@@ -194,7 +194,6 @@ async def add_jd_download(listener, path):
                         corrupted_packages.append(pack["uuid"])
                         continue
 
-
                     if (
                         pack.get("tempUnknownCount", 0) > 0
                         or pack.get("unknownCount", 0) > 0

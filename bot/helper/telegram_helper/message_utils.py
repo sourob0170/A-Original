@@ -13,8 +13,8 @@ from pyrogram.errors import (
 from pyrogram.types import InputMediaPhoto
 
 from bot import (
-    LOGGER,
     DOWNLOAD_DIR,
+    LOGGER,
     intervals,
     status_dict,
     task_dict_lock,
