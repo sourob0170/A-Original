@@ -139,3 +139,6 @@
 - Rename files before upload via name substitution.
 - Select use of `rclone.conf` or `token.pickle` without `mpt:` or `mrcc:` prefix.
 - Execute FFmpeg commands post-download (task option).
+- Change Metadata automatically.
+- Add watermark text automatically.
+- Custom caption format.

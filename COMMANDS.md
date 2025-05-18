@@ -35,4 +35,6 @@ restartses - Restart Telegram Session(s)
 stats - Bot Usage Stats
 ping - Ping the Bot
 help - All cmds with description
+mediainfo - Check mediainfo
+broadcast - broadcast message
 ```
