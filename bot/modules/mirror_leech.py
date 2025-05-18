@@ -378,6 +378,9 @@ class Mirror(TaskListener):
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
+            content_type = await get_content_type(self.link)  # recheck with new link
+            if content_type and "x-bittorrent" in content_type:
+                self.is_qbit = True
 
         if file_ is not None:
             create_task(
