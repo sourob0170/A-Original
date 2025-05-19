@@ -1,7 +1,5 @@
 import os
 import subprocess
-from pyrogram.types import Message
-from pyrogram import Client
 import time
 
 
