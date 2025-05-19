@@ -6,7 +6,7 @@ from time import time as get_time
 
 from aiofiles import open as aiopen
 from aiofiles.os import path as aiopath
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from pymongo.errors import (
     ConnectionFailure,
     PyMongoError,
@@ -42,7 +42,7 @@ class DbManager:
                     LOGGER.error(f"Error closing previous DB connection: {e}")
 
             # Improved connection parameters to address stability issues
-            self._conn = AsyncIOMotorClient(
+            self._conn = AsyncMongoClient(
                 Config.DATABASE_URL,
                 server_api=ServerApi("1"),
                 maxPoolSize=5,  # Reduced pool size to prevent resource exhaustion

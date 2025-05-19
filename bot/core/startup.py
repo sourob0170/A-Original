@@ -7,7 +7,7 @@ from asyncio import (
 from os import environ
 from time import time
 
-import requests
+import aiohttp
 from aiofiles import open as aiopen
 from aiofiles.os import makedirs, remove
 from aiofiles.os import path as aiopath
@@ -68,23 +68,50 @@ async def update_aria2_options():
 async def update_nzb_options():
     try:
         if sabnzbd_client is None:
+            LOGGER.warning(
+                "SABnzbd client is not initialized, skipping NZB options update"
+            )
             return
 
         # Try to connect to SABnzbd with a timeout
         try:
             # First check if SABnzbd is responding at all
+            LOGGER.info("Checking if SABnzbd is responding...")
             status_response = await sabnzbd_client.call(
                 {"mode": "version"},
-                requests_args={"timeout": 5},
+                requests_args={
+                    "timeout": 10
+                },  # Increased timeout for better reliability
             )
-            if not status_response:
+
+            # Check if the response indicates an error
+            if "error" in status_response:
+                LOGGER.warning(
+                    f"SABnzbd version check failed: {status_response['error']}"
+                )
                 return
-        except Exception:
+
+            if not status_response:
+                LOGGER.warning("SABnzbd returned empty response for version check")
+                return
+
+            LOGGER.info(f"SABnzbd version check successful: {status_response}")
+        except Exception as e:
+            LOGGER.warning(f"Failed to connect to SABnzbd: {e!s}")
             return
 
         # Now try to get the config
         try:
+            LOGGER.info("Getting SABnzbd configuration...")
             config_response = await sabnzbd_client.get_config()
+
+            # Check if the response indicates an error
+            if "error" in config_response:
+                LOGGER.warning(
+                    f"SABnzbd config retrieval failed: {config_response['error']}"
+                )
+                return
+
             if (
                 config_response
                 and isinstance(config_response, dict)
@@ -95,9 +122,11 @@ async def update_nzb_options():
                 nzb_options.update(no)
                 LOGGER.info("Successfully updated NZB options")
             else:
-                pass
-        except Exception:
-            pass
+                LOGGER.warning(
+                    f"Unexpected SABnzbd config response format: {config_response}"
+                )
+        except Exception as e:
+            LOGGER.warning(f"Error getting SABnzbd config: {e!s}")
     except APIError as e:
         LOGGER.error(f"SABnzbd API error: {e}")
         # Continue with the bot startup even if NZB options update fails
@@ -401,16 +430,18 @@ async def update_variables():
             f"https://api.heroku.com/apps/{Config.HEROKU_APP_NAME}",
         ]
 
-        for url in urls:
-            try:
-                response = requests.get(url, headers=headers)
-                response.raise_for_status()
-                app_data = response.json()
-                if web_url := app_data.get("web_url"):
-                    Config.set("BASE_URL", web_url.rstrip("/"))
-                    return
-            except Exception:
-                continue
+        async with aiohttp.ClientSession(headers=headers) as session:
+            for url in urls:
+                try:
+                    async with session.get(url) as response:
+                        response.raise_for_status()
+                        app_data = await response.json()
+                        if web_url := app_data.get("web_url"):
+                            Config.set("BASE_URL", web_url.rstrip("/"))
+                            return
+                except Exception as e:
+                    LOGGER.error(f"BASE_URL error: {e}")
+                    continue
 
 
 async def load_configurations():

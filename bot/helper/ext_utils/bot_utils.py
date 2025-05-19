@@ -109,6 +109,10 @@ def arg_parser(items, arg_base):
     if not items:
         return
 
+    # Initialize -m flag if not present
+    if "-m" not in arg_base:
+        arg_base["-m"] = ""
+
     arg_start = -1
     i = 0
     total = len(items)
@@ -286,8 +290,10 @@ def get_size_bytes(size):
 
 async def get_content_type(url):
     try:
-        async with AsyncClient() as client:
-            response = await client.get(url, allow_redirects=True, verify=False)
+        async with AsyncClient(follow_redirects=True, verify=False) as client:
+            response = await client.head(url)
+            if "Content-Type" not in response.headers:
+                response = await client.get(url)
             return response.headers.get("Content-Type")
     except Exception:
         return None
@@ -794,8 +800,10 @@ def is_media_tool_enabled(tool_name):
         "extract",
         "add",
         "metadata",
-        "ffmpeg",
+        "xtra",
         "sample",
+        "screenshot",
+        "archive",
     ]
 
     # This is a synchronous function, so we can't directly access the database
@@ -893,10 +901,33 @@ def is_flag_enabled(flag_name):
     Returns:
         bool: True if the flag is enabled, False otherwise
     """
+    from bot.core.config_manager import Config
+
+    # Clean the flag name by removing the leading dash
+    clean_flag = flag_name.lstrip("-")
+
+    # Check for leech-related flags
+    leech_flags = ["tl", "hl", "ut", "bt", "sp", "es", "doc", "med"]
+    if clean_flag in leech_flags:
+        # If leech is disabled, these flags should be disabled too
+        return Config.LEECH_ENABLED
+
+    # Check for ytdlp-related flags
+    ytdlp_flags = ["opt"]
+    if clean_flag in ytdlp_flags:
+        # If ytdlp is disabled, these flags should be disabled too
+        return Config.YTDLP_ENABLED
+
+    # Check for torrent seed flag
+    if clean_flag == "d":
+        # If torrent operations are disabled, the seed flag should be disabled too
+        return Config.TORRENT_ENABLED
+
     # Map flags to their corresponding media tools
     flag_to_tool_map = {
-        "ff": "ffmpeg",  # Custom FFmpeg commands flag
+        "ff": "xtra",  # Custom FFmpeg commands flag
         "sv": "sample",  # Sample video flag
+        "ss": "screenshot",  # Screenshot flag
         "mt": "mediatools",  # Media tools flag
         "md": "metadata",  # Metadata flag
         "merge-video": "merge",
@@ -925,14 +956,37 @@ def is_flag_enabled(flag_name):
         "comp-document": "compression",
         "comp-subtitle": "compression",
         "comp-archive": "compression",
+        "cv": "convert",  # Convert video flag
+        "ca": "convert",  # Convert audio flag
+        "cs": "convert",  # Convert subtitle flag
+        "cd": "convert",  # Convert document flag
+        "cr": "convert",  # Convert archive flag
+        "z": "archive",  # Archive compression flag
+        "e": "archive",  # Archive extraction flag
     }
 
+    # Special case for -m flag (same directory operations)
+    if clean_flag == "m":
+        return Config.SAME_DIR_ENABLED
+
+    # Special case for archive flags (-z and -e)
+    if clean_flag in ["z", "e"]:
+        return (
+            hasattr(Config, "ARCHIVE_FLAGS_ENABLED") and Config.ARCHIVE_FLAGS_ENABLED
+        )
+
     # If the flag is not in the map, assume it's enabled
-    if flag_name.lstrip("-") not in flag_to_tool_map:
+    if clean_flag not in flag_to_tool_map:
         return True
 
     # Get the tool name for this flag
-    tool_name = flag_to_tool_map[flag_name.lstrip("-")]
+    tool_name = flag_to_tool_map[clean_flag]
+
+    # Special handling for "archive" tool
+    if tool_name == "archive":
+        return (
+            hasattr(Config, "ARCHIVE_FLAGS_ENABLED") and Config.ARCHIVE_FLAGS_ENABLED
+        )
 
     # Check if the tool is enabled
     return is_media_tool_enabled(tool_name)

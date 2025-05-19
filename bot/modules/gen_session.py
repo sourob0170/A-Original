@@ -95,18 +95,8 @@ async def handle_session_input(_, message):
     except Exception as e:
         LOGGER.error(f"Error deleting user credential message: {e!s}")
 
-    # We'll handle /cancel in the dedicated handler now
-    # This is kept for backward compatibility with older versions
-    # but we'll add a flag to prevent duplicate messages
-    if message.text and message.text.lower() == "/cancel":
-        # Check if this message has already been processed by the cancel handler
-        if hasattr(message, "_cancel_processed"):
-            return
-
-        # Mark as processed to prevent duplicate handling
-        message._cancel_processed = True
-        await cancel_session_generation(_, message, user_id)
-        return
+    # We no longer support /cancel command for gensession
+    # Users should use the cancel button instead
 
     # Get current step
     current_step = session_state[user_id]["step"]
@@ -148,23 +138,33 @@ async def handle_api_id(_, message, user_id):
         if session_state[user_id]["last_msg"]:
             await session_state[user_id]["last_msg"].delete()
 
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Cancel", "gensession_cancel")
+
         # Send next instruction
         msg = await send_message(
             message.chat.id,
             "✅ API ID received.\n\n"
             "🔒 <b>Remember:</b> Your API ID is not stored and will be deleted after use.\n\n"
             "Now please enter your <b>API HASH</b>.\n\n"
-            "<i>Send /cancel to cancel the process</i>",
+            "<i>Click the button below to cancel the process</i>",
+            buttons.build_menu(1),
         )
         session_state[user_id]["last_msg"] = msg
 
         # Auto-delete the message after 10 minutes for security
         create_task(auto_delete_message(msg, time=600))  # 10 minutes
     except ValueError:
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Cancel", "gensession_cancel")
+
         error_msg = await send_message(
             message.chat.id,
             "❌ <b>Error:</b> Invalid API ID. Please enter a valid numeric value.\n\n"
-            "<i>Send /cancel to cancel the process</i>",
+            "<i>Click the button below to cancel the process</i>",
+            buttons.build_menu(1),
         )
         create_task(
             auto_delete_message(error_msg, time=300)
@@ -181,6 +181,10 @@ async def handle_api_hash(_, message, user_id):
     if session_state[user_id]["last_msg"]:
         await session_state[user_id]["last_msg"].delete()
 
+    # Create cancel button
+    buttons = ButtonMaker()
+    buttons.data_button("Cancel", "gensession_cancel")
+
     # Send next instruction
     msg = await send_message(
         message.chat.id,
@@ -190,7 +194,8 @@ async def handle_api_hash(_, message, user_id):
         "Examples:\n"
         "• Phone: +1234567890\n"
         "• Bot Token: 123456789:ABCdefGhIJklmNoPQRstUVwxyz\n\n"
-        "<i>Send /cancel to cancel the process</i>",
+        "<i>Click the button below to cancel the process</i>",
+        buttons.build_menu(1),
     )
     session_state[user_id]["last_msg"] = msg
 
@@ -273,6 +278,10 @@ async def handle_phone_or_bot(_, message, user_id):
                 session_state[user_id]["phone_code_hash"] = code.phone_code_hash
                 session_state[user_id]["step"] = "verification_code"
 
+                # Create cancel button
+                buttons = ButtonMaker()
+                buttons.data_button("Cancel", "gensession_cancel")
+
                 # Update message
                 msg = await send_message(
                     message.chat.id,
@@ -284,7 +293,8 @@ async def handle_phone_or_bot(_, message, user_id):
                     "• Without spaces: <code>12345</code>\n"
                     "• With any separator: <code>1-2-3-4-5</code> or <code>1.2.3.4.5</code>\n\n"
                     "<i>Only the digits will be used, so don't worry about the format.</i>\n\n"
-                    "<i>Send /cancel to cancel the process</i>",
+                    "<i>Click the button below to cancel the process</i>",
+                    buttons.build_menu(1),
                 )
                 session_state[user_id]["last_msg"] = msg
 
@@ -295,21 +305,31 @@ async def handle_phone_or_bot(_, message, user_id):
                 await status_msg.delete()
 
             except (ApiIdInvalid, PhoneNumberInvalid) as e:
+                # Create cancel button
+                buttons = ButtonMaker()
+                buttons.data_button("Generate Again", "gensession")
+
                 error_msg = await send_message(
                     message.chat.id,
                     f"❌ <b>Error:</b> {e!s}\n\n"
                     "<b>Session generation process has been cancelled.</b>\n\n"
                     "You can use /gensession or /gs command again when you're ready to generate a session.",
+                    buttons.build_menu(1),
                 )
                 create_task(auto_delete_message(error_msg, time=300))
                 await cleanup_session(user_id)
 
     except Exception as e:
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Again", "gensession")
+
         error_msg = await send_message(
             message.chat.id,
             f"❌ <b>Error:</b> {e!s}\n\n"
             "<b>Session generation process has been cancelled.</b>\n\n"
             "You can use /gensession or /gs command again when you're ready to generate a session.",
+            buttons.build_menu(1),
         )
         create_task(auto_delete_message(error_msg, time=300))
         await cleanup_session(user_id)
@@ -323,11 +343,16 @@ async def handle_verification_code(_, message, user_id):
 
     # Check if we have a valid code
     if not code or len(code) < 5:
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Cancel", "gensession_cancel")
+
         error_msg = await send_message(
             message.chat.id,
             "❌ <b>Error:</b> Invalid verification code format.\n\n"
             "Please enter a valid verification code (5 digits).\n\n"
-            "<i>Send /cancel to cancel the process</i>",
+            "<i>Click the button below to cancel the process</i>",
+            buttons.build_menu(1),
         )
         create_task(auto_delete_message(error_msg, time=300))
         return
@@ -364,6 +389,10 @@ async def handle_verification_code(_, message, user_id):
             # 2FA is enabled
             session_state[user_id]["step"] = "2fa_password"
 
+            # Create cancel button
+            buttons = ButtonMaker()
+            buttons.data_button("Cancel", "gensession_cancel")
+
             # Update message
             await status_msg.delete()
             msg = await send_message(
@@ -371,7 +400,8 @@ async def handle_verification_code(_, message, user_id):
                 "🔐 Two-Step Verification is enabled.\n\n"
                 "🔒 <b>Security:</b> Your verification code is not stored and will be deleted after use.\n\n"
                 "Please enter your password.\n\n"
-                "<i>Send /cancel to cancel the process</i>",
+                "<i>Click the button below to cancel the process</i>",
+                buttons.build_menu(1),
             )
             session_state[user_id]["last_msg"] = msg
 
@@ -388,22 +418,33 @@ async def handle_verification_code(_, message, user_id):
             elif isinstance(e, PhoneCodeExpired):
                 error_message = "The verification code has expired. Please request a new code by starting the process again."
 
+            # Create cancel button
+            buttons = ButtonMaker()
+            buttons.data_button("Generate Again", "gensession")
+
             error_msg = await send_message(
                 message.chat.id,
                 f"❌ <b>Error:</b> {error_message}\n\n"
                 "<b>Session generation process has been cancelled.</b>\n\n"
                 "You can use /gensession or /gs command again when you're ready to generate a session.",
+                buttons.build_menu(1),
             )
             create_task(auto_delete_message(error_msg, time=300))
             await cleanup_session(user_id)
 
     except Exception as e:
         await status_msg.delete()
+
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Again", "gensession")
+
         error_msg = await send_message(
             message.chat.id,
             f"❌ <b>Error:</b> {e!s}\n\n"
             "<b>Session generation process has been cancelled.</b>\n\n"
             "You can use /gensession or /gs command again when you're ready to generate a session.",
+            buttons.build_menu(1),
         )
         create_task(auto_delete_message(error_msg, time=300))
         await cleanup_session(user_id)
@@ -437,22 +478,34 @@ async def handle_2fa_password(_, message, user_id):
 
         except PasswordHashInvalid:
             await status_msg.delete()
+
+            # Create cancel button
+            buttons = ButtonMaker()
+            buttons.data_button("Generate Again", "gensession")
+
             error_msg = await send_message(
                 message.chat.id,
                 "❌ <b>Error:</b> Invalid password.\n\n"
                 "<b>Session generation process has been cancelled.</b>\n\n"
                 "You can use /gensession or /gs command again when you're ready to generate a session.",
+                buttons.build_menu(1),
             )
             create_task(auto_delete_message(error_msg, time=300))
             await cleanup_session(user_id)
 
     except Exception as e:
         await status_msg.delete()
+
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Again", "gensession")
+
         error_msg = await send_message(
             message.chat.id,
             f"❌ <b>Error:</b> {e!s}\n\n"
             "<b>Session generation process has been cancelled.</b>\n\n"
             "You can use /gensession or /gs command again when you're ready to generate a session.",
+            buttons.build_menu(1),
         )
         create_task(auto_delete_message(error_msg, time=300))
         await cleanup_session(user_id)
@@ -526,35 +579,115 @@ async def generate_session_string(_, status_msg, user_id):
         await cleanup_session(user_id)
 
     except Exception as e:
+        # Create cancel button
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Again", "gensession")
+
         error_msg = await send_message(
             status_msg.chat.id,
             f"❌ <b>Error:</b> {e!s}\n\n"
             "<b>Session generation process has been cancelled.</b>\n\n"
             "You can use /gensession or /gs command again when you're ready to generate a session.",
+            buttons.build_menu(1),
         )
         create_task(auto_delete_message(error_msg, time=300))
         await cleanup_session(user_id)
 
 
 async def cancel_session_generation(_, message, user_id):
-    """Cancel the session generation process"""
+    """Cancel the session generation process for /cancel command"""
+    # This function is now only used for the /cancel command
+    # The cancel button has its own handler
+
+    # For regular message
+    chat_id = message.chat.id
     # Delete the cancel message
     try:
         await message.delete()
     except Exception as e:
         LOGGER.error(f"Error deleting cancel message: {e!s}")
 
+    # Clean up the session state
+    await cleanup_session(user_id)
+
+    # Create button to generate again
+    buttons = ButtonMaker()
+    buttons.data_button("Generate Again", "gensession")
+
     # Send cancellation message
     cancel_msg = await send_message(
-        message.chat.id,
+        chat_id,
         "❌ <b>Session generation process has been cancelled.</b>\n\n"
         "You can use /gensession or /gs command again when you're ready to generate a session.",
+        buttons.build_menu(1),
     )
-    create_task(auto_delete_message(cancel_msg, time=300))  # Delete after 5 minutes
+    # Auto-delete the message after 5 minutes
+    create_task(auto_delete_message(cancel_msg, time=300))
 
-    # Clean up only if user is in session state
+
+@new_task
+async def handle_cancel_button(_, callback_query):
+    """Handle cancel button click for session generation"""
+    user_id = callback_query.from_user.id
+    chat_id = callback_query.message.chat.id
+
+    # Answer the callback immediately to provide feedback
+    await callback_query.answer("Cancelling session generation...")
+
+    # Check if user is in session generation process
     if user_id in session_state:
+        # Get the message to delete before cleaning up session state
+        message_to_delete = None
+        if (
+            "last_msg" in session_state[user_id]
+            and session_state[user_id]["last_msg"]
+        ):
+            message_to_delete = session_state[user_id]["last_msg"]
+
+        # Clean up the session state
         await cleanup_session(user_id)
+
+        # Delete the message with the cancel button if it exists
+        if message_to_delete:
+            try:
+                await message_to_delete.delete()
+            except Exception as e:
+                LOGGER.error(f"Error deleting message with cancel button: {e!s}")
+
+        # Create button to generate again
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Again", "gensession")
+
+        # Send cancellation message
+        cancel_msg = await send_message(
+            chat_id,
+            "❌ <b>Session generation process has been cancelled.</b>\n\n"
+            "You can use /gensession or /gs command again when you're ready to generate a session.",
+            buttons.build_menu(1),
+        )
+
+        # Auto-delete the message after 5 minutes
+        create_task(auto_delete_message(cancel_msg, time=300))
+    else:
+        # Try to delete the message with the cancel button
+        try:
+            await callback_query.message.delete()
+        except Exception as e:
+            LOGGER.error(f"Error deleting message: {e!s}")
+
+        # Create button to generate a session
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Session", "gensession")
+
+        # Send message that there's no active session to cancel
+        msg = await send_message(
+            chat_id,
+            "ℹ️ <b>Info:</b> You don't have an active session generation process to cancel.",
+            buttons.build_menu(1),
+        )
+
+        # Auto-delete the message after 1 minute
+        create_task(auto_delete_message(msg, time=60))
 
 
 @new_task
@@ -575,12 +708,19 @@ async def handle_cancel_command(_, message):
         except Exception as e:
             LOGGER.error(f"Error deleting cancel message: {e!s}")
 
+        # Create button to generate a session
+        buttons = ButtonMaker()
+        buttons.data_button("Generate Session", "gensession")
+
         # Send message that there's no active session to cancel
         msg = await send_message(
             message.chat.id,
             "ℹ️ <b>Info:</b> You don't have an active session generation process to cancel.",
+            buttons.build_menu(1),
         )
-        create_task(auto_delete_message(msg, time=60))  # Delete after 1 minute
+        # Auto-delete the message after 1 minute
+        # We don't need to store the task reference as it will be garbage collected properly
+        create_task(auto_delete_message(msg, time=60))
 
 
 async def cleanup_session(user_id):
@@ -644,6 +784,10 @@ async def gen_session(_, callback_query=None, message=None):
         "last_msg": None,
     }
 
+    # Create cancel button
+    buttons = ButtonMaker()
+    buttons.data_button("Cancel", "gensession_cancel")
+
     # Send initial message asking for API ID
     msg = await send_message(
         message,
@@ -654,13 +798,15 @@ async def gen_session(_, callback_query=None, message=None):
         "• All messages will auto-delete for your privacy\n\n"
         "Please enter your <b>API ID</b> (numeric value).\n\n"
         "<i>You can get API ID and API HASH from https://my.telegram.org</i>\n\n"
-        "<i>Send /cancel to cancel the process</i>",
+        "<i>Click the button below to cancel the process</i>",
+        buttons.build_menu(1),
     )
 
     # Store the message ID for later deletion
     session_state[user_id]["last_msg"] = msg
 
     # Auto-delete the message after 10 minutes for security
+    # We don't need to store the task reference as it will be garbage collected properly
     create_task(auto_delete_message(msg, time=600))  # 10 minutes
 
     # We don't need to add a handler for each user anymore

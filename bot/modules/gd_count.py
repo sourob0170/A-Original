@@ -1,5 +1,6 @@
 from asyncio import create_task
 
+from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import new_task, sync_to_async
 from bot.helper.ext_utils.links_utils import is_gdrive_link
 from bot.helper.ext_utils.status_utils import get_readable_file_size
@@ -14,6 +15,14 @@ from bot.helper.telegram_helper.message_utils import (
 
 @new_task
 async def count_node(_, message):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message,
+            "❌ Count command is disabled when mirror operations are disabled.",
+        )
+        return
+
     args = message.text.split()
     user = message.from_user or message.sender_chat
     if username := user.username:

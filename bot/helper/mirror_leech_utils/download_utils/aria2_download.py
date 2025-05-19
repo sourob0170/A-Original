@@ -19,6 +19,16 @@ from bot.helper.telegram_helper.message_utils import (
 
 
 async def add_aria2_download(listener, dpath, header, ratio, seed_time):
+    # Check if it's a torrent and if torrent operations are enabled
+    is_torrent = listener.link.startswith("magnet:") or listener.link.endswith(
+        ".torrent"
+    )
+    if is_torrent and not Config.TORRENT_ENABLED:
+        await listener.on_download_error(
+            "❌ Torrent operations are disabled by the administrator."
+        )
+        return
+
     a2c_opt = {"dir": dpath}
     if listener.name:
         a2c_opt["out"] = listener.name

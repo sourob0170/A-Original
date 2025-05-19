@@ -25,6 +25,12 @@ class JDownloader(MyJdApi):
 
     @new_task
     async def boot(self):
+        # Check if JDownloader operations are enabled in the configuration
+        if not Config.JD_ENABLED:
+            self.is_connected = False
+            self.error = "JDownloader operations are disabled by the administrator."
+            return
+
         await cmd_exec(["pkill", "-9", "-f", "java"])
         if not Config.JD_EMAIL or not Config.JD_PASS:
             self.is_connected = False

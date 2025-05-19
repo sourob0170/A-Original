@@ -12,6 +12,24 @@ ffmpeg_help = """<b>Custom FFmpeg Commands</b>: -ff
 </blockquote>
 
 <blockquote expandable="expandable">
+<b>Multiple Commands:</b>
+Run commands sequentially, using output of one as input for the next.
+
+<b>JSON Array Format:</b> (Recommended)
+<code>/cmd link -ff '[
+  "-i mltb.video -c:v libx264 output1.mp4",
+  "-i mltb -vf scale=640:360 output2.mp4",
+  "-i mltb -ss 00:00:01 -vframes 1 thumb.jpg"
+]'</code>
+
+<b>List Format:</b>
+<code>/cmd link -ff [["-i","mltb.video","-c:v","libx264","out.mp4"],["-i","mltb","-vf","scale=640:360","out2.mp4"]]</code>
+
+• <code>mltb</code> in later commands refers to previous output
+• For presets: <code>{"process":[["-i","mltb","-c:v","libx264","temp.mp4"],["-i","mltb","-vf","scale=720p","final.mp4"]]}</code>
+</blockquote>
+
+<blockquote expandable="expandable">
 <b>Input Placeholders:</b>
 • <code>mltb</code> or <code>input.mp4</code> - Generic input file
 • <code>mltb.video</code> - Video files only
@@ -20,6 +38,7 @@ ffmpeg_help = """<b>Custom FFmpeg Commands</b>: -ff
 • <code>mltb.subtitle</code> - Subtitle files only
 • <code>mltb.document</code> - Document files only
 • <code>mltb.archive</code> - Archive files only
+• <code>mltb.mkv</code> - In multiple commands, refers to previous command's output
 
 These placeholders are automatically replaced with the actual file path.
 </blockquote>
@@ -70,35 +89,34 @@ These placeholders are automatically replaced with the actual file path.
 <blockquote expandable="expandable">
 <b>Advanced Examples:</b>
 
-<b>Extract All Streams Separately:</b>
-<code>-i mltb.mkv -map 0:v -c:v copy mltb-%d_video.mp4 -map 0:a -c:a copy mltb-%d_audio.m4a -map 0:s -c:s srt mltb-%d_sub.srt</code>
+<b>Extract Streams:</b> <code>-i mltb.mkv -map 0:v -c:v copy video.mp4 -map 0:a -c:a copy audio.m4a</code>
 
-<b>Add Watermark:</b>
-<code>-i mltb.video -vf "drawtext=text='@YourChannel':fontcolor=white:fontsize=24:x=10:y=10" -c:a copy mltb.mp4</code>
+<b>Add Watermark:</b> <code>-i mltb.video -vf "drawtext=text='@YourChannel':fontcolor=white:fontsize=24:x=10:y=10" mltb.mp4</code>
 
-<b>Speed Up/Slow Down:</b>
-<code>-i mltb.video -filter_complex "[0:v]setpts=0.5*PTS[v];[0:a]atempo=2.0[a]" -map "[v]" -map "[a]" mltb.mp4</code>
+<b>Speed Up:</b> <code>-i mltb.video -filter_complex "[0:v]setpts=0.5*PTS[v];[0:a]atempo=2.0[a]" -map "[v]" -map "[a]" mltb.mp4</code>
 
-<b>Merge Video and Audio:</b>
-<code>-i mltb.video -i mltb.audio -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 mltb.mp4</code>
+<b>Multi-Step Processing:</b>
+<code>/cmd link -ff '[
+  "-i mltb.video -c:v libx264 temp.mp4",
+  "-i mltb -vf scale=720:480 final.mp4",
+  "-i mltb -ss 00:00:01 -vframes 1 thumb.jpg"
+]'</code>
 </blockquote>
 
 <blockquote expandable="expandable">
 <b>Preset Management:</b>
 
 <b>Using Presets:</b>
-• Presets are stored in user settings or bot config
 • Use <code>/cmd link -ff "preset_name"</code> to apply a preset
-• Configure presets in User Settings > FFMPEG_CMDS
+• Configure in User Settings > FFMPEG_CMDS
 
 <b>Creating Presets:</b>
-• In User Settings, add a dictionary with preset names as keys
-• Each preset can contain multiple commands as a list
-• Example: <code>{"compress": ["-i mltb.video -c:v libx264 -crf 23 mltb.mp4"]}</code>
-
-<b>Variables in Presets:</b>
-• Use <code>{variable}</code> in presets for customizable values
-• Set variable values in User Settings > Variables
+• Single command: <code>{"compress": ["-i mltb.video -c:v libx264 mltb.mp4"]}</code>
+• Multiple commands: <code>{"process": [
+  ["-i mltb.video -c:v libx264 temp.mp4"],
+  ["-i mltb -vf scale=720:480 final.mp4"]
+]}</code>
+• Variables: Use <code>{variable}</code> for customizable values
 </blockquote>
 
 <blockquote expandable="expandable">
@@ -108,6 +126,8 @@ These placeholders are automatically replaced with the actual file path.
 • Add <code>-del</code> to delete original files after processing
 • For bulk downloads, commands apply to each file individually
 • For complex commands, test on small files first
+• In multiple commands, use <code>mltb</code> to reference the previous command's output
+• JSON array format is more readable for complex command sequences
 </blockquote>"""
 
 nsfw_keywords = [
@@ -251,6 +271,8 @@ Check here all <a href='https://rclone.org/flags/'>RcloneFlags</a>."""
 bulk = """<b>Bulk Download</b>: -b
 
 Bulk can be used only by replying to text message or text file contains links separated by new line.
+Note: Bulk operations can be enabled/disabled by the administrator in bot settings.
+
 Example:
 link1 -n new name -up remote1:path1 -rcf |key:value|key:value
 link2 -z -n new name -up remote2:path2
@@ -335,7 +357,7 @@ In case default quality added from yt-dlp options using format option and you ne
 
 yt_opt = """<b>Options</b>: -opt
 
-/cmd link -opt {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"ffmpeg": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
+/cmd link -opt {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"xtra": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
 Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184'>FILE</a> or use this <a href='https://t.me/mltb_official_channel/177'>script</a> to convert cli arguments to api options."""
 
 convert_media = """<b>Convert Media</b>: -ca -cv -cs -cd -cr
@@ -345,21 +367,25 @@ convert_media = """<b>Convert Media</b>: -ca -cv -cs -cd -cr
 Convert media files to different formats with customizable settings for video, audio, subtitles, documents, and archives.
 
 <b>Basic Usage:</b>
-- <code>-ca mp3</code>: Convert all audio files to MP3 format
-- <code>-cv mp4</code>: Convert all video files to MP4 format
-- <code>-cs srt</code>: Convert all subtitle files to SRT format
-- <code>-cd pdf</code>: Convert all document files to PDF format
-- <code>-cr zip</code>: Convert all archive files to ZIP format
-- <code>-ca mp3 -cv mp4</code>: Convert all audios to MP3 and all videos to MP4
+- <code>-cv format</code>: Convert videos (e.g., <code>-cv mp4</code>)
+- <code>-ca format</code>: Convert audio (e.g., <code>-ca mp3</code>)
+- <code>-cs format</code>: Convert subtitles (e.g., <code>-cs srt</code>)
+- <code>-cd format</code>: Convert documents (e.g., <code>-cd pdf</code>)
+- <code>-cr format</code>: Convert archives (e.g., <code>-cr zip</code>)
+- <code>-del</code>: Delete original files after conversion
+
+<b>Supported Formats:</b>
+• <b>Videos</b>: MP4, MKV, AVI, MOV, WebM, FLV, WMV, M4V, TS, 3GP
+• <b>Audio</b>: MP3, M4A, FLAC, WAV, OGG, OPUS, AAC, WMA, ALAC
+• <b>Subtitles</b>: SRT, ASS, SSA, VTT, WebVTT, SUB, SBV
+• <b>Documents</b>: PDF, DOCX, TXT, ODT, RTF
+• <b>Archives</b>: ZIP, RAR, 7Z, TAR, GZ, BZ2
 
 <b>Advanced Usage:</b>
 - <code>-ca mp3 + flac ogg</code>: Convert only FLAC and OGG audios to MP3
 - <code>-cv mkv - webm flv</code>: Convert all videos to MKV except WebM and FLV
-- <code>-ca mp3 -del</code>: Convert all audios to MP3 and delete original files
+- <code>-ca mp3 -cv mp4 -cs srt</code>: Convert audios to MP3, videos to MP4, and subtitles to SRT
 - <code>-cv mp4 -del</code>: Convert all videos to MP4 and delete original files
-- <code>-cs srt -del</code>: Convert all subtitles to SRT and delete original files
-- <code>-cd pdf -del</code>: Convert all documents to PDF and delete original files
-- <code>-cr zip -del</code>: Convert all archives to ZIP and delete original files
 
 <b>Examples:</b>
 /cmd link -ca mp3 -cv mp4
@@ -368,20 +394,12 @@ Convert media files to different formats with customizable settings for video, a
 /cmd link -cs srt -cd pdf
 /cmd link -cr zip -del
 
-<b>Available Flags:</b>
-• <code>-cv format</code>: Convert videos to specified format
-• <code>-ca format</code>: Convert audios to specified format
-• <code>-cs format</code>: Convert subtitles to specified format
-• <code>-cd format</code>: Convert documents to specified format
-• <code>-cr format</code>: Convert archives to specified format
-• <code>-del</code>: Delete original files after conversion
-
 <b>Important Notes:</b>
-• The Convert feature must be enabled in both the bot settings and user settings
-• The main Convert toggle and the specific media type toggles must be enabled
-• Configure convert settings in Media Tools settings
-• Convert priority can be set to control when it runs in the processing pipeline
-• Each media type has its own specific settings and delete original option"""
+• Enable convert in Media Tools settings before using
+• Enable specific media type conversions (video, audio, etc.)
+• Configure quality settings for optimal results
+• Set priority to control when conversion runs in the pipeline
+• Use /mthelp command for detailed guide on convert feature"""
 
 add_media = """<b>Add Media</b>: -add -add-video -add-audio -add-subtitle -add-attachment
 
@@ -402,10 +420,6 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 - <code>-replace</code>: Replace existing tracks with new ones
 
 <b>Advanced Usage (Long Format):</b>
-- <code>-add-video-path /path/to/video.mp4</code>: Specify video file to add
-- <code>-add-audio-path /path/to/audio.mp3</code>: Specify audio file to add
-- <code>-add-subtitle-path /path/to/subtitle.srt</code>: Specify subtitle file to add
-- <code>-add-attachment-path /path/to/font.ttf</code>: Specify attachment file to add
 - <code>-add-video-index 0,1,2</code>: Add video tracks at indices 0, 1, and 2
 - <code>-add-audio-index 0,1</code>: Add audio tracks at indices 0 and 1
 - <code>-add -del</code>: Add tracks and delete original file
@@ -421,10 +435,6 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 - <code>-add-audio-index 0,1,2</code>: Add multiple audio tracks at specified indices
 
 <b>Advanced Usage (Short Format):</b>
-- <code>-avp /path/to/video.mp4</code>: Specify video file to add
-- <code>-aap /path/to/audio.mp3</code>: Specify audio file to add
-- <code>-asp /path/to/subtitle.srt</code>: Specify subtitle file to add
-- <code>-atp /path/to/font.ttf</code>: Specify attachment file to add
 - <code>-avi 0</code>: Add only the first video track from source
 - <code>-avi 0,1,2</code>: Add video tracks at indices 0, 1, and 2
 - <code>-aai 1</code>: Add only the second audio track from source
@@ -460,8 +470,6 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 <b>Examples:</b>
 /cmd link -add
 /cmd link -add-video -add-audio
-/cmd link -avp /path/to/video.mp4 -aap /path/to/audio.mp3
-/cmd link -add-subtitle -asp /path/to/subtitle.srt
 /cmd link -add -del
 /cmd link -add-video -add-video-codec h264 -add-video-quality 18
 /cmd link -add-audio -add-audio-codec aac -add-audio-bitrate 320k
@@ -477,8 +485,7 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 • The main Add toggle and the specific track type toggles must be enabled
 • Configure add settings in Media Tools settings
 • Add priority can be set to control when it runs in the processing pipeline
-• If no path is specified, the default paths from settings will be used
-• You can use either long format (-add-video-path) or short format (-avp) flags
+• When using multi-link feature (-m), tracks are added from the additional files
 • When add is enabled through settings, original files are automatically deleted after processing
 • Use the -del flag to delete original files after adding tracks (or -del f to keep original files)
 • Settings with value 'none' will not be used in command generation
@@ -1123,7 +1130,7 @@ Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb |
 """,
     "YT_DLP_OPTIONS": """Send dict of YT-DLP Options. Timeout: 60 sec
 Format: {key: value, key: value, key: value}.
-Example: {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"ffmpeg": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
+Example: {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"xtra": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
 Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184'>FILE</a> or use this <a href='https://t.me/mltb_official_channel/177'>script</a> to convert cli arguments to api options.""",
     "FFMPEG_CMDS": """Read this guide. http://telegra.ph/Ffmpeg-guide-01-10""",
     "HELPER_TOKENS": """Send your helper bot tokens separated by space. These bots will be used for hyper download to speed up your downloads.
@@ -1306,6 +1313,8 @@ media_tools_text = {
     "COMPRESSION_ARCHIVE_PRESET": "Set the compression preset for archives. Options: fast, medium, slow.\n\nExample: fast - faster compression but lower compression ratio\nExample: slow - better compression ratio but slower\n\nTimeout: 60 sec",
     "COMPRESSION_ARCHIVE_LEVEL": "Set the compression level for archives (1-9). Higher values mean better compression but slower processing.\n\nExample: 5 - good balance of speed and compression\nExample: 9 - maximum compression\n\nTimeout: 60 sec",
     "COMPRESSION_ARCHIVE_METHOD": "Set the compression method for archives. Options: deflate, store, bzip2, lzma.\n\nExample: deflate - good balance of speed and compression\nExample: lzma - best compression but slowest\n\nTimeout: 60 sec",
+    "COMPRESSION_ARCHIVE_PASSWORD": "Set a password to protect the archive. Leave as 'none' for no password protection.\nNote: Password protection only works with 7z, zip, and rar formats.\n\nExample: mySecurePassword123\nExample: none - no password protection\n\nTimeout: 60 sec",
+    "COMPRESSION_ARCHIVE_ALGORITHM": "Set the archive algorithm. Options: 7z, zip, tar, rar, etc.\n\nExample: 7z - best compression, supports password protection\nExample: zip - more compatible, supports password protection\nExample: tar - good for preserving file permissions (no password support)\n\nTimeout: 60 sec",
     "COMPRESSION_ARCHIVE_FORMAT": "Set the output format for compressed archives. Common formats: zip, 7z, tar.gz.\n\nExample: zip - widely compatible format\nExample: 7z - better compression but less compatible\nExample: none - keep original format\n\nTimeout: 60 sec",
     # Trim Settings
     "TRIM_ENABLED": "Enable or disable trim feature. Send 'true' to enable or 'false' to disable.\n\nExample: true - enable trim feature\nExample: false - disable trim feature\n\nPriority:\n1. Global (enabled) & User (disabled) -> Apply global\n2. User (enabled) & Global (disabled) -> Apply user\n3. Global (enabled) & User (enabled) -> Apply user\n4. Global (disabled) & User (disabled) -> Don't apply\n\nUse the Reset button to reset all trim settings to default.\n\nTimeout: 60 sec",
@@ -1367,7 +1376,7 @@ media_tools_text = {
     "ADD_REPLACE_TRACKS": "Enable or disable replacing existing tracks when adding new ones.\n\nExample: true - replace existing tracks with new ones\nExample: false - keep existing tracks and add new ones\n\nThis can be overridden by using the -replace flag in the command.\n\nTimeout: 60 sec",
     # Video Add Settings
     "ADD_VIDEO_ENABLED": "Enable or disable adding video tracks to media files.\n\nExample: true - enable video track addition\nExample: false - disable video track addition\n\nWhen enabled, video tracks will be added according to the specified settings.\n\nTimeout: 60 sec",
-    "ADD_VIDEO_PATH": "Set the path to the video file to add as a track.\n\nExample: /path/to/video.mp4\nExample: none - no video file specified\n\nThe path should be accessible to the bot.\n\nTimeout: 60 sec",
+    # "ADD_VIDEO_PATH": "Path flag has been removed",
     "ADD_VIDEO_INDEX": "Set the video track index to add. Leave empty to add all video tracks.\n\nExample: 0 - add first video track\nExample: 1 - add second video track\nExample: none - add all video tracks\n\nTimeout: 60 sec",
     "ADD_VIDEO_CODEC": "Set the codec to use for video track addition.\n\nExample: copy - preserve original codec (fastest, no quality loss)\nExample: libx264 - H.264 codec (good compatibility)\nExample: libx265 - H.265/HEVC codec (better compression)\nExample: none - use default codec\n\nTimeout: 60 sec",
     "ADD_VIDEO_QUALITY": "Set the quality (CRF value) for video track addition. Lower values mean better quality but larger file size.\n\nExample: 18 - high quality\nExample: 23 - good quality\nExample: 28 - lower quality\nExample: none - don't set quality\n\nTimeout: 60 sec",
@@ -1377,7 +1386,7 @@ media_tools_text = {
     "ADD_VIDEO_FPS": "Set the frame rate for video track addition.\n\nExample: 30 - 30 frames per second\nExample: 60 - 60 frames per second\nExample: none - don't set FPS\n\nTimeout: 60 sec",
     # Audio Add Settings
     "ADD_AUDIO_ENABLED": "Enable or disable adding audio tracks to media files.\n\nExample: true - enable audio track addition\nExample: false - disable audio track addition\n\nWhen enabled, audio tracks will be added according to the specified settings.\n\nTimeout: 60 sec",
-    "ADD_AUDIO_PATH": "Set the path to the audio file to add as a track.\n\nExample: /path/to/audio.mp3\nExample: none - no audio file specified\n\nThe path should be accessible to the bot.\n\nTimeout: 60 sec",
+    # "ADD_AUDIO_PATH": "Path flag has been removed",
     "ADD_AUDIO_INDEX": "Set the audio track index to add. Leave empty to add all audio tracks.\n\nExample: 0 - add first audio track\nExample: 1 - add second audio track\nExample: none - add all audio tracks\n\nTimeout: 60 sec",
     "ADD_AUDIO_CODEC": "Set the codec to use for audio track addition.\n\nExample: copy - preserve original codec (fastest, no quality loss)\nExample: aac - AAC codec (good quality, compatibility)\nExample: libmp3lame - MP3 codec (widely compatible)\nExample: flac - FLAC codec (lossless)\nExample: none - use default codec\n\nTimeout: 60 sec",
     "ADD_AUDIO_BITRATE": "Set the bitrate for audio track addition.\n\nExample: 320k - high quality\nExample: 192k - good quality\nExample: 128k - acceptable quality\nExample: none - don't set bitrate\n\nTimeout: 60 sec",
@@ -1386,7 +1395,7 @@ media_tools_text = {
     "ADD_AUDIO_VOLUME": "Set the volume adjustment for audio track addition.\n\nExample: 1.0 - original volume\nExample: 2.0 - double volume\nExample: 0.5 - half volume\nExample: none - don't adjust volume\n\nTimeout: 60 sec",
     # Subtitle Add Settings
     "ADD_SUBTITLE_ENABLED": "Enable or disable adding subtitle tracks to media files.\n\nExample: true - enable subtitle track addition\nExample: false - disable subtitle track addition\n\nWhen enabled, subtitle tracks will be added according to the specified settings.\n\nTimeout: 60 sec",
-    "ADD_SUBTITLE_PATH": "Set the path to the subtitle file to add as a track.\n\nExample: /path/to/subtitle.srt\nExample: none - no subtitle file specified\n\nThe path should be accessible to the bot.\n\nTimeout: 60 sec",
+    # "ADD_SUBTITLE_PATH": "Path flag has been removed",
     "ADD_SUBTITLE_INDEX": "Set the subtitle track index to add. Leave empty to add all subtitle tracks.\n\nExample: 0 - add first subtitle track\nExample: 1 - add second subtitle track\nExample: none - add all subtitle tracks\n\nTimeout: 60 sec",
     "ADD_SUBTITLE_CODEC": "Set the codec to use for subtitle track addition.\n\nExample: copy - preserve original format\nExample: srt - convert to SRT format\nExample: ass - convert to ASS format\nExample: none - use default codec\n\nTimeout: 60 sec",
     "ADD_SUBTITLE_LANGUAGE": "Set the language code for subtitle track addition.\n\nExample: eng - English\nExample: spa - Spanish\nExample: none - don't set language\n\nTimeout: 60 sec",
@@ -1395,7 +1404,7 @@ media_tools_text = {
     "ADD_SUBTITLE_FONT_SIZE": "Set the font size for subtitle track addition (for ASS/SSA subtitles).\n\nExample: 24 - medium size\nExample: 32 - larger size\nExample: none - don't set font size\n\nTimeout: 60 sec",
     # Attachment Add Settings
     "ADD_ATTACHMENT_ENABLED": "Enable or disable adding attachments to media files.\n\nExample: true - enable attachment addition\nExample: false - disable attachment addition\n\nWhen enabled, attachments will be added according to the specified settings.\n\nTimeout: 60 sec",
-    "ADD_ATTACHMENT_PATH": "Set the path to the attachment file to add.\n\nExample: /path/to/font.ttf\nExample: none - no attachment file specified\n\nThe path should be accessible to the bot.\n\nTimeout: 60 sec",
+    # "ADD_ATTACHMENT_PATH": "Path flag has been removed",
     "ADD_ATTACHMENT_INDEX": "Set the attachment index to add. Leave empty to add all attachments.\n\nExample: 0 - add first attachment\nExample: 1 - add second attachment\nExample: none - add all attachments\n\nTimeout: 60 sec",
     "ADD_ATTACHMENT_MIMETYPE": "Set the MIME type for attachment addition.\n\nExample: font/ttf - TrueType font\nExample: image/png - PNG image\nExample: none - don't set MIME type\n\nTimeout: 60 sec",
     # MediaInfo Settings

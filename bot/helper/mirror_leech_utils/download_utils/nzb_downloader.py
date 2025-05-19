@@ -64,6 +64,13 @@ async def add_servers():
 
 
 async def add_nzb(listener, path):
+    # Check if NZB operations are enabled in the configuration
+    if not Config.NZB_ENABLED:
+        await listener.on_download_error(
+            "❌ NZB operations are disabled by the administrator."
+        )
+        return
+
     if not sabnzbd_client.LOGGED_IN:
         try:
             await add_servers()

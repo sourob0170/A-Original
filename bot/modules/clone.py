@@ -215,6 +215,16 @@ class Clone(TaskListener):
             )
             LOGGER.info(f"Cloning Done: {self.name}")
         elif is_rclone_path(self.link):
+            # Check if Rclone operations are enabled in the configuration
+            from bot.core.config_manager import Config
+
+            if not Config.RCLONE_ENABLED:
+                await send_message(
+                    self.message,
+                    "❌ Rclone operations are disabled by the administrator.",
+                )
+                return
+
             if self.link.startswith("mrcc:"):
                 self.link = self.link.replace("mrcc:", "", 1)
                 self.up_dest = self.up_dest.replace("mrcc:", "", 1)
@@ -402,6 +412,22 @@ async def clone_node(client, message):
     This function creates a task to handle the clone operation.
     It's designed to be called from a command handler.
     """
+    # Check if mirror operations are enabled in the configuration
+    from bot.core.config_manager import Config
+    from bot.helper.telegram_helper.message_utils import send_message
+
+    # Check if mirror operations are enabled
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message,
+            "❌ Clone command is disabled when mirror operations are disabled.",
+        )
+        return None
+
+    # We don't check for RCLONE_ENABLED here because the clone command can also
+    # clone from Google Drive. The check for RCLONE_ENABLED is done in the Clone class
+    # when an Rclone path is detected.
+
     # Use create_task to avoid blocking the event loop
     # We wrap this in a function to avoid running asyncio code during import
     return bot_loop.create_task(Clone(client, message).new_event())

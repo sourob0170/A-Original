@@ -1,7 +1,11 @@
 import ast
+import logging
 import os
 from importlib import import_module
 from typing import Any, ClassVar
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class Config:
@@ -36,6 +40,8 @@ class Config:
     MEDIA_GROUP: bool = False
     HYBRID_LEECH: bool = False
     MEDIA_SEARCH_CHATS: ClassVar[list] = []
+    HYDRA_IP: str = ""
+    HYDRA_API_KEY: str = ""
     NAME_SUBSTITUTE: str = r""
     OWNER_ID: int = 0
     QUEUE_ALL: int = 0
@@ -98,8 +104,6 @@ class Config:
     FSUB_IDS: str = ""
     LOG_CHAT_ID: int = 0
     LEECH_FILENAME_CAPTION: str = ""
-    HYDRA_IP: str = ""
-    HYDRA_API_KEY: str = ""
     INSTADL_API: str = ""
     MEDIA_STORE: bool = False
 
@@ -170,6 +174,8 @@ class Config:
     COMPRESSION_ARCHIVE_FORMAT: str = (
         "none"  # Output format for archive compression (e.g., zip, 7z)
     )
+    COMPRESSION_ARCHIVE_PASSWORD: str = "none"  # Password for archive protection
+    COMPRESSION_ARCHIVE_ALGORITHM: str = "none"  # Archive algorithm (e.g., 7z, zip)
 
     # Trim Settings
     TRIM_ENABLED: bool = False
@@ -465,17 +471,20 @@ class Config:
     AUTO_RESTART_ENABLED: bool = False
     AUTO_RESTART_INTERVAL: int = 24  # in hours
 
+    # Bulk Operation Settings
+    BULK_ENABLED: bool = True  # Enable/disable bulk operations (-b flag)
+
     # Task Monitoring Settings
     TASK_MONITOR_ENABLED: bool = True
     TASK_MONITOR_INTERVAL: int = 60  # in seconds
-    TASK_MONITOR_CONSECUTIVE_CHECKS: int = 3
+    TASK_MONITOR_CONSECUTIVE_CHECKS: int = 20
     TASK_MONITOR_SPEED_THRESHOLD: int = 50  # in KB/s
     TASK_MONITOR_ELAPSED_THRESHOLD: int = 3600  # in seconds (1 hour)
     TASK_MONITOR_ETA_THRESHOLD: int = 86400  # in seconds (24 hours)
     TASK_MONITOR_WAIT_TIME: int = 600  # in seconds (10 minutes)
-    TASK_MONITOR_COMPLETION_THRESHOLD: int = 14400  # in seconds (4 hours)
+    TASK_MONITOR_COMPLETION_THRESHOLD: int = 86400  # in seconds (4 hours)
     TASK_MONITOR_CPU_HIGH: int = 90  # percentage
-    TASK_MONITOR_CPU_LOW: int = 40  # percentage
+    TASK_MONITOR_CPU_LOW: int = 60  # percentage
     TASK_MONITOR_MEMORY_HIGH: int = 75  # percentage
     TASK_MONITOR_MEMORY_LOW: int = 60  # percentage
 
@@ -511,6 +520,44 @@ class Config:
     # Extra Modules Settings
     ENABLE_EXTRA_MODULES: bool = True
 
+    # Multi-link Settings
+    MULTI_LINK_ENABLED: bool = True
+
+    # Same Directory Settings
+    SAME_DIR_ENABLED: bool = True
+
+    # Mirror Settings
+    MIRROR_ENABLED: bool = True
+
+    # Leech Settings
+    LEECH_ENABLED: bool = True
+
+    # YT-DLP Settings
+    YTDLP_ENABLED: bool = True
+
+    # Torrent Settings
+    TORRENT_ENABLED: bool = True
+    TORRENT_SEARCH_ENABLED: bool = True
+
+    # NZB Settings
+    NZB_ENABLED: bool = True
+    NZB_SEARCH_ENABLED: bool = True
+
+    # JDownloader Settings
+    JD_ENABLED: bool = True
+
+    # Hyper Download Settings
+    HYPERDL_ENABLED: bool = True
+
+    # Media Search Settings
+    MEDIA_SEARCH_ENABLED: bool = True
+
+    # Rclone Settings
+    RCLONE_ENABLED: bool = True
+
+    # Archive Operation Settings
+    ARCHIVE_FLAGS_ENABLED: bool = True
+
     # AI Settings
     # Default AI Provider (mistral, deepseek)
     DEFAULT_AI_PROVIDER: str = "mistral"
@@ -531,8 +578,24 @@ class Config:
         expected_type = type(getattr(cls, key))
         if value is None:
             return None
-        if isinstance(value, expected_type):
-            return value
+
+        if key == "LEECH_DUMP_CHAT":
+            if isinstance(value, list):
+                return [str(v).strip() for v in value if str(v).strip()]
+
+            if isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    return []
+                try:
+                    evaluated = ast.literal_eval(value)
+                    if isinstance(evaluated, list):
+                        return [str(v).strip() for v in evaluated if str(v).strip()]
+                except (ValueError, SyntaxError):
+                    pass
+                return [value] if value else []
+
+            raise TypeError(f"{key} should be list[str], got {type(value).__name__}")
 
         # Special handling for MEDIA_TOOLS_ENABLED
         if key == "MEDIA_TOOLS_ENABLED":
@@ -562,7 +625,7 @@ class Config:
                     "extract",
                     "add",
                     "metadata",
-                    "ffmpeg",
+                    "xtra",
                     "sample",
                 ]
                 # Sort the tools to maintain consistent order
@@ -609,14 +672,17 @@ class Config:
             # For any other type, return an empty list
             return []
 
-        if isinstance(expected_type, bool):
+        if isinstance(value, expected_type):
+            return value
+
+        if expected_type is bool:
             return str(value).strip().lower() in {"true", "1", "yes"}
 
         if expected_type in [list, dict]:
             # Handle empty values for list and dict types
             if value == "" or value is None:
                 # Return empty list or dict based on expected type
-                return [] if expected_type == list else {}
+                return [] if expected_type is list else {}
 
             if not isinstance(value, str):
                 raise TypeError(
@@ -635,14 +701,24 @@ class Config:
                 raise TypeError(
                     f"{key} should be {expected_type.__name__}, got invalid string: {value}"
                 ) from e
+
         # Special handling for "none" or empty string values in numeric fields
-        if (
-            isinstance(value, str)
-            and (value.lower() == "none" or value == "")
-            and expected_type in (int, float)
-        ):
-            # For numeric types, return a default value (0) when "none" or empty string is specified
-            return 0
+        if isinstance(value, str) and expected_type in (int, float):
+            # Convert string values to appropriate numeric types
+            value_lower = value.lower()
+            if value_lower == "none" or value == "":
+                # For numeric types, return a default value (0) when "none" or empty string is specified
+                return 0
+
+            # Try to convert the string to the expected numeric type
+            try:
+                return expected_type(value)
+            except (ValueError, TypeError):
+                # If conversion fails, log a warning and return a default value
+                logger.warning(
+                    f"Failed to convert '{value}' to {expected_type.__name__} for {key}, using default value 0"
+                )
+                return 0
 
         try:
             return expected_type(value)
@@ -652,222 +728,87 @@ class Config:
             ) from exc
 
     @classmethod
-    def get(cls, key):
-        return getattr(cls, key) if hasattr(cls, key) else None
+    def _normalize_value(cls, key: str, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+
+        if key == "DEFAULT_UPLOAD" and value != "gd":
+            return "rc"
+
+        if key in {"BASE_URL", "RCLONE_SERVE_URL", "INDEX_URL"}:
+            return value.strip("/")
+
+        if key == "USENET_SERVERS" and (
+            not isinstance(value, list)
+            or not value
+            or not isinstance(value[0], dict)
+            or not value[0].get("host")
+        ):
+            return []
+
+        return value
 
     @classmethod
-    def set(cls, key, value):
-        if hasattr(cls, key):
-            value = cls._convert(key, value)
-            setattr(cls, key, value)
-        else:
+    def get(cls, key: str) -> Any:
+        return getattr(cls, key, None)
+
+    @classmethod
+    def set(cls, key: str, value: Any):
+        if not hasattr(cls, key):
             raise KeyError(f"{key} is not a valid configuration key.")
+        converted = cls._convert(key, value)
+        normalized = cls._normalize_value(key, converted)
+        setattr(cls, key, normalized)
 
     @classmethod
-    def get_all(cls):
-        return {
-            key: getattr(cls, key)
-            for key in sorted(cls.__dict__)
-            if not key.startswith("__") and not callable(getattr(cls, key))
-        }
+    def get_all(cls) -> dict:
+        return {key: getattr(cls, key) for key in sorted(cls.__annotations__)}
 
     @classmethod
     def load(cls):
         try:
             settings = import_module("config")
         except ModuleNotFoundError:
+            logger.warning("No config.py module found.")
             return
-        else:
-            for attr in dir(settings):
-                if (
-                    not attr.startswith("__")
-                    and not callable(getattr(settings, attr))
-                    and hasattr(cls, attr)
-                ):
-                    value = getattr(settings, attr)
-                    if value is None:  # Skip None values
-                        continue
-                    # Special handling for BASE_URL_PORT and RCLONE_SERVE_PORT
-                    # to ensure 0 values are properly processed
-                    if attr in ["BASE_URL_PORT", "RCLONE_SERVE_PORT"] and value == 0:
-                        setattr(cls, attr, 0)
-                        continue
-                    # Skip other falsy values
-                    if not value and not isinstance(value, int | float | bool):
-                        continue
-                    value = cls._convert(attr, value)
-                    if isinstance(value, str):
-                        value = value.strip()
-                    if attr == "DEFAULT_UPLOAD" and value != "gd":
-                        value = "rc"
-                    elif (
-                        attr
-                        in [
-                            "BASE_URL",
-                            "RCLONE_SERVE_URL",
-                            "INDEX_URL",
-                        ]
-                        and value
-                    ):
-                        value = value.strip("/")
-                    elif attr == "USENET_SERVERS":
-                        try:
-                            if not value[0].get("host"):
-                                continue
-                        except Exception:
-                            continue
-                    # Convert integer limit values to float
-                    elif (
-                        attr.endswith("_LIMIT")
-                        and not attr.startswith("PLAYLIST")
-                        and not attr.startswith("DAILY_TASK")
-                        and isinstance(value, int)
-                    ):
-                        value = float(value)
-                    setattr(cls, attr, value)
+
+        for attr in dir(settings):
+            if not cls._is_valid_config_attr(settings, attr):
+                continue
+
+            value = getattr(settings, attr)
+            if not value:
+                continue
+
+            try:
+                cls.set(attr, value)
+            except Exception as e:
+                logger.warning(f"Skipping config '{attr}' due to error: {e}")
 
     @classmethod
-    def load_dict(cls, config_dict):
+    def load_dict(cls, config_dict: dict[str, Any]):
         for key, value in config_dict.items():
-            if hasattr(cls, key):
-                value = cls._convert(key, value)
-                if key == "DEFAULT_UPLOAD" and value != "gd":
-                    value = "rc"
-                elif (
-                    key
-                    in [
-                        "BASE_URL",
-                        "RCLONE_SERVE_URL",
-                        "INDEX_URL",
-                    ]
-                    and value
-                ):
-                    value = value.strip("/")
-                elif key == "USENET_SERVERS":
-                    try:
-                        if not value[0].get("host"):
-                            value = []
-                    except Exception:
-                        value = []
-                elif key == "LEECH_DUMP_CHAT":
-                    # Ensure LEECH_DUMP_CHAT is always a valid list
-                    if not isinstance(value, list):
-                        value = []
-                # Convert integer limit values to float
-                elif (
-                    key.endswith("_LIMIT")
-                    and not key.startswith("PLAYLIST")
-                    and not key.startswith("DAILY_TASK")
-                    and isinstance(value, int)
-                ):
-                    value = float(value)
-                setattr(cls, key, value)
+            try:
+                cls.set(key, value)
+            except Exception as e:
+                logger.warning(f"Skipping config '{key}' due to error: {e}")
+
+    @classmethod
+    def _is_valid_config_attr(cls, module, attr: str) -> bool:
+        return (
+            not attr.startswith("__")
+            and not callable(getattr(module, attr))
+            and attr in cls.__annotations__
+        )
 
 
 class SystemEnv:
     @classmethod
     def load(cls):
-        config_vars = Config.get_all()
-        for key in config_vars:
+        for key in Config.__annotations__:
             env_value = os.getenv(key)
             if env_value is not None:
-                converted_value = cls._convert_type(key, env_value)
-                Config.set(key, converted_value)
-
-    @classmethod
-    def _convert_type(cls, key: str, value: str) -> Any:
-        original_value = getattr(Config, key, None)
-
-        if original_value is None:
-            return value
-
-        # Special handling for MEDIA_TOOLS_ENABLED
-        if key == "MEDIA_TOOLS_ENABLED":
-            # If it's a string with commas, it's a list of enabled tools
-            if "," in value:
-                return value  # Keep it as a comma-separated string
-            # If it's a single tool name
-            if value.strip() and value.strip().lower() not in {
-                "true",
-                "1",
-                "yes",
-                "false",
-                "0",
-                "no",
-            }:
-                return value  # Keep it as a string
-            # If it's a string that evaluates to True
-            if value.strip().lower() in {"true", "1", "yes"}:
-                # List of all available media tools
-                all_tools = [
-                    "watermark",
-                    "merge",
-                    "convert",
-                    "compression",
-                    "trim",
-                    "extract",
-                    "add",
-                    "metadata",
-                    "ffmpeg",
-                    "sample",
-                ]
-                # Sort the tools to maintain consistent order
-                all_tools.sort()
-                return ",".join(all_tools)
-            # If it's a string that evaluates to False
-            return False
-
-        # Special handling for MEDIA_SEARCH_CHATS
-        if key == "MEDIA_SEARCH_CHATS":
-            if not value:
-                return []
-            # Split by comma and convert each value to integer
-            try:
-                # First split by comma
-                chat_ids = value.split(",")
-                # Convert each value to integer, filtering out invalid values
-                return [
-                    int(chat_id.strip())
-                    for chat_id in chat_ids
-                    if chat_id.strip().lstrip("-").isdigit()
-                ]
-            except Exception:
-                # If there's any error, return the original value
-                return original_value
-
-        if isinstance(original_value, bool):
-            return value.lower() in ("true", "1", "yes")
-
-        # Special handling for limit values - convert to float
-        if (
-            key.endswith("_LIMIT")
-            and not key.startswith("PLAYLIST")
-            and not key.startswith("DAILY_TASK")
-        ):
-            try:
-                return float(value)
-            except ValueError:
-                return original_value
-
-        if isinstance(original_value, int):
-            try:
-                return int(value)
-            except ValueError:
-                return original_value
-
-        if isinstance(original_value, float):
-            try:
-                return float(value)
-            except ValueError:
-                return original_value
-
-        if isinstance(original_value, list):
-            return value.split(",")
-
-        if isinstance(original_value, dict):
-            try:
-                return ast.literal_eval(value)
-            except (SyntaxError, ValueError):
-                return original_value
-
-        return value
+                try:
+                    Config.set(key, env_value)
+                except Exception as e:
+                    logger.warning(f"Env override failed for '{key}': {e}")

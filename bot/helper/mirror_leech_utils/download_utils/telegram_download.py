@@ -46,7 +46,9 @@ class TelegramDownloadHelper:
         self._id = ""
         self.session = ""
         self._hyper_dl = (
-            TgClient.are_helper_bots_available() and Config.LEECH_DUMP_CHAT
+            Config.HYPERDL_ENABLED
+            and TgClient.are_helper_bots_available()
+            and Config.LEECH_DUMP_CHAT
         )
 
     @property
@@ -105,13 +107,11 @@ class TelegramDownloadHelper:
             create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
 
     async def _on_download_complete(self):
-        await self._listener.on_download_complete()
         async with global_lock:
             # Safely remove ID from GLOBAL_GID if it exists
             if self._id in GLOBAL_GID:
                 GLOBAL_GID.remove(self._id)
-            else:
-                pass
+        await self._listener.on_download_complete()
 
     async def _download(self, message, path):
         try:
@@ -191,7 +191,6 @@ class TelegramDownloadHelper:
             await self._on_download_complete()
         elif not self._listener.is_cancelled:
             await self._on_download_error("Internal error occurred")
-        return
 
     async def add_download(self, message, path, session):
         self.session = session

@@ -17,7 +17,7 @@ class FFmpegStatus:
         # Set the cstatus attribute on the listener for progress calculation
         if hasattr(listener, "cstatus"):
             listener.cstatus = status
-        self.tool = "ffmpeg"
+        self.tool = "xtra"
 
     def speed(self):
         return f"{get_readable_file_size(self._obj.speed_raw)}/s"

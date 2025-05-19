@@ -2537,6 +2537,9 @@ async def get_metadata_cmd(
     # Add output file
     cmd.append(temp_file)
 
+    # Log the output file format
+    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+
     # Log the command for debugging}")
 
     return cmd, temp_file
@@ -5350,8 +5353,46 @@ async def get_trim_cmd(
             # Use copy codec as default when none is specified
             cmd.extend(["-c:a", "copy"])
         else:
+            # Ensure codec is compatible with the container format
+            output_ext = os.path.splitext(temp_file)[1].lower()
+
+            # Match codec to appropriate container format
+            if audio_codec != "copy":
+                if file_ext == ".mp3" and audio_codec != "libmp3lame":
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with MP3 container, using libmp3lame"
+                    )
+                    audio_codec = "libmp3lame"
+                elif file_ext == ".m4a" and audio_codec != "aac":
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with M4A container, using aac"
+                    )
+                    audio_codec = "aac"
+                elif file_ext == ".opus" and audio_codec != "libopus":
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with OPUS container, using libopus"
+                    )
+                    audio_codec = "libopus"
+                elif file_ext == ".ogg" and audio_codec != "libvorbis":
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with OGG container, using libvorbis"
+                    )
+                    audio_codec = "libvorbis"
+                elif file_ext == ".flac" and audio_codec != "flac":
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with FLAC container, using flac"
+                    )
+                    audio_codec = "flac"
+                elif file_ext == ".wav" and not audio_codec.startswith("pcm_"):
+                    LOGGER.warning(
+                        f"Codec {audio_codec} not compatible with WAV container, using pcm_s16le"
+                    )
+                    audio_codec = "pcm_s16le"
+
+            # Add the codec to the command
             cmd.extend(["-c:a", audio_codec])
 
+            # Add appropriate quality parameters based on codec
             if audio_codec != "copy":
                 if audio_codec == "aac":
                     cmd.extend(["-b:a", "192k"])
@@ -5359,6 +5400,8 @@ async def get_trim_cmd(
                     cmd.extend(["-q:a", "3"])
                 elif audio_codec == "libopus":
                     cmd.extend(["-b:a", "128k"])
+                elif audio_codec == "libvorbis":
+                    cmd.extend(["-q:a", "6"])
                 elif audio_codec == "flac":
                     cmd.extend(["-compression_level", "8"])
 
@@ -5368,30 +5411,51 @@ async def get_trim_cmd(
         # Add avoid_negative_ts to fix timestamp issues
         cmd.extend(["-avoid_negative_ts", "make_zero"])
 
-        # Add container-specific parameters
+        # Add container-specific parameters for better compatibility
         if file_ext == ".mp3":
+            # For MP3 files, ensure we use the right format
+            cmd.extend(["-f", "mp3"])
             if audio_codec == "copy":
                 # For MP3 files, sometimes copy doesn't work well with trimming
                 # Use re-encoding with high quality
+                cmd = [c for c in cmd if c not in ["-c:a", "copy"]]
                 cmd.extend(["-c:a", "libmp3lame", "-q:a", "3"])
         elif file_ext == ".m4a":
+            # For M4A files, ensure we use the right format
+            cmd.extend(["-f", "mp4"])
             if audio_codec == "copy":
                 # For M4A files, sometimes copy doesn't work well with trimming
                 # Use re-encoding with high quality
+                cmd = [c for c in cmd if c not in ["-c:a", "copy"]]
                 cmd.extend(["-c:a", "aac", "-b:a", "192k"])
         elif file_ext == ".opus":
+            # For Opus files, ensure we use the right format
+            cmd.extend(["-f", "opus"])
             if audio_codec == "copy":
                 # For Opus files, sometimes copy doesn't work well with trimming
                 # Use re-encoding with high quality
+                cmd = [c for c in cmd if c not in ["-c:a", "copy"]]
                 cmd.extend(["-c:a", "libopus", "-b:a", "128k"])
+        elif file_ext == ".ogg":
+            # For OGG files, ensure we use the right format
+            cmd.extend(["-f", "ogg"])
+            if audio_codec == "copy":
+                # For OGG files, sometimes copy doesn't work well with trimming
+                # Use re-encoding with high quality
+                cmd = [c for c in cmd if c not in ["-c:a", "copy"]]
+                cmd.extend(["-c:a", "libvorbis", "-q:a", "6"])
         elif file_ext == ".flac":
-            # For FLAC files, ensure we preserve quality
+            # For FLAC files, ensure we use the right format
+            cmd.extend(["-f", "flac"])
             if audio_codec == "copy":
                 # No special parameters needed for FLAC copy
                 pass
             else:
                 # Use high quality for re-encoding
                 cmd.extend(["-compression_level", "8"])
+        elif file_ext == ".wav":
+            # For WAV files, ensure we use the right format
+            cmd.extend(["-f", "wav"])
 
     elif media_type == "image":
         # For image files, we need special handling since images don't have duration
@@ -5457,102 +5521,56 @@ async def get_trim_cmd(
             # For GIF, we need special handling
             # Check if it's an animated GIF by getting the number of frames
             streams = await get_streams(file)
-            if streams and len(streams) > 0:
-                # Try to get the number of frames
-                nb_frames = 1
-                for stream in streams:
-                    if stream.get("codec_type") == "video" and stream.get(
-                        "nb_frames"
-                    ):
-                        with contextlib.suppress(ValueError, TypeError):
-                            nb_frames = int(stream.get("nb_frames"))
 
-                # If it's an animated GIF (more than 1 frame)
-                if nb_frames > 1:
-                    LOGGER.info(
-                        f"Detected animated GIF with {nb_frames} frames: {file}"
-                    )
+            # Create a more robust approach for GIF files
+            # Reset the command to ensure clean setup
+            cmd = [
+                "xtra",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-progress",
+                "pipe:1",
+            ]
 
-                    # For animated GIFs, we need to use a different approach
-                    # We'll use palettegen and paletteuse filters to maintain quality
-                    cmd = [
-                        "xtra",
-                        "-hide_banner",
-                        "-loglevel",
-                        "error",
-                        "-progress",
-                        "pipe:1",
-                    ]
+            # Always put -ss before -i for accurate seeking with GIFs
+            if start_time:
+                cmd.extend(["-ss", start_time])
 
-                    # Add input file with seek if needed
-                    if start_time:
-                        cmd.extend(["-ss", start_time])
+            cmd.extend(["-i", file])
 
-                    cmd.extend(["-i", file])
+            if end_time:
+                cmd.extend(["-to", end_time])
 
-                    # Add duration limit if needed
-                    if end_time:
-                        cmd.extend(["-to", end_time])
+            # Create a temporary output file with .mp4 extension for intermediate processing
+            # This helps avoid issues with direct GIF output
+            temp_mp4 = f"{file}.temp.mp4"
 
-                    # Create a palette for better quality
-                    cmd.extend(
-                        [
-                            "-vf",
-                            "split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=sierra2_4a",
-                            "-loop",
-                            "0",  # Preserve looping
-                        ]
-                    )
+            # Use a two-step process:
+            # 1. Convert GIF to MP4 with h264 encoding
+            # 2. Convert MP4 back to GIF with proper palette
 
-                    # Ensure we're using the GIF format
-                    cmd.extend(["-f", "gif"])
-                else:
-                    # For static GIFs, use a simpler approach
-                    LOGGER.info(f"Detected static GIF: {file}")
-                    cmd = [
-                        "xtra",
-                        "-hide_banner",
-                        "-loglevel",
-                        "error",
-                        "-progress",
-                        "pipe:1",
-                    ]
-
-                    # For static GIFs, it's better to put -ss before -i for accurate seeking
-                    if start_time:
-                        cmd.extend(["-ss", start_time])
-
-                    cmd.extend(["-i", file])
-
-                    if end_time:
-                        cmd.extend(["-to", end_time])
-
-                    # Use a simple filter to ensure the output is a valid GIF
-                    cmd.extend(
-                        ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-f", "gif"]
-                    )
-            else:
-                # Fallback to a more robust approach if we can't determine frame count
-                cmd = [
-                    "xtra",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-progress",
-                    "pipe:1",
+            # Step 1: Convert to MP4 with h264 encoding
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-vf",
+                    "scale=trunc(iw/2)*2:trunc(ih/2)*2",  # Ensure even dimensions
+                    "-crf",
+                    "18",  # High quality
+                    "-preset",
+                    "fast",
+                    "-y",
+                    temp_mp4,
                 ]
+            )
 
-                # Put -ss before -i for accurate seeking
-                if start_time:
-                    cmd.extend(["-ss", start_time])
-
-                cmd.extend(["-i", file])
-
-                if end_time:
-                    cmd.extend(["-to", end_time])
-
-                # Use a simple filter to ensure the output is a valid GIF
-                cmd.extend(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-f", "gif"])
+            # Return a special command format that will be recognized and handled
+            # in the proceed_trim method to perform the second step
+            return ["gif_trim", file, temp_mp4, temp_file], temp_file
 
     elif media_type == "subtitle":
         # For subtitle files
@@ -5676,6 +5694,9 @@ async def get_trim_cmd(
 
     # Add output file
     cmd.append(temp_file)
+
+    # Log the output file format
+    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
 
     # Add -y flag to force overwrite without prompting
     if "-y" not in cmd:
@@ -6215,6 +6236,9 @@ async def get_compression_cmd(
     # Add output file
     cmd.append(temp_file)
 
+    # Log the output file format
+    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+
     return cmd, temp_file
 
 
@@ -6285,10 +6309,6 @@ async def get_add_cmd(
     add_audio=False,
     add_subtitle=False,
     add_attachment=False,
-    video_path=None,
-    audio_path=None,
-    subtitle_path=None,
-    attachment_path=None,
     video_index=None,
     audio_index=None,
     subtitle_index=None,
@@ -6323,10 +6343,6 @@ async def get_add_cmd(
         add_audio: Whether to add audio track
         add_subtitle: Whether to add subtitle track
         add_attachment: Whether to add attachment
-        video_path: Path to video file to add
-        audio_path: Path to audio file to add
-        subtitle_path: Path to subtitle file to add
-        attachment_path: Path to attachment file to add
         video_index: Index to place video track (None = append)
         audio_index: Index to place audio track (None = append)
         subtitle_index: Index to place subtitle track (None = append)
@@ -6378,38 +6394,15 @@ async def get_add_cmd(
         # First additional file is treated as video, second as audio, third as subtitle, etc.
         if len(multi_files) >= 1:
             add_video = True
-            video_path = multi_files[
-                0
-            ]  # This is just for logging, not actually used
         if len(multi_files) >= 2:
             add_audio = True
-            audio_path = multi_files[
-                1
-            ]  # This is just for logging, not actually used
         if len(multi_files) >= 3:
             add_subtitle = True
-            subtitle_path = multi_files[
-                2
-            ]  # This is just for logging, not actually used
         if len(multi_files) >= 4:
             add_attachment = True
-            attachment_path = multi_files[
-                3
-            ]  # This is just for logging, not actually used
-    else:
-        # Legacy mode - check if at least one track is being added
-        if not any([add_video, add_audio, add_subtitle, add_attachment]):
-            return None, None
-
-        # Check if the required paths are provided
-        if add_video and not video_path:
-            return None, None
-        if add_audio and not audio_path:
-            return None, None
-        if add_subtitle and not subtitle_path:
-            return None, None
-        if add_attachment and not attachment_path:
-            return None, None
+    # Legacy mode - check if at least one track is being added
+    elif not any([add_video, add_audio, add_subtitle, add_attachment]):
+        return None, None
 
     # Determine output file extension based on input file
     file_ext = os.path.splitext(file_path)[1].lower()
@@ -6417,6 +6410,35 @@ async def get_add_cmd(
     # For videos, always use .mkv as temp extension for maximum compatibility
     if media_type == "video":
         temp_file = f"{file_path}.temp.mkv"
+    # For MP3 files with audio tracks being added, use MKV format
+    elif file_ext == ".mp3" and add_audio:
+        # Check if we're adding audio tracks
+        if multi_files:
+            has_audio = False
+            for additional_file in multi_files:
+                from bot.helper.ext_utils.media_utils import get_streams
+
+                streams = await get_streams(additional_file)
+                if streams and any(
+                    stream.get("codec_type") == "audio" for stream in streams
+                ):
+                    has_audio = True
+                    break
+
+            if has_audio:
+                LOGGER.warning(
+                    "MP3 files can only contain one audio stream. Converting to MKV format."
+                )
+                temp_file = f"{file_path}.temp.mkv"
+            else:
+                # For other files, preserve the original extension
+                temp_file = f"{file_path}.temp{file_ext}"
+        else:
+            # If we're not using multi-input mode, we're definitely adding audio
+            LOGGER.warning(
+                "MP3 files can only contain one audio stream. Converting to MKV format."
+            )
+            temp_file = f"{file_path}.temp.mkv"
     else:
         # For other files, preserve the original extension
         temp_file = f"{file_path}.temp{file_ext}"
@@ -6434,7 +6456,6 @@ async def get_add_cmd(
     ]
 
     # Add input files for tracks to be added
-    input_count = 1  # Start from 1 because the main file is input 0
 
     # Track the input indices for mapping
     video_input_idx = None
@@ -6456,26 +6477,8 @@ async def get_add_cmd(
             elif i == 3:
                 attachment_input_idx = 4
     else:
-        # Legacy mode - add specific files for each track type
-        if add_video and video_path:
-            cmd.extend(["-i", video_path])
-            video_input_idx = input_count
-            input_count += 1
-
-        if add_audio and audio_path:
-            cmd.extend(["-i", audio_path])
-            audio_input_idx = input_count
-            input_count += 1
-
-        if add_subtitle and subtitle_path:
-            cmd.extend(["-i", subtitle_path])
-            subtitle_input_idx = input_count
-            input_count += 1
-
-        if add_attachment and attachment_path:
-            cmd.extend(["-i", attachment_path])
-            attachment_input_idx = input_count
-            input_count += 1
+        # Legacy mode - no specific files for each track type in this mode
+        pass
 
     # Add mapping for the original file streams
     map_args = []
@@ -6497,6 +6500,210 @@ async def get_add_cmd(
     subtitle_stream_type = "s"  # Default stream type for subtitle files
     attachment_stream_type = "t"  # Default stream type for attachment files
 
+    # Determine stream types based on file content
+    if multi_files:
+        from bot.helper.ext_utils.media_utils import get_streams
+
+        # Check each input file for stream types
+        for i, additional_file in enumerate(multi_files):
+            streams = await get_streams(additional_file)
+            if not streams:
+                LOGGER.warning(f"No streams found in file: {additional_file}")
+                continue
+
+            # Determine the primary stream type for this file
+            has_video = any(
+                stream.get("codec_type") == "video" for stream in streams
+            )
+            has_audio = any(
+                stream.get("codec_type") == "audio" for stream in streams
+            )
+            has_subtitle = any(
+                stream.get("codec_type") == "subtitle" for stream in streams
+            )
+            has_attachment = any(
+                stream.get("codec_type") == "attachment" for stream in streams
+            )
+
+            # Update the stream type for this input index
+            if i == 0 and video_input_idx is not None:
+                if has_video:
+                    video_stream_type = "v"
+                elif has_audio:
+                    video_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as video input"
+                    )
+                elif has_subtitle:
+                    video_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as video input"
+                    )
+                elif has_attachment:
+                    video_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as video input"
+                    )
+
+            if i == 1 and audio_input_idx is not None:
+                if has_audio:
+                    audio_stream_type = "a"
+                elif has_video:
+                    audio_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as audio input"
+                    )
+                elif has_subtitle:
+                    audio_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as audio input"
+                    )
+                elif has_attachment:
+                    audio_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as audio input"
+                    )
+
+            if i == 2 and subtitle_input_idx is not None:
+                if has_subtitle:
+                    subtitle_stream_type = "s"
+                elif has_video:
+                    subtitle_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as subtitle input"
+                    )
+                elif has_audio:
+                    subtitle_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as subtitle input"
+                    )
+                elif has_attachment:
+                    subtitle_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as subtitle input"
+                    )
+
+            if i == 3 and attachment_input_idx is not None:
+                if has_attachment:
+                    attachment_stream_type = "t"
+                elif has_video:
+                    attachment_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as attachment input"
+                    )
+                elif has_audio:
+                    attachment_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as attachment input"
+                    )
+                elif has_subtitle:
+                    attachment_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as attachment input"
+                    )
+
+    # Determine stream types based on file content
+    if multi_files:
+        from bot.helper.ext_utils.media_utils import get_streams
+
+        # Check each input file for stream types
+        for i, additional_file in enumerate(multi_files):
+            streams = await get_streams(additional_file)
+            if not streams:
+                LOGGER.warning(f"No streams found in file: {additional_file}")
+                continue
+
+            # Determine the primary stream type for this file
+            has_video = any(
+                stream.get("codec_type") == "video" for stream in streams
+            )
+            has_audio = any(
+                stream.get("codec_type") == "audio" for stream in streams
+            )
+            has_subtitle = any(
+                stream.get("codec_type") == "subtitle" for stream in streams
+            )
+            has_attachment = any(
+                stream.get("codec_type") == "attachment" for stream in streams
+            )
+
+            # Update the stream type for this input index
+            if i == 0 and video_input_idx is not None:
+                if has_video:
+                    video_stream_type = "v"
+                elif has_audio:
+                    video_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as video input"
+                    )
+                elif has_subtitle:
+                    video_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as video input"
+                    )
+                elif has_attachment:
+                    video_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as video input"
+                    )
+
+            if i == 1 and audio_input_idx is not None:
+                if has_audio:
+                    audio_stream_type = "a"
+                elif has_video:
+                    audio_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as audio input"
+                    )
+                elif has_subtitle:
+                    audio_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as audio input"
+                    )
+                elif has_attachment:
+                    audio_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as audio input"
+                    )
+
+            if i == 2 and subtitle_input_idx is not None:
+                if has_subtitle:
+                    subtitle_stream_type = "s"
+                elif has_video:
+                    subtitle_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as subtitle input"
+                    )
+                elif has_audio:
+                    subtitle_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as subtitle input"
+                    )
+                elif has_attachment:
+                    subtitle_stream_type = "t"
+                    LOGGER.info(
+                        f"Using attachment stream from file {additional_file} as subtitle input"
+                    )
+
+            if i == 3 and attachment_input_idx is not None:
+                if has_attachment:
+                    attachment_stream_type = "t"
+                elif has_video:
+                    attachment_stream_type = "v"
+                    LOGGER.info(
+                        f"Using video stream from file {additional_file} as attachment input"
+                    )
+                elif has_audio:
+                    attachment_stream_type = "a"
+                    LOGGER.info(
+                        f"Using audio stream from file {additional_file} as attachment input"
+                    )
+                elif has_subtitle:
+                    attachment_stream_type = "s"
+                    LOGGER.info(
+                        f"Using subtitle stream from file {additional_file} as attachment input"
+                    )
+
     # Stream types for mapping
     # video_stream_type, audio_stream_type, subtitle_stream_type, attachment_stream_type are defined above
 
@@ -6507,7 +6714,51 @@ async def get_add_cmd(
         # The indices in the comma-separated list correspond to the order of input files
 
         # Handle video tracks
+        # Check if the input file has video streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if video_input_idx is not None:
+            # Check if the input file has video streams
+            video_file = (
+                multi_files[0] if multi_files and len(multi_files) > 0 else file_path
+            )
+            video_streams = await get_streams(video_file)
+            has_video_stream = (
+                any(stream.get("codec_type") == "video" for stream in video_streams)
+                if video_streams
+                else False
+            )
+
+            if not has_video_stream:
+                LOGGER.warning(f"No video streams found in input file {video_file}")
+                # Use audio stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "s"
+                else:
+                    # Skip this input file
+                    video_input_idx = None
             if video_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(video_index):
@@ -6616,7 +6867,51 @@ async def get_add_cmd(
                 map_args.extend(["-map", f"{video_input_idx}:{video_stream_type}"])
 
         # Handle audio tracks
+        # Check if the input file has audio streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if audio_input_idx is not None:
+            # Check if the input file has audio streams
+            audio_file = (
+                multi_files[1] if multi_files and len(multi_files) > 1 else file_path
+            )
+            audio_streams = await get_streams(audio_file)
+            has_audio_stream = (
+                any(stream.get("codec_type") == "audio" for stream in audio_streams)
+                if audio_streams
+                else False
+            )
+
+            if not has_audio_stream:
+                LOGGER.warning(f"No audio streams found in input file {audio_file}")
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "s"
+                else:
+                    # Skip this input file
+                    audio_input_idx = None
             if audio_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(audio_index):
@@ -6728,7 +7023,56 @@ async def get_add_cmd(
                 map_args.extend(["-map", f"{audio_input_idx}:{audio_stream_type}"])
 
         # Handle subtitle tracks
+        # Check if the input file has subtitle streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if subtitle_input_idx is not None:
+            # Check if the input file has subtitle streams
+            subtitle_file = (
+                multi_files[2] if multi_files and len(multi_files) > 2 else file_path
+            )
+            subtitle_streams = await get_streams(subtitle_file)
+            has_subtitle_stream = (
+                any(
+                    stream.get("codec_type") == "subtitle"
+                    for stream in subtitle_streams
+                )
+                if subtitle_streams
+                else False
+            )
+
+            if not has_subtitle_stream:
+                LOGGER.warning(
+                    f"No subtitle streams found in input file {subtitle_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "a"
+                else:
+                    # Skip this input file
+                    subtitle_input_idx = None
             if subtitle_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(subtitle_index):
@@ -6846,7 +7190,68 @@ async def get_add_cmd(
                 )
 
         # Handle attachment tracks
+        # Check if the input file has attachment streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if attachment_input_idx is not None:
+            # Check if the input file has attachment streams
+            attachment_file = (
+                multi_files[3] if multi_files and len(multi_files) > 3 else file_path
+            )
+            attachment_streams = await get_streams(attachment_file)
+            has_attachment_stream = (
+                any(
+                    stream.get("codec_type") == "attachment"
+                    for stream in attachment_streams
+                )
+                if attachment_streams
+                else False
+            )
+
+            if not has_attachment_stream:
+                LOGGER.warning(
+                    f"No attachment streams found in input file {attachment_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "s"
+                else:
+                    # Skip this input file
+                    attachment_input_idx = None
             if attachment_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(attachment_index):
@@ -6981,7 +7386,51 @@ async def get_add_cmd(
                 )
     else:
         # Legacy mode - simpler mapping
+        # Check if the input file has video streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if video_input_idx is not None:
+            # Check if the input file has video streams
+            video_file = (
+                multi_files[0] if multi_files and len(multi_files) > 0 else file_path
+            )
+            video_streams = await get_streams(video_file)
+            has_video_stream = (
+                any(stream.get("codec_type") == "video" for stream in video_streams)
+                if video_streams
+                else False
+            )
+
+            if not has_video_stream:
+                LOGGER.warning(f"No video streams found in input file {video_file}")
+                # Use audio stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "s"
+                else:
+                    # Skip this input file
+                    video_input_idx = None
             if video_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(video_index):
@@ -7006,7 +7455,51 @@ async def get_add_cmd(
                 # Append to the end
                 map_args.extend(["-map", f"{video_input_idx}:{video_stream_type}"])
 
+        # Check if the input file has audio streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if audio_input_idx is not None:
+            # Check if the input file has audio streams
+            audio_file = (
+                multi_files[1] if multi_files and len(multi_files) > 1 else file_path
+            )
+            audio_streams = await get_streams(audio_file)
+            has_audio_stream = (
+                any(stream.get("codec_type") == "audio" for stream in audio_streams)
+                if audio_streams
+                else False
+            )
+
+            if not has_audio_stream:
+                LOGGER.warning(f"No audio streams found in input file {audio_file}")
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "s"
+                else:
+                    # Skip this input file
+                    audio_input_idx = None
             if audio_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(audio_index):
@@ -7031,7 +7524,56 @@ async def get_add_cmd(
                 # Append to the end
                 map_args.extend(["-map", f"{audio_input_idx}:{audio_stream_type}"])
 
+        # Check if the input file has subtitle streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if subtitle_input_idx is not None:
+            # Check if the input file has subtitle streams
+            subtitle_file = (
+                multi_files[2] if multi_files and len(multi_files) > 2 else file_path
+            )
+            subtitle_streams = await get_streams(subtitle_file)
+            has_subtitle_stream = (
+                any(
+                    stream.get("codec_type") == "subtitle"
+                    for stream in subtitle_streams
+                )
+                if subtitle_streams
+                else False
+            )
+
+            if not has_subtitle_stream:
+                LOGGER.warning(
+                    f"No subtitle streams found in input file {subtitle_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "a"
+                else:
+                    # Skip this input file
+                    subtitle_input_idx = None
             if subtitle_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(subtitle_index):
@@ -7061,7 +7603,68 @@ async def get_add_cmd(
                     ["-map", f"{subtitle_input_idx}:{subtitle_stream_type}"]
                 )
 
+        # Check if the input file has attachment streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if attachment_input_idx is not None:
+            # Check if the input file has attachment streams
+            attachment_file = (
+                multi_files[3] if multi_files and len(multi_files) > 3 else file_path
+            )
+            attachment_streams = await get_streams(attachment_file)
+            has_attachment_stream = (
+                any(
+                    stream.get("codec_type") == "attachment"
+                    for stream in attachment_streams
+                )
+                if attachment_streams
+                else False
+            )
+
+            if not has_attachment_stream:
+                LOGGER.warning(
+                    f"No attachment streams found in input file {attachment_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "s"
+                else:
+                    # Skip this input file
+                    attachment_input_idx = None
             if attachment_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(attachment_index):
@@ -7108,7 +7711,51 @@ async def get_add_cmd(
         # In multi-input mode, we need to add metadata for each file based on its index
 
         # Add metadata for video tracks
+        # Check if the input file has video streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if video_input_idx is not None:
+            # Check if the input file has video streams
+            video_file = (
+                multi_files[0] if multi_files and len(multi_files) > 0 else file_path
+            )
+            video_streams = await get_streams(video_file)
+            has_video_stream = (
+                any(stream.get("codec_type") == "video" for stream in video_streams)
+                if video_streams
+                else False
+            )
+
+            if not has_video_stream:
+                LOGGER.warning(f"No video streams found in input file {video_file}")
+                # Use audio stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "s"
+                else:
+                    # Skip this input file
+                    video_input_idx = None
             if video_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(video_index):
@@ -7163,7 +7810,51 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for audio tracks
+        # Check if the input file has audio streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if audio_input_idx is not None:
+            # Check if the input file has audio streams
+            audio_file = (
+                multi_files[1] if multi_files and len(multi_files) > 1 else file_path
+            )
+            audio_streams = await get_streams(audio_file)
+            has_audio_stream = (
+                any(stream.get("codec_type") == "audio" for stream in audio_streams)
+                if audio_streams
+                else False
+            )
+
+            if not has_audio_stream:
+                LOGGER.warning(f"No audio streams found in input file {audio_file}")
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "s"
+                else:
+                    # Skip this input file
+                    audio_input_idx = None
             if audio_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(audio_index):
@@ -7219,7 +7910,56 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for subtitle tracks
+        # Check if the input file has subtitle streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if subtitle_input_idx is not None:
+            # Check if the input file has subtitle streams
+            subtitle_file = (
+                multi_files[2] if multi_files and len(multi_files) > 2 else file_path
+            )
+            subtitle_streams = await get_streams(subtitle_file)
+            has_subtitle_stream = (
+                any(
+                    stream.get("codec_type") == "subtitle"
+                    for stream in subtitle_streams
+                )
+                if subtitle_streams
+                else False
+            )
+
+            if not has_subtitle_stream:
+                LOGGER.warning(
+                    f"No subtitle streams found in input file {subtitle_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "a"
+                else:
+                    # Skip this input file
+                    subtitle_input_idx = None
             if subtitle_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(subtitle_index):
@@ -7276,7 +8016,68 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for attachment tracks
+        # Check if the input file has attachment streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if attachment_input_idx is not None:
+            # Check if the input file has attachment streams
+            attachment_file = (
+                multi_files[3] if multi_files and len(multi_files) > 3 else file_path
+            )
+            attachment_streams = await get_streams(attachment_file)
+            has_attachment_stream = (
+                any(
+                    stream.get("codec_type") == "attachment"
+                    for stream in attachment_streams
+                )
+                if attachment_streams
+                else False
+            )
+
+            if not has_attachment_stream:
+                LOGGER.warning(
+                    f"No attachment streams found in input file {attachment_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "s"
+                else:
+                    # Skip this input file
+                    attachment_input_idx = None
             if attachment_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(attachment_index):
@@ -7336,7 +8137,51 @@ async def get_add_cmd(
     else:
         # Legacy mode - simpler metadata handling
         # Add metadata for video tracks
+        # Check if the input file has video streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if video_input_idx is not None:
+            # Check if the input file has video streams
+            video_file = (
+                multi_files[0] if multi_files and len(multi_files) > 0 else file_path
+            )
+            video_streams = await get_streams(video_file)
+            has_video_stream = (
+                any(stream.get("codec_type") == "video" for stream in video_streams)
+                if video_streams
+                else False
+            )
+
+            if not has_video_stream:
+                LOGGER.warning(f"No video streams found in input file {video_file}")
+                # Use audio stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in video_streams
+                    )
+                    if video_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of video stream from {video_file}"
+                    )
+                    video_stream_type = "s"
+                else:
+                    # Skip this input file
+                    video_input_idx = None
             if video_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(video_index):
@@ -7391,7 +8236,51 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for audio tracks
+        # Check if the input file has audio streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if audio_input_idx is not None:
+            # Check if the input file has audio streams
+            audio_file = (
+                multi_files[1] if multi_files and len(multi_files) > 1 else file_path
+            )
+            audio_streams = await get_streams(audio_file)
+            has_audio_stream = (
+                any(stream.get("codec_type") == "audio" for stream in audio_streams)
+                if audio_streams
+                else False
+            )
+
+            if not has_audio_stream:
+                LOGGER.warning(f"No audio streams found in input file {audio_file}")
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in audio_streams
+                    )
+                    if audio_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of audio stream from {audio_file}"
+                    )
+                    audio_stream_type = "s"
+                else:
+                    # Skip this input file
+                    audio_input_idx = None
             if audio_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(audio_index):
@@ -7446,7 +8335,56 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for subtitle tracks
+        # Check if the input file has subtitle streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if subtitle_input_idx is not None:
+            # Check if the input file has subtitle streams
+            subtitle_file = (
+                multi_files[2] if multi_files and len(multi_files) > 2 else file_path
+            )
+            subtitle_streams = await get_streams(subtitle_file)
+            has_subtitle_stream = (
+                any(
+                    stream.get("codec_type") == "subtitle"
+                    for stream in subtitle_streams
+                )
+                if subtitle_streams
+                else False
+            )
+
+            if not has_subtitle_stream:
+                LOGGER.warning(
+                    f"No subtitle streams found in input file {subtitle_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in subtitle_streams
+                    )
+                    if subtitle_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of subtitle stream from {subtitle_file}"
+                    )
+                    subtitle_stream_type = "a"
+                else:
+                    # Skip this input file
+                    subtitle_input_idx = None
             if subtitle_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(subtitle_index):
@@ -7502,7 +8440,68 @@ async def get_add_cmd(
                 pass
 
         # Add metadata for attachment tracks
+        # Check if the input file has attachment streams
+        from bot.helper.ext_utils.media_utils import get_streams
+
         if attachment_input_idx is not None:
+            # Check if the input file has attachment streams
+            attachment_file = (
+                multi_files[3] if multi_files and len(multi_files) > 3 else file_path
+            )
+            attachment_streams = await get_streams(attachment_file)
+            has_attachment_stream = (
+                any(
+                    stream.get("codec_type") == "attachment"
+                    for stream in attachment_streams
+                )
+                if attachment_streams
+                else False
+            )
+
+            if not has_attachment_stream:
+                LOGGER.warning(
+                    f"No attachment streams found in input file {attachment_file}"
+                )
+                # Use video stream instead if available
+                if (
+                    any(
+                        stream.get("codec_type") == "video"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using video stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "v"
+                elif (
+                    any(
+                        stream.get("codec_type") == "audio"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using audio stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "a"
+                elif (
+                    any(
+                        stream.get("codec_type") == "subtitle"
+                        for stream in attachment_streams
+                    )
+                    if attachment_streams
+                    else False
+                ):
+                    LOGGER.info(
+                        f"Using subtitle stream instead of attachment stream from {attachment_file}"
+                    )
+                    attachment_stream_type = "s"
+                else:
+                    # Skip this input file
+                    attachment_input_idx = None
             if attachment_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(attachment_index):
@@ -7663,6 +8662,9 @@ async def get_add_cmd(
     # Add output file
     cmd.append(temp_file)
 
+    # Log the output file format
+    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+
     # Add -del flag if delete_original is True
     if delete_original:
         cmd.append("-del")
@@ -7820,12 +8822,16 @@ async def get_extract_cmd(
 
                     cmd = [
                         "xtra",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-i",
                         file_path,
                         "-map",
                         f"0:{stream_index}",
                         "-c:v",
                         video_codec,
+                        "-y",  # Always overwrite output files
                     ]
 
                     # Add quality settings if not using copy codec
@@ -7859,12 +8865,16 @@ async def get_extract_cmd(
 
                 cmd = [
                     "xtra",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
                     "-i",
                     file_path,
                     "-map",
                     f"0:{stream_index}",
                     "-c:v",
                     video_codec,
+                    "-y",  # Always overwrite output files
                 ]
 
                 # Add quality settings if not using copy codec
@@ -7890,11 +8900,39 @@ async def get_extract_cmd(
                     codec_name = stream.get("codec_name", "unknown")
 
                     # Determine output extension based on codec
-                    output_ext = (
-                        "m4a"
-                        if audio_codec in ["aac", "libfdk_aac"]
-                        else audio_codec
-                    )
+                    if audio_codec == "copy":
+                        # When using copy, use a proper extension based on the input codec
+                        input_codec = codec_name.lower()
+                        if input_codec in ["aac", "libfdk_aac"]:
+                            output_ext = "m4a"
+                        elif input_codec in ["mp3", "libmp3lame"]:
+                            output_ext = "mp3"
+                        elif input_codec in ["opus", "libopus"]:
+                            output_ext = "opus"
+                        elif input_codec in ["flac", "libflac"]:
+                            output_ext = "flac"
+                        elif input_codec in ["vorbis", "libvorbis"]:
+                            output_ext = "ogg"
+                        elif input_codec in ["pcm_s16le", "pcm_s24le", "pcm_f32le"]:
+                            output_ext = "wav"
+                        else:
+                            # Default to Matroska Audio for other codecs
+                            output_ext = "mka"
+                    # For non-copy codecs, use appropriate extension
+                    elif audio_codec in ["aac", "libfdk_aac"]:
+                        output_ext = "m4a"
+                    elif audio_codec in ["mp3", "libmp3lame"]:
+                        output_ext = "mp3"
+                    elif audio_codec in ["opus", "libopus"]:
+                        output_ext = "opus"
+                    elif audio_codec in ["flac", "libflac"]:
+                        output_ext = "flac"
+                    elif audio_codec in ["vorbis", "libvorbis"]:
+                        output_ext = "ogg"
+                    else:
+                        # Default to Matroska Audio for other codecs
+                        output_ext = "mka"
+
                     output_file = os.path.join(
                         file_dir,
                         f"{file_base}.audio.{stream.get('tags', {}).get('language', 'und')}.{stream_index}.{output_ext}",
@@ -7902,12 +8940,16 @@ async def get_extract_cmd(
 
                     cmd = [
                         "xtra",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-i",
                         file_path,
                         "-map",
                         f"0:{stream_index}",
                         "-c:a",
                         audio_codec,
+                        "-y",  # Always overwrite output files
                     ]
 
                     # Add quality settings if not using copy codec
@@ -7932,9 +8974,39 @@ async def get_extract_cmd(
             # Extract all audio tracks
             for i, (stream_index, stream) in enumerate(audio_streams):
                 # Determine output extension based on codec
-                output_ext = (
-                    "m4a" if audio_codec in ["aac", "libfdk_aac"] else audio_codec
-                )
+                codec_name = stream.get("codec_name", "unknown")
+                if audio_codec == "copy":
+                    # When using copy, use a proper extension based on the input codec
+                    input_codec = codec_name.lower()
+                    if input_codec in ["aac", "libfdk_aac"]:
+                        output_ext = "m4a"
+                    elif input_codec in ["mp3", "libmp3lame"]:
+                        output_ext = "mp3"
+                    elif input_codec in ["opus", "libopus"]:
+                        output_ext = "opus"
+                    elif input_codec in ["flac", "libflac"]:
+                        output_ext = "flac"
+                    elif input_codec in ["vorbis", "libvorbis"]:
+                        output_ext = "ogg"
+                    elif input_codec in ["pcm_s16le", "pcm_s24le", "pcm_f32le"]:
+                        output_ext = "wav"
+                    else:
+                        # Default to Matroska Audio for other codecs
+                        output_ext = "mka"
+                elif audio_codec in ["aac", "libfdk_aac"]:
+                    output_ext = "m4a"
+                elif audio_codec in ["mp3", "libmp3lame"]:
+                    output_ext = "mp3"
+                elif audio_codec in ["opus", "libopus"]:
+                    output_ext = "opus"
+                elif audio_codec in ["flac", "libflac"]:
+                    output_ext = "flac"
+                elif audio_codec in ["vorbis", "libvorbis"]:
+                    output_ext = "ogg"
+                else:
+                    # Default to Matroska Audio for other codecs
+                    output_ext = "mka"
+
                 output_file = os.path.join(
                     file_dir,
                     f"{file_base}.audio.{stream.get('tags', {}).get('language', 'und')}.{stream_index}.{output_ext}",
@@ -7942,12 +9014,16 @@ async def get_extract_cmd(
 
                 cmd = [
                     "xtra",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
                     "-i",
                     file_path,
                     "-map",
                     f"0:{stream_index}",
                     "-c:a",
                     audio_codec,
+                    "-y",  # Always overwrite output files
                 ]
 
                 # Add quality settings if not using copy codec
@@ -7989,12 +9065,16 @@ async def get_extract_cmd(
 
                     cmd = [
                         "xtra",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-i",
                         file_path,
                         "-map",
                         f"0:{stream_index}",
                         "-c:s",
                         subtitle_codec,
+                        "-y",  # Always overwrite output files
                     ]
                     cmd.append(output_file)
                     commands.append(" ".join(cmd))
@@ -8024,12 +9104,16 @@ async def get_extract_cmd(
 
                 cmd = [
                     "xtra",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
                     "-i",
                     file_path,
                     "-map",
                     f"0:{stream_index}",
                     "-c:s",
                     subtitle_codec,
+                    "-y",  # Always overwrite output files
                 ]
                 cmd.append(output_file)
                 commands.append(" ".join(cmd))

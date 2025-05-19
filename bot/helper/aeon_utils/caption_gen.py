@@ -79,10 +79,20 @@ async def calculate_md5(file_path, block_size=8192):
 
 def clean_caption(caption):
     """Clean up the caption by removing empty lines and extra whitespace."""
+    if not caption:
+        return ""
+
     # Remove empty lines
     lines = [line.strip() for line in caption.split("\n") if line.strip()]
+
+    # Remove duplicate lines
+    unique_lines = []
+    for line in lines:
+        if line not in unique_lines:
+            unique_lines.append(line)
+
     # Join lines with a newline
-    return "\n".join(lines)
+    return "\n".join(unique_lines)
 
 
 async def generate_caption(filename, directory, caption_template):
@@ -586,32 +596,49 @@ async def generate_caption(filename, directory, caption_template):
             return processed_caption
         except Exception as e:
             LOGGER.error(f"Error processing template with advanced processor: {e}")
-            # Fall back to the simple format_map method if advanced processing fails
+            # Try to recover by removing problematic parts
             try:
-                # Create a custom format string that skips empty variables
-                custom_template = caption_template
-                for key, value in caption_data.items():
-                    if not value or not str(value).strip():
-                        # Replace the variable and its line if it's on its own line
-                        pattern = rf"^.*{{{key}}}.*$\n?"
-                        custom_template = re.sub(
-                            pattern, "", custom_template, flags=re.MULTILINE
-                        )
-                        # Replace the variable if it's part of a line
-                        custom_template = custom_template.replace(f"{{{key}}}", "")
-
-                # Format the template with the data
-                processed_caption = custom_template.format_map(caption_data)
-                # Clean up empty lines and format the caption
-                processed_caption = clean_caption(processed_caption)
-                LOGGER.info(
-                    f"Successfully applied simple caption template for: {filename}"
+                # Remove nested templates that might be causing issues
+                simplified_template = re.sub(r"{{+.*?}+", "", caption_template)
+                processed_caption = await process_template(
+                    simplified_template, cleaned_caption_data
                 )
+                processed_caption = clean_caption(processed_caption)
+                LOGGER.info(f"Recovered with simplified template for: {filename}")
                 return processed_caption
-            except Exception as e:
-                LOGGER.error(f"Error processing template with simple processor: {e}")
-                # If all else fails, just return the filename
-                return filename
+            except Exception as e2:
+                LOGGER.error(f"Error recovering with simplified template: {e2}")
+                # Fall back to the simple format_map method if advanced processing fails
+                try:
+                    # Create a custom format string that skips empty variables
+                    custom_template = caption_template
+                    for key, value in caption_data.items():
+                        if not value or not str(value).strip():
+                            # Replace the variable and its line if it's on its own line
+                            pattern = rf"^.*{{{key}}}.*$\n?"
+                            custom_template = re.sub(
+                                pattern, "", custom_template, flags=re.MULTILINE
+                            )
+                            # Replace the variable if it's part of a line
+                            custom_template = custom_template.replace(
+                                f"{{{key}}}", ""
+                            )
+
+                    # Format the template with the data
+                    processed_caption = custom_template.format_map(caption_data)
+                    # Clean up empty lines and format the caption
+                    processed_caption = clean_caption(processed_caption)
+                    LOGGER.info(
+                        f"Successfully applied simple caption template for: {filename}"
+                    )
+                    return processed_caption
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error processing template with simple processor: {e}"
+                    )
+                    # If all else fails, return a basic formatted caption
+                    return f"<code>{filename}</code>\n<b>Size:</b> {cleaned_caption_data.get('size', 'Unknown')}"
     except Exception as e:
         LOGGER.error(f"Error generating caption: {e}")
-        return filename
+        # Return a basic formatted caption instead of just the filename
+        return f"<code>{filename}</code>"

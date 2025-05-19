@@ -18,6 +18,13 @@ async def rclone_serve_booter():
         except Exception:
             pass
 
+    # Check if Rclone operations are enabled in the configuration
+    if not Config.RCLONE_ENABLED:
+        from bot import LOGGER
+
+        LOGGER.info("Rclone HTTP server is disabled (RCLONE_ENABLED is False)")
+        return
+
     # Check if rclone serve is disabled (RCLONE_SERVE_PORT = 0)
     if Config.RCLONE_SERVE_PORT == 0:
         from bot import LOGGER

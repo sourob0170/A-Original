@@ -67,11 +67,14 @@ class SabnzbdClient(JobFunctions):
     ):
         if requests_args is None:
             requests_args = {}
+        if params is None:
+            params = {}
         session = self._session()
         params |= kwargs
         requests_kwargs = {**self._HTTPX_REQUETS_ARGS, **requests_args}
         retries = 5
         response = None
+        res = None
         for retry_count in range(retries):
             try:
                 res = await session.request(
@@ -80,15 +83,45 @@ class SabnzbdClient(JobFunctions):
                     params={**self._default_params, **params},
                     **requests_kwargs,
                 )
-                response = res.json()
-                break
-            except DecodingError as e:
-                raise DecodingError(f"Failed to decode response!: {res.text}") from e
+
+                # Check if response is empty
+                if not res.text.strip():
+                    # Handle empty response
+                    if retry_count >= (retries - 1):
+                        # If this is the last retry, return an empty dict
+                        return {
+                            "status": False,
+                            "error": "Empty response from server",
+                        }
+                    # Otherwise, retry
+                    continue
+
+                try:
+                    response = res.json()
+                    break
+                except DecodingError as e:
+                    # If we can't decode the response as JSON, log the error and retry
+                    if retry_count >= (retries - 1):
+                        # If this is the last retry, raise the error
+                        raise DecodingError(
+                            f"Failed to decode response: {res.text}"
+                        ) from e
+                    # Otherwise, retry
+                    continue
+
             except APIConnectionError as err:
                 if retry_count >= (retries - 1):
                     raise err
+
         if response is None:
+            if res is not None and res.status_code != 200:
+                # If we have a response but it's not 200 OK
+                raise APIConnectionError(
+                    f"API returned status code {res.status_code}: {res.text}"
+                )
+            # If we don't have a response at all
             raise APIConnectionError("Failed to connect to API!")
+
         return response
 
     async def close(self):

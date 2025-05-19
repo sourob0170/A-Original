@@ -1,3 +1,4 @@
+from asyncio import create_task
 from xml.etree import ElementTree as ET
 
 from aiohttp import ClientSession
@@ -8,11 +9,35 @@ from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.status_utils import get_readable_file_size
 from bot.helper.ext_utils.telegraph_helper import telegraph
 from bot.helper.telegram_helper.button_build import ButtonMaker
-from bot.helper.telegram_helper.message_utils import edit_message, send_message
+from bot.helper.telegram_helper.message_utils import (
+    auto_delete_message,
+    edit_message,
+    send_message,
+)
 
 
 @new_task
 async def hydra_search(_, message):
+    # Check if NZB operations are enabled in the configuration
+    if not Config.NZB_ENABLED:
+        error_msg = await send_message(
+            message, "❌ NZB operations are disabled by the administrator."
+        )
+        create_task(
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
+    # Check if NZB search is specifically enabled
+    if not Config.NZB_SEARCH_ENABLED:
+        error_msg = await send_message(
+            message, "❌ NZB search is disabled by the administrator."
+        )
+        create_task(
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
     key = message.text.split()
 
     if len(key) == 1:

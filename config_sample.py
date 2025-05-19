@@ -35,6 +35,7 @@ NAME_SUBSTITUTE = r""  # Regex pattern to substitute in filenames
 FFMPEG_CMDS = {}  # Custom FFmpeg commands for different file types
 UPLOAD_PATHS = {}  # Custom upload paths for different file types
 MEDIA_STORE = False  # Enable media store for faster thumbnail generation
+MEDIA_SEARCH_ENABLED = True  # Enable/disable media search feature
 MEDIA_SEARCH_CHATS = []  # List of chat IDs where media search is enabled
 DELETE_LINKS = False  # Delete links after download
 FSUB_IDS = ""  # Force subscribe channel IDs, separated by space
@@ -48,6 +49,20 @@ MEDIAINFO_ENABLED = (
     False  # Enable/disable mediainfo command for detailed media information
 )
 INSTADL_API = ""  # InstaDL API key for Instagram downloads
+
+# Feature Toggles
+MIRROR_ENABLED = True  # Enable/disable mirror feature
+LEECH_ENABLED = True  # Enable/disable leech feature
+YTDLP_ENABLED = True  # Enable/disable YT-DLP feature
+TORRENT_ENABLED = True  # Enable/disable torrent feature
+TORRENT_SEARCH_ENABLED = True  # Enable/disable torrent search feature
+NZB_ENABLED = True  # Enable/disable NZB feature
+JD_ENABLED = True  # Enable/disable JDownloader feature
+RCLONE_ENABLED = True  # Enable/disable Rclone feature
+ARCHIVE_FLAGS_ENABLED = True  # Enable/disable archive operation flags
+MULTI_LINK_ENABLED = True  # Enable/disable multi-link feature
+SAME_DIR_ENABLED = True  # Enable/disable same directory feature
+BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
 
 # GDrive Tools
 GDRIVE_ID = ""  # Google Drive folder/TeamDrive ID where files will be uploaded
@@ -77,6 +92,7 @@ MEGA_PASSWORD = ""  # Mega.nz account password
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
 HYDRA_API_KEY = ""  # Hydra API key for direct links
+NZB_SEARCH_ENABLED = True  # Enable/disable NZB search feature
 USENET_SERVERS = [  # List of Usenet servers for NZB downloads
     {
         "name": "main",  # Server name
@@ -112,12 +128,15 @@ LEECH_FILENAME_PREFIX = ""  # Prefix to add to leeched filenames
 LEECH_SUFFIX = ""  # Suffix to add to leeched files
 LEECH_FONT = ""  # Font to use for leech captions
 LEECH_FILENAME = ""  # Custom filename template for leeched files
-LEECH_FILENAME_CAPTION = ""  # Caption template for leeched files
+LEECH_FILENAME_CAPTION = (
+    ""  # Caption template for leeched files (max 1024 characters)
+)
 LEECH_DUMP_CHAT = []  # Chat IDs ["-100123456789", "b:@mychannel", "u:-100987654321", "h:@mygroup|123456"] where leeched files will be sent
 THUMBNAIL_LAYOUT = ""  # Layout for thumbnails: empty, top, bottom, or custom
 EQUAL_SPLITS = False  # Create equal-sized parts when splitting files
 
 # Hyper Download Settings
+HYPERDL_ENABLED = True  # Enable/disable hyper download feature
 HELPER_TOKENS = ""  # Bot tokens for helper bots, separated by space. Format: "token1 token2 token3"
 HYPER_THREADS = 0  # Number of threads for hyper download (0 = auto-detect based on number of helper bots)
 
@@ -170,13 +189,13 @@ BOT_MAX_TASKS = (
     0  # Maximum number of concurrent tasks the bot can handle (0 = unlimited)
 )
 USER_TIME_INTERVAL = 0  # Minimum time between user tasks in seconds (0 = no delay)
-STATUS_LIMIT = 10  # Number of tasks to display in status message
+STATUS_LIMIT = 10  # Number of tasks to display in status message (recommended: 4-10)
 SEARCH_LIMIT = 0  # Maximum number of search results to display (0 = unlimited)
 
 # Task Monitoring Settings
 TASK_MONITOR_ENABLED = True  # Master switch to enable/disable task monitoring
 TASK_MONITOR_INTERVAL = 60  # Interval between task monitoring checks in seconds
-TASK_MONITOR_CONSECUTIVE_CHECKS = 200  # Number of consecutive checks for monitoring
+TASK_MONITOR_CONSECUTIVE_CHECKS = 20  # Number of consecutive checks for monitoring
 TASK_MONITOR_SPEED_THRESHOLD = 50  # Speed threshold in KB/s
 TASK_MONITOR_ELAPSED_THRESHOLD = 3600  # Elapsed time threshold in seconds (1 hour)
 TASK_MONITOR_ETA_THRESHOLD = 86400  # ETA threshold in seconds (24 hours)
@@ -184,7 +203,7 @@ TASK_MONITOR_WAIT_TIME = (
     600  # Wait time before canceling a task in seconds (10 minutes)
 )
 TASK_MONITOR_COMPLETION_THRESHOLD = (
-    86400  # Completion threshold in seconds (24 hours)
+    86400  # Completion threshold in seconds (4 hours)
 )
 TASK_MONITOR_CPU_HIGH = 90  # High CPU usage threshold percentage
 TASK_MONITOR_CPU_LOW = 60  # Low CPU usage threshold percentage
@@ -244,7 +263,7 @@ WATERMARK_SIZE = (
 )
 WATERMARK_COLOR = "none"  # Watermark text color: none, white, black, red, green, blue, yellow, etc.
 WATERMARK_FONT = "none"  # Font for watermark text: none, Arial.ttf, Roboto, etc. (supports Google Fonts)
-WATERMARK_OPACITY = 1.0  # Watermark opacity: 0.0 (transparent) to 1.0 (opaque)
+WATERMARK_OPACITY = 0.0  # Watermark opacity: 0.0 (transparent) to 1.0 (opaque)
 WATERMARK_PRIORITY = 2  # Processing priority in pipeline (lower numbers run earlier)
 WATERMARK_THREADING = True  # Use multi-threading for faster watermark processing
 WATERMARK_THREAD_NUMBER = 4  # Number of threads for watermark processing
@@ -449,6 +468,10 @@ COMPRESSION_ARCHIVE_METHOD = "none"  # Compression method: none, deflate, lzma, 
 COMPRESSION_ARCHIVE_FORMAT = (
     "none"  # Output format: none (use input format), zip, 7z, tar.gz, etc.
 )
+COMPRESSION_ARCHIVE_PASSWORD = (
+    "none"  # Password for archive: none or password string
+)
+COMPRESSION_ARCHIVE_ALGORITHM = "none"  # Archive algorithm: none, 7z, zip, etc.
 
 # Trim Settings
 TRIM_ENABLED = False  # Master switch to enable/disable trim feature
@@ -556,7 +579,7 @@ ADD_REPLACE_TRACKS = False  # Replace existing tracks with new ones at the same 
 
 # Video Add Settings
 ADD_VIDEO_ENABLED = False  # Enable/disable video track addition
-ADD_VIDEO_PATH = "none"  # Path to video file to add
+# ADD_VIDEO_PATH has been removed
 ADD_VIDEO_INDEX = None  # Stream index to add: None (all), 0, 1, 2, etc.
 ADD_VIDEO_CODEC = "copy"  # Video codec: copy (fastest), libx264, libx265, etc.
 ADD_VIDEO_QUALITY = "none"  # Video quality: none, high, medium, low, etc.
@@ -569,7 +592,7 @@ ADD_VIDEO_FPS = "none"  # Frame rate: none, 30, 60, etc.
 
 # Audio Add Settings
 ADD_AUDIO_ENABLED = False  # Enable/disable audio track addition
-ADD_AUDIO_PATH = "none"  # Path to audio file to add
+# ADD_AUDIO_PATH has been removed
 ADD_AUDIO_INDEX = None  # Stream index to add: None (all), 0, 1, 2, etc.
 ADD_AUDIO_CODEC = "copy"  # Audio codec: copy (fastest), aac, mp3, etc.
 ADD_AUDIO_BITRATE = "none"  # Audio bitrate: none, 128k, 192k, 320k, etc.
@@ -581,7 +604,7 @@ ADD_AUDIO_VOLUME = "none"  # Volume adjustment: none, 1.0, 1.5, 0.5, etc.
 
 # Subtitle Add Settings
 ADD_SUBTITLE_ENABLED = False  # Enable/disable subtitle track addition
-ADD_SUBTITLE_PATH = "none"  # Path to subtitle file to add
+# ADD_SUBTITLE_PATH has been removed
 ADD_SUBTITLE_INDEX = None  # Stream index to add: None (all), 0, 1, 2, etc.
 ADD_SUBTITLE_CODEC = "copy"  # Subtitle codec: copy, mov_text, etc.
 ADD_SUBTITLE_LANGUAGE = "none"  # Language code: none, eng, spa, etc.
@@ -591,7 +614,7 @@ ADD_SUBTITLE_FONT_SIZE = "none"  # Font size: none, 12, 16, etc.
 
 # Attachment Add Settings
 ADD_ATTACHMENT_ENABLED = False  # Enable/disable attachment addition
-ADD_ATTACHMENT_PATH = "none"  # Path to attachment file to add
+# ADD_ATTACHMENT_PATH has been removed
 ADD_ATTACHMENT_INDEX = None  # Attachment index to add: None (all), 0, 1, 2, etc.
 ADD_ATTACHMENT_MIMETYPE = "none"  # MIME type: none, font/ttf, image/png, etc.
 
@@ -660,6 +683,7 @@ CONVERT_ARCHIVE_DELETE_ORIGINAL = (
 )
 
 # Metadata Settings
+METADATA_KEY = ""  # Legacy metadata key
 METADATA_ALL = ""  # Global metadata template for all media types
 METADATA_TITLE = ""  # Default title metadata for all media types
 METADATA_AUTHOR = ""  # Default author metadata for all media types

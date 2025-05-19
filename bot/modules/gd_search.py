@@ -1,4 +1,5 @@
 from bot import LOGGER, user_data
+from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import (
     get_telegraph_list,
     new_task,
@@ -68,6 +69,14 @@ async def _list_drive(key, message, item_type, is_recursive, user_token, user_id
 
 @new_task
 async def select_type(_, query):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await query.answer(
+            text="❌ List command is disabled when mirror operations are disabled.",
+            show_alert=True,
+        )
+        return None
+
     user_id = query.from_user.id
     message = query.message
     cmd_message = message.reply_to_message
@@ -109,6 +118,14 @@ async def select_type(_, query):
 
 @new_task
 async def gdrive_search(_, message):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message,
+            "❌ List command is disabled when mirror operations are disabled.",
+        )
+        return
+
     if len(message.text.split()) == 1:
         msg = await send_message(message, "Send a search key along with command")
         await auto_delete_message(msg, message)  # Auto delete after 5 minutes

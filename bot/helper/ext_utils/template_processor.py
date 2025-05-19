@@ -234,7 +234,21 @@ async def extract_metadata_from_filename(name):
     # Special case for anime titles
     if "anime" in name.lower() or any(
         keyword in name.lower()
-        for keyword in ["sub", "dub", "raw", "bd", "tv", "dvd", "ova", "ona"]
+        for keyword in [
+            "sub",
+            "dub",
+            "raw",
+            "bd",
+            "tv",
+            "dvd",
+            "ova",
+            "ona",
+            "anima",
+            "subs",
+            "dubbed",
+            "fansub",
+            "bluray",
+        ]
     ):
         # Special case for One Piece and other anime with 1000+ episodes
         if "one piece" in name.lower():
@@ -253,44 +267,74 @@ async def extract_metadata_from_filename(name):
                     skip_further_detection = True
                     break
 
-            # Only proceed with other patterns if we didn't find a One Piece episode
-            if not skip_further_detection:
-                # Check for explicit anime episode patterns with full episode number
-                anime_explicit_patterns = [
-                    r"Episode\s+(\d{3,4})(?![a-zA-Z0-9])",  # Episode 1015
-                    r"Ep(?:isode)?\s*(\d{3,4})(?![a-zA-Z0-9])",  # Ep1015, Ep 1015
-                    r"#(\d{3,4})(?![a-zA-Z0-9])",  # #1015
-                    r"E(\d{3,4})(?![a-zA-Z0-9])",  # E1015
-                ]
+        # Check for common anime naming patterns like [Group] Title - Episode
+        anime_group_patterns = [
+            r"\[([^\]]+)\]\s*([^-\[\]]+)\s*-\s*(\d+)",  # [Group] Title - 01
+            r"\[([^\]]+)\]\s*([^-\[\]]+)\s*-\s*(?:Episode|Ep\.?|#)?\s*(\d+)",  # [Group] Title - Episode 01
+        ]
 
-                for pattern in anime_explicit_patterns:
-                    match = re.search(pattern, name, re.IGNORECASE)
-                    if match:
-                        episode = match.group(1)
-                        # Don't remove leading zeros for high episode numbers
-                        # This preserves the full episode number
-                        break
+        for pattern in anime_group_patterns:
+            match = re.search(pattern, name, re.IGNORECASE)
+            if match:
+                # Extract group, title, and episode
+                match.group(1)
+                title = match.group(2).strip()
+                ep_num = match.group(3)
 
-                # If still no match, look for standalone 3-4 digit numbers that might be anime episodes
-                # But avoid matching years (1900-2099)
-                if not episode:
-                    # First try to find full episode numbers in anime titles
-                    full_ep_pattern = r"(?:Episode|Ep)\s*(\d{3,4})(?![a-zA-Z0-9])"
-                    full_ep_match = re.search(full_ep_pattern, name, re.IGNORECASE)
-                    if full_ep_match:
-                        episode = full_ep_match.group(1)
-                    else:
-                        # Then try standalone numbers
-                        anime_ep_pattern = r"(?<![a-zA-Z0-9])(?!(?:19|20)\d{2})(\d{3,4})(?![a-zA-Z0-9\.])"
-                        anime_matches = re.finditer(
-                            anime_ep_pattern, name, re.IGNORECASE
-                        )
-                        for match in anime_matches:
-                            potential_ep = match.group(1)
-                            # Only consider it an episode if it's a reasonable number (under 2000)
-                            if int(potential_ep) < 2000:
-                                episode = potential_ep
-                                break
+                # Set episode number
+                episode = ep_num
+
+                # Try to extract season from title if it contains "S2", "Season 2", etc.
+                season_in_title = re.search(
+                    r"S(\d+)|Season\s*(\d+)", title, re.IGNORECASE
+                )
+                if season_in_title:
+                    season_num = season_in_title.group(1) or season_in_title.group(2)
+                    season = f"{int(season_num):02d}"
+
+                # Skip further detection since we found a match
+                skip_further_detection = True
+                break
+
+        # Only proceed with other patterns if we didn't find an episode yet
+        if not skip_further_detection:
+            # Check for explicit anime episode patterns with full episode number
+            anime_explicit_patterns = [
+                r"Episode\s+(\d{1,4})(?![a-zA-Z0-9])",  # Episode 1015
+                r"Ep(?:isode)?\s*(\d{1,4})(?![a-zA-Z0-9])",  # Ep1015, Ep 1015
+                r"#(\d{1,4})(?![a-zA-Z0-9])",  # #1015
+                r"E(\d{1,4})(?![a-zA-Z0-9])",  # E1015
+                r"(?<![a-zA-Z0-9])(\d{2,4})(?:\s*v\d+)?(?:\s*END)?(?![a-zA-Z0-9])",  # 1015, 1015 v2, 1015 END
+            ]
+
+            for pattern in anime_explicit_patterns:
+                match = re.search(pattern, name, re.IGNORECASE)
+                if match:
+                    episode = match.group(1)
+                    # Don't remove leading zeros for high episode numbers
+                    # This preserves the full episode number
+                    break
+
+            # If still no match, look for standalone 2-4 digit numbers that might be anime episodes
+            # But avoid matching years (1900-2099)
+            if not episode:
+                # First try to find full episode numbers in anime titles
+                full_ep_pattern = r"(?:Episode|Ep)\s*(\d{1,4})(?![a-zA-Z0-9])"
+                full_ep_match = re.search(full_ep_pattern, name, re.IGNORECASE)
+                if full_ep_match:
+                    episode = full_ep_match.group(1)
+                else:
+                    # Then try standalone numbers
+                    anime_ep_pattern = r"(?<![a-zA-Z0-9])(?!(?:19|20)\d{2})(\d{2,4})(?![a-zA-Z0-9\.])"
+                    anime_matches = re.finditer(
+                        anime_ep_pattern, name, re.IGNORECASE
+                    )
+                    for match in anime_matches:
+                        potential_ep = match.group(1)
+                        # Only consider it an episode if it's a reasonable number (under 2000)
+                        if int(potential_ep) < 2000:
+                            episode = potential_ep
+                            break
 
     # Special case for titles with numbers that might be mistaken for episodes
     # Check if the extracted episode is actually part of a year
@@ -358,6 +402,8 @@ async def extract_metadata_from_filename(name):
         r"(x264|x265)",
         r"(10bit|8bit|10-bit|8-bit)",
         r"(HDR10\+?|Dolby\s*Vision|DV|DoVi)",
+        r"(DOLBY(?:VISION)?|DV)",  # Dolby Vision
+        r"(AAC|MP3|FLAC|DTS(?:-?HD)?|DD(?:\+|P)?|TrueHD|Atmos)",  # Audio codecs
     ]
 
     codec_matches = []
@@ -368,6 +414,19 @@ async def extract_metadata_from_filename(name):
             # Avoid duplicates
             if codec_match.lower() not in [c.lower() for c in codec_matches]:
                 codec_matches.append(codec_match)
+
+    # Special case for anime files with HEVC in brackets
+    if not codec_matches and "HEVC" in name:
+        hevc_match = re.search(r"\[(HEVC(?:\s+\d+bit)?)\]", name, re.IGNORECASE)
+        if hevc_match:
+            codec_matches.append(hevc_match.group(1))
+
+    # Special case for anime files with common codec indicators
+    if not codec_matches:
+        for indicator in ["10bit", "10 bit", "HEVC", "x264", "x265"]:
+            if indicator.lower() in name.lower():
+                codec_matches.append(indicator)
+                break
 
     # Join all codec indicators
     if codec_matches:
@@ -579,7 +638,11 @@ async def process_template(template, data_dict):
                 match.group(2).strip() if match.group(2) else None
             )  # Get the variable value
             if var_name in data_dict:
-                value = str(data_dict[var_name])  # Apply styling if specified
+                value = str(data_dict[var_name])
+                # Handle None or empty values
+                if value is None or value == "":
+                    value = ""
+                # Apply styling if specified
                 if style_name:
                     try:  # Check if it's a Google Font
                         if await is_google_font(style_name):
@@ -598,6 +661,7 @@ async def process_template(template, data_dict):
                         return value
                     except Exception as e:
                         LOGGER.error(f"Error applying style {style_name}: {e}")
+                        # Continue with original value on error
                         return value
                 return value
             # If it's not a template variable, treat it as custom text
@@ -623,6 +687,7 @@ async def process_template(template, data_dict):
                     return f"<code>{value}</code>"
                 except Exception as e:
                     LOGGER.error(f"Error applying style {style_name}: {e}")
+                    # Continue with original value on error
                     return value
             return value
 
@@ -630,7 +695,11 @@ async def process_template(template, data_dict):
         if match.group(3) is not None:
             var_name = match.group(3).strip()
             if var_name in data_dict:
-                return str(data_dict[var_name])
+                value = str(data_dict[var_name])
+                # Handle None or empty values
+                if value is None:
+                    return ""
+                return value
 
         # Return the original if variable not found or no match
         return match.group(0)

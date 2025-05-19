@@ -802,16 +802,59 @@ class YtDlp(TaskListener):
                     args[flag] = 0
 
         try:
-            self.multi = int(args["-i"])
+            # Check if multi-link operations are enabled in the configuration
+            if not Config.MULTI_LINK_ENABLED and int(args["-i"]) > 0:
+                await send_message(
+                    self.message,
+                    "❌ Multi-link operations are disabled by the administrator.",
+                )
+                self.multi = 0
+            else:
+                self.multi = int(args["-i"])
         except Exception:
             self.multi = 0
 
         try:
             if args["-ff"]:
+                # Process multiple commands or presets
                 if isinstance(args["-ff"], str):
-                    # Check if it's a key in the FFmpeg commands dictionary
-                    if Config.FFMPEG_CMDS and args["-ff"] in Config.FFMPEG_CMDS:
-                        self.ffmpeg_cmds = Config.FFMPEG_CMDS[args["-ff"]]
+                    # Check if it contains multiple presets separated by spaces
+                    if " " in args["-ff"]:
+                        preset_names = args["-ff"].split()
+                        self.ffmpeg_cmds = []
+                        for preset_name in preset_names:
+                            # Look for preset in config
+                            if (
+                                Config.FFMPEG_CMDS
+                                and preset_name in Config.FFMPEG_CMDS
+                            ):
+                                self.ffmpeg_cmds.append(
+                                    Config.FFMPEG_CMDS[preset_name]
+                                )
+                                LOGGER.info(
+                                    f"Added FFmpeg command from owner config: {preset_name}"
+                                )
+                            elif (
+                                self.user_dict.get("FFMPEG_CMDS")
+                                and preset_name in self.user_dict["FFMPEG_CMDS"]
+                            ):
+                                self.ffmpeg_cmds.append(
+                                    self.user_dict["FFMPEG_CMDS"][preset_name]
+                                )
+                                LOGGER.info(
+                                    f"Added FFmpeg command from user config: {preset_name}"
+                                )
+                            else:
+                                # If not found as preset, treat as direct command
+                                import shlex
+
+                                self.ffmpeg_cmds.append(shlex.split(preset_name))
+                                LOGGER.info(
+                                    f"Added direct FFmpeg command: {preset_name}"
+                                )
+                    elif Config.FFMPEG_CMDS and args["-ff"] in Config.FFMPEG_CMDS:
+                        # Single preset from owner config
+                        self.ffmpeg_cmds = [Config.FFMPEG_CMDS[args["-ff"]]]
                         LOGGER.info(
                             f"Using FFmpeg command key from owner config: {self.ffmpeg_cmds}"
                         )
@@ -819,25 +862,70 @@ class YtDlp(TaskListener):
                         self.user_dict.get("FFMPEG_CMDS")
                         and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
                     ):
-                        self.ffmpeg_cmds = self.user_dict["FFMPEG_CMDS"][args["-ff"]]
+                        # Single preset from user config
+                        self.ffmpeg_cmds = [
+                            self.user_dict["FFMPEG_CMDS"][args["-ff"]]
+                        ]
                         LOGGER.info(
                             f"Using FFmpeg command key from user config: {self.ffmpeg_cmds}"
                         )
                     else:
-                        # If it's not a key, treat it as a direct command
+                        # Direct command
                         import shlex
 
-                        self.ffmpeg_cmds = shlex.split(args["-ff"])
+                        self.ffmpeg_cmds = [shlex.split(args["-ff"])]
                         LOGGER.info(
                             f"Using direct FFmpeg command: {self.ffmpeg_cmds}"
                         )
                 elif isinstance(args["-ff"], set):
-                    # If it's already a set, use it as is
-                    self.ffmpeg_cmds = args["-ff"]
+                    # If it's already a set, convert to list for sequential processing
+                    self.ffmpeg_cmds = list(args["-ff"])
                     LOGGER.info(f"Using FFmpeg command keys: {self.ffmpeg_cmds}")
                 else:
                     # For any other type, try to evaluate it
-                    self.ffmpeg_cmds = eval(args["-ff"])
+                    # This handles cases like: ["-i mltb.mkv -c copy mltb.mkv", "-i mltb.m4a -c:a libmp3lame mltb.mp3"]
+                    # or [["cmd1", "arg1"], ["cmd2", "arg2"]]
+                    try:
+                        evaluated_cmds = eval(args["-ff"])
+                        LOGGER.info(f"Evaluated FFmpeg commands: {evaluated_cmds}")
+                    except Exception as e:
+                        LOGGER.error(f"Error evaluating FFmpeg commands: {e}")
+                        evaluated_cmds = []
+
+                    # Handle different formats
+                    if isinstance(evaluated_cmds, list):
+                        # Check if it's a list of strings or a list of lists
+                        if all(isinstance(item, str) for item in evaluated_cmds):
+                            # List of command strings
+                            import shlex
+
+                            self.ffmpeg_cmds = [
+                                shlex.split(cmd) for cmd in evaluated_cmds
+                            ]
+                        elif all(isinstance(item, list) for item in evaluated_cmds):
+                            # List of command lists
+                            self.ffmpeg_cmds = evaluated_cmds
+                        else:
+                            # Mixed list - try to handle each item appropriately
+                            self.ffmpeg_cmds = []
+                            for item in evaluated_cmds:
+                                if isinstance(item, str):
+                                    import shlex
+
+                                    self.ffmpeg_cmds.append(shlex.split(item))
+                                elif isinstance(item, list):
+                                    self.ffmpeg_cmds.append(item)
+                                else:
+                                    # Try to convert to string and split
+                                    import shlex
+
+                                    self.ffmpeg_cmds.append(shlex.split(str(item)))
+                    else:
+                        # Single command
+                        import shlex
+
+                        self.ffmpeg_cmds = [shlex.split(str(evaluated_cmds))]
+
                     LOGGER.info(
                         f"Using evaluated FFmpeg commands: {self.ffmpeg_cmds}"
                     )
@@ -858,6 +946,11 @@ class YtDlp(TaskListener):
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
+        # Enable compression if -z flag is set and archive flags are enabled
+        from bot.helper.ext_utils.bot_utils import is_flag_enabled
+
+        if self.compress and is_flag_enabled("-z"):
+            self.compression_enabled = True
         self.thumb = args["-t"]
         self.split_size = args["-sp"]
         self.sample_video = args["-sv"]
@@ -903,6 +996,9 @@ class YtDlp(TaskListener):
         self.watermark = args["-watermark"]
         self.image_watermark = args["-iwm"]
         self.extract = args["-extract"]
+        # Enable extract if -extract flag is set and archive flags are enabled
+        if self.extract and is_flag_enabled("-extract"):
+            self.extract_enabled = True
         self.extract_video = args["-extract-video"]
         self.extract_audio = args["-extract-audio"]
         self.extract_subtitle = args["-extract-subtitle"]
@@ -1203,8 +1299,32 @@ class YtDlp(TaskListener):
 
 
 async def ytdl(client, message):
+    # Check if ytdlp operations are enabled in the configuration
+    if not Config.YTDLP_ENABLED:
+        await send_message(
+            message, "❌ YT-DLP operations are disabled by the administrator."
+        )
+        return
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message, "❌ Mirror operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(YtDlp(client, message).new_event())
 
 
 async def ytdl_leech(client, message):
+    # Check if ytdlp operations are enabled in the configuration
+    if not Config.YTDLP_ENABLED:
+        await send_message(
+            message, "❌ YT-DLP operations are disabled by the administrator."
+        )
+        return
+    # Check if leech operations are enabled in the configuration
+    if not Config.LEECH_ENABLED:
+        await send_message(
+            message, "❌ Leech operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(YtDlp(client, message, is_leech=True).new_event())

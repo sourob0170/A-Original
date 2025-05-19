@@ -1,5 +1,319 @@
+from aiofiles.os import path as aiopath
+from aiofiles.os import remove as aioremove
+
 from bot import user_data
 from bot.core.config_manager import Config
+
+
+async def reset_mirror_configs(database):
+    """Reset all mirror-related configurations to their default values when mirror is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific mirror configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Mirror-related keys to reset
+        mirror_keys = [
+            "GDRIVE_ID",
+            "INDEX_URL",
+            "STOP_DUPLICATE",
+            "TOKEN_PICKLE",
+            "RCLONE_PATH",
+            "RCLONE_FLAGS",
+            "RCLONE_CONFIG",
+            "DEFAULT_UPLOAD",
+        ]
+
+        # Reset each mirror-related key
+        for key in mirror_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Set DEFAULT_UPLOAD to "gd" if it was "rc"
+        if user_dict.get("DEFAULT_UPLOAD") == "rc":
+            user_dict["DEFAULT_UPLOAD"] = "gd"
+            user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+
+async def reset_leech_configs(database):
+    """Reset all leech-related configurations to their default values when leech is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific leech configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Leech-related keys to reset
+        leech_keys = [
+            "THUMBNAIL",
+            "LEECH_SPLIT_SIZE",
+            "EQUAL_SPLITS",
+            "LEECH_FILENAME_PREFIX",
+            "LEECH_SUFFIX",
+            "LEECH_FONT",
+            "LEECH_FILENAME",
+            "LEECH_FILENAME_CAPTION",
+            "THUMBNAIL_LAYOUT",
+            "USER_DUMP",
+            "USER_SESSION",
+        ]
+
+        # Reset each leech-related key
+        for key in leech_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+
+async def reset_ytdlp_configs(database):
+    """Reset all YT-DLP-related configurations to their default values when YT-DLP is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific YT-DLP configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # YT-DLP-related keys to reset
+        ytdlp_keys = ["YT_DLP_OPTIONS", "USER_COOKIES"]
+
+        # Reset each YT-DLP-related key
+        for key in ytdlp_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Delete user cookies file if it exists
+        cookies_path = f"cookies/{user_id}.txt"
+        if await aiopath.exists(cookies_path):
+            try:
+                await aioremove(cookies_path)
+            except Exception as e:
+                from bot import LOGGER
+
+                LOGGER.error(f"Error deleting cookies file for user {user_id}: {e}")
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+
+async def reset_rclone_configs(database):
+    """Reset all Rclone-related configurations to their default values when Rclone is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific Rclone configurations
+    from bot import LOGGER
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Reset user's DEFAULT_UPLOAD to "gd" if it's not already
+        if user_dict.get("DEFAULT_UPLOAD", "") != "gd":
+            user_dict["DEFAULT_UPLOAD"] = "gd"
+            user_configs_to_reset = True
+
+        # Rclone-related keys to reset
+        rclone_keys = ["RCLONE_FLAGS", "RCLONE_PATH", "RCLONE_CONFIG"]
+
+        # Reset each Rclone-related key
+        for key in rclone_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Remove the user's Rclone config file if it exists
+        rclone_conf = f"rclone/{user_id}.conf"
+        if await aiopath.exists(rclone_conf):
+            try:
+                await aioremove(rclone_conf)
+            except Exception as e:
+                LOGGER.error(f"Error removing Rclone config for user {user_id}: {e}")
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Rclone disabled without logging
+
+
+async def reset_torrent_configs(database):
+    """Reset all torrent-related configurations to their default values when torrent is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific torrent configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Torrent-related keys to reset
+        torrent_keys = ["TORRENT_TIMEOUT"]
+
+        # Reset each torrent-related key
+        for key in torrent_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Torrent operations disabled without logging
+
+
+async def reset_nzb_configs(database):
+    """Reset all NZB-related configurations to their default values when NZB is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific NZB configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # NZB-related keys to reset - no user-specific NZB configs found in codebase
+        nzb_keys = []
+
+        # Reset each NZB-related key
+        for key in nzb_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # NZB operations disabled without logging
+
+
+async def reset_jd_configs(database):
+    """Reset all JDownloader-related configurations to their default values when JD is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific JDownloader configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # JDownloader-related keys to reset - no user-specific JD configs found in codebase
+        jd_keys = []
+
+        # Reset each JDownloader-related key
+        for key in jd_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # JDownloader operations disabled without logging
+
+
+async def reset_bulk_configs(database):
+    """Reset all bulk-related configurations to their default values when bulk is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific bulk configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Bulk-related keys to reset - no user-specific bulk configs found in codebase
+        bulk_keys = []
+
+        # Reset each bulk-related key
+        for key in bulk_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Bulk operations disabled without logging
+
+
+async def reset_multi_link_configs(database):
+    """Reset all multi-link-related configurations to their default values when multi-link is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific multi-link configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Multi-link-related keys to reset - no user-specific multi-link configs found in codebase
+        multi_link_keys = []
+
+        # Reset each multi-link-related key
+        for key in multi_link_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Multi-link operations disabled without logging
+
+
+async def reset_same_dir_configs(database):
+    """Reset all same-dir-related configurations to their default values when same-dir is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific same-dir configurations
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Same-dir-related keys to reset - no user-specific same-dir configs found in codebase
+        same_dir_keys = []
+
+        # Reset each same-dir-related key
+        for key in same_dir_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Same-dir operations disabled without logging
 
 
 async def reset_tool_configs(tool_name, database):
@@ -24,7 +338,7 @@ async def reset_tool_configs(tool_name, database):
         "extract": ["EXTRACT_"],
         "add": ["ADD_"],
         "metadata": ["METADATA_"],
-        "ffmpeg": ["FFMPEG_CMDS"],  # Reset FFMPEG_CMDS for users
+        "xtra": ["FFMPEG_CMDS"],  # Reset FFMPEG_CMDS for users
         "sample": [],  # No specific configs for sample
     }
 
@@ -191,6 +505,8 @@ async def reset_tool_configs(tool_name, database):
         "COMPRESSION_ARCHIVE_PRESET": "none",
         "COMPRESSION_ARCHIVE_LEVEL": "none",
         "COMPRESSION_ARCHIVE_METHOD": "none",
+        "COMPRESSION_ARCHIVE_PASSWORD": "none",
+        "COMPRESSION_ARCHIVE_ALGORITHM": "none",
         # Trim Settings
         "TRIM_ENABLED": False,
         "TRIM_PRIORITY": 5,
@@ -291,7 +607,7 @@ async def reset_tool_configs(tool_name, database):
         "ADD_REMOVE_ORIGINAL": True,
         # Video Add Settings
         "ADD_VIDEO_ENABLED": False,
-        "ADD_VIDEO_PATH": "none",
+        # "ADD_VIDEO_PATH": "none", # Removed
         "ADD_VIDEO_CODEC": "none",
         "ADD_VIDEO_INDEX": None,
         "ADD_VIDEO_QUALITY": "none",
@@ -301,7 +617,7 @@ async def reset_tool_configs(tool_name, database):
         "ADD_VIDEO_FPS": "none",
         # Audio Add Settings
         "ADD_AUDIO_ENABLED": False,
-        "ADD_AUDIO_PATH": "none",
+        # "ADD_AUDIO_PATH": "none", # Removed
         "ADD_AUDIO_CODEC": "none",
         "ADD_AUDIO_INDEX": None,
         "ADD_AUDIO_BITRATE": "none",
@@ -310,7 +626,7 @@ async def reset_tool_configs(tool_name, database):
         "ADD_AUDIO_VOLUME": "none",
         # Subtitle Add Settings
         "ADD_SUBTITLE_ENABLED": False,
-        "ADD_SUBTITLE_PATH": "none",
+        # "ADD_SUBTITLE_PATH": "none", # Removed
         "ADD_SUBTITLE_CODEC": "none",
         "ADD_SUBTITLE_INDEX": None,
         "ADD_SUBTITLE_LANGUAGE": "none",
@@ -319,7 +635,7 @@ async def reset_tool_configs(tool_name, database):
         "ADD_SUBTITLE_FONT_SIZE": "none",
         # Attachment Add Settings
         "ADD_ATTACHMENT_ENABLED": False,
-        "ADD_ATTACHMENT_PATH": "none",
+        # "ADD_ATTACHMENT_PATH": "none", # Removed
         "ADD_ATTACHMENT_INDEX": None,
         "ADD_ATTACHMENT_MIMETYPE": "none",
     }
@@ -333,7 +649,7 @@ async def reset_tool_configs(tool_name, database):
     configs_to_reset = {}
 
     # Special handling for ffmpeg tool - don't reset owner's FFMPEG_CMDS
-    if tool_name.lower() == "ffmpeg":
+    if tool_name.lower() == "xtra":
         # Skip resetting owner configurations for ffmpeg
         pass
     else:

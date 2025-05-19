@@ -146,6 +146,9 @@ async def create_thumb(msg, _id=""):
 
     # Use PIL to convert and save the image
     try:
+        # Apply memory limits for PIL operations
+        limit_memory_for_pil()
+
         img = await sync_to_async(Image.open, photo_dir)
         img_rgb = await sync_to_async(img.convert, "RGB")
         await sync_to_async(img_rgb.save, output, "JPEG")
@@ -1101,7 +1104,8 @@ async def extract_track(
                 "error",
                 "-i",
                 file_path,
-            ]  # Using xtra instead of ffmpeg
+                "-y",  # Always overwrite output files
+            ]
 
             if track_type == "attachment":
                 # For attachments, use the attachment muxer
@@ -1173,43 +1177,112 @@ async def extract_track(
                     )
 
                     # Try alternative approach for subtitles if the first attempt failed
-                    if track_type == "subtitle" and codec != "srt":
-                        LOGGER.info(
-                            f"Trying alternative approach with srt codec for track {track['index']}"
-                        )
-                        alt_output_file = os.path.join(
-                            output_dir,
-                            f"{file_name}.{track_type}.{language}.{track['index']}.srt",
-                        )
-
-                        alt_cmd = [
-                            "xtra",
-                            "-hide_banner",
-                            "-loglevel",
-                            "error",
-                            "-i",
-                            file_path,  # Using xtra instead of ffmpeg
-                            "-map",
-                            f"0:{track['index']}",
-                            "-c:s",
-                            "srt",
-                            alt_output_file,
-                        ]
-
-                        alt_stdout, alt_stderr, alt_code = await cmd_exec(alt_cmd)
-                        if (
-                            alt_code == 0
-                            and await aiopath.exists(alt_output_file)
-                            and (await aiopath.getsize(alt_output_file)) > 0
-                        ):
-                            extracted_files.append(alt_output_file)
+                    if track_type == "subtitle":
+                        # Handle WebVTT subtitles specially
+                        if track.get("codec") == "webvtt":
                             LOGGER.info(
-                                f"Successfully extracted to {alt_output_file} using alternative approach"
+                                f"Detected WebVTT subtitle, trying specialized approach for track {track['index']}"
                             )
-                        else:
-                            LOGGER.error(
-                                f"Alternative approach also failed: {alt_stderr}"
+                            # For WebVTT, we should keep the original format
+                            alt_output_file = os.path.join(
+                                output_dir,
+                                f"{file_name}.{track_type}.{language}.{track['index']}.vtt",
                             )
+
+                            # Simple file copy for WebVTT files
+                            if file_path.lower().endswith(".vtt"):
+                                import asyncio
+                                import shutil
+
+                                try:
+                                    await asyncio.to_thread(
+                                        shutil.copy2, file_path, alt_output_file
+                                    )
+                                    if await aiopath.exists(alt_output_file):
+                                        extracted_files.append(alt_output_file)
+                                        LOGGER.info(
+                                            f"Successfully copied WebVTT file to {alt_output_file}"
+                                        )
+                                    else:
+                                        LOGGER.error(
+                                            f"Failed to copy WebVTT file to {alt_output_file}"
+                                        )
+                                except Exception as e:
+                                    LOGGER.error(f"Error copying WebVTT file: {e}")
+                            else:
+                                # Extract WebVTT from container
+                                alt_cmd = [
+                                    "xtra",  # Use xtra for WebVTT
+                                    "-hide_banner",
+                                    "-loglevel",
+                                    "error",
+                                    "-i",
+                                    file_path,
+                                    "-map",
+                                    f"0:{track['index']}",
+                                    "-c:s",
+                                    "copy",  # Copy the WebVTT subtitle
+                                    "-y",  # Overwrite output file
+                                    alt_output_file,
+                                ]
+
+                                alt_stdout, alt_stderr, alt_code = await cmd_exec(
+                                    alt_cmd
+                                )
+                                if (
+                                    alt_code == 0
+                                    and await aiopath.exists(alt_output_file)
+                                    and (await aiopath.getsize(alt_output_file)) > 0
+                                ):
+                                    extracted_files.append(alt_output_file)
+                                    LOGGER.info(
+                                        f"Successfully extracted WebVTT to {alt_output_file}"
+                                    )
+                                else:
+                                    LOGGER.error(
+                                        f"WebVTT extraction failed: {alt_stderr}"
+                                    )
+                        # For other subtitle formats, try converting to SRT
+                        elif codec != "srt":
+                            LOGGER.info(
+                                f"Trying alternative approach with srt codec for track {track['index']}"
+                            )
+                            alt_output_file = os.path.join(
+                                output_dir,
+                                f"{file_name}.{track_type}.{language}.{track['index']}.srt",
+                            )
+
+                            alt_cmd = [
+                                "xtra",  # Use xtra directly
+                                "-hide_banner",
+                                "-loglevel",
+                                "error",
+                                "-i",
+                                file_path,
+                                "-map",
+                                f"0:{track['index']}",
+                                "-c:s",
+                                "srt",
+                                "-y",  # Overwrite output file
+                                alt_output_file,
+                            ]
+
+                            alt_stdout, alt_stderr, alt_code = await cmd_exec(
+                                alt_cmd
+                            )
+                            if (
+                                alt_code == 0
+                                and await aiopath.exists(alt_output_file)
+                                and (await aiopath.getsize(alt_output_file)) > 0
+                            ):
+                                extracted_files.append(alt_output_file)
+                                LOGGER.info(
+                                    f"Successfully extracted to {alt_output_file} using alternative approach"
+                                )
+                            else:
+                                LOGGER.error(
+                                    f"Alternative approach also failed: {alt_stderr}"
+                                )
             except Exception as e:
                 LOGGER.error(f"Error running FFmpeg: {e}")
 
@@ -3242,7 +3315,7 @@ async def get_video_thumbnail(video_file, duration):
             return None
     except Exception:
         LOGGER.error(
-            f"Error while extracting thumbnail from video. Name: {video_file}. Error: Timeout some issues with ffmpeg with specific arch!",
+            f"Error while extracting thumbnail from video. Name: {video_file}. Error: Timeout some issues with xtra with specific arch!",
         )
         return None
     return output
@@ -3466,7 +3539,7 @@ async def get_multiple_frames_thumbnail(video_file, layout, keep_screenshots):
 
     except Exception:
         LOGGER.error(
-            f"Error while combining thumbnails from video. Name: {video_file}. Error: Timeout some issues with ffmpeg with specific arch!",
+            f"Error while combining thumbnails from video. Name: {video_file}. Error: Timeout some issues with xtra with specific arch!",
         )
     finally:
         # Clean up screenshots if not keeping them
@@ -4275,8 +4348,134 @@ class FFMpeg:
             return []
 
     async def ffmpeg_cmds(self, ffmpeg, f_path, user_provided_files=None):
+        """Process one or more FFmpeg commands.
+
+        Args:
+            ffmpeg: A single FFmpeg command or a list of commands to run sequentially
+            f_path: The input file path
+            user_provided_files: Dictionary of user-provided file paths for variable replacement
+
+        Returns:
+            list: List of output files or False if the command failed
+        """
         self.clear()
         self._total_time = (await get_media_info(f_path))[0]
+        base_name, ext = ospath.splitext(f_path)
+        dir, base_name = base_name.rsplit("/", 1)
+
+        # Check if ffmpeg is a list of commands to run sequentially
+        if isinstance(ffmpeg, list) and ffmpeg:
+            # Check if this is a list of lists (multiple commands)
+            if isinstance(ffmpeg[0], list):
+                LOGGER.info(
+                    f"Processing multiple FFmpeg commands sequentially: {len(ffmpeg)} commands"
+                )
+
+                # Track the current input file (starts with the original file)
+                current_input = f_path
+                outputs = []
+
+                # Process each command in sequence
+                for i, cmd in enumerate(ffmpeg):
+                    LOGGER.info(
+                        f"Running FFmpeg command {i + 1}/{len(ffmpeg)}: {cmd}"
+                    )
+
+                    # For each command after the first one, use the output of the previous command as input
+                    if i > 0:
+                        # Find the input file argument in the command
+                        for j, arg in enumerate(cmd):
+                            # Check if this is an input flag followed by a placeholder
+                            if (
+                                arg == "-i"
+                                and j + 1 < len(cmd)
+                                and cmd[j + 1]
+                                in [
+                                    "mltb",
+                                    "input.mp4",
+                                    "mltb.video",
+                                    "mltb.audio",
+                                    "mltb.mkv",
+                                ]
+                            ):
+                                # Replace the input file with the output from the previous command
+                                cmd[j + 1] = current_input
+                                LOGGER.info(
+                                    f"Using output from previous command as input: {current_input}"
+                                )
+                                break
+
+                    # Process this command
+                    result = await self._process_ffmpeg_cmd(
+                        cmd, current_input, user_provided_files
+                    )
+
+                    # If the command failed, stop the sequence
+                    if not result:
+                        LOGGER.error(
+                            f"FFmpeg command {i + 1}/{len(ffmpeg)} failed, stopping sequence"
+                        )
+                        return False
+
+                    # If the command succeeded, use its output as input for the next command
+                    if isinstance(result, list) and result:
+                        current_input = result[0]  # Use the first output file
+                        outputs.extend(
+                            result
+                        )  # Add all outputs to the final output list
+                        LOGGER.info(
+                            f"Command {i + 1}/{len(ffmpeg)} succeeded, output: {current_input}"
+                        )
+                    else:
+                        LOGGER.error(
+                            f"Command {i + 1}/{len(ffmpeg)} did not produce valid output"
+                        )
+                        return False
+
+                # Return all outputs from all commands
+                return outputs
+
+            # Check if this is a list of strings that might be a JSON array of commands
+            if (
+                len(ffmpeg) > 0
+                and isinstance(ffmpeg[0], str)
+                and ffmpeg[0].startswith("[")
+                and ffmpeg[0].endswith("]")
+            ):
+                # This might be a JSON array of commands, try to parse it
+                try:
+                    import json
+                    import shlex
+
+                    # Try to parse the JSON array
+                    cmd_str = ffmpeg[0]
+                    cmd_list = json.loads(cmd_str)
+
+                    if isinstance(cmd_list, list) and cmd_list:
+                        # Convert each command string to a list of arguments
+                        processed_cmds = []
+                        for cmd in cmd_list:
+                            if isinstance(cmd, str):
+                                processed_cmds.append(shlex.split(cmd))
+                            elif isinstance(cmd, list):
+                                processed_cmds.append(cmd)
+
+                        if processed_cmds:
+                            # Recursively call ffmpeg_cmds with the processed commands
+                            LOGGER.info(
+                                f"Parsed JSON array of commands: {processed_cmds}"
+                            )
+                            return await self.ffmpeg_cmds(
+                                processed_cmds, f_path, user_provided_files
+                            )
+                except Exception as e:
+                    LOGGER.error(f"Error parsing JSON array of commands: {e}")
+
+        # Process a single command
+        return await self._process_ffmpeg_cmd(ffmpeg, f_path, user_provided_files)
+
+    async def _process_ffmpeg_cmd(self, ffmpeg, f_path, user_provided_files=None):
+        """Process a single FFmpeg command"""
         base_name, ext = ospath.splitext(f_path)
         dir, base_name = base_name.rsplit("/", 1)
 
@@ -4301,6 +4500,133 @@ class FFMpeg:
             except Exception as e:
                 LOGGER.error(f"Error parsing FFmpeg command string: {e}")
 
+        # Process user-provided files for variable replacement
+        if user_provided_files:
+            LOGGER.info(
+                f"Processing user-provided files for variable replacement: {user_provided_files}"
+            )
+            # Create a copy of the command to avoid modifying the original during iteration
+            ffmpeg_copy = ffmpeg.copy() if hasattr(ffmpeg, "copy") else ffmpeg[:]
+
+            # Replace variables in the command with actual file paths
+            for i, arg in enumerate(ffmpeg_copy):
+                if isinstance(arg, str):
+                    # Direct variable replacement
+                    if arg in user_provided_files:
+                        ffmpeg[i] = user_provided_files[arg]
+                        LOGGER.info(
+                            f"Replaced variable '{arg}' with '{user_provided_files[arg]}'"
+                        )
+                    else:
+                        # Check for variables within the argument string
+                        modified_arg = arg
+                        replaced = False
+
+                        # Sort variables by length (longest first) to avoid partial replacements
+                        sorted_vars = sorted(
+                            user_provided_files.items(),
+                            key=lambda x: len(x[0]),
+                            reverse=True,
+                        )
+
+                        for var_name, var_value in sorted_vars:
+                            # Only replace whole words or variables with clear boundaries
+                            # This prevents partial replacements like replacing "X" in "X_OFFSET"
+                            if var_name in modified_arg:
+                                # Handle special characters in the replacement value
+                                if "'" in modified_arg or '"' in modified_arg:
+                                    # For arguments with quotes, we need to be careful with the replacement
+                                    if "text=" in modified_arg and (
+                                        var_name in modified_arg.split("text=")[1]
+                                    ):
+                                        # For text parameters, escape special characters
+                                        escaped_value = var_value.replace(
+                                            '"', '\\"'
+                                        ).replace("'", "\\'")
+                                        # Replace the variable in the text parameter
+                                        parts = modified_arg.split("text=")
+                                        text_part = parts[1]
+                                        # Find the end of the text parameter (next colon or end of string)
+                                        if ":" in text_part:
+                                            text_value, rest = text_part.split(
+                                                ":", 1
+                                            )
+                                            # Replace in the text value
+                                            text_value = text_value.replace(
+                                                var_name, escaped_value
+                                            )
+                                            modified_arg = (
+                                                f"{parts[0]}text={text_value}:{rest}"
+                                            )
+                                        else:
+                                            # Text is the last parameter
+                                            modified_arg = f"{parts[0]}text={text_part.replace(var_name, escaped_value)}"
+                                    else:
+                                        # For other parameters with quotes, do a simple replacement
+                                        modified_arg = modified_arg.replace(
+                                            var_name, var_value
+                                        )
+                                else:
+                                    # For arguments without quotes, do a simple replacement
+                                    modified_arg = modified_arg.replace(
+                                        var_name, var_value
+                                    )
+
+                                replaced = True
+                                LOGGER.info(
+                                    f"Replaced variable '{var_name}' with '{var_value}' in argument: {arg} -> {modified_arg}"
+                                )
+
+                        # Update the argument if it was modified
+                        if replaced:
+                            ffmpeg[i] = modified_arg
+
+            # Special handling for filter_complex arguments
+            for i, arg in enumerate(ffmpeg):
+                if arg == "-filter_complex" and i + 1 < len(ffmpeg):
+                    # Make sure filter_complex arguments are properly formatted
+                    filter_complex = ffmpeg[i + 1]
+
+                    # Check if the filter_complex contains semicolons without proper escaping
+                    if ";" in filter_complex and not filter_complex.startswith("["):
+                        # Split the filter_complex by semicolons and ensure proper formatting
+                        filter_parts = filter_complex.split(";")
+                        formatted_parts = []
+
+                        for part in filter_parts:
+                            part = part.strip()
+                            if part:
+                                formatted_parts.append(part)
+
+                        # Rejoin the parts with semicolons
+                        ffmpeg[i + 1] = ";".join(formatted_parts)
+
+                    LOGGER.info(f"Processed filter_complex: {ffmpeg[i + 1]}")
+
+            # Special handling for map arguments
+            map_indices = [i for i, arg in enumerate(ffmpeg) if arg == "-map"]
+            for idx in map_indices:
+                if idx + 1 < len(ffmpeg):
+                    map_arg = ffmpeg[idx + 1]
+                    # Ensure map arguments with output labels are properly formatted
+                    if "[" in map_arg and "]" in map_arg:
+                        # The map argument is already properly formatted
+                        pass
+                    elif ":" in map_arg:
+                        # This is a stream specifier like "0:v" or "1:a"
+                        pass
+                    else:
+                        # This might be a variable that needs to be properly formatted
+                        LOGGER.info(f"Processed map argument: {map_arg}")
+
+            # Add -y flag to overwrite output files if not already present
+            if "-y" not in ffmpeg:
+                ffmpeg.append("-y")
+                LOGGER.info("Added -y flag to overwrite output files")
+
+            # Log the modified command
+            LOGGER.info(f"Command after variable replacement: {ffmpeg}")
+
         # Check for -del flag to delete original files after processing
         delete_files = False
         if "-del" in ffmpeg:
@@ -4308,7 +4634,7 @@ class FFMpeg:
             delete_files = True
 
         # Replace 'ffmpeg' with 'xtra' as the command name
-        if ffmpeg and ffmpeg[0] == "ffmpeg":
+        if ffmpeg and ffmpeg[0] == "xtra":
             ffmpeg[0] = "xtra"
 
         # Determine the media type of the input file
@@ -5574,7 +5900,7 @@ class FFMpeg:
         except Exception:
             stderr = "Unable to decode the error!"
         LOGGER.error(
-            f"{stderr}. Something went wrong while running ffmpeg cmd, mostly file requires different/specific arguments. Path: {f_path}",
+            f"{stderr}. Something went wrong while running xtra cmd, mostly file requires different/specific arguments. Path: {f_path}",
         )
         for op in outputs:
             if await aiopath.exists(op):
@@ -5633,7 +5959,7 @@ class FFMpeg:
             )
             return False
 
-        # Special case for subtitle watermarking - ffmpeg will be None
+        # Special case for subtitle watermarking - xtra will be None
         if ffmpeg is None:
             # This is a subtitle file that was processed directly without FFmpeg
             # The temp_file is in f_path, and we need to replace the original file with it
@@ -5691,7 +6017,7 @@ class FFMpeg:
             delete_files = True
 
         # Replace 'ffmpeg' with 'xtra' as the command name
-        if ffmpeg and ffmpeg[0] == "ffmpeg":
+        if ffmpeg and ffmpeg[0] == "xtra":
             ffmpeg[0] = "xtra"
 
         # Execute the command
@@ -5772,7 +6098,7 @@ class FFMpeg:
         except Exception:
             stderr = "Unable to decode the error!"
         LOGGER.error(
-            f"{stderr}. Something went wrong while running ffmpeg cmd, mostly file requires different/specific arguments. Path: {f_path}",
+            f"{stderr}. Something went wrong while running xtra cmd, mostly file requires different/specific arguments. Path: {f_path}",
         )
         return False
 

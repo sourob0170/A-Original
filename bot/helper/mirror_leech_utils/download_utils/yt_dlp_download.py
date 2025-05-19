@@ -62,7 +62,11 @@ class MyLogger:
             LOGGER.warning(f"YT-DLP Warning: {msg}")
             # Set the class variable to indicate title extraction failed
             MyLogger.title_extraction_warning = True
-        elif "ffmpeg not found" in msg or "Requested format is not available" in msg:
+        elif (
+            "xtra not found" in msg
+            or "ffmpeg not found" in msg
+            or "Requested format is not available" in msg
+        ):
             LOGGER.warning(f"YT-DLP Warning: {msg}")
         else:
             # Log other warnings at debug level to reduce noise
@@ -580,9 +584,12 @@ class YoutubeDLHelper:
                                     error_msg += "\nThis might be due to YouTube's SSAP experiment. Try again later."
                                     self._on_download_error(error_msg)
                                     return
-                                if "ffmpeg not found" in error_msg.lower():
-                                    # Ignore ffmpeg path error as requested
-                                    # Try to continue without ffmpeg
+                                if (
+                                    "ffmpeg not found" in error_msg.lower()
+                                    or "xtra not found" in error_msg.lower()
+                                ):
+                                    # Ignore xtra/ffmpeg path error as requested
+                                    # Try to continue without xtra/ffmpeg
                                     break
                                 if (
                                     "template variables not replaced"
@@ -790,7 +797,7 @@ class YoutubeDLHelper:
                 self._on_download_error(
                     "Error: Memory allocation failed. The video might be too large or in a format that requires too much memory to process. Try a lower quality format."
                 )
-            elif "ffmpeg" in error_str.lower():
+            elif "ffmpeg" in error_str.lower() or "xtra" in error_str.lower():
                 # Ignore ffmpeg errors as requested
                 # Try to continue without error
                 async_to_sync(self._listener.on_download_complete)

@@ -3470,10 +3470,6 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         btns = buttons.build_menu(2)
 
         # Get video add settings
-        video_path = user_dict.get("ADD_VIDEO_PATH", "none")
-        if video_path == "none" and hasattr(Config, "ADD_VIDEO_PATH"):
-            video_path = Config.ADD_VIDEO_PATH
-
         video_codec = user_dict.get("ADD_VIDEO_CODEC", "none")
         if video_codec == "none" and hasattr(Config, "ADD_VIDEO_CODEC"):
             video_codec = Config.ADD_VIDEO_CODEC
@@ -3522,10 +3518,6 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         video_fps_str = f"{video_fps}" if video_fps != "none" else "none (Default)"
 
         # Get audio add settings
-        audio_path = user_dict.get("ADD_AUDIO_PATH", "none")
-        if audio_path == "none" and hasattr(Config, "ADD_AUDIO_PATH"):
-            audio_path = Config.ADD_AUDIO_PATH
-
         audio_codec = user_dict.get("ADD_AUDIO_CODEC", "none")
         if audio_codec == "none" and hasattr(Config, "ADD_AUDIO_CODEC"):
             audio_codec = Config.ADD_AUDIO_CODEC
@@ -3569,10 +3561,6 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         )
 
         # Get subtitle add settings
-        subtitle_path = user_dict.get("ADD_SUBTITLE_PATH", "none")
-        if subtitle_path == "none" and hasattr(Config, "ADD_SUBTITLE_PATH"):
-            subtitle_path = Config.ADD_SUBTITLE_PATH
-
         subtitle_codec = user_dict.get("ADD_SUBTITLE_CODEC", "none")
         if subtitle_codec == "none" and hasattr(Config, "ADD_SUBTITLE_CODEC"):
             subtitle_codec = Config.ADD_SUBTITLE_CODEC
@@ -3624,9 +3612,6 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         )
 
         # Get attachment add settings
-        attachment_path = user_dict.get("ADD_ATTACHMENT_PATH", "none")
-        if attachment_path == "none" and hasattr(Config, "ADD_ATTACHMENT_PATH"):
-            attachment_path = Config.ADD_ATTACHMENT_PATH
 
         attachment_index = user_dict.get("ADD_ATTACHMENT_INDEX", None)
         if attachment_index is None and hasattr(Config, "ADD_ATTACHMENT_INDEX"):
@@ -3960,6 +3945,14 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         buttons.data_button(
             "Archive Format", f"mediatools {user_id} menu COMPRESSION_ARCHIVE_FORMAT"
         )
+        buttons.data_button(
+            "Archive Password",
+            f"mediatools {user_id} menu COMPRESSION_ARCHIVE_PASSWORD",
+        )
+        buttons.data_button(
+            "Archive Algorithm",
+            f"mediatools {user_id} menu COMPRESSION_ARCHIVE_ALGORITHM",
+        )
 
         buttons.data_button("Back", f"mediatools {user_id} compression", "footer")
         buttons.data_button("Close", f"mediatools {user_id} close", "footer")
@@ -4150,6 +4143,37 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
             f"{archive_format}" if archive_format else "none (Default)"
         )
 
+        # Get archive password setting
+        archive_password = user_dict.get("COMPRESSION_ARCHIVE_PASSWORD", None)
+        if archive_password is None and hasattr(
+            Config, "COMPRESSION_ARCHIVE_PASSWORD"
+        ):
+            archive_password = Config.COMPRESSION_ARCHIVE_PASSWORD
+        # Don't show the actual password for security reasons
+        archive_password_str = (
+            "Set"
+            if archive_password and archive_password.lower() != "none"
+            else "none (Default)"
+        )
+
+        # Get archive algorithm setting
+        archive_algorithm = user_dict.get("COMPRESSION_ARCHIVE_ALGORITHM", None)
+        if archive_algorithm is None and hasattr(
+            Config, "COMPRESSION_ARCHIVE_ALGORITHM"
+        ):
+            archive_algorithm = Config.COMPRESSION_ARCHIVE_ALGORITHM
+        archive_algorithm_str = (
+            f"{archive_algorithm}" if archive_algorithm else "none (Default)"
+        )
+
+        # Check if the selected algorithm supports password protection
+        if (
+            archive_password
+            and archive_password.lower() != "none"
+            and archive_algorithm
+        ) and archive_algorithm.lower() not in ["7z", "zip", "rar"]:
+            archive_password_str += " (Not supported with " + archive_algorithm + ")"
+
         # Get compression enabled status for each type
         # Video compression status
         video_compression_enabled = user_dict.get("COMPRESSION_VIDEO_ENABLED", False)
@@ -4333,7 +4357,9 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Archive Preset</b> → <code>{archive_preset_str}</code>
 ┠ <b>Archive Level</b> → <code>{archive_level_str}</code>
 ┠ <b>Archive Method</b> → <code>{archive_method_str}</code>
-┖ <b>Archive Format</b> → <code>{archive_format_str}</code>
+┠ <b>Archive Format</b> → <code>{archive_format_str}</code>
+┠ <b>Archive Password</b> → <code>{archive_password_str}</code>
+┖ <b>Archive Algorithm</b> → <code>{archive_algorithm_str}</code>
 
 <b>Usage:</b>
 • Enable compression to reduce file sizes
@@ -8838,7 +8864,7 @@ async def edit_media_tools_settings(client, query):
         update_user_ldata(user_id, "ADD_PRESERVE_TRACKS", False)
         update_user_ldata(user_id, "ADD_REPLACE_TRACKS", False)
         update_user_ldata(user_id, "ADD_VIDEO_ENABLED", False)
-        update_user_ldata(user_id, "ADD_VIDEO_PATH", "none")
+        # Path flag has been removed
         update_user_ldata(user_id, "ADD_VIDEO_CODEC", "copy")
         update_user_ldata(user_id, "ADD_VIDEO_INDEX", None)
         update_user_ldata(user_id, "ADD_VIDEO_QUALITY", "none")
@@ -8847,7 +8873,7 @@ async def edit_media_tools_settings(client, query):
         update_user_ldata(user_id, "ADD_VIDEO_RESOLUTION", "none")
         update_user_ldata(user_id, "ADD_VIDEO_FPS", "none")
         update_user_ldata(user_id, "ADD_AUDIO_ENABLED", False)
-        update_user_ldata(user_id, "ADD_AUDIO_PATH", "none")
+        # Path flag has been removed
         update_user_ldata(user_id, "ADD_AUDIO_CODEC", "copy")
         update_user_ldata(user_id, "ADD_AUDIO_INDEX", None)
         update_user_ldata(user_id, "ADD_AUDIO_BITRATE", "none")
@@ -8855,7 +8881,7 @@ async def edit_media_tools_settings(client, query):
         update_user_ldata(user_id, "ADD_AUDIO_SAMPLING", "none")
         update_user_ldata(user_id, "ADD_AUDIO_VOLUME", "none")
         update_user_ldata(user_id, "ADD_SUBTITLE_ENABLED", False)
-        update_user_ldata(user_id, "ADD_SUBTITLE_PATH", "none")
+        # Path flag has been removed
         update_user_ldata(user_id, "ADD_SUBTITLE_CODEC", "copy")
         update_user_ldata(user_id, "ADD_SUBTITLE_INDEX", None)
         update_user_ldata(user_id, "ADD_SUBTITLE_LANGUAGE", "none")
@@ -8863,7 +8889,7 @@ async def edit_media_tools_settings(client, query):
         update_user_ldata(user_id, "ADD_SUBTITLE_FONT", "none")
         update_user_ldata(user_id, "ADD_SUBTITLE_FONT_SIZE", "none")
         update_user_ldata(user_id, "ADD_ATTACHMENT_ENABLED", False)
-        update_user_ldata(user_id, "ADD_ATTACHMENT_PATH", "none")
+        # Path flag has been removed
         update_user_ldata(user_id, "ADD_ATTACHMENT_INDEX", None)
         update_user_ldata(user_id, "ADD_ATTACHMENT_MIMETYPE", "none")
         await database.update_user_data(user_id)
@@ -8873,7 +8899,7 @@ async def edit_media_tools_settings(client, query):
         await query.answer("Setting all add settings to None...")
         # Set all add settings to None/False
         add_keys = [
-            "ADD_VIDEO_PATH",
+            # Path flags have been removed
             "ADD_VIDEO_CODEC",
             "ADD_VIDEO_INDEX",
             "ADD_VIDEO_QUALITY",
@@ -8881,21 +8907,18 @@ async def edit_media_tools_settings(client, query):
             "ADD_VIDEO_BITRATE",
             "ADD_VIDEO_RESOLUTION",
             "ADD_VIDEO_FPS",
-            "ADD_AUDIO_PATH",
             "ADD_AUDIO_CODEC",
             "ADD_AUDIO_INDEX",
             "ADD_AUDIO_BITRATE",
             "ADD_AUDIO_CHANNELS",
             "ADD_AUDIO_SAMPLING",
             "ADD_AUDIO_VOLUME",
-            "ADD_SUBTITLE_PATH",
             "ADD_SUBTITLE_CODEC",
             "ADD_SUBTITLE_INDEX",
             "ADD_SUBTITLE_LANGUAGE",
             "ADD_SUBTITLE_ENCODING",
             "ADD_SUBTITLE_FONT",
             "ADD_SUBTITLE_FONT_SIZE",
-            "ADD_ATTACHMENT_PATH",
             "ADD_ATTACHMENT_INDEX",
             "ADD_ATTACHMENT_MIMETYPE",
         ]
@@ -9238,6 +9261,8 @@ async def edit_media_tools_settings(client, query):
             "COMPRESSION_ARCHIVE_PRESET",
             "COMPRESSION_ARCHIVE_LEVEL",
             "COMPRESSION_ARCHIVE_METHOD",
+            "COMPRESSION_ARCHIVE_PASSWORD",
+            "COMPRESSION_ARCHIVE_ALGORITHM",
         ]
 
         for key in compression_keys:
@@ -9327,6 +9352,8 @@ async def edit_media_tools_settings(client, query):
             "COMPRESSION_ARCHIVE_PRESET",
             "COMPRESSION_ARCHIVE_LEVEL",
             "COMPRESSION_ARCHIVE_METHOD",
+            "COMPRESSION_ARCHIVE_PASSWORD",
+            "COMPRESSION_ARCHIVE_ALGORITHM",
             "TRIM_ENABLED",
             "TRIM_PRIORITY",
             "TRIM_START_TIME",
@@ -10313,7 +10340,7 @@ async def find_first_available_index(file_info, track_type):
     return current_index
 
 
-async def add_media(path, user_id, multi_files=None):
+async def add_media(path, user_id, mid=None, multi_files=None):
     """Add media to a file.
 
     This function adds media tracks (video, audio, subtitle, attachment) to a file.
@@ -10323,6 +10350,7 @@ async def add_media(path, user_id, multi_files=None):
     Args:
         path (str): Path to the file to add media to
         user_id (int): User ID for retrieving user settings
+        mid (str, optional): Message ID for task tracking. Defaults to None.
         multi_files (list, optional): List of additional files to use as sources. Defaults to None.
 
     Returns:
@@ -10514,7 +10542,7 @@ async def add_media(path, user_id, multi_files=None):
 
             # replace_tracks is already set from user settings
     else:
-        # Legacy mode - using specific paths for each track type
+        # Legacy mode - path flags have been removed
         # Check if at least one track type is enabled
         if not (
             video_enabled or audio_enabled or subtitle_enabled or attachment_enabled
@@ -10526,110 +10554,14 @@ async def add_media(path, user_id, multi_files=None):
         if not file_info:
             return False, None, "Failed to get media info"
 
-        # Get paths and settings
-        video_path = (
-            user_dict.get("ADD_VIDEO_PATH", "none") if video_enabled else None
+        # Path flags have been removed
+        # We now only support adding tracks from multi-files
+        # Return an error message if no multi-files are provided
+        return (
+            False,
+            None,
+            "Path flags have been removed. Please use multi-file mode instead.",
         )
-        audio_path = (
-            user_dict.get("ADD_AUDIO_PATH", "none") if audio_enabled else None
-        )
-        subtitle_path = (
-            user_dict.get("ADD_SUBTITLE_PATH", "none") if subtitle_enabled else None
-        )
-        attachment_path = (
-            user_dict.get("ADD_ATTACHMENT_PATH", "none")
-            if attachment_enabled
-            else None
-        )
-
-        # Check if required paths are set
-        if video_enabled and (video_path == "none" or video_path is None):
-            return False, None, "Video path is not set"
-        if audio_enabled and (audio_path == "none" or audio_path is None):
-            return False, None, "Audio path is not set"
-        if subtitle_enabled and (subtitle_path == "none" or subtitle_path is None):
-            return False, None, "Subtitle path is not set"
-        if attachment_enabled and (
-            attachment_path == "none" or attachment_path is None
-        ):
-            return False, None, "Attachment path is not set"
-
-        # Check if any of the paths is a directory
-        if video_enabled and os.path.isdir(video_path):
-            # Get all video files in the directory
-            try:
-                video_files = []
-                for root, _, files in os.walk(video_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Check if it's a video file (simple extension check)
-                        if file.lower().endswith(
-                            (".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv")
-                        ):
-                            video_files.append(file_path)
-
-                if not video_files:
-                    return (
-                        False,
-                        None,
-                        f"No video files found in directory: {video_path}",
-                    )
-
-                # Use the first video file
-                video_path = video_files[0]
-
-            except Exception as e:
-                return False, None, f"Error processing video directory: {e}"
-
-        if audio_enabled and os.path.isdir(audio_path):
-            # Get all audio files in the directory
-            try:
-                audio_files = []
-                for root, _, files in os.walk(audio_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Check if it's an audio file (simple extension check)
-                        if file.lower().endswith(
-                            (".mp3", ".aac", ".wav", ".flac", ".ogg")
-                        ):
-                            audio_files.append(file_path)
-
-                if not audio_files:
-                    return (
-                        False,
-                        None,
-                        f"No audio files found in directory: {audio_path}",
-                    )
-
-                # Use the first audio file
-                audio_path = audio_files[0]
-
-            except Exception as e:
-                return False, None, f"Error processing audio directory: {e}"
-
-        if subtitle_enabled and os.path.isdir(subtitle_path):
-            # Get all subtitle files in the directory
-            try:
-                subtitle_files = []
-                for root, _, files in os.walk(subtitle_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Check if it's a subtitle file (simple extension check)
-                        if file.lower().endswith((".srt", ".ass", ".ssa", ".vtt")):
-                            subtitle_files.append(file_path)
-
-                if not subtitle_files:
-                    return (
-                        False,
-                        None,
-                        f"No subtitle files found in directory: {subtitle_path}",
-                    )
-
-                # Use the first subtitle file
-                subtitle_path = subtitle_files[0]
-
-            except Exception as e:
-                return False, None, f"Error processing subtitle directory: {e}"
 
         # Get indices
         video_index = user_dict.get("ADD_VIDEO_INDEX", None)
@@ -10713,10 +10645,6 @@ async def add_media(path, user_id, multi_files=None):
             add_audio=audio_enabled,
             add_subtitle=subtitle_enabled,
             add_attachment=attachment_enabled,
-            video_path=video_path,
-            audio_path=audio_path,
-            subtitle_path=subtitle_path,
-            attachment_path=attachment_path,
             video_index=video_index,
             audio_index=audio_index,
             subtitle_index=subtitle_index,

@@ -5,6 +5,7 @@ from secrets import token_hex
 from aiofiles.os import remove
 
 from bot import LOGGER, task_dict, task_dict_lock
+from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import cmd_exec
 from bot.helper.ext_utils.limit_checker import limit_checker
 from bot.helper.ext_utils.task_manager import (
@@ -18,6 +19,13 @@ from bot.helper.telegram_helper.message_utils import send_status_message
 
 
 async def add_rclone_download(listener, path):
+    # Check if Rclone operations are enabled in the configuration
+    if not Config.RCLONE_ENABLED:
+        await listener.on_download_error(
+            "❌ Rclone operations are disabled by the administrator."
+        )
+        return
+
     if listener.link.startswith("mrcc:"):
         listener.link = listener.link.split("mrcc:", 1)[1]
         config_path = f"rclone/{listener.user_id}.conf"

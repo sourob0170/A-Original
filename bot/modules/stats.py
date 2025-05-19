@@ -33,7 +33,7 @@ commands = {
     "python": (["python3", "--version"], r"Python ([\d.]+)"),
     "rclone": (["xone", "--version"], r"rclone v([\d.]+)"),
     "yt-dlp": (["yt-dlp", "--version"], r"([\d.]+)"),
-    "ffmpeg": (["xtra", "-version"], r"ffmpeg version ([\d.\w-]+)"),
+    "xtra": (["xtra", "-version"], r"ffmpeg version ([\d.\w-]+)"),
     "7z": (["7z", "i"], r"7-Zip ([\d.]+)"),
 }
 
@@ -110,7 +110,7 @@ async def bot_stats(_, message):
 <b>SABnzbd+:</b> {commands["SABnzbd+"]}
 <b>rclone:</b> {commands["rclone"]}
 <b>yt-dlp:</b> {commands["yt-dlp"]}
-<b>ffmpeg:</b> {commands["ffmpeg"]}
+<b>xtra:</b> {commands["xtra"]}
 <b>7z:</b> {commands["7z"]}
 """
 

@@ -252,7 +252,7 @@ async def rss_sub(_, message, pre_event):
                         },
                     }
             LOGGER.info(
-                f"RSS Feed Added: {title}",
+                f"RSS Feed Added: id: {user_id} - title: {title} - link: {feed_link} - c: {cmd} - inf: {inf} - exf: {exf} - stv: {stv}",
             )
             success_count += 1
         except (IndexError, AttributeError) as e:

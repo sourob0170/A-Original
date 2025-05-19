@@ -15,7 +15,6 @@ from .check_deletion import (
     force_delete_all_messages,
 )
 from .clone import clone_node
-from .deprecated_commands import handle_no_suffix_commands, handle_qb_commands
 from .exec import aioexecute, clear, execute
 from .file_selector import confirm_selection, select
 from .font_styles import font_styles_cmd
@@ -25,6 +24,7 @@ from .gd_delete import delete_file
 from .gd_search import gdrive_search, select_type
 from .gen_session import (
     gen_session,
+    handle_cancel_button,
     handle_cancel_command,
     handle_command,
     handle_group_gensession,
@@ -68,6 +68,7 @@ from .users_settings import (
     get_users_settings,
     send_user_settings,
 )
+from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
 from .ytdlp import ytdl, ytdl_leech
 
 __all__ = [
@@ -107,6 +108,7 @@ __all__ = [
     "handle_broadcast_command",
     "handle_broadcast_media",
     "handle_cancel_broadcast_command",
+    "handle_cancel_button",
     "handle_cancel_command",
     "handle_command",
     "handle_group_gensession",

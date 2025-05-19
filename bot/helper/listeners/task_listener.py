@@ -272,7 +272,10 @@ class TaskListener(TaskConfig):
         if self.join and not self.is_file:
             await join_files(up_path)
 
-        if self.extract and not self.is_nzb:
+        # Check if archive flags are enabled in config
+        from bot.helper.ext_utils.bot_utils import is_flag_enabled
+
+        if self.extract and not self.is_nzb and is_flag_enabled("-e"):
             up_path = await self.proceed_extract(up_path, gid)
             if self.is_cancelled:
                 return
@@ -412,7 +415,9 @@ class TaskListener(TaskConfig):
             self.clear()
 
         # Add direct compression handling for -z flag if not already handled by media tools
-        if self.compress and not self.compression_enabled:
+        # Check if archive flags are enabled in config using is_flag_enabled
+
+        if self.compress and not self.compression_enabled and is_flag_enabled("-z"):
             LOGGER.info(f"Direct compression triggered by -z flag for: {self.name}")
             up_path = await self.compress_with_7z(up_path, gid)
             if self.is_cancelled:
@@ -613,7 +618,11 @@ class TaskListener(TaskConfig):
             msg += f"\n<b>cc: </b>{self.tag}"
 
             # Add media store links inside blockquote if enabled and there's only one file
-            if Config.MEDIA_STORE and files and len(files) == 1:
+            # Check if Media Store is enabled for this user
+            user_media_store_enabled = self.user_dict.get("MEDIA_STORE", None)
+            if user_media_store_enabled is None:
+                user_media_store_enabled = Config.MEDIA_STORE
+            if user_media_store_enabled and files and len(files) == 1:
                 url = next(iter(files.keys()))
                 chat_id, msg_id = url.split("/")[-2:]
                 if chat_id.isdigit():
@@ -646,7 +655,13 @@ class TaskListener(TaskConfig):
                     fmsg += f"{index}. <a href='{url}'>{name}</a>"
 
                     # Add store link if enabled
-                    if Config.MEDIA_STORE:
+                    # Check if Media Store is enabled for this user
+                    user_media_store_enabled = self.user_dict.get(
+                        "MEDIA_STORE", None
+                    )
+                    if user_media_store_enabled is None:
+                        user_media_store_enabled = Config.MEDIA_STORE
+                    if user_media_store_enabled:
                         chat_id, msg_id = url.split("/")[-2:]
                         if chat_id.isdigit():
                             chat_id = f"-100{chat_id}"
@@ -719,7 +734,8 @@ class TaskListener(TaskConfig):
                                         )
 
                                 # Now send to all dump chats except the one specified with -up flag
-                                if Config.LEECH_DUMP_CHAT:
+                                # Only use leech dump chats if leech operations are enabled
+                                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                                         for chat_id in Config.LEECH_DUMP_CHAT:
                                             processed_chat_id = chat_id
@@ -1004,7 +1020,8 @@ class TaskListener(TaskConfig):
                                     )
 
                             # Now send to all dump chats except the one specified with -up flag
-                            if Config.LEECH_DUMP_CHAT:
+                            # Only use leech dump chats if leech operations are enabled
+                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                                 if isinstance(Config.LEECH_DUMP_CHAT, list):
                                     for chat_id in Config.LEECH_DUMP_CHAT:
                                         processed_chat_id = chat_id
@@ -1107,7 +1124,8 @@ class TaskListener(TaskConfig):
                         # Case 1: If user didn't set any dump
                         if not user_dump:
                             # Send to leech dump chat and bot PM
-                            if Config.LEECH_DUMP_CHAT:
+                            # Only use leech dump chats if leech operations are enabled
+                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                                 # Handle LEECH_DUMP_CHAT as a list
                                 if isinstance(Config.LEECH_DUMP_CHAT, list):
                                     for chat_id in Config.LEECH_DUMP_CHAT:
@@ -1137,7 +1155,8 @@ class TaskListener(TaskConfig):
                         elif user_dump and not owner_has_premium:
                             # Send to user's own dump, leech dump chat, and bot PM
                             leech_destinations.append(int(user_dump))
-                            if Config.LEECH_DUMP_CHAT:
+                            # Only use leech dump chats if leech operations are enabled
+                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                                 # Handle LEECH_DUMP_CHAT as a list
                                 if isinstance(Config.LEECH_DUMP_CHAT, list):
                                     for chat_id in Config.LEECH_DUMP_CHAT:
@@ -1166,7 +1185,8 @@ class TaskListener(TaskConfig):
                         # Case 3: If user set their own dump and owner has premium string
                         elif user_dump and owner_has_premium:
                             # By default, send to leech dump chat and bot PM
-                            if Config.LEECH_DUMP_CHAT:
+                            # Only use leech dump chats if leech operations are enabled
+                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                                 # Handle LEECH_DUMP_CHAT as a list
                                 if isinstance(Config.LEECH_DUMP_CHAT, list):
                                     for chat_id in Config.LEECH_DUMP_CHAT:

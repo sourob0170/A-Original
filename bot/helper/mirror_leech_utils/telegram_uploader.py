@@ -141,9 +141,11 @@ class TelegramUploader:
                 original_dump_ids = []
 
                 # Handle LEECH_DUMP_CHAT as a list of chat IDs
+                # Only use leech dump chats if leech operations are enabled
                 if (
                     isinstance(Config.LEECH_DUMP_CHAT, list)
                     and Config.LEECH_DUMP_CHAT
+                    and Config.LEECH_ENABLED
                 ):
                     # First pass: Process all chat IDs and check if original chat is in the list
                     for chat_id in Config.LEECH_DUMP_CHAT:
@@ -1747,7 +1749,7 @@ class TelegramUploader:
             LOGGER.error("Cannot copy message: self._sent_msg is None")
             return
 
-        async def _copy(target, retries=3):
+        async def _copy(target, retries=2):
             for attempt in range(retries):
                 # Check if task is cancelled before attempting to copy
                 if self._listener.is_cancelled:
@@ -1845,7 +1847,8 @@ class TelegramUploader:
                         if target_str == str(self._user_id):
                             pass
                         # Check if this is a dump chat that should have a command message
-                        elif Config.LEECH_DUMP_CHAT:
+                        # Only use leech dump chats if leech operations are enabled
+                        elif Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                             if isinstance(Config.LEECH_DUMP_CHAT, list):
                                 dump_chat_ids = []
                                 for chat in Config.LEECH_DUMP_CHAT:
@@ -2055,7 +2058,7 @@ class TelegramUploader:
         if (
             self._sent_msg.chat.id == self._user_id
             and not self._user_dump
-            and not Config.LEECH_DUMP_CHAT
+            and (not Config.LEECH_DUMP_CHAT or not Config.LEECH_ENABLED)
         ):
             LOGGER.info(
                 "Already in user's PM with no other destinations needed, skipping copy"
@@ -2089,7 +2092,8 @@ class TelegramUploader:
                     destinations.append(user_dump_int)
 
             # Then add all dump chats except the one specified with -up flag
-            if Config.LEECH_DUMP_CHAT:
+            # Only use leech dump chats if leech operations are enabled
+            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                 if isinstance(Config.LEECH_DUMP_CHAT, list):
                     for chat_id in Config.LEECH_DUMP_CHAT:
                         processed_chat_id = chat_id
@@ -2163,7 +2167,8 @@ class TelegramUploader:
             # Case 1: If user didn't set any dump and owner has premium or non-premium string
             if not self._user_dump:
                 # Send to leech dump chat and bot PM
-                if Config.LEECH_DUMP_CHAT:
+                # Only use leech dump chats if leech operations are enabled
+                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -2194,7 +2199,8 @@ class TelegramUploader:
                 if self._sent_msg.chat.id != int(self._user_dump):
                     destinations.append(int(self._user_dump))
 
-                if Config.LEECH_DUMP_CHAT:
+                # Only use leech dump chats if leech operations are enabled
+                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -2222,7 +2228,8 @@ class TelegramUploader:
             # Case 3: If user set their own dump and owner has premium string
             elif self._user_dump and owner_has_premium:
                 # By default, send to leech dump chat and bot PM
-                if Config.LEECH_DUMP_CHAT:
+                # Only use leech dump chats if leech operations are enabled
+                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -2259,7 +2266,12 @@ class TelegramUploader:
         destinations = [x for x in destinations if not (x in seen or seen.add(x))]
 
         # Make sure all dump chats are in the destinations list
-        if Config.LEECH_DUMP_CHAT and not self._listener.up_dest:
+        # Only use leech dump chats if leech operations are enabled
+        if (
+            Config.LEECH_DUMP_CHAT
+            and not self._listener.up_dest
+            and Config.LEECH_ENABLED
+        ):
             if isinstance(Config.LEECH_DUMP_CHAT, list):
                 for chat_id in Config.LEECH_DUMP_CHAT:
                     processed_chat_id = chat_id

@@ -1,4 +1,5 @@
 import contextlib
+import re
 from asyncio import gather, sleep
 from re import match as re_match
 from time import time as get_time
@@ -14,6 +15,7 @@ from pyrogram.errors import (
 from pyrogram.types import InputMediaPhoto
 
 from bot import (
+    DOWNLOAD_DIR,
     LOGGER,
     intervals,
     status_dict,
@@ -533,6 +535,11 @@ async def get_tg_link_message(link, user_id=""):
             return (links, user_session) if links else (user_message, user_session)
         return None, None
     raise TgLinkException("Private: Please report!")
+
+
+async def temp_download(msg):
+    path = f"{DOWNLOAD_DIR}temp"
+    return await msg.download(file_name=f"{path}/")
 
 
 async def update_status_message(sid, force=False):

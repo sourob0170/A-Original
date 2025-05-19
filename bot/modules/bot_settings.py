@@ -92,6 +92,21 @@ DEFAULT_VALUES = {
     "EQUAL_SPLITS": False,
     "ENABLE_EXTRA_MODULES": True,
     "MEDIA_TOOLS_ENABLED": True,
+    "BULK_ENABLED": True,
+    "MULTI_LINK_ENABLED": True,
+    "SAME_DIR_ENABLED": True,
+    "MIRROR_ENABLED": True,
+    "LEECH_ENABLED": True,
+    "TORRENT_ENABLED": True,
+    "TORRENT_SEARCH_ENABLED": True,
+    "YTDLP_ENABLED": True,
+    "NZB_ENABLED": True,
+    "NZB_SEARCH_ENABLED": True,
+    "JD_ENABLED": True,
+    "HYPERDL_ENABLED": True,
+    "MEDIA_SEARCH_ENABLED": True,
+    "RCLONE_ENABLED": True,
+    "ARCHIVE_FLAGS_ENABLED": True,
     # Watermark Settings
     "WATERMARK_ENABLED": False,
     "WATERMARK_KEY": "",
@@ -103,6 +118,14 @@ DEFAULT_VALUES = {
     "WATERMARK_THREADING": True,
     "WATERMARK_THREAD_NUMBER": 4,
     "WATERMARK_QUALITY": "none",
+    # Screenshot Settings
+    "SCREENSHOT_ENABLED": False,
+    "SCREENSHOT_PRIORITY": 3,
+    "SCREENSHOT_COUNT": 5,
+    "SCREENSHOT_INTERVAL": "auto",
+    "SCREENSHOT_FORMAT": "jpg",
+    "SCREENSHOT_QUALITY": 80,
+    "SCREENSHOT_RESOLUTION": "original",
     "WATERMARK_SPEED": "none",
     "WATERMARK_OPACITY": 0.0,
     "WATERMARK_REMOVE_ORIGINAL": True,
@@ -211,6 +234,8 @@ DEFAULT_VALUES = {
     "COMPRESSION_ARCHIVE_PRESET": "none",
     "COMPRESSION_ARCHIVE_LEVEL": "none",
     "COMPRESSION_ARCHIVE_METHOD": "none",
+    "COMPRESSION_ARCHIVE_PASSWORD": "none",
+    "COMPRESSION_ARCHIVE_ALGORITHM": "none",
     "COMPRESSION_ARCHIVE_DELETE_ORIGINAL": True,
     # Trim Settings
     "TRIM_ENABLED": False,
@@ -424,6 +449,7 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
 
         # Monitoring & Tools
         buttons.data_button("📊 Task Monitor", "botset taskmonitor")
+        buttons.data_button("🔄 Operations", "botset operations")
 
         # Always show Media Tools button, regardless of whether tools are enabled
         buttons.data_button("🎬 Media Tools", "botset mediatools")
@@ -586,6 +612,7 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
                 "COMPRESSION_SUBTITLE_ENABLED",
                 "COMPRESSION_ARCHIVE_ENABLED",
                 "TASK_MONITOR_ENABLED",
+                "TORRENT_ENABLED",
             }:
                 help_text = (
                     "Send 'true' to enable or 'false' to disable this feature."
@@ -793,6 +820,10 @@ Set to 0 to disable interval (watermark will be applied once).
                 help_text = "Send a tune option.\n\n<b>Examples:</b> <code>film</code>, <code>animation</code>, <code>grain</code>, <code>stillimage</code>, <code>fastdecode</code>, <code>zerolatency</code>"
             elif key in {"COMPRESSION_ARCHIVE_METHOD", "CONVERT_ARCHIVE_METHOD"}:
                 help_text = "Send a compression method.\n\n<b>Examples:</b> <code>deflate</code>, <code>store</code>, <code>bzip2</code>, <code>lzma</code>"
+            elif key == "COMPRESSION_ARCHIVE_PASSWORD":
+                help_text = "Set a password to protect the archive. Leave as 'none' for no password protection.\nNote: Password protection only works with 7z, zip, and rar formats.\n\n<b>Examples:</b> <code>mySecurePassword123</code>, <code>none</code>"
+            elif key == "COMPRESSION_ARCHIVE_ALGORITHM":
+                help_text = "Set the archive algorithm. Options: 7z, zip, tar, rar, etc.\n\n<b>Examples:</b> <code>7z</code> - best compression, supports password protection\n<code>zip</code> - more compatible, supports password protection\n<code>tar</code> - good for preserving file permissions (no password support)"
             elif key == "CONVERT_ARCHIVE_LEVEL":
                 help_text = "Send the compression level (0-9). Higher values mean better compression but slower speed.\n\n<b>Examples:</b> <code>6</code>, <code>9</code>"
             elif key in {"WATERMARK_FONT", "MERGE_SUBTITLE_FONT"}:
@@ -1108,14 +1139,9 @@ Send one of the following position options:
         elif edit_type.startswith("nzbsevar"):
             index = 0 if key == "newser" else int(edit_type.replace("nzbsevar", ""))
             if key == "newser":
-                buttons.data_button("⬅️ Back", "botset nzbserver", "footer")
-                buttons.data_button("❌ Close", "botset close", "footer")
-                msg = "Send one server as dictionary {}, like in config.py without [].\n\n<b>Example:</b> <code>{'name': 'MyServer', 'host': 'news.example.com', 'port': 119, 'username': 'user', 'password': 'pass'}</code>\n\n<i>Timeout: 60 seconds</i>"
+                msg = "Send one server as dictionary {}, like in config.py without []. Timeout: 60 sec"
             else:
-                buttons.data_button("⬅️ Back", f"botset nzbser{index}", "footer")
-                buttons.data_button("🗑️ Empty", f"botset emptyserkey {index} {key}")
-                buttons.data_button("❌ Close", "botset close", "footer")
-                msg = f"Send a valid value for <code>{key}</code> in server <b>{Config.USENET_SERVERS[index]['name']}</b>.\n\n<b>Current value:</b> <code>{Config.USENET_SERVERS[index][key]}</code>\n\n<i>Timeout: 60 seconds</i>"
+                msg = f"Send a valid value for {key} in server {Config.USENET_SERVERS[index]['name']}. Current value is {Config.USENET_SERVERS[index][key]}. Timeout: 60 sec"
     elif key == "var":
         conf_dict = Config.get_all()
         # Filter out watermark, merge configs, metadata, convert, add, task monitor, and AI settings
@@ -1168,12 +1194,32 @@ Send one of the following position options:
         # Add module control settings to the config menu
         module_keys = [
             "ENABLE_EXTRA_MODULES",
+            "BULK_ENABLED",
+            "MULTI_LINK_ENABLED",
+            "SAME_DIR_ENABLED",
+            "MIRROR_ENABLED",
+            "LEECH_ENABLED",
+            "TORRENT_ENABLED",
+            "YTDLP_ENABLED",
+            "NZB_ENABLED",
+            "JD_ENABLED",
+            "RCLONE_ENABLED",
             # Removed MEDIA_TOOLS_ENABLED from config menu
         ]
 
         # Add descriptions for module settings
         module_descriptions = {
             "ENABLE_EXTRA_MODULES": "Enable Extra Modules (AI, Truecaller, IMDB)",
+            "BULK_ENABLED": "Enable Bulk Operations (-b flag)",
+            "MULTI_LINK_ENABLED": "Enable Multi-Link Operations",
+            "SAME_DIR_ENABLED": "Enable Same Directory Operations (-m flag)",
+            "MIRROR_ENABLED": "Enable Mirror Operations",
+            "LEECH_ENABLED": "Enable Leech Operations",
+            "TORRENT_ENABLED": "Enable Torrent Operations",
+            "YTDLP_ENABLED": "Enable YT-DLP Operations",
+            "NZB_ENABLED": "Enable NZB Operations",
+            "JD_ENABLED": "Enable JDownloader Operations",
+            "RCLONE_ENABLED": "Enable Rclone Operations",
             # Removed MEDIA_TOOLS_ENABLED description
         }
 
@@ -1422,8 +1468,9 @@ Send only the file name as text message.
                 "extract",
                 "add",
                 "metadata",
-                "ffmpeg",
+                "xtra",
                 "sample",
+                "screenshot",
             ]
 
         # Count enabled tools for display
@@ -1461,12 +1508,9 @@ Send only the file name as text message.
             buttons.data_button("➕ Add", "botset mediatools_add")
         if is_media_tool_enabled("metadata"):
             buttons.data_button("📝 Metadata", "botset mediatools_metadata")
+        # Screenshot button removed as requested
 
         # Count enabled tools for display
-        total_tools = 10  # Total number of possible tools
-        enabled_count = len(enabled_tools)
-
-        # Count enabled tools
         all_tools = [
             "watermark",
             "merge",
@@ -1476,8 +1520,9 @@ Send only the file name as text message.
             "extract",
             "add",
             "metadata",
-            "ffmpeg",
+            "xtra",
             "sample",
+            "screenshot",
         ]
         enabled_count = len(enabled_tools)
         total_count = len(all_tools)
@@ -1501,6 +1546,7 @@ Configure global settings for media processing tools.
 • <b>Trim</b> - Cut sections from media files
 • <b>Extract</b> - Extract components from media files
 • <b>Add</b> - Add elements to media files
+• <b>Screenshot</b> - Take screenshots from videos (enabled via -ss flag)
 • <b>Metadata</b> - Modify file metadata
 
 Select a tool category to configure its settings."""
@@ -1566,6 +1612,166 @@ Select a tool category to configure its settings."""
 
 <i>Note: For each provider, configure either API Key or URL. If both are set, API Key will be used first with fallback to URL.</i>
 <i>Users can override these settings in their user settings.</i>"""
+
+    elif key == "operations":
+        # Operations settings
+
+        # Force refresh all operations settings from database to ensure accurate status
+        operations_settings = [
+            "BULK_ENABLED",
+            "MULTI_LINK_ENABLED",
+            "SAME_DIR_ENABLED",
+            "MIRROR_ENABLED",
+            "LEECH_ENABLED",
+            "TORRENT_ENABLED",
+            "TORRENT_SEARCH_ENABLED",
+            "YTDLP_ENABLED",
+            "NZB_ENABLED",
+            "NZB_SEARCH_ENABLED",
+            "JD_ENABLED",
+            "HYPERDL_ENABLED",
+            "MEDIA_SEARCH_ENABLED",
+            "RCLONE_ENABLED",
+        ]
+
+        try:
+            # Check if database is connected and db attribute exists
+            if (
+                database.db is not None
+                and hasattr(database, "db")
+                and hasattr(database.db, "settings")
+            ):
+                db_config = await database.db.settings.config.find_one(
+                    {"_id": TgClient.ID},
+                    dict.fromkeys(operations_settings, 1),
+                )
+                if db_config:
+                    # Update the Config object with the current values from database
+                    for setting in operations_settings:
+                        if setting in db_config:
+                            db_value = db_config[setting]
+                            if db_value != getattr(Config, setting, None):
+                                setattr(Config, setting, db_value)
+        except Exception:
+            pass
+
+        # Get current operations settings after refresh
+        bulk_enabled = "✅ Enabled" if Config.BULK_ENABLED else "❌ Disabled"
+        multi_link_enabled = (
+            "✅ Enabled" if Config.MULTI_LINK_ENABLED else "❌ Disabled"
+        )
+        same_dir_enabled = "✅ Enabled" if Config.SAME_DIR_ENABLED else "❌ Disabled"
+        mirror_enabled = "✅ Enabled" if Config.MIRROR_ENABLED else "❌ Disabled"
+        leech_enabled = "✅ Enabled" if Config.LEECH_ENABLED else "❌ Disabled"
+        torrent_enabled = "✅ Enabled" if Config.TORRENT_ENABLED else "❌ Disabled"
+        torrent_search_enabled = (
+            "✅ Enabled" if Config.TORRENT_SEARCH_ENABLED else "❌ Disabled"
+        )
+        ytdlp_enabled = "✅ Enabled" if Config.YTDLP_ENABLED else "❌ Disabled"
+        nzb_enabled = "✅ Enabled" if Config.NZB_ENABLED else "❌ Disabled"
+        nzb_search_enabled = (
+            "✅ Enabled" if Config.NZB_SEARCH_ENABLED else "❌ Disabled"
+        )
+        jd_enabled = "✅ Enabled" if Config.JD_ENABLED else "❌ Disabled"
+        hyperdl_enabled = "✅ Enabled" if Config.HYPERDL_ENABLED else "❌ Disabled"
+        media_search_enabled = (
+            "✅ Enabled" if Config.MEDIA_SEARCH_ENABLED else "❌ Disabled"
+        )
+        rclone_enabled = "✅ Enabled" if Config.RCLONE_ENABLED else "❌ Disabled"
+
+        # Create toggle buttons for operations
+        buttons.data_button(
+            f"📦 Bulk Operations: {bulk_enabled}",
+            f"botset toggle BULK_ENABLED {not Config.BULK_ENABLED}",
+        )
+        buttons.data_button(
+            f"🔗 Multi-Link Operations: {multi_link_enabled}",
+            f"botset toggle MULTI_LINK_ENABLED {not Config.MULTI_LINK_ENABLED}",
+        )
+        buttons.data_button(
+            f"📁 Same Directory Operations: {same_dir_enabled}",
+            f"botset toggle SAME_DIR_ENABLED {not Config.SAME_DIR_ENABLED}",
+        )
+        buttons.data_button(
+            f"🪞 Mirror Operations: {mirror_enabled}",
+            f"botset toggle MIRROR_ENABLED {not Config.MIRROR_ENABLED}",
+        )
+        buttons.data_button(
+            f"📥 Leech Operations: {leech_enabled}",
+            f"botset toggle LEECH_ENABLED {not Config.LEECH_ENABLED}",
+        )
+        buttons.data_button(
+            f"🧲 Torrent Operations: {torrent_enabled}",
+            f"botset toggle TORRENT_ENABLED {not Config.TORRENT_ENABLED}",
+        )
+        buttons.data_button(
+            f"🔍 Torrent Search: {torrent_search_enabled}",
+            f"botset toggle TORRENT_SEARCH_ENABLED {not Config.TORRENT_SEARCH_ENABLED}",
+        )
+        buttons.data_button(
+            f"📹 YT-DLP Operations: {ytdlp_enabled}",
+            f"botset toggle YTDLP_ENABLED {not Config.YTDLP_ENABLED}",
+        )
+        buttons.data_button(
+            f"📦 NZB Operations: {nzb_enabled}",
+            f"botset toggle NZB_ENABLED {not Config.NZB_ENABLED}",
+        )
+        buttons.data_button(
+            f"🔍 NZB Search: {nzb_search_enabled}",
+            f"botset toggle NZB_SEARCH_ENABLED {not Config.NZB_SEARCH_ENABLED}",
+        )
+        buttons.data_button(
+            f"📥 JDownloader Operations: {jd_enabled}",
+            f"botset toggle JD_ENABLED {not Config.JD_ENABLED}",
+        )
+        buttons.data_button(
+            f"⚡ Hyper Download: {hyperdl_enabled}",
+            f"botset toggle HYPERDL_ENABLED {not Config.HYPERDL_ENABLED}",
+        )
+        buttons.data_button(
+            f"🔍 Media Search: {media_search_enabled}",
+            f"botset toggle MEDIA_SEARCH_ENABLED {not Config.MEDIA_SEARCH_ENABLED}",
+        )
+        buttons.data_button(
+            f"☁️ Rclone Operations: {rclone_enabled}",
+            f"botset toggle RCLONE_ENABLED {not Config.RCLONE_ENABLED}",
+        )
+
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        msg = f"""<b>Operations Settings</b>
+
+<b>Bulk Operations:</b> {bulk_enabled}
+<b>Multi-Link Operations:</b> {multi_link_enabled}
+<b>Same Directory Operations:</b> {same_dir_enabled}
+<b>Mirror Operations:</b> {mirror_enabled}
+<b>Leech Operations:</b> {leech_enabled}
+<b>Torrent Operations:</b> {torrent_enabled}
+<b>Torrent Search:</b> {torrent_search_enabled}
+<b>YT-DLP Operations:</b> {ytdlp_enabled}
+<b>NZB Operations:</b> {nzb_enabled}
+<b>NZB Search:</b> {nzb_search_enabled}
+<b>JDownloader Operations:</b> {jd_enabled}
+<b>Hyper Download:</b> {hyperdl_enabled}
+<b>Media Search:</b> {media_search_enabled}
+<b>Rclone Operations:</b> {rclone_enabled}
+
+<b>Description:</b>
+• <b>Bulk Operations:</b> Controls whether users can use the -b flag for bulk operations
+• <b>Multi-Link Operations:</b> Controls whether users can process multiple links with the -i flag
+• <b>Same Directory Operations:</b> Controls whether users can use the -m flag to save files in the same directory
+• <b>Mirror Operations:</b> Controls whether users can use mirror commands
+• <b>Leech Operations:</b> Controls whether users can use leech commands
+• <b>Torrent Operations:</b> Controls whether users can process torrent files and magnet links
+• <b>Torrent Search:</b> Controls whether users can search for torrents
+• <b>YT-DLP Operations:</b> Controls whether users can use YT-DLP commands for downloading videos
+• <b>NZB Operations:</b> Controls whether users can use NZB commands for downloading from Usenet
+• <b>NZB Search:</b> Controls whether users can search for NZB files
+• <b>JDownloader Operations:</b> Controls whether users can use JDownloader commands
+• <b>Hyper Download:</b> Controls whether users can use Hyper Download for faster Telegram downloads
+• <b>Media Search:</b> Controls whether users can search for media in configured channels
+• <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations"""
 
     elif key == "taskmonitor":
         # Group task monitoring settings by category
@@ -2743,6 +2949,98 @@ Current page shows: {category_text} settings."""
 
 Configure global extract settings that will be used when user settings are not available."""
 
+    elif key == "mediatools_screenshot":
+        # Create a new ButtonMaker instance to avoid duplicate buttons
+        buttons = ButtonMaker()
+
+        # Add screenshot settings
+        screenshot_settings = [
+            "SCREENSHOT_ENABLED",
+            "SCREENSHOT_PRIORITY",
+            "SCREENSHOT_COUNT",
+            "SCREENSHOT_INTERVAL",
+            "SCREENSHOT_FORMAT",
+            "SCREENSHOT_QUALITY",
+            "SCREENSHOT_RESOLUTION",
+        ]
+
+        # Add buttons for each setting
+        for setting in screenshot_settings:
+            # Create a more user-friendly display name
+            display_name = setting.replace("SCREENSHOT_", "").title()
+
+            # For boolean settings, add toggle buttons with status
+            if setting == "SCREENSHOT_ENABLED":
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+                continue
+
+            # For non-boolean settings, use editvar
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mediatools_screenshot")
+        else:
+            buttons.data_button("👁️ View", "botset view mediatools_screenshot")
+
+        # Add settings buttons
+        buttons.data_button("⬅️ Back", "botset mediatools", "footer")
+        buttons.data_button("🔄 Reset to Default", "botset default_screenshot")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current screenshot settings
+        screenshot_enabled = (
+            "✅ Enabled" if Config.SCREENSHOT_ENABLED else "❌ Disabled"
+        )
+        screenshot_priority = Config.SCREENSHOT_PRIORITY or DEFAULT_VALUES.get(
+            "SCREENSHOT_PRIORITY", 3
+        )
+        screenshot_count = Config.SCREENSHOT_COUNT or DEFAULT_VALUES.get(
+            "SCREENSHOT_COUNT", 5
+        )
+        screenshot_interval = Config.SCREENSHOT_INTERVAL or DEFAULT_VALUES.get(
+            "SCREENSHOT_INTERVAL", "auto"
+        )
+        screenshot_format = Config.SCREENSHOT_FORMAT or DEFAULT_VALUES.get(
+            "SCREENSHOT_FORMAT", "jpg"
+        )
+        screenshot_quality = Config.SCREENSHOT_QUALITY or DEFAULT_VALUES.get(
+            "SCREENSHOT_QUALITY", 80
+        )
+        screenshot_resolution = Config.SCREENSHOT_RESOLUTION or DEFAULT_VALUES.get(
+            "SCREENSHOT_RESOLUTION", "original"
+        )
+
+        # Create a message with information about the screenshot tool
+        msg = f"""<b>Screenshot Tool Settings</b>
+
+<b>Status:</b> {screenshot_enabled}
+<b>Priority:</b> {screenshot_priority}
+<b>Count:</b> {screenshot_count}
+<b>Interval:</b> {screenshot_interval}
+<b>Format:</b> {screenshot_format}
+<b>Quality:</b> {screenshot_quality}
+<b>Resolution:</b> {screenshot_resolution}
+
+<b>Usage:</b>
+• Use the <code>-ss</code> flag to enable taking screenshots
+
+<b>Example:</b>
+<code>/mirror -ss https://example.com/video.mp4</code>
+
+<b>Details:</b>
+• Screenshots are taken at equal intervals throughout the video
+• By default, multiple screenshots are taken
+• Screenshots are saved in a folder with the video name
+"""
+
+        # Show the message with buttons
+        return msg, buttons.build_menu(2)
+
     elif key == "mediatools_add":
         # Add buttons for add settings
         # General add settings
@@ -3585,6 +3883,8 @@ Configure global extract settings that will be used when user settings are not a
             "COMPRESSION_ARCHIVE_LEVEL",
             "COMPRESSION_ARCHIVE_METHOD",
             "COMPRESSION_ARCHIVE_FORMAT",
+            "COMPRESSION_ARCHIVE_PASSWORD",
+            "COMPRESSION_ARCHIVE_ALGORITHM",
         ]
 
         # Combine all settings
@@ -3657,6 +3957,7 @@ Configure global extract settings that will be used when user settings are not a
                 "COMPRESSION_DOCUMENT_ENABLED",
                 "COMPRESSION_SUBTITLE_ENABLED",
                 "COMPRESSION_ARCHIVE_ENABLED",
+                "BULK_ENABLED",
             ]:
                 # Use True as default for COMPRESSION_DELETE_ORIGINAL, False for others
                 default_value = setting == "COMPRESSION_DELETE_ORIGINAL"
@@ -3777,6 +4078,14 @@ Configure global extract settings that will be used when user settings are not a
         archive_level = Config.COMPRESSION_ARCHIVE_LEVEL
         archive_method = Config.COMPRESSION_ARCHIVE_METHOD
         archive_format = Config.COMPRESSION_ARCHIVE_FORMAT
+        archive_password = (
+            "Set"
+            if hasattr(Config, "COMPRESSION_ARCHIVE_PASSWORD")
+            and Config.COMPRESSION_ARCHIVE_PASSWORD
+            and Config.COMPRESSION_ARCHIVE_PASSWORD.lower() != "none"
+            else "none"
+        )
+        archive_algorithm = Config.COMPRESSION_ARCHIVE_ALGORITHM
 
         msg = f"""<b>Compression Settings</b> | State: {state}
 
@@ -3831,6 +4140,8 @@ Configure global extract settings that will be used when user settings are not a
 • <b>Level:</b> <code>{archive_level}</code>
 • <b>Method:</b> <code>{archive_method}</code>
 • <b>Format:</b> <code>{archive_format}</code>
+• <b>Password:</b> <code>{archive_password}</code>
+• <b>Algorithm:</b> <code>{archive_algorithm}</code>
 
 <b>Usage:</b>
 • Main Compression toggle must be enabled
@@ -4678,6 +4989,11 @@ async def handle_image_upload(_, message, pre_message):
             try:
                 from PIL import Image
 
+                from bot.helper.ext_utils.media_utils import limit_memory_for_pil
+
+                # Apply memory limits for PIL operations
+                limit_memory_for_pil()
+
                 img = Image.open(temp_path)
 
                 # Get original dimensions
@@ -4714,6 +5030,11 @@ async def handle_image_upload(_, message, pre_message):
             # Get image dimensions for smaller images
             try:
                 from PIL import Image
+
+                from bot.helper.ext_utils.media_utils import limit_memory_for_pil
+
+                # Apply memory limits for PIL operations
+                limit_memory_for_pil()
 
                 img = Image.open(temp_path)
                 width, height = img.size
@@ -5288,54 +5609,130 @@ async def edit_nzb_server(_, message, pre_message, key, index=0):
     # Get the current state before making changes
     current_state = globals()["state"]
 
+    # Check if SABnzbd client is available
+    if sabnzbd_client is None:
+        await send_message(message, "SABnzbd client is not available!")
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(pre_message, "nzbserver")
+        return
+
     if key == "newser":
         if value.startswith("{") and value.endswith("}"):
             try:
                 value = eval(value)
-            except Exception:
-                await send_message(message, "Invalid dict format!")
+            except Exception as e:
+                await send_message(message, f"Invalid dict format! Error: {e!s}")
 
                 # Set the state back to what it was
                 globals()["state"] = current_state
                 await update_buttons(pre_message, "nzbserver")
-
                 return
-            res = await sabnzbd_client.add_server(value)
-            if not res["config"]["servers"][0]["host"]:
-                await send_message(message, "Invalid server!")
+
+            try:
+                res = await sabnzbd_client.add_server(value)
+
+                # Check if the response indicates an error
+                if "error" in res:
+                    await send_message(
+                        message, f"Error adding server: {res['error']}"
+                    )
+
+                    # Set the state back to what it was
+                    globals()["state"] = current_state
+                    await update_buttons(pre_message, "nzbserver")
+                    return
+
+                # Check if the response has the expected structure
+                if (
+                    "config" not in res
+                    or "servers" not in res["config"]
+                    or not res["config"]["servers"]
+                ):
+                    await send_message(message, "Invalid response from SABnzbd!")
+
+                    # Set the state back to what it was
+                    globals()["state"] = current_state
+                    await update_buttons(pre_message, "nzbserver")
+                    return
+
+                if not res["config"]["servers"][0]["host"]:
+                    await send_message(message, "Invalid server!")
+
+                    # Set the state back to what it was
+                    globals()["state"] = current_state
+                    await update_buttons(pre_message, "nzbserver")
+                    return
+
+                Config.USENET_SERVERS.append(value)
 
                 # Set the state back to what it was
                 globals()["state"] = current_state
                 await update_buttons(pre_message, "nzbserver")
+            except Exception as e:
+                await send_message(
+                    message, f"Error communicating with SABnzbd: {e!s}"
+                )
 
+                # Set the state back to what it was
+                globals()["state"] = current_state
+                await update_buttons(pre_message, "nzbserver")
                 return
-            Config.USENET_SERVERS.append(value)
-
-            # Set the state back to what it was
-            globals()["state"] = current_state
-            await update_buttons(pre_message, "nzbserver")
         else:
             await send_message(message, "Invalid dict format!")
 
             # Set the state back to what it was
             globals()["state"] = current_state
             await update_buttons(pre_message, "nzbserver")
-
             return
     else:
         if value.isdigit():
             value = int(value)
-        res = await sabnzbd_client.add_server(
-            {"name": Config.USENET_SERVERS[index]["name"], key: value},
-        )
-        if res["config"]["servers"][0][key] == "":
-            await send_message(message, "Invalid value")
-            return
-        Config.USENET_SERVERS[index][key] = value
 
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(pre_message, f"nzbser{index}")
+        try:
+            res = await sabnzbd_client.add_server(
+                {"name": Config.USENET_SERVERS[index]["name"], key: value},
+            )
+
+            # Check if the response indicates an error
+            if "error" in res:
+                await send_message(message, f"Error updating server: {res['error']}")
+
+                # Set the state back to what it was
+                globals()["state"] = current_state
+                await update_buttons(pre_message, f"nzbser{index}")
+                return
+
+            # Check if the response has the expected structure
+            if (
+                "config" not in res
+                or "servers" not in res["config"]
+                or not res["config"]["servers"]
+            ):
+                await send_message(message, "Invalid response from SABnzbd!")
+
+                # Set the state back to what it was
+                globals()["state"] = current_state
+                await update_buttons(pre_message, f"nzbser{index}")
+                return
+
+            if res["config"]["servers"][0][key] == "":
+                await send_message(message, "Invalid value")
+                return
+
+            Config.USENET_SERVERS[index][key] = value
+
+            # Set the state back to what it was
+            globals()["state"] = current_state
+            await update_buttons(pre_message, f"nzbser{index}")
+        except Exception as e:
+            await send_message(message, f"Error communicating with SABnzbd: {e!s}")
+
+            # Set the state back to what it was
+            globals()["state"] = current_state
+            await update_buttons(pre_message, f"nzbser{index}")
+            return
 
     await delete_message(message)
     await database.update_config({"USENET_SERVERS": Config.USENET_SERVERS})
@@ -5392,6 +5789,10 @@ async def handle_watermark_image_upload(_, message):
                     # Try to import PIL
                     try:
                         from PIL import Image
+
+                        from bot.helper.ext_utils.media_utils import (
+                            limit_memory_for_pil,
+                        )
                     except ImportError:
                         error_msg = await send_message(
                             message,
@@ -5402,6 +5803,9 @@ async def handle_watermark_image_upload(_, message):
                         # Delete the uploaded image message
                         await delete_message(message)
                         return
+
+                    # Apply memory limits for PIL operations
+                    limit_memory_for_pil()
 
                     img = Image.open(temp_path)
                     width, height = img.size
@@ -5548,9 +5952,14 @@ async def handle_watermark_image_upload(_, message):
                 # Try to import PIL
                 try:
                     from PIL import Image
+
+                    from bot.helper.ext_utils.media_utils import limit_memory_for_pil
                 except ImportError:
                     img_info = ""
                 else:
+                    # Apply memory limits for PIL operations
+                    limit_memory_for_pil()
+
                     img = Image.open(temp_path)
                     width, height = img.size
                     img_info = f"Dimensions: {width}x{height}"
@@ -5922,8 +6331,18 @@ async def edit_bot_settings(client, query):
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
-            {"name": "ffmpeg", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
+            {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
+            {
+                "name": "screenshot",
+                "icon": "📸",
+                "desc": "Take screenshots from videos",
+            },
+            {
+                "name": "archive",
+                "icon": "🗜️",
+                "desc": "Enable archive flags (-z, -e) for compression/extraction",
+            },
         ]
 
         # Get list of tool names only
@@ -6290,6 +6709,25 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_add")
 
+    elif data[1] == "mediatools_screenshot":
+        from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
+
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if screenshot is enabled
+        if not is_media_tool_enabled("screenshot"):
+            await query.answer(
+                "Screenshot tool is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        # Note: Button removed from menu but functionality still accessible via direct URL
+        await update_buttons(message, "mediatools_screenshot")
+
     elif data[1] == "mediatools_compression":
         from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
 
@@ -6561,6 +6999,12 @@ async def edit_bot_settings(client, query):
         Config.COMPRESSION_ARCHIVE_METHOD = DEFAULT_VALUES[
             "COMPRESSION_ARCHIVE_METHOD"
         ]
+        Config.COMPRESSION_ARCHIVE_PASSWORD = DEFAULT_VALUES[
+            "COMPRESSION_ARCHIVE_PASSWORD"
+        ]
+        Config.COMPRESSION_ARCHIVE_ALGORITHM = DEFAULT_VALUES[
+            "COMPRESSION_ARCHIVE_ALGORITHM"
+        ]
 
         # Update the database
         await database.update_config(
@@ -6643,6 +7087,12 @@ async def edit_bot_settings(client, query):
                 ],
                 "COMPRESSION_ARCHIVE_METHOD": DEFAULT_VALUES[
                     "COMPRESSION_ARCHIVE_METHOD"
+                ],
+                "COMPRESSION_ARCHIVE_PASSWORD": DEFAULT_VALUES[
+                    "COMPRESSION_ARCHIVE_PASSWORD"
+                ],
+                "COMPRESSION_ARCHIVE_ALGORITHM": DEFAULT_VALUES[
+                    "COMPRESSION_ARCHIVE_ALGORITHM"
                 ],
             }
         )
@@ -7030,6 +7480,61 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_convert")
 
+    elif data[1] == "default_screenshot_setting":
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Reset the specific SCREENSHOT_ setting to its default value
+        setting_key = data[2]
+        default_value = DEFAULT_VALUES.get(setting_key)
+
+        if default_value is not None:
+            # Update the Config class
+            Config.set(setting_key, default_value)
+
+            # Update the database
+            await database.update_config({setting_key: default_value})
+
+            # Show a success message
+            await query.answer(
+                f"Reset {setting_key} to default value: {default_value}",
+                show_alert=True,
+            )
+        else:
+            # Show an error message
+            await query.answer(
+                f"Error: No default value found for {setting_key}", show_alert=True
+            )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mediatools_screenshot")
+
+    elif data[1] == "default_screenshot":
+        await query.answer("Resetting all screenshot settings to default...")
+        # Reset all screenshot settings to default using DEFAULT_VALUES
+
+        # Create a dictionary of all SCREENSHOT_ settings from DEFAULT_VALUES
+        screenshot_settings = {
+            key: value
+            for key, value in DEFAULT_VALUES.items()
+            if key.startswith("SCREENSHOT_")
+        }
+
+        # Update the Config object
+        for key, value in screenshot_settings.items():
+            Config.set(key, value)
+
+        # Update the database
+        await database.update_config(screenshot_settings)
+
+        # Update the UI - maintain the current state (edit/view)
+        # Get the current state before updating the UI
+        current_state = globals()["state"]
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mediatools_screenshot")
+
     elif data[1] == "default_add":
         await query.answer("Resetting all add settings to default...")
         # Reset all add settings to default using DEFAULT_VALUES
@@ -7389,6 +7894,7 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
+        "mediatools_screenshot",
         "ai",
     ]:
         await query.answer()
@@ -7413,6 +7919,9 @@ async def edit_bot_settings(client, query):
         elif data[2] == "mediatools_add":
             # Force a refresh of the UI to ensure the toggle buttons show the correct state
             await update_buttons(message, "mediatools_add")
+        elif data[2] == "mediatools_screenshot":
+            # Force a refresh of the UI to ensure the toggle buttons show the correct state
+            await update_buttons(message, "mediatools_screenshot")
         elif data[2] == "ai":
             await update_buttons(message, "ai")
         elif data[2] == "taskmonitor":
@@ -7429,6 +7938,7 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
+        "mediatools_screenshot",
         "ai",
     ]:
         await query.answer()
@@ -7452,6 +7962,9 @@ async def edit_bot_settings(client, query):
         elif data[2] == "mediatools_add":
             # Force a refresh of the UI to ensure the toggle buttons show the correct state
             await update_buttons(message, "mediatools_add")
+        elif data[2] == "mediatools_screenshot":
+            # Force a refresh of the UI to ensure the toggle buttons show the correct state
+            await update_buttons(message, "mediatools_screenshot")
         elif data[2] == "ai":
             await update_buttons(message, "ai")
         else:
@@ -7654,6 +8167,61 @@ async def edit_bot_settings(client, query):
 
             # Set up the return function to preserve the edit state
             rfunc = partial(update_buttons, message, "mediatools_add", "edit")
+
+            # Launch the event handler to capture user input
+            handler_dict[message.chat.id] = True
+            await event_handler(client, query, pfunc, rfunc)
+            return
+
+        # Handle screenshot settings
+        if data[2].startswith("SCREENSHOT_"):
+            # Create a more user-friendly display name
+            display_name = data[2].replace("SCREENSHOT_", "").title()
+
+            # Get the current value
+            current_value = getattr(Config, data[2], DEFAULT_VALUES.get(data[2], ""))
+
+            # Create a message with instructions
+            msg = f"<b>Edit {display_name}</b>\n\n"
+
+            # Add specific instructions based on the setting
+            if data[2] == "SCREENSHOT_PRIORITY":
+                msg += "Enter a number (1-10) for the screenshot task priority.\n"
+                msg += "Lower numbers = higher priority."
+            elif data[2] == "SCREENSHOT_COUNT":
+                msg += "Enter the number of screenshots to take from each video.\n"
+                msg += "Recommended: 3-10 screenshots."
+            elif data[2] == "SCREENSHOT_INTERVAL":
+                msg += "Enter the interval between screenshots.\n"
+                msg += "Use 'auto' for automatic spacing, or specify in seconds."
+            elif data[2] == "SCREENSHOT_FORMAT":
+                msg += "Enter the format for screenshots (jpg, png, etc).\n"
+                msg += "Recommended: jpg for smaller files, png for higher quality."
+            elif data[2] == "SCREENSHOT_QUALITY":
+                msg += "Enter the quality for screenshots (1-100).\n"
+                msg += "Higher values = better quality but larger files."
+            elif data[2] == "SCREENSHOT_RESOLUTION":
+                msg += "Enter the resolution for screenshots.\n"
+                msg += "Use 'original' to keep source resolution, or specify like '1280x720'."
+
+            # Add the current value
+            msg += f"\n\n<b>Current value:</b> <code>{current_value}</code>\n\n<i>Timeout: 60 seconds</i>"
+
+            # Add buttons
+            buttons = ButtonMaker()
+            buttons.data_button("⬅️ Back", "botset mediatools_screenshot", "footer")
+            buttons.data_button(
+                "🔄 Default", f"botset default_screenshot_setting {data[2]}"
+            )
+            buttons.data_button("❌ Close", "botset close", "footer")
+
+            await edit_message(message, msg, buttons.build_menu(1))
+
+            # Set up the edit function
+            pfunc = partial(edit_variable, pre_message=message, key=data[2])
+
+            # Set up the return function to preserve the edit state
+            rfunc = partial(update_buttons, message, "mediatools_screenshot", "edit")
 
             # Launch the event handler to capture user input
             handler_dict[message.chat.id] = True
@@ -7986,8 +8554,10 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
+        "mediatools_screenshot",
         "ai",
         "taskmonitor",
+        "operations",
     ] or data[1].startswith(
         "nzbser",
     ):
@@ -8121,6 +8691,8 @@ async def edit_bot_settings(client, query):
             previous_menu = "mediatools_extract"
         elif data[2].startswith("ADD_"):
             previous_menu = "mediatools_add"
+        elif data[2].startswith("SCREENSHOT_"):
+            previous_menu = "mediatools_screenshot"
         elif data[2].startswith("TASK_MONITOR_"):
             previous_menu = "taskmonitor"
         elif data[2] == "DEFAULT_AI_PROVIDER" or data[2].startswith(
@@ -8166,6 +8738,8 @@ async def edit_bot_settings(client, query):
                 previous_menu = "mediatools_extract"
             elif "Add" in message.text:
                 previous_menu = "mediatools_add"
+            elif "Screenshot" in message.text:
+                previous_menu = "mediatools_screenshot"
             elif "Task Monitor" in message.text:
                 previous_menu = "taskmonitor"
             elif "qBittorrent" in message.text:
@@ -8404,8 +8978,18 @@ async def edit_bot_settings(client, query):
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
-            {"name": "ffmpeg", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
+            {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
+            {
+                "name": "screenshot",
+                "icon": "📸",
+                "desc": "Take screenshots from videos",
+            },
+            {
+                "name": "archive",
+                "icon": "🗜️",
+                "desc": "Enable archive flags (-z, -e) for compression/extraction",
+            },
         ]
 
         # Get list of tool names only
@@ -8688,40 +9272,15 @@ async def edit_bot_settings(client, query):
     elif data[1].startswith("nzbsevar") and (state == "edit" or data[2] == "newser"):
         index = 0 if data[2] == "newser" else int(data[1].replace("nzbsevar", ""))
         await query.answer()
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        # Check if index is valid before proceeding (except for newser which creates a new server)
-        if data[2] == "newser" or (0 <= index < len(Config.USENET_SERVERS)):
-            # Set the state back to what it was
-            globals()["state"] = current_state
-            await update_buttons(message, data[2], data[1])
-
-            pfunc = partial(
-                edit_nzb_server,
-                pre_message=message,
-                key=data[2],
-                index=index,
-            )
-
-            # Use the improved return function from the incoming change
-            rfunc = partial(
-                update_buttons,
-                message,
-                f"nzbser{index}" if data[2] != "newser" else "nzbserver",
-            )
-
-            await event_handler(client, query, pfunc, rfunc)
-        else:
-            # Handle invalid index
-            await query.answer(
-                "Invalid server index. Please go back and try again.",
-                show_alert=True,
-            )
-
-            # Set the state back to what it was
-            globals()["state"] = current_state
-            await update_buttons(message, "nzbserver")
+        await update_buttons(message, data[2], data[1])
+        pfunc = partial(
+            edit_nzb_server,
+            pre_message=message,
+            key=data[2],
+            index=index,
+        )
+        rfunc = partial(update_buttons, message, data[1])
+        await event_handler(client, query, pfunc, rfunc)
     elif data[1].startswith("nzbsevar") and state == "view":
         index = int(data[1].replace("nzbsevar", ""))
         # Get the current state before making changes
@@ -8781,8 +9340,18 @@ async def edit_bot_settings(client, query):
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
-            {"name": "ffmpeg", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
+            {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
+            {
+                "name": "screenshot",
+                "icon": "📸",
+                "desc": "Take screenshots from videos",
+            },
+            {
+                "name": "archive",
+                "icon": "🗜️",
+                "desc": "Enable archive flags (-z, -e) for compression/extraction",
+            },
         ]
 
         # Get list of tool names only
@@ -9005,8 +9574,18 @@ async def edit_bot_settings(client, query):
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
-            {"name": "ffmpeg", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
+            {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
+            {
+                "name": "screenshot",
+                "icon": "📸",
+                "desc": "Take screenshots from videos",
+            },
+            {
+                "name": "archive",
+                "icon": "🗜️",
+                "desc": "Enable archive flags (-z, -e) for compression/extraction",
+            },
         ]
 
         # Get list of tool names only
@@ -9113,8 +9692,18 @@ async def edit_bot_settings(client, query):
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
-            {"name": "ffmpeg", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
+            {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
+            {
+                "name": "screenshot",
+                "icon": "📸",
+                "desc": "Take screenshots from videos",
+            },
+            {
+                "name": "archive",
+                "icon": "🗜️",
+                "desc": "Enable archive flags (-z, -e) for compression/extraction",
+            },
         ]
 
         # Get list of tool names only
@@ -9419,6 +10008,29 @@ async def edit_bot_settings(client, query):
         key = data[2]
         value = data[3].lower() == "true"
 
+        # Force refresh the setting from database before toggling to ensure accurate status
+        try:
+            # Check if database is connected and db attribute exists
+            if (
+                database.db is not None
+                and hasattr(database, "db")
+                and hasattr(database.db, "settings")
+            ):
+                db_config = await database.db.settings.config.find_one(
+                    {"_id": TgClient.ID},
+                    {key: 1},
+                )
+                if db_config and key in db_config:
+                    # Update the Config object with the current value from database
+                    db_value = db_config[key]
+                    if db_value != getattr(Config, key, None):
+                        setattr(Config, key, db_value)
+                        # If the database value is different from what we're trying to toggle,
+                        # update the value to toggle based on the current database value
+                        value = not db_value
+        except Exception:
+            pass
+
         # Special handling for ADD_PRESERVE_TRACKS and ADD_REPLACE_TRACKS
         # When one is turned on, the other should be turned off
         if key == "ADD_PRESERVE_TRACKS" and value:
@@ -9438,6 +10050,182 @@ async def edit_bot_settings(client, query):
             await database.update_config(
                 {"ADD_REPLACE_TRACKS": True, "ADD_PRESERVE_TRACKS": False}
             )
+
+        # Special handling for RCLONE_ENABLED
+        elif key == "RCLONE_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Rclone is being disabled, reset all user Rclone configs
+                from bot.helper.ext_utils.config_utils import reset_rclone_configs
+
+                await reset_rclone_configs(database)
+            else:
+                # If Rclone is being enabled, log it
+                from bot import LOGGER
+
+                LOGGER.info("Rclone operations have been enabled.")
+
+        # Special handling for MIRROR_ENABLED
+        elif key == "MIRROR_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Mirror is being disabled, reset all user mirror-related configs
+                from bot.helper.ext_utils.config_utils import reset_mirror_configs
+
+                await reset_mirror_configs(database)
+            else:
+                # Mirror enabled without logging
+                pass
+
+        # Special handling for LEECH_ENABLED
+        elif key == "LEECH_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Leech is being disabled, reset all user leech-related configs
+                from bot.helper.ext_utils.config_utils import reset_leech_configs
+
+                await reset_leech_configs(database)
+            else:
+                # Leech operations enabled without logging
+                pass
+
+        # Special handling for YTDLP_ENABLED
+        elif key == "YTDLP_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If YT-DLP is being disabled, reset all user YT-DLP-related configs
+                from bot.helper.ext_utils.config_utils import reset_ytdlp_configs
+
+                await reset_ytdlp_configs(database)
+            else:
+                # YT-DLP operations enabled without logging
+                pass
+
+        # Special handling for TORRENT_ENABLED
+        elif key == "TORRENT_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Torrent is being disabled, reset all user torrent-related configs
+                from bot.helper.ext_utils.config_utils import reset_torrent_configs
+
+                await reset_torrent_configs(database)
+            else:
+                # Torrent operations enabled without logging
+                pass
+
+        # Special handling for NZB_ENABLED
+        elif key == "NZB_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If NZB is being disabled, reset all user NZB-related configs
+                from bot.helper.ext_utils.config_utils import reset_nzb_configs
+
+                await reset_nzb_configs(database)
+            else:
+                # NZB operations enabled without logging
+                pass
+
+        # Special handling for JD_ENABLED
+        elif key == "JD_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If JDownloader is being disabled, reset all user JD-related configs
+                from bot.helper.ext_utils.config_utils import reset_jd_configs
+
+                await reset_jd_configs(database)
+            else:
+                # JDownloader operations enabled without logging
+                pass
+
+        # Special handling for BULK_ENABLED
+        elif key == "BULK_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Bulk is being disabled, reset all user bulk-related configs
+                from bot.helper.ext_utils.config_utils import reset_bulk_configs
+
+                await reset_bulk_configs(database)
+            else:
+                # Bulk operations enabled without logging
+                pass
+
+        # Special handling for MULTI_LINK_ENABLED
+        elif key == "MULTI_LINK_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Multi-link is being disabled, reset all user multi-link-related configs
+                from bot.helper.ext_utils.config_utils import (
+                    reset_multi_link_configs,
+                )
+
+                await reset_multi_link_configs(database)
+            else:
+                # Multi-link operations enabled without logging
+                pass
+
+        # Special handling for SAME_DIR_ENABLED
+        elif key == "SAME_DIR_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Same-dir is being disabled, reset all user same-dir-related configs
+                from bot.helper.ext_utils.config_utils import reset_same_dir_configs
+
+                await reset_same_dir_configs(database)
+            else:
+                # Same-dir operations enabled without logging
+                pass
+
+        # Special handling for TORRENT_SEARCH_ENABLED
+        elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
+            "HYPERDL_ENABLED",
+            "MEDIA_SEARCH_ENABLED",
+        }:
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            # Media search toggle without logging
 
         else:
             # For all other toggles, just set the value directly
@@ -9470,7 +10258,7 @@ async def edit_bot_settings(client, query):
                     "extract",
                     "add",
                     "metadata",
-                    "ffmpeg",
+                    "xtra",
                     "sample",
                 ]
                 # Sort the tools to maintain consistent order
@@ -9509,6 +10297,25 @@ async def edit_bot_settings(client, query):
             return_menu = "mediatools_add"
         elif key.startswith("TASK_MONITOR_"):
             return_menu = "taskmonitor"
+        elif key == "ARCHIVE_FLAGS_ENABLED":
+            return_menu = "archiveflags"
+        elif key in {
+            "BULK_ENABLED",
+            "MULTI_LINK_ENABLED",
+            "SAME_DIR_ENABLED",
+            "MIRROR_ENABLED",
+            "LEECH_ENABLED",
+            "TORRENT_ENABLED",
+            "TORRENT_SEARCH_ENABLED",
+            "YTDLP_ENABLED",
+            "NZB_ENABLED",
+            "NZB_SEARCH_ENABLED",
+            "JD_ENABLED",
+            "HYPERDL_ENABLED",
+            "MEDIA_SEARCH_ENABLED",
+            "RCLONE_ENABLED",
+        }:
+            return_menu = "operations"
         elif key in {"ENABLE_EXTRA_MODULES", "MEDIA_TOOLS_ENABLED"}:
             return_menu = "var"
         elif key == "DEFAULT_AI_PROVIDER" or key.startswith(
@@ -9573,6 +10380,9 @@ async def edit_bot_settings(client, query):
                     db_value = db_config[key]
                     if db_value != value:
                         Config.set(key, db_value)
+                        # If the database value is different from what we tried to set,
+                        # make sure we use the database value for the UI update
+                        value = db_value
             else:
                 pass
 

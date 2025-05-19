@@ -19,11 +19,11 @@ httpx
 jinja2
 langcodes
 lxml
-motor
 natsort
 pycountry
 pillow
 psutil
+pymongo
 pyshorteners
 python-magic
 pytz

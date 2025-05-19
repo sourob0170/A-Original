@@ -32,6 +32,11 @@ async def start(client, message):
         from bot.modules.gen_session import handle_command
 
         await handle_command(client, message)
+    elif len(message.command) > 1 and message.command[1].startswith("get_"):
+        # Handle media search get command
+        from bot.modules.media_search import handle_media_get_command
+
+        await handle_media_get_command(client, message)
     elif len(message.command) > 1 and message.command[1] != "start":
         userid = message.from_user.id
         if len(message.command[1]) == 36:

@@ -76,6 +76,7 @@ from .telegram_helper.message_utils import (
     get_tg_link_message,
     send_message,
     send_status_message,
+    temp_download,
 )
 
 
@@ -175,10 +176,7 @@ class TaskConfig:
         self.add_audio_enabled = False
         self.add_subtitle_enabled = False
         self.add_attachment_enabled = False
-        self.add_video_path = "none"
-        self.add_audio_path = "none"
-        self.add_subtitle_path = "none"
-        self.add_attachment_path = "none"
+
         self.add_video_index = None
         self.add_audio_index = None
         self.add_subtitle_index = None
@@ -562,23 +560,6 @@ class TaskConfig:
         )
 
         # Initialize add path settings
-        self.add_video_path = self.user_dict.get("ADD_VIDEO_PATH", "none")
-        if self.add_video_path == "none" and hasattr(Config, "ADD_VIDEO_PATH"):
-            self.add_video_path = Config.ADD_VIDEO_PATH
-
-        self.add_audio_path = self.user_dict.get("ADD_AUDIO_PATH", "none")
-        if self.add_audio_path == "none" and hasattr(Config, "ADD_AUDIO_PATH"):
-            self.add_audio_path = Config.ADD_AUDIO_PATH
-
-        self.add_subtitle_path = self.user_dict.get("ADD_SUBTITLE_PATH", "none")
-        if self.add_subtitle_path == "none" and hasattr(Config, "ADD_SUBTITLE_PATH"):
-            self.add_subtitle_path = Config.ADD_SUBTITLE_PATH
-
-        self.add_attachment_path = self.user_dict.get("ADD_ATTACHMENT_PATH", "none")
-        if self.add_attachment_path == "none" and hasattr(
-            Config, "ADD_ATTACHMENT_PATH"
-        ):
-            self.add_attachment_path = Config.ADD_ATTACHMENT_PATH
 
         # Initialize add index settings
         self.add_video_index = self.user_dict.get("ADD_VIDEO_INDEX", None)
@@ -1274,21 +1255,7 @@ class TaskConfig:
         else:
             self.add_video_enabled = False
 
-        # Initialize video path
-        if (
-            user_add_enabled
-            and "ADD_VIDEO_PATH" in self.user_dict
-            and self.user_dict["ADD_VIDEO_PATH"] != "none"
-        ):
-            self.add_video_path = self.user_dict["ADD_VIDEO_PATH"]
-        elif (
-            self.add_enabled
-            and "ADD_VIDEO_PATH" in db_add_settings
-            and db_add_settings["ADD_VIDEO_PATH"] != "none"
-        ):
-            self.add_video_path = db_add_settings["ADD_VIDEO_PATH"]
-        else:
-            self.add_video_path = "none"
+        # Path flags have been removed
 
         # Initialize video index
         if (
@@ -1410,21 +1377,7 @@ class TaskConfig:
         else:
             self.add_audio_enabled = False
 
-        # Initialize audio path
-        if (
-            user_add_enabled
-            and "ADD_AUDIO_PATH" in self.user_dict
-            and self.user_dict["ADD_AUDIO_PATH"] != "none"
-        ):
-            self.add_audio_path = self.user_dict["ADD_AUDIO_PATH"]
-        elif (
-            self.add_enabled
-            and "ADD_AUDIO_PATH" in db_add_settings
-            and db_add_settings["ADD_AUDIO_PATH"] != "none"
-        ):
-            self.add_audio_path = db_add_settings["ADD_AUDIO_PATH"]
-        else:
-            self.add_audio_path = "none"
+        # Path flags have been removed
 
         # Initialize audio index
         if (
@@ -1530,21 +1483,7 @@ class TaskConfig:
         else:
             self.add_subtitle_enabled = False
 
-        # Initialize subtitle path
-        if (
-            user_add_enabled
-            and "ADD_SUBTITLE_PATH" in self.user_dict
-            and self.user_dict["ADD_SUBTITLE_PATH"] != "none"
-        ):
-            self.add_subtitle_path = self.user_dict["ADD_SUBTITLE_PATH"]
-        elif (
-            self.add_enabled
-            and "ADD_SUBTITLE_PATH" in db_add_settings
-            and db_add_settings["ADD_SUBTITLE_PATH"] != "none"
-        ):
-            self.add_subtitle_path = db_add_settings["ADD_SUBTITLE_PATH"]
-        else:
-            self.add_subtitle_path = "none"
+        # Path flags have been removed
 
         # Initialize subtitle index
         if (
@@ -1650,21 +1589,7 @@ class TaskConfig:
         else:
             self.add_attachment_enabled = False
 
-        # Initialize attachment path
-        if (
-            user_add_enabled
-            and "ADD_ATTACHMENT_PATH" in self.user_dict
-            and self.user_dict["ADD_ATTACHMENT_PATH"] != "none"
-        ):
-            self.add_attachment_path = self.user_dict["ADD_ATTACHMENT_PATH"]
-        elif (
-            self.add_enabled
-            and "ADD_ATTACHMENT_PATH" in db_add_settings
-            and db_add_settings["ADD_ATTACHMENT_PATH"] != "none"
-        ):
-            self.add_attachment_path = db_add_settings["ADD_ATTACHMENT_PATH"]
-        else:
-            self.add_attachment_path = "none"
+        # Path flags have been removed
 
         # Initialize attachment index
         if (
@@ -3350,7 +3275,8 @@ class TaskConfig:
             if "EXCLUDED_EXTENSIONS" not in self.user_dict
             else ["aria2", "!qB"]
         )
-        if not self.rc_flags:
+        # Only set rc_flags if RCLONE_ENABLED is true
+        if not self.rc_flags and Config.RCLONE_ENABLED:
             if self.user_dict.get("RCLONE_FLAGS"):
                 self.rc_flags = self.user_dict["RCLONE_FLAGS"]
             elif "RCLONE_FLAGS" not in self.user_dict and Config.RCLONE_FLAGS:
@@ -3372,6 +3298,11 @@ class TaskConfig:
                 await self.is_token_exists(self.link, "dl")
         elif self.link == "rcl":
             if not self.is_ytdlp and not self.is_jd:
+                # Check if Rclone operations are enabled
+                if not Config.RCLONE_ENABLED:
+                    raise ValueError(
+                        "Rclone operations are disabled by the administrator."
+                    )
                 self.link = await RcloneList(self).get_rclone_path("rcd")
                 if not is_rclone_path(self.link):
                     raise ValueError(self.link)
@@ -3434,7 +3365,10 @@ class TaskConfig:
             default_upload = (
                 self.user_dict.get("DEFAULT_UPLOAD", "") or Config.DEFAULT_UPLOAD
             )
-            if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
+            # Check if Rclone is enabled before using Rclone upload destinations
+            if (
+                (not self.up_dest and default_upload == "rc") or self.up_dest == "rc"
+            ) and Config.RCLONE_ENABLED:
                 # User's RCLONE_PATH has higher priority than owner's
                 if "RCLONE_PATH" in self.user_dict:
                     self.up_dest = self.user_dict["RCLONE_PATH"]
@@ -3442,6 +3376,15 @@ class TaskConfig:
                     self.up_dest = Config.RCLONE_PATH
                 else:
                     self.up_dest = ""
+            # If Rclone is disabled but Rclone destination is selected, use GDrive instead
+            elif (
+                (not self.up_dest and default_upload == "rc") or self.up_dest == "rc"
+            ) and not Config.RCLONE_ENABLED:
+                # Fall back to GDrive if Rclone is disabled
+                self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
+                LOGGER.info(
+                    "Rclone is disabled. Using GDrive as upload destination instead."
+                )
             elif (
                 not self.up_dest and default_upload == "gd"
             ) or self.up_dest == "gd":
@@ -3467,20 +3410,30 @@ class TaskConfig:
                 await self.is_token_exists(self.up_dest, "up")
 
             if self.up_dest == "rcl":
-                if self.is_clone:
-                    if not is_rclone_path(self.link):
-                        raise ValueError(
-                            "You can't clone from different types of tools",
-                        )
-                    config_path = self.get_config_path(self.link)
+                # Check if Rclone operations are enabled
+                if not Config.RCLONE_ENABLED:
+                    # Fall back to GDrive if Rclone is disabled
+                    self.up_dest = (
+                        self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
+                    )
+                    LOGGER.info(
+                        "Rclone is disabled. Using GDrive as upload destination instead."
+                    )
                 else:
-                    config_path = None
-                self.up_dest = await RcloneList(self).get_rclone_path(
-                    "rcu",
-                    config_path,
-                )
-                if not is_rclone_path(self.up_dest):
-                    raise ValueError(self.up_dest)
+                    if self.is_clone:
+                        if not is_rclone_path(self.link):
+                            raise ValueError(
+                                "You can't clone from different types of tools",
+                            )
+                        config_path = self.get_config_path(self.link)
+                    else:
+                        config_path = None
+                    self.up_dest = await RcloneList(self).get_rclone_path(
+                        "rcu",
+                        config_path,
+                    )
+                    if not is_rclone_path(self.up_dest):
+                        raise ValueError(self.up_dest)
             elif self.up_dest == "gdl":
                 if self.is_clone:
                     if not is_gdrive_link(self.link):
@@ -3744,6 +3697,18 @@ class TaskConfig:
     @new_task
     async def run_multi(self, input_list, obj):
         await sleep(7)
+        # Check if multi-link operations are enabled in the configuration
+        if self.multi > 1 and not Config.MULTI_LINK_ENABLED:
+            await send_message(
+                self.message,
+                "❌ Multi-link operations are disabled by the administrator.",
+            )
+            await send_status_message(self.message)
+            async with task_dict_lock:
+                for fd_name in self.same_dir:
+                    self.same_dir[fd_name]["total"] -= self.multi
+            return
+
         if not self.multi_tag and self.multi > 1:
             self.multi_tag = token_hex(2)
             multi_tags.add(self.multi_tag)
@@ -3856,7 +3821,24 @@ class TaskConfig:
 
     async def init_bulk(self, input_list, bulk_start, bulk_end, obj):
         try:
+            # Check if bulk operations are enabled in the configuration
+            if not Config.BULK_ENABLED:
+                await send_message(
+                    self.message,
+                    "❌ Bulk operations are disabled by the administrator.",
+                )
+                return
+
+            # Extract bulk links first
             self.bulk = await extract_bulk_links(self.message, bulk_start, bulk_end)
+
+            # Check if multi-link operations are enabled in the configuration
+            if not Config.MULTI_LINK_ENABLED and len(self.bulk) > 1:
+                await send_message(
+                    self.message,
+                    "❌ Multi-link operations are disabled by the administrator.",
+                )
+                return
             if len(self.bulk) == 0:
                 raise ValueError("Bulk Empty!")
             b_msg = input_list[:1]
@@ -3984,8 +3966,11 @@ class TaskConfig:
                             self.is_cancelled = True
         return t_path if self.is_file and code == 0 else dl_path
 
-    async def proceed_ffmpeg(self, dl_path, gid):
+    async def proceed_ffmpeg(
+        self, dl_path, gid
+    ):  # Method name kept as ffmpeg for compatibility
         checked = False
+        inputs = {}  # Dictionary to store temporary input files from Telegram links
         cmds = []
 
         # Check if ffmpeg_cmds is empty or None
@@ -4034,8 +4019,6 @@ class TaskConfig:
             ):
                 # Remove the quotes
                 self.ffmpeg_cmds[0] = self.ffmpeg_cmds[0][1:-1]
-
-        # FFmpeg commands are ready for processing
 
         # Process each FFmpeg command with error handling
         for item in self.ffmpeg_cmds:
@@ -4110,8 +4093,6 @@ class TaskConfig:
                 if item:
                     cmds.append([str(item)])
 
-        # Commands are processed and ready for execution
-
         # Check if any command is empty or missing input parameter
         valid_cmds = []
         for cmd in cmds:
@@ -4133,7 +4114,6 @@ class TaskConfig:
         # Skip processing if all commands are empty
         if not cmds:
             return dl_path
-
         try:
             ffmpeg = FFMpeg(self)
             for ffmpeg_cmd in cmds:
@@ -4173,7 +4153,7 @@ class TaskConfig:
                         # This is a bit tricky since it's a string, so we'll need to modify the string
                         cmd_parts = cmd[2].split(" && ", 1)
                         if len(cmd_parts) > 1:
-                            # There's a ulimit command before the actual ffmpeg command
+                            # There's a ulimit command before the actual xtra command
                             ulimit_part = cmd_parts[0]
                             ffmpeg_part = cmd_parts[1]
                             # Add -i parameter before the last argument (assumed to be output file)
@@ -4182,7 +4162,7 @@ class TaskConfig:
                             ffmpeg_parts.insert(-1, "input.mp4")
                             cmd[2] = f"{ulimit_part} && {' '.join(ffmpeg_parts)}"
                         else:
-                            # No ulimit, just the ffmpeg command
+                            # No ulimit, just the xtra command
                             ffmpeg_parts = cmd[2].split()
                             ffmpeg_parts.insert(-1, "-i")
                             ffmpeg_parts.insert(-1, "input.mp4")
@@ -4217,6 +4197,15 @@ class TaskConfig:
                     cmd.extend(["-i", "input.mp4"])
                     index = cmd.index("-i")
                     input_file = cmd[index + 1]
+                    delete_files = False
+
+                input_indexes = [
+                    index for index, value in enumerate(cmd) if value == "-i"
+                ]
+                for index in input_indexes:
+                    if cmd[index + 1].startswith("mltb"):
+                        input_file = cmd[index + 1]
+                        break
                 if input_file.lower().endswith(".video"):
                     ext = "video"
                 elif input_file.lower().endswith(".audio"):
@@ -4274,7 +4263,7 @@ class TaskConfig:
                             # Replace the input file in the command string
                             cmd_parts = cmd_str.split(" && ", 1)
                             if len(cmd_parts) > 1:
-                                # There's a ulimit command before the actual ffmpeg command
+                                # There's a ulimit command before the actual xtra command
                                 ulimit_part = cmd_parts[0]
                                 ffmpeg_part = cmd_parts[1]
                                 # Replace the input file after -i
@@ -4285,7 +4274,7 @@ class TaskConfig:
                                         break
                                 cmd[2] = f"{ulimit_part} && {' '.join(parts)}"
                             else:
-                                # No ulimit, just the ffmpeg command
+                                # No ulimit, just the xtra command
                                 parts = cmd_str.split()
                                 for i, part in enumerate(parts):
                                     if part == "-i" and i + 1 < len(parts):
@@ -4295,6 +4284,16 @@ class TaskConfig:
                     else:
                         # Normal case: command is a list of arguments
                         cmd[index + 1] = file_path
+
+                    # Handle Telegram links in input parameters
+                    for index in input_indexes:
+                        if cmd[index + 1].startswith("mltb"):
+                            cmd[index + 1] = file_path
+                        elif is_telegram_link(cmd[index + 1]):
+                            msg = (await get_tg_link_message(cmd[index + 1]))[0]
+                            file_dir = await temp_download(msg)
+                            inputs[index + 1] = file_dir
+                            cmd[index + 1] = file_dir
                     self.subsize = self.size
 
                     # Get user-provided files from bulk or multi feature
@@ -4337,10 +4336,8 @@ class TaskConfig:
                                 folder = new_folder.rsplit("/", 1)[0]
                                 self.name = ospath.basename(res[0])
                                 if self.name.startswith(
-                                    "ffmpeg"
-                                ) or self.name.startswith(
                                     "xtra"
-                                ):  # Check for both ffmpeg and xtra
+                                ) or self.name.startswith("xtra"):  # Check for xtra
                                     self.name = self.name.split(".", 1)[-1]
                                 dl_path = ospath.join(folder, self.name)
                                 await move(res[0], dl_path)
@@ -4382,7 +4379,7 @@ class TaskConfig:
                                 continue
                             self.proceed_count += 1
 
-                            # Make sure -del flag is not passed to ffmpeg
+                            # Make sure -del flag is not passed to xtra
                             if "-del" in var_cmd:
                                 var_cmd.remove("-del")
                                 # delete_files is already set from the main command
@@ -4401,7 +4398,7 @@ class TaskConfig:
                                     # This is a bit tricky since it's a string, so we'll need to modify the string
                                     cmd_parts = var_cmd[2].split(" && ", 1)
                                     if len(cmd_parts) > 1:
-                                        # There's a ulimit command before the actual ffmpeg command
+                                        # There's a ulimit command before the actual xtra command
                                         ulimit_part = cmd_parts[0]
                                         ffmpeg_part = cmd_parts[1]
                                         # Add -i parameter before the last argument (assumed to be output file)
@@ -4412,7 +4409,7 @@ class TaskConfig:
                                             f"{ulimit_part} && {' '.join(ffmpeg_parts)}"
                                         )
                                     else:
-                                        # No ulimit, just the ffmpeg command
+                                        # No ulimit, just the xtra command
                                         ffmpeg_parts = var_cmd[2].split()
                                         ffmpeg_parts.insert(-1, "-i")
                                         ffmpeg_parts.insert(-1, f_path)
@@ -4427,7 +4424,7 @@ class TaskConfig:
                                     cmd_str = var_cmd[2]
                                     cmd_parts = cmd_str.split(" && ", 1)
                                     if len(cmd_parts) > 1:
-                                        # There's a ulimit command before the actual ffmpeg command
+                                        # There's a ulimit command before the actual xtra command
                                         ulimit_part = cmd_parts[0]
                                         ffmpeg_part = cmd_parts[1]
                                         # Replace the input file after -i
@@ -4440,7 +4437,7 @@ class TaskConfig:
                                             f"{ulimit_part} && {' '.join(parts)}"
                                         )
                                     else:
-                                        # No ulimit, just the ffmpeg command
+                                        # No ulimit, just the xtra command
                                         parts = cmd_str.split()
                                         for i, part in enumerate(parts):
                                             if part == "-i" and i + 1 < len(parts):
@@ -4474,7 +4471,7 @@ class TaskConfig:
 
                             # Resource manager removed
 
-                            LOGGER.info(f"Running ffmpeg cmd for: {f_path}")
+                            LOGGER.info(f"Running xtra cmd for: {f_path}")
                             self.subsize = await get_path_size(f_path)
                             self.subname = file_
 
@@ -4519,14 +4516,30 @@ class TaskConfig:
                                 if len(res) == 1:
                                     file_name = ospath.basename(res[0])
                                     if file_name.startswith(
-                                        ("ffmpeg", "xtra")
-                                    ):  # Check for both ffmpeg and xtra
+                                        ("xtra", "xtra")
+                                    ):  # Check for xtra
                                         newname = file_name.split(".", 1)[-1]
                                         newres = ospath.join(dirpath, newname)
                                         await move(res[0], newres)
+                try:
+                    # Clean up temporary files downloaded from Telegram links
+                    for inp in inputs.values():
+                        if "/temp/" in inp and await aiopath.exists(inp):
+                            try:
+                                await remove(inp)
+                                LOGGER.debug(f"Removed temporary file: {inp}")
+                            except Exception as e:
+                                LOGGER.error(
+                                    f"Error removing temporary file {inp}: {e}"
+                                )
+                except Exception as e:
+                    LOGGER.error(f"Error cleaning up temporary files: {e}")
+        except Exception as e:
+            LOGGER.error(f"Error in proceed_ffmpeg: {e}")
         finally:
             if checked:
                 cpu_eater_lock.release()
+                LOGGER.debug("Released CPU eater lock")
         return dl_path
 
     async def substitute(self, dl_path):
@@ -4710,13 +4723,8 @@ class TaskConfig:
             else:
                 vstatus = ""
 
-            # Check if -del flag is present in convert_video
-            if "-del" in self.convert_video:
-                delete_original = True
-            else:
-                # For flag-based conversion without -del, we'll still delete the original
-                # This ensures consistent behavior with settings-based conversion
-                delete_original = True
+            # Always delete original for flag-based conversion
+            delete_original = True
         # If convert_video is not set via command line, check if it's enabled in settings
         elif convert_enabled:
             # Determine if video convert is enabled based on priority
@@ -4858,13 +4866,8 @@ class TaskConfig:
             else:
                 astatus = ""
 
-            # Check if -del flag is present in convert_audio
-            if "-del" in self.convert_audio:
-                delete_original = True
-            else:
-                # For flag-based conversion without -del, we'll still delete the original
-                # This ensures consistent behavior with settings-based conversion
-                delete_original = True
+            # Always delete original for flag-based conversion
+            delete_original = True
         # If convert_audio is not set via command line, check if it's enabled in settings
         elif convert_enabled:
             # Determine if audio convert is enabled based on priority
@@ -5039,13 +5042,8 @@ class TaskConfig:
             else:
                 sstatus = ""
 
-            # Check if -del flag is present in convert_subtitle
-            if "-del" in self.convert_subtitle:
-                delete_original = True
-            else:
-                # For flag-based conversion without -del, we'll still delete the original
-                # This ensures consistent behavior with settings-based conversion
-                delete_original = True
+            # Always delete original for flag-based conversion
+            delete_original = True
         # If convert_subtitle is not set via command line, check if it's enabled in settings
         elif convert_enabled:
             # Determine if subtitle convert is enabled based on priority
@@ -5129,13 +5127,8 @@ class TaskConfig:
             else:
                 dstatus = ""
 
-            # Check if -del flag is present in convert_document
-            if "-del" in self.convert_document:
-                delete_original = True
-            else:
-                # For flag-based conversion without -del, we'll still delete the original
-                # This ensures consistent behavior with settings-based conversion
-                delete_original = True
+            # Always delete original for flag-based conversion
+            delete_original = True
         # If convert_document is not set via command line, check if it's enabled in settings
         elif convert_enabled:
             # Determine if document convert is enabled based on priority
@@ -5217,13 +5210,8 @@ class TaskConfig:
             else:
                 rstatus = ""
 
-            # Check if -del flag is present in convert_archive
-            if "-del" in self.convert_archive:
-                delete_original = True
-            else:
-                # For flag-based conversion without -del, we'll still delete the original
-                # This ensures consistent behavior with settings-based conversion
-                delete_original = True
+            # Always delete original for flag-based conversion
+            delete_original = True
         # If convert_archive is not set via command line, check if it's enabled in settings
         elif convert_enabled:
             # Determine if archive convert is enabled based on priority
@@ -5538,11 +5526,11 @@ class TaskConfig:
                                             f"All attempts to delete file failed: {e3}"
                                         )
 
-                    if res:
+                    # Return the result if successful and this is a file operation
+                    if res and self.is_file:
                         # The original file is now deleted inside the conversion methods if delete_original is True
                         # We don't need to delete it here anymore
-                        if self.is_file:
-                            return res
+                        return res
         return dl_path
 
     async def generate_sample_video(self, dl_path, gid):
@@ -5838,9 +5826,28 @@ class TaskConfig:
         return await sevenz.zip(dl_path, up_path, pswd)
 
     async def compress_video_file(self, dl_path, gid):
+        """Compress video files using appropriate tools based on file type.
+
+        Args:
+            dl_path: Path to the video file
+            gid: Task ID for tracking
+
+        Returns:
+            Path to the compressed file or original file if compression failed
+        """
         # Check if file exists
         if not await aiopath.exists(dl_path):
             LOGGER.error(f"File not found for compression: {dl_path}")
+            return dl_path
+
+        # Validate the file is not empty
+        try:
+            file_size = await get_path_size(dl_path)
+            if file_size == 0:
+                LOGGER.error(f"Empty file, skipping compression: {dl_path}")
+                return dl_path
+        except Exception as e:
+            LOGGER.error(f"Error checking file size: {e}")
             return dl_path
 
         file_ext = ospath.splitext(dl_path)[1].lower()
@@ -5860,6 +5867,7 @@ class TaskConfig:
             ".mpg",
             ".mpeg",
         ]:
+            LOGGER.warning(f"Unsupported video format: {file_ext}")
             return dl_path
 
         # Use specified format if available
@@ -5875,47 +5883,129 @@ class TaskConfig:
 
         # Validate the video file using ffprobe
         try:
-            # Check if xtra binary exists
+            # Check if ffprobe is available
+            import json
             import shutil
             import subprocess
 
-            xtra_path = shutil.which("xtra")
-            ffprobe_cmd = [
-                "ffprobe",  # Keep as ffprobe, not xtra
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                dl_path,
-            ]
-
-            if xtra_path:
+            # Try to find ffprobe
+            ffprobe_path = shutil.which("ffprobe")
+            if not ffprobe_path and shutil.which("xtra"):
                 # Use ffprobe from the same directory as xtra
-                xtra_dir = os.path.dirname(xtra_path)
+                xtra_dir = os.path.dirname(shutil.which("xtra"))
                 ffprobe_path = os.path.join(xtra_dir, "ffprobe")
-                if os.path.exists(ffprobe_path):
-                    ffprobe_cmd[0] = ffprobe_path
+                if not os.path.exists(ffprobe_path):
+                    ffprobe_path = None
 
-            # Run ffprobe to check if the file is a valid video
-            process = subprocess.run(
-                ffprobe_cmd, capture_output=True, text=True, check=False
-            )
+            if not ffprobe_path:
+                LOGGER.warning(
+                    "ffprobe not found, skipping detailed video validation"
+                )
+            else:
+                # Use JSON output for better parsing
+                ffprobe_cmd = [
+                    ffprobe_path,
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "stream=codec_type,codec_name,width,height,duration",
+                    "-show_entries",
+                    "format=duration,size,bit_rate",
+                    "-of",
+                    "json",
+                    dl_path,
+                ]
 
-            if process.returncode != 0:
-                LOGGER.error(f"Invalid video file: {dl_path}")
-                return dl_path
+                # Run ffprobe to check if the file is a valid video
+                process = subprocess.run(
+                    ffprobe_cmd, capture_output=True, text=True, check=False
+                )
 
-            # Check if the video has a valid duration
-            try:
-                duration = float(process.stdout.strip())
-                if duration <= 0:
-                    LOGGER.error(f"Video has invalid duration: {duration}")
-                    return dl_path
-            except (ValueError, TypeError):
-                LOGGER.error(f"Could not determine video duration: {process.stdout}")
-                return dl_path
+                if process.returncode != 0:
+                    LOGGER.error(f"Invalid video file: {dl_path}")
+                    LOGGER.error(f"ffprobe error: {process.stderr}")
+                    # Try to repair the video file
+                    repaired_path = await self._repair_video_file(dl_path, gid)
+                    if repaired_path != dl_path:
+                        LOGGER.info(
+                            f"Successfully repaired video file: {repaired_path}"
+                        )
+                        dl_path = repaired_path
+                    else:
+                        LOGGER.warning(
+                            "Video repair failed, attempting compression anyway"
+                        )
+                else:
+                    # Parse the JSON output
+                    try:
+                        probe_data = json.loads(process.stdout)
+
+                        # Check if we have video streams
+                        has_video = False
+                        for stream in probe_data.get("streams", []):
+                            if stream.get("codec_type") == "video":
+                                has_video = True
+                                break
+
+                        if not has_video:
+                            LOGGER.error(
+                                f"No video streams found in file: {dl_path}"
+                            )
+                            # Try to repair the video file
+                            repaired_path = await self._repair_video_file(
+                                dl_path, gid
+                            )
+                            if repaired_path != dl_path:
+                                LOGGER.info(
+                                    f"Successfully repaired video file: {repaired_path}"
+                                )
+                                dl_path = repaired_path
+                            else:
+                                LOGGER.warning(
+                                    "Video repair failed, attempting compression anyway"
+                                )
+
+                        # Check if the video has a valid duration
+                        duration = probe_data.get("format", {}).get("duration")
+                        if duration:
+                            try:
+                                duration = float(duration)
+                                if duration <= 0:
+                                    LOGGER.error(
+                                        f"Video has invalid duration: {duration}"
+                                    )
+                                    # Try to repair the video file
+                                    repaired_path = await self._repair_video_file(
+                                        dl_path, gid
+                                    )
+                                    if repaired_path != dl_path:
+                                        LOGGER.info(
+                                            f"Successfully repaired video file: {repaired_path}"
+                                        )
+                                        dl_path = repaired_path
+                                    else:
+                                        LOGGER.warning(
+                                            "Video repair failed, attempting compression anyway"
+                                        )
+                            except (ValueError, TypeError):
+                                LOGGER.error(
+                                    f"Could not parse video duration: {duration}"
+                                )
+                    except json.JSONDecodeError:
+                        LOGGER.error(
+                            f"Could not parse ffprobe output: {process.stdout}"
+                        )
+                        # Try to repair the video file
+                        repaired_path = await self._repair_video_file(dl_path, gid)
+                        if repaired_path != dl_path:
+                            LOGGER.info(
+                                f"Successfully repaired video file: {repaired_path}"
+                            )
+                            dl_path = repaired_path
+                        else:
+                            LOGGER.warning(
+                                "Video repair failed, attempting compression anyway"
+                            )
 
         except Exception as e:
             LOGGER.error(f"Error validating video file: {e}")
@@ -6062,14 +6152,13 @@ class TaskConfig:
         if bitdepth and str(bitdepth).lower() != "none":
             try:
                 depth_val = int(bitdepth)
-                if depth_val == 10:
-                    # For 10-bit, use appropriate pixel format based on codec
-                    if codec in {"libx264", "libx265"}:
-                        ffmpeg_cmd[-1] = "yuv420p10le"  # Replace the pixel format
-                elif depth_val == 12:
-                    # For 12-bit, use appropriate pixel format
-                    if codec == "libx265":  # x264 doesn't support 12-bit
-                        ffmpeg_cmd[-1] = "yuv420p12le"  # Replace the pixel format
+                # Handle different bit depths with appropriate pixel formats
+                if depth_val == 10 and codec in {"libx264", "libx265"}:
+                    # For 10-bit, use appropriate pixel format for x264/x265
+                    ffmpeg_cmd[-1] = "yuv420p10le"  # Replace the pixel format
+                elif depth_val == 12 and codec == "libx265":
+                    # For 12-bit, use appropriate pixel format (only for x265, as x264 doesn't support 12-bit)
+                    ffmpeg_cmd[-1] = "yuv420p12le"  # Replace the pixel format
             except (ValueError, TypeError):
                 # If conversion fails, don't change pixel format
                 pass
@@ -6112,13 +6201,13 @@ class TaskConfig:
             xtra_path = shutil.which("xtra")
             if not xtra_path:
                 LOGGER.error("xtra binary not found in PATH")
-                # Try to find ffmpeg instead
-                ffmpeg_path = shutil.which("ffmpeg")
+                # Try to find xtra
+                ffmpeg_path = shutil.which("xtra")
                 if ffmpeg_path:
-                    # Replace xtra with ffmpeg in the command
-                    ffmpeg_cmd[0] = "ffmpeg"  # Use ffmpeg as fallback
+                    # Use xtra command
+                    ffmpeg_cmd[0] = "xtra"  # Use xtra as fallback
                 else:
-                    LOGGER.error("Neither xtra nor ffmpeg binary found in PATH")
+                    LOGGER.error("xtra binary not found in PATH")
                     return dl_path
 
             # Create subprocess with pipes
@@ -6170,6 +6259,229 @@ class TaskConfig:
         except Exception as e:
             LOGGER.error(f"Error during video compression: {e!s}")
             return dl_path
+
+    async def _repair_video_file(self, dl_path, _):
+        """Attempt to repair a corrupted video file.
+
+        Args:
+            dl_path: Path to the corrupted video file
+            _: Unused parameter (kept for API compatibility)
+
+        Returns:
+            Path to the repaired file or original file if repair failed
+        """
+        LOGGER.info(f"Attempting to repair corrupted video file: {dl_path}")
+
+        # Create output path for repaired file
+        file_ext = ospath.splitext(dl_path)[1].lower()
+        repaired_path = f"{ospath.splitext(dl_path)[0]}_repaired{file_ext}"
+
+        try:
+            # Check if xtra is available
+            import shutil
+
+            # Try to find xtra
+            ffmpeg_path = shutil.which("xtra")
+            if not ffmpeg_path and shutil.which("xtra"):
+                ffmpeg_path = shutil.which("xtra")
+
+            if not ffmpeg_path:
+                LOGGER.error("Neither ffmpeg nor xtra found, cannot repair video")
+                return dl_path
+
+            # Try different repair methods
+
+            # Method 1: Copy streams without re-encoding
+            repair_cmd1 = [
+                ffmpeg_path,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-err_detect",
+                "ignore_err",
+                "-i",
+                dl_path,
+                "-c",
+                "copy",
+                "-y",
+                repaired_path,
+            ]
+
+            # Execute the repair command
+            from asyncio.subprocess import PIPE, create_subprocess_exec
+
+            LOGGER.info("Trying repair method 1: Stream copy")
+            process = await create_subprocess_exec(
+                *repair_cmd1,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
+
+            # Wait for process to complete
+            _, stderr = await process.communicate()
+            code = process.returncode
+
+            # Check if repair was successful
+            if code == 0 and await aiopath.exists(repaired_path):
+                # Validate the repaired file
+                if await self._validate_video_file(repaired_path):
+                    LOGGER.info("Video repair successful using method 1")
+                    return repaired_path
+
+                LOGGER.warning("Repair method 1 failed validation, trying method 2")
+                await remove(repaired_path)
+            else:
+                stderr_text = stderr.decode().strip() if stderr else "Unknown error"
+                LOGGER.warning(f"Repair method 1 failed: {stderr_text}")
+
+            # Method 2: Re-encode the video
+            repair_cmd2 = [
+                ffmpeg_path,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-err_detect",
+                "ignore_err",
+                "-i",
+                dl_path,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-crf",
+                "23",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-y",
+                repaired_path,
+            ]
+
+            LOGGER.info("Trying repair method 2: Re-encoding")
+            process = await create_subprocess_exec(
+                *repair_cmd2,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
+
+            # Wait for process to complete
+            _, stderr = await process.communicate()
+            code = process.returncode
+
+            # Check if repair was successful
+            if code == 0 and await aiopath.exists(repaired_path):
+                # Validate the repaired file
+                if await self._validate_video_file(repaired_path):
+                    LOGGER.info("Video repair successful using method 2")
+                    return repaired_path
+
+                LOGGER.warning("Repair method 2 failed validation")
+                await remove(repaired_path)
+            else:
+                stderr_text = stderr.decode().strip() if stderr else "Unknown error"
+                LOGGER.warning(f"Repair method 2 failed: {stderr_text}")
+
+            # If all repair methods failed, return the original file
+            LOGGER.error("All video repair methods failed")
+            return dl_path
+
+        except Exception as e:
+            LOGGER.error(f"Error during video repair: {e!s}")
+            # If repair failed, return the original file
+            if await aiopath.exists(repaired_path):
+                await remove(repaired_path)
+            return dl_path
+
+    async def _validate_video_file(self, video_path):
+        """Validate if a video file is playable.
+
+        Args:
+            video_path: Path to the video file
+
+        Returns:
+            True if the video is valid, False otherwise
+        """
+        try:
+            # Check if ffprobe is available
+            import json
+            import shutil
+            import subprocess
+
+            # Try to find ffprobe
+            ffprobe_path = shutil.which("ffprobe")
+            if not ffprobe_path and shutil.which("xtra"):
+                # Use ffprobe from the same directory as xtra
+                xtra_dir = os.path.dirname(shutil.which("xtra"))
+                ffprobe_path = os.path.join(xtra_dir, "ffprobe")
+                if not os.path.exists(ffprobe_path):
+                    ffprobe_path = None
+
+            if not ffprobe_path:
+                LOGGER.warning("ffprobe not found, skipping video validation")
+                return True  # Assume valid if we can't check
+
+            # Use JSON output for better parsing
+            ffprobe_cmd = [
+                ffprobe_path,
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type,codec_name",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                video_path,
+            ]
+
+            # Run ffprobe to check if the file is a valid video
+            process = subprocess.run(
+                ffprobe_cmd, capture_output=True, text=True, check=False
+            )
+
+            if process.returncode != 0:
+                LOGGER.error(f"Invalid video file: {video_path}")
+                LOGGER.error(f"ffprobe error: {process.stderr}")
+                return False
+
+            # Parse the JSON output
+            try:
+                probe_data = json.loads(process.stdout)
+
+                # Check if we have video streams
+                has_video = False
+                for stream in probe_data.get("streams", []):
+                    if stream.get("codec_type") == "video":
+                        has_video = True
+                        break
+
+                if not has_video:
+                    LOGGER.error(f"No video streams found in file: {video_path}")
+                    return False
+
+                # Check if the video has a valid duration
+                duration = probe_data.get("format", {}).get("duration")
+                if duration:
+                    try:
+                        duration = float(duration)
+                        if duration <= 0:
+                            LOGGER.error(f"Video has invalid duration: {duration}")
+                            return False
+                    except (ValueError, TypeError):
+                        LOGGER.error(f"Could not parse video duration: {duration}")
+                        return False
+
+                # All checks passed
+                return True
+
+            except json.JSONDecodeError:
+                LOGGER.error(f"Could not parse ffprobe output: {process.stdout}")
+                return False
+
+        except Exception as e:
+            LOGGER.error(f"Error validating video file: {e}")
+            return False  # Assume invalid if validation fails
 
     async def compress_audio_file(self, dl_path, gid):
         # Create output path with same extension
@@ -6497,14 +6809,14 @@ class TaskConfig:
             xtra_path = shutil.which("xtra")
             if not xtra_path:
                 LOGGER.error("xtra binary not found in PATH")
-                # Try to find ffmpeg instead
-                ffmpeg_path = shutil.which("ffmpeg")
+                # Try to find xtra
+                ffmpeg_path = shutil.which("xtra")
                 if ffmpeg_path:
-                    LOGGER.info(f"Using ffmpeg instead: {ffmpeg_path}")
-                    # Replace xtra with ffmpeg in the command
-                    ffmpeg_cmd[0] = "ffmpeg"  # Use ffmpeg as fallback
+                    LOGGER.info(f"Using xtra: {ffmpeg_path}")
+                    # Use xtra command
+                    ffmpeg_cmd[0] = "xtra"  # Use xtra as fallback
                 else:
-                    LOGGER.error("Neither xtra nor ffmpeg binary found in PATH")
+                    LOGGER.error("xtra binary not found in PATH")
                     return dl_path
 
             # Create subprocess with pipes
@@ -6634,12 +6946,67 @@ class TaskConfig:
                     LOGGER.error(f"Invalid SVG file: {dl_path}, error: {e}")
                     return dl_path
 
-                # For SVG files, we'll convert to PNG using a different approach
+                # Try to optimize the SVG file using svgo if available
+                svgo_path = shutil.which("svgo")
+                if svgo_path:
+                    LOGGER.info(f"Using SVGO to optimize SVG file: {dl_path}")
+                    # Use SVGO to optimize the SVG file
+                    svgo_cmd = [
+                        svgo_path,
+                        "--multipass",
+                        "--precision=2",
+                        "--output=" + out_path,
+                        dl_path,
+                    ]
+                    try:
+                        process = subprocess.run(
+                            svgo_cmd,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        if process.returncode == 0:
+                            # Check if optimized file is smaller
+                            orig_size = os.path.getsize(dl_path)
+                            comp_size = os.path.getsize(out_path)
+
+                            if comp_size < orig_size:
+                                LOGGER.info(
+                                    f"SVG optimization successful: {orig_size} -> {comp_size} bytes"
+                                )
+                                return out_path
+
+                            LOGGER.info("Optimized SVG is not smaller than original")
+                            os.remove(out_path)
+                    except Exception as e:
+                        LOGGER.error(f"Error optimizing SVG with SVGO: {e}")
+
+                # If SVGO is not available or failed, try converting to PNG
                 # First, check if convert (ImageMagick) is available
                 convert_path = shutil.which("convert")
                 if convert_path:
+                    LOGGER.info(
+                        f"Using ImageMagick to convert SVG to PNG: {dl_path}"
+                    )
                     # Use ImageMagick to convert SVG to PNG
-                    convert_cmd = [convert_path, dl_path, out_path]
+                    png_out_path = f"{ospath.splitext(out_path)[0]}.png"
+                    # Get quality setting from class or use default
+                    img_quality = 80  # Default quality
+                    if hasattr(self, "compression_image_quality"):
+                        from contextlib import suppress
+
+                        with suppress(ValueError, TypeError):
+                            img_quality = int(self.compression_image_quality)
+
+                    convert_cmd = [
+                        convert_path,
+                        "-density",
+                        "300",  # Higher density for better quality
+                        dl_path,
+                        "-quality",
+                        str(img_quality),
+                        png_out_path,
+                    ]
                     try:
                         process = subprocess.run(
                             convert_cmd,
@@ -6648,14 +7015,29 @@ class TaskConfig:
                             check=False,
                         )
                         if process.returncode == 0:
-                            # Conversion successful
-                            return out_path
+                            # Check if converted file is smaller
+                            orig_size = os.path.getsize(dl_path)
+                            comp_size = os.path.getsize(png_out_path)
+
+                            if comp_size < orig_size:
+                                LOGGER.info(
+                                    f"SVG to PNG conversion successful: {orig_size} -> {comp_size} bytes"
+                                )
+                                return png_out_path
+
+                            LOGGER.info(
+                                "Converted PNG is not smaller than original SVG"
+                            )
+                            os.remove(png_out_path)
                     except Exception as e:
                         LOGGER.error(
                             f"Error converting SVG to PNG using ImageMagick: {e}"
                         )
 
-                # If ImageMagick is not available or failed, just return the original file
+                # If all methods failed, just return the original file
+                LOGGER.info(
+                    "No suitable method found for SVG compression, returning original file"
+                )
                 return dl_path
 
             # For other image formats, use ffprobe
@@ -6918,14 +7300,14 @@ class TaskConfig:
             xtra_path = shutil.which("xtra")
             if not xtra_path:
                 LOGGER.error("xtra binary not found in PATH")
-                # Try to find ffmpeg instead
-                ffmpeg_path = shutil.which("ffmpeg")
+                # Try to find xtra
+                ffmpeg_path = shutil.which("xtra")
                 if ffmpeg_path:
-                    LOGGER.info(f"Using ffmpeg instead: {ffmpeg_path}")
-                    # Replace xtra with ffmpeg in the command
-                    ffmpeg_cmd[0] = "ffmpeg"  # Use ffmpeg as fallback
+                    LOGGER.info(f"Using xtra: {ffmpeg_path}")
+                    # Use xtra command
+                    ffmpeg_cmd[0] = "xtra"  # Use xtra as fallback
                 else:
-                    LOGGER.error("Neither xtra nor ffmpeg binary found in PATH")
+                    LOGGER.error("xtra binary not found in PATH")
                     return dl_path
 
             # Create subprocess with pipes
@@ -6990,10 +7372,28 @@ class TaskConfig:
             return dl_path
 
     async def compress_document_file(self, dl_path, gid):
-        # For PDF files, we can use Ghostscript to compress
+        """Compress document files using appropriate tools based on file type.
+
+        Args:
+            dl_path: Path to the document file
+            gid: Task ID for tracking
+
+        Returns:
+            Path to the compressed file or original file if compression failed
+        """
         # Check if file exists
         if not await aiopath.exists(dl_path):
             LOGGER.error(f"File not found for compression: {dl_path}")
+            return dl_path
+
+        # Validate the file is not empty
+        try:
+            file_size = await get_path_size(dl_path)
+            if file_size == 0:
+                LOGGER.error(f"Empty file, skipping compression: {dl_path}")
+                return dl_path
+        except Exception as e:
+            LOGGER.error(f"Error checking file size: {e}")
             return dl_path
 
         file_ext = ospath.splitext(dl_path)[1].lower()
@@ -7063,16 +7463,35 @@ class TaskConfig:
 
             # Log the command for debugging
 
+            # Determine PDF settings based on preset
+            pdf_settings = "/ebook"  # Default to ebook quality
+            if preset == "fast":
+                pdf_settings = "/screen"  # Lower quality, smaller size
+            elif preset == "medium":
+                pdf_settings = "/ebook"  # Medium quality, medium size
+            elif preset == "slow":
+                pdf_settings = "/prepress"  # Higher quality, larger size
+            elif preset == "lossless":
+                pdf_settings = "/default"  # Highest quality, largest size
+
             gs_cmd = [
                 gs_binary,
                 "-sDEVICE=pdfwrite",
-                "-dPDFSETTINGS=/ebook",
+                f"-dPDFSETTINGS={pdf_settings}",
                 "-dDEVICEWIDTHPOINTS=595",
                 "-dDEVICEHEIGHTPOINTS=842",
                 "-dCompatibilityLevel=1.4",
                 "-dNOPAUSE",
                 "-dQUIET",
                 "-dBATCH",
+                "-dDetectDuplicateImages=true",
+                "-dCompressFonts=true",
+                "-dDownsampleColorImages=true",
+                "-dDownsampleGrayImages=true",
+                "-dDownsampleMonoImages=true",
+                f"-dColorImageResolution={dpi}",
+                f"-dGrayImageResolution={dpi}",
+                f"-dMonoImageResolution={dpi}",
                 f"-r{dpi}",
                 f"-sOutputFile={out_path}",
                 dl_path,
@@ -7318,14 +7737,14 @@ class TaskConfig:
         xtra_path = shutil.which("xtra")
         if not xtra_path:
             LOGGER.error("xtra binary not found in PATH")
-            # Try to find ffmpeg instead
-            ffmpeg_path = shutil.which("ffmpeg")
+            # Try to find xtra
+            ffmpeg_path = shutil.which("xtra")
             if ffmpeg_path:
-                LOGGER.info(f"Using ffmpeg instead: {ffmpeg_path}")
-                # Replace xtra with ffmpeg in the command
-                ffmpeg_cmd[0] = "ffmpeg"  # Use ffmpeg as fallback
+                LOGGER.info(f"Using xtra: {ffmpeg_path}")
+                # Use xtra command
+                ffmpeg_cmd[0] = "xtra"  # Use xtra as fallback
             else:
-                LOGGER.error("Neither xtra nor ffmpeg binary found in PATH")
+                LOGGER.error("xtra binary not found in PATH")
                 return dl_path
 
         try:
@@ -7607,14 +8026,14 @@ class TaskConfig:
                 xtra_path = shutil.which("xtra")
                 if not xtra_path:
                     LOGGER.error("xtra binary not found in PATH")
-                    # Try to find ffmpeg instead
-                    ffmpeg_path = shutil.which("ffmpeg")
+                    # Try to find xtra
+                    ffmpeg_path = shutil.which("xtra")
                     if ffmpeg_path:
-                        LOGGER.info(f"Using ffmpeg instead: {ffmpeg_path}")
-                        # Replace xtra with ffmpeg in the command
-                        ffmpeg_cmd[0] = "ffmpeg"  # Use ffmpeg as fallback
+                        LOGGER.info(f"Using xtra: {ffmpeg_path}")
+                        # Use xtra command
+                        ffmpeg_cmd[0] = "xtra"  # Use xtra as fallback
                     else:
-                        LOGGER.error("Neither xtra nor ffmpeg binary found in PATH")
+                        LOGGER.error("xtra binary not found in PATH")
                         return dl_path
 
                 # Create subprocess with pipes
@@ -8043,20 +8462,64 @@ class TaskConfig:
             LOGGER.error(f"{sevenz_binary} binary not found in PATH")
             return False
 
+        # Get password and algorithm settings
+        archive_password = None
+        if (
+            hasattr(self, "user_dict")
+            and "COMPRESSION_ARCHIVE_PASSWORD" in self.user_dict
+        ):
+            archive_password = self.user_dict.get("COMPRESSION_ARCHIVE_PASSWORD")
+        elif hasattr(Config, "COMPRESSION_ARCHIVE_PASSWORD"):
+            archive_password = Config.COMPRESSION_ARCHIVE_PASSWORD
+
+        archive_algorithm = "7z"  # Default algorithm
+        if (
+            hasattr(self, "user_dict")
+            and "COMPRESSION_ARCHIVE_ALGORITHM" in self.user_dict
+        ):
+            user_algorithm = self.user_dict.get("COMPRESSION_ARCHIVE_ALGORITHM")
+            if user_algorithm and user_algorithm.lower() != "none":
+                archive_algorithm = user_algorithm
+        elif hasattr(Config, "COMPRESSION_ARCHIVE_ALGORITHM"):
+            config_algorithm = Config.COMPRESSION_ARCHIVE_ALGORITHM
+            if config_algorithm and config_algorithm.lower() != "none":
+                archive_algorithm = config_algorithm
+
         # Build 7z compress command
         sevenz_cmd = [
             sevenz_binary,
             "a",  # Add to archive
-            "-t7z",  # Archive type (will be overridden by output extension if different)
+            f"-t{archive_algorithm}",  # Archive type based on algorithm setting
             f"-mx={level}",  # Compression level
-            f"-m0={method}",  # Compression method
             "-bsp1",  # Show progress
             "-bse1",  # Show errors
             "-bso0",  # No standard output
             "-y",  # Overwrite output file if it exists
-            out_path,
-            f"{directory_path}/*",  # All files in the directory
         ]
+
+        # Add compression method if not tar (tar doesn't support compression method)
+        if (
+            archive_algorithm.lower() != "tar"
+            and method
+            and method.lower() != "none"
+        ):
+            sevenz_cmd.append(f"-m0={method}")
+
+        # Add password if provided and format supports it
+        if archive_password and archive_password.lower() != "none":
+            # Only add password for formats that support it (7z, zip, rar)
+            if archive_algorithm.lower() in ["7z", "zip", "rar"]:
+                sevenz_cmd.append(f"-p{archive_password}")
+                self.log_info(
+                    f"Adding password protection to {archive_algorithm} archive"
+                )
+            else:
+                self.log_info(
+                    f"Password protection not supported for {archive_algorithm} format. Ignoring password."
+                )
+
+        # Add output path and input directory
+        sevenz_cmd.extend([out_path, f"{directory_path}/*"])
 
         # Use SevenZ for compression with status tracking
         sevenz = SevenZ(self)
@@ -8105,19 +8568,61 @@ class TaskConfig:
 
         # Log the command for debugging
 
+        # Get password and algorithm settings
+        archive_password = None
+        if (
+            hasattr(self, "user_dict")
+            and "COMPRESSION_ARCHIVE_PASSWORD" in self.user_dict
+        ):
+            archive_password = self.user_dict.get("COMPRESSION_ARCHIVE_PASSWORD")
+        elif hasattr(Config, "COMPRESSION_ARCHIVE_PASSWORD"):
+            archive_password = Config.COMPRESSION_ARCHIVE_PASSWORD
+
+        archive_algorithm = "7z"  # Default algorithm
+        if (
+            hasattr(self, "user_dict")
+            and "COMPRESSION_ARCHIVE_ALGORITHM" in self.user_dict
+        ):
+            user_algorithm = self.user_dict.get("COMPRESSION_ARCHIVE_ALGORITHM")
+            if user_algorithm and user_algorithm.lower() != "none":
+                archive_algorithm = user_algorithm
+        elif hasattr(Config, "COMPRESSION_ARCHIVE_ALGORITHM"):
+            config_algorithm = Config.COMPRESSION_ARCHIVE_ALGORITHM
+            if config_algorithm and config_algorithm.lower() != "none":
+                archive_algorithm = config_algorithm
+
+        # Build the command
         sevenz_cmd = [
             sevenz_binary,
             "a",
-            "-t7z",
+            f"-t{archive_algorithm}",  # Archive type based on algorithm setting
             f"-mx={level}",
-            f"-m0={method}",
             "-bsp1",  # Show progress
             "-bse1",  # Show errors
             "-bso0",  # No standard output
             "-y",  # Overwrite output file if it exists
-            out_path,
-            dl_path,
         ]
+
+        # Add compression method if not tar (tar doesn't support compression method)
+        if (
+            archive_algorithm.lower() != "tar"
+            and method
+            and method.lower() != "none"
+        ):
+            sevenz_cmd.append(f"-m0={method}")
+
+        # Add password if provided and format supports it
+        if archive_password and archive_password.lower() != "none":
+            # Only add password for formats that support it (7z, zip, rar)
+            if archive_algorithm.lower() in ["7z", "zip", "rar"]:
+                sevenz_cmd.append(f"-p{archive_password}")
+            else:
+                self.log_info(
+                    f"Password protection not supported for {archive_algorithm} format. Ignoring password."
+                )
+
+        # Add output path and input file
+        sevenz_cmd.extend([out_path, dl_path])
 
         # Use SevenZ for compression with status tracking
         sevenz = SevenZ(self)
@@ -10227,27 +10732,19 @@ class TaskConfig:
             # Legacy mode - log individual track settings
             # Log video add settings
             if self.add_video_enabled:
-                LOGGER.info(
-                    f"Video add enabled: adding video track from {self.add_video_path}"
-                )
+                LOGGER.info("Video add enabled: adding video track")
 
             # Log audio add settings
             if self.add_audio_enabled:
-                LOGGER.info(
-                    f"Audio add enabled: adding audio track from {self.add_audio_path}"
-                )
+                LOGGER.info("Audio add enabled: adding audio track")
 
             # Log subtitle add settings
             if self.add_subtitle_enabled:
-                LOGGER.info(
-                    f"Subtitle add enabled: adding subtitle track from {self.add_subtitle_path}"
-                )
+                LOGGER.info("Subtitle add enabled: adding subtitle track")
 
             # Log attachment add settings
             if self.add_attachment_enabled:
-                LOGGER.info(
-                    f"Attachment add enabled: adding attachment from {self.add_attachment_path}"
-                )
+                LOGGER.info("Attachment add enabled: adding attachment")
 
         # Check if file exists
         if not await aiopath.exists(dl_path):
@@ -10740,6 +11237,9 @@ class TaskConfig:
                 elif cmd[0] == "pdf_trim":
                     # Handle PDF trimming manually
                     res = await self.trim_pdf_file(cmd[1], cmd[2], cmd[3], cmd[4])
+                elif cmd[0] == "gif_trim":
+                    # Handle GIF trimming manually
+                    res = await self.trim_gif_file(cmd[1], cmd[2], cmd[3])
                 else:
                     # Get user-provided files from bulk or multi feature
                     user_provided_files = None
@@ -10786,7 +11286,7 @@ class TaskConfig:
 
                 # Handle the result based on the command output and temp file status
                 if isinstance(res, list) and res:
-                    # ffmpeg_cmds returns a list of output files on success
+                    # xtra_cmds returns a list of output files on success
                     if temp_file_exists and temp_file_valid:
                         if delete_original:
                             # Replace the original file with the trimmed file
@@ -10913,6 +11413,9 @@ class TaskConfig:
                             res = await self.trim_pdf_file(
                                 cmd[1], cmd[2], cmd[3], cmd[4]
                             )
+                        elif cmd[0] == "gif_trim":
+                            # Handle GIF trimming manually
+                            res = await self.trim_gif_file(cmd[1], cmd[2], cmd[3])
                         else:
                             # Get user-provided files from bulk or multi feature
                             user_provided_files = None
@@ -10966,7 +11469,7 @@ class TaskConfig:
 
                         # Handle the result based on the command output and temp file status
                         if isinstance(res, list) and res:
-                            # ffmpeg_cmds returns a list of output files on success
+                            # xtra_cmds returns a list of output files on success
                             if temp_file_exists and temp_file_valid:
                                 if delete_original:
                                     # Replace the original file with the trimmed file
@@ -11035,6 +11538,91 @@ class TaskConfig:
             cpu_eater_lock.release()
 
         return dl_path
+
+    async def trim_gif_file(self, input_file, temp_mp4, output_file):
+        """Handle GIF trimming using a two-step process.
+
+        Args:
+            input_file: Path to the original GIF file
+            temp_mp4: Path to the temporary MP4 file created in the first step
+            output_file: Path to the final output GIF file
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Check if the temporary MP4 file exists
+            if not await aiopath.exists(temp_mp4):
+                LOGGER.error(f"Temporary MP4 file not found: {temp_mp4}")
+                return False
+
+            # Step 2: Convert MP4 back to GIF with proper palette
+            LOGGER.info(f"Converting MP4 to GIF: {temp_mp4} -> {output_file}")
+
+            # Create a palette for better quality
+            palette_file = f"{temp_mp4}.palette.png"
+
+            # Generate palette from the MP4
+            palette_cmd = [
+                "xtra",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                temp_mp4,
+                "-vf",
+                "fps=10,scale=320:-1:flags=lanczos,palettegen",
+                "-y",
+                palette_file,
+            ]
+
+            # Execute the palette generation command
+            ffmpeg = FFMpeg(self)
+            palette_res = await ffmpeg.ffmpeg_cmds(palette_cmd, temp_mp4)
+
+            if not palette_res or not await aiopath.exists(palette_file):
+                LOGGER.error("Failed to generate palette for GIF conversion")
+                return False
+
+            # Use the palette to convert MP4 to high-quality GIF
+            gif_cmd = [
+                "xtra",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                temp_mp4,
+                "-i",
+                palette_file,
+                "-lavfi",
+                "fps=10,scale=320:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=sierra2_4a",
+                "-y",
+                output_file,
+            ]
+
+            # Execute the GIF conversion command
+            gif_res = await ffmpeg.ffmpeg_cmds(gif_cmd, temp_mp4)
+
+            # Clean up the temporary palette file
+            if await aiopath.exists(palette_file):
+                await aiopath.remove(palette_file)
+
+            # Check if the output GIF file was created successfully
+            if gif_res and await aiopath.exists(output_file):
+                LOGGER.info(
+                    f"Successfully converted GIF: {input_file} -> {output_file}"
+                )
+                return True
+
+            LOGGER.error(f"Failed to convert GIF: {input_file} -> {output_file}")
+            return False
+
+        except Exception as e:
+            LOGGER.error(f"Error in GIF trimming process: {e}")
+            import traceback
+
+            LOGGER.error(traceback.format_exc())
+            return False
 
     async def trim_pdf_file(
         self, input_file, start_page_str, end_page_str, output_file

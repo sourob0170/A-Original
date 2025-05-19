@@ -40,7 +40,6 @@ leech_options = [
     "THUMBNAIL",
     "LEECH_SPLIT_SIZE",
     "EQUAL_SPLITS",
-    # "LEECH_DUMP_CHAT",
     "LEECH_FILENAME_PREFIX",
     "LEECH_SUFFIX",
     "LEECH_FONT",
@@ -49,6 +48,7 @@ leech_options = [
     "THUMBNAIL_LAYOUT",
     "USER_DUMP",
     "USER_SESSION",
+    "MEDIA_STORE",
 ]
 
 ai_options = [
@@ -79,7 +79,7 @@ convert_options = []
 
 rclone_options = ["RCLONE_CONFIG", "RCLONE_PATH", "RCLONE_FLAGS"]
 gdrive_options = ["TOKEN_PICKLE", "GDRIVE_ID", "INDEX_URL"]
-yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES"]
+yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES", "FFMPEG_CMDS"]
 
 
 async def get_user_settings(from_user, stype="main"):
@@ -216,6 +216,22 @@ async def get_user_settings(from_user, stype="main"):
                 f"userset {user_id} tog MEDIA_GROUP t",
             )
             media_group = "Disabled"
+
+        # Add Media Store toggle
+        if user_dict.get("MEDIA_STORE", False) or (
+            "MEDIA_STORE" not in user_dict and Config.MEDIA_STORE
+        ):
+            buttons.data_button(
+                "Disable Media Store",
+                f"userset {user_id} tog MEDIA_STORE f",
+            )
+            media_store = "Enabled"
+        else:
+            buttons.data_button(
+                "Enable Media Store",
+                f"userset {user_id} tog MEDIA_STORE t",
+            )
+            media_store = "Disabled"
         buttons.data_button(
             "Thumbnail Layout",
             f"userset {user_id} menu THUMBNAIL_LAYOUT",
@@ -238,6 +254,14 @@ async def get_user_settings(from_user, stype="main"):
             else "Disabled"
         )
 
+        # Determine Media Store status
+        media_store = (
+            "Enabled"
+            if user_dict.get("MEDIA_STORE", False)
+            or ("MEDIA_STORE" not in user_dict and Config.MEDIA_STORE)
+            else "Disabled"
+        )
+
         # Format split size for display
         if isinstance(lsplit, int) and lsplit > 0:
             lsplit_display = get_readable_file_size(lsplit)
@@ -257,6 +281,7 @@ async def get_user_settings(from_user, stype="main"):
         text = f"""<u><b>Leech Settings for {name}</b></u>
 -> Leech Type: <b>{ltype}</b>
 -> Media Group: <b>{media_group}</b>
+-> Media Store: <b>{media_store}</b>
 -> Leech Prefix: <code>{escape(lprefix)}</code>
 -> Leech Suffix: <code>{escape(lsuffix)}</code>
 -> Leech Font: <code>{escape(lfont)}</code>
@@ -492,9 +517,15 @@ Please use /mediatools command to configure convert settings.
 <b>Note:</b> 'Metadata All' takes priority over all other settings when set."""
 
     else:
-        buttons.data_button("Leech", f"userset {user_id} leech")
-        buttons.data_button("Rclone", f"userset {user_id} rclone")
-        buttons.data_button("Gdrive API", f"userset {user_id} gdrive")
+        # Only show Leech button if Leech operations are enabled
+        if Config.LEECH_ENABLED:
+            buttons.data_button("Leech", f"userset {user_id} leech")
+        # Only show Rclone button if Rclone operations are enabled
+        if Config.RCLONE_ENABLED:
+            buttons.data_button("Rclone", f"userset {user_id} rclone")
+        # Only show Gdrive API button if Mirror operations are enabled
+        if Config.MIRROR_ENABLED:
+            buttons.data_button("Gdrive API", f"userset {user_id} gdrive")
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
             buttons.data_button("AI Settings", f"userset {user_id} ai")
@@ -515,20 +546,35 @@ Please use /mediatools command to configure convert settings.
             default_upload = user_dict["DEFAULT_UPLOAD"]
         elif "DEFAULT_UPLOAD" not in user_dict:
             default_upload = Config.DEFAULT_UPLOAD
+
+        # If Rclone is disabled or Mirror is disabled and default upload is set to Rclone, change it to Gdrive
+        if (
+            not Config.RCLONE_ENABLED or not Config.MIRROR_ENABLED
+        ) and default_upload != "gd":
+            default_upload = "gd"
+            # Update the user's settings
+            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
+
         du = "Gdrive API" if default_upload == "gd" else "Rclone"
-        dur = "Gdrive API" if default_upload != "gd" else "Rclone"
-        buttons.data_button(
-            f"Upload using {dur}",
-            f"userset {user_id} {default_upload}",
-        )
+
+        # Only show the toggle button if both Rclone and Mirror are enabled
+        if Config.RCLONE_ENABLED and Config.MIRROR_ENABLED:
+            dur = "Gdrive API" if default_upload != "gd" else "Rclone"
+            buttons.data_button(
+                f"Upload using {dur}",
+                f"userset {user_id} {default_upload}",
+            )
 
         user_tokens = user_dict.get("USER_TOKENS", False)
         tr = "MY" if user_tokens else "OWNER"
         trr = "OWNER" if user_tokens else "MY"
-        buttons.data_button(
-            f"{trr} Token/Config",
-            f"userset {user_id} tog USER_TOKENS {'f' if user_tokens else 't'}",
-        )
+
+        # Only show the token/config toggle if Mirror is enabled
+        if Config.MIRROR_ENABLED:
+            buttons.data_button(
+                f"{trr} Token/Config",
+                f"userset {user_id} tog USER_TOKENS {'f' if user_tokens else 't'}",
+            )
 
         buttons.data_button(
             "Excluded Extensions",
@@ -547,10 +593,12 @@ Please use /mediatools command to configure convert settings.
             f"userset {user_id} menu NAME_SUBSTITUTE",
         )
 
-        buttons.data_button(
-            "YT-DLP Options",
-            f"userset {user_id} menu YT_DLP_OPTIONS",
-        )
+        # Only show YT-DLP Options button if YT-DLP operations are enabled
+        if Config.YTDLP_ENABLED:
+            buttons.data_button(
+                "YT-DLP Options",
+                f"userset {user_id} menu YT_DLP_OPTIONS",
+            )
         if user_dict.get("YT_DLP_OPTIONS", False):
             ytopt = "Added by User"
         elif "YT_DLP_OPTIONS" not in user_dict and Config.YT_DLP_OPTIONS:
@@ -558,10 +606,12 @@ Please use /mediatools command to configure convert settings.
         else:
             ytopt = "None"
 
-        buttons.data_button(
-            "User Cookies",
-            f"userset {user_id} menu USER_COOKIES",
-        )
+        # Only show User Cookies button if YT-DLP operations are enabled
+        if Config.YTDLP_ENABLED:
+            buttons.data_button(
+                "User Cookies",
+                f"userset {user_id} menu USER_COOKIES",
+            )
         cookies_path = f"cookies/{user_id}.txt"
         cookies_status = "Added" if await aiopath.exists(cookies_path) else "None"
 
@@ -589,7 +639,7 @@ Please use /mediatools command to configure convert settings.
             buttons.data_button("Metadata", f"userset {user_id} metadata")
 
         # Only show FFmpeg Cmds button if ffmpeg tool is enabled
-        if is_media_tool_enabled("ffmpeg"):
+        if is_media_tool_enabled("xtra"):
             buttons.data_button("FFmpeg Cmds", f"userset {user_id} menu FFMPEG_CMDS")
             if user_dict.get("FFMPEG_CMDS", False):
                 ffc = "Added by User"
@@ -645,11 +695,48 @@ Please use /mediatools command to configure convert settings.
             mediainfo_source = "User"
         mediainfo_status = f"{'Enabled' if mediainfo_enabled else 'Disabled'} (Set by {mediainfo_source})"
 
-        text = f"""<u><b>Settings for {name}</B></u>
+        # Adjust display text based on mirror and leech status
+        if Config.MIRROR_ENABLED and Config.LEECH_ENABLED:
+            text = f"""<u><b>Settings for {name}</B></u>
 -> Default Package: <b>{du}</b>
 -> Upload Paths: <code><b>{upload_paths}</b></code>
 -> Using <b>{tr}</b> Token/Config
-
+-> Name Substitution: <code>{ns_msg}</code>
+-> Excluded Extensions: <code>{ex_ex}</code>
+-> YT-DLP Options: <code>{ytopt}</code>
+-> User Cookies: <b>{cookies_status}</b>
+-> FFMPEG Commands: <code>{ffc}</code>
+-> MediaInfo: <b>{mediainfo_status}</b>
+-> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
+        elif not Config.MIRROR_ENABLED and Config.LEECH_ENABLED:
+            text = f"""<u><b>Settings for {name}</B></u>
+-> Upload Paths: <code><b>{upload_paths}</b></code>
+-> Mirror operations are disabled by admin
+-> Name Substitution: <code>{ns_msg}</code>
+-> Excluded Extensions: <code>{ex_ex}</code>
+-> YT-DLP Options: <code>{ytopt}</code>
+-> User Cookies: <b>{cookies_status}</b>
+-> FFMPEG Commands: <code>{ffc}</code>
+-> MediaInfo: <b>{mediainfo_status}</b>
+-> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
+        elif Config.MIRROR_ENABLED and not Config.LEECH_ENABLED:
+            text = f"""<u><b>Settings for {name}</B></u>
+-> Default Package: <b>{du}</b>
+-> Upload Paths: <code><b>{upload_paths}</b></code>
+-> Using <b>{tr}</b> Token/Config
+-> Leech operations are disabled by admin
+-> Name Substitution: <code>{ns_msg}</code>
+-> Excluded Extensions: <code>{ex_ex}</code>
+-> YT-DLP Options: <code>{ytopt}</code>
+-> User Cookies: <b>{cookies_status}</b>
+-> FFMPEG Commands: <code>{ffc}</code>
+-> MediaInfo: <b>{mediainfo_status}</b>
+-> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
+        else:
+            text = f"""<u><b>Settings for {name}</B></u>
+-> Upload Paths: <code><b>{upload_paths}</b></code>
+-> Mirror operations are disabled by admin
+-> Leech operations are disabled by admin
 -> Name Substitution: <code>{ns_msg}</code>
 -> Excluded Extensions: <code>{ex_ex}</code>
 -> YT-DLP Options: <code>{ytopt}</code>
@@ -899,6 +986,7 @@ async def get_menu(option, message, user_id):
             ffc = Config.FFMPEG_CMDS
         if ffc:
             buttons.data_button("Variables", f"userset {user_id} ffvar")
+            buttons.data_button("View", f"userset {user_id} view {option}")
     elif user_dict.get(option):
         if option == "THUMBNAIL":
             buttons.data_button("View", f"userset {user_id} view {option}")
@@ -907,12 +995,16 @@ async def get_menu(option, message, user_id):
             buttons.data_button("Remove one", f"userset {user_id} rmone {option}")
     if option == "USER_COOKIES":
         buttons.data_button("Help", f"userset {user_id} help {option}")
+    # Check if option is in leech_options and if leech is enabled
     if option in leech_options:
-        back_to = "leech"
+        # If leech is disabled, go back to main menu
+        back_to = "leech" if Config.LEECH_ENABLED else "back"
     elif option in rclone_options:
-        back_to = "rclone"
+        # If mirror is disabled, go back to main menu
+        back_to = "rclone" if Config.MIRROR_ENABLED else "back"
     elif option in gdrive_options:
-        back_to = "gdrive"
+        # If mirror is disabled, go back to main menu
+        back_to = "gdrive" if Config.MIRROR_ENABLED else "back"
     elif option in metadata_options:
         back_to = "metadata"
     # Convert options have been moved to Media Tools settings
@@ -1052,7 +1144,13 @@ async def edit_user_settings(client, query):
         await query.answer()
     elif data[2] in ["leech", "gdrive", "rclone", "metadata", "convert", "ai"]:
         await query.answer()
-        await update_user_settings(query, data[2])
+        # Redirect to main menu if trying to access disabled features
+        if (data[2] == "leech" and not Config.LEECH_ENABLED) or (
+            data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED
+        ):
+            await update_user_settings(query, "main")
+        else:
+            await update_user_settings(query, data[2])
     elif data[2] == "menu":
         await query.answer()
         await get_menu(data[3], message, user_id)
@@ -1221,11 +1319,58 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await database.update_user_data(user_id)
     elif data[2] == "view":
         await query.answer()
-        msg = await send_file(message, thumb_path, name)
-        # Auto delete thumbnail after viewing
-        create_task(  # noqa: RUF006
-            auto_delete_message(msg, time=30),
-        )  # Delete after 30 seconds
+        if data[3] == "THUMBNAIL":
+            if await aiopath.exists(thumb_path):
+                msg = await send_file(message, thumb_path, name)
+                # Auto delete thumbnail after viewing
+                create_task(  # noqa: RUF006
+                    auto_delete_message(msg, time=30),
+                )  # Delete after 30 seconds
+            else:
+                msg = await send_message(message, "No thumbnail found!")
+                create_task(  # noqa: RUF006
+                    auto_delete_message(msg, time=10),
+                )  # Delete after 10 seconds
+        elif data[3] == "FFMPEG_CMDS":
+            ffc = None
+            if user_dict.get("FFMPEG_CMDS", False):
+                ffc = user_dict["FFMPEG_CMDS"]
+                source = "User"
+            elif "FFMPEG_CMDS" not in user_dict and Config.FFMPEG_CMDS:
+                ffc = Config.FFMPEG_CMDS
+                source = "Owner"
+            else:
+                ffc = None
+                source = None
+
+            if ffc:
+                # Format the FFmpeg commands for better readability
+                formatted_cmds = f"FFmpeg Commands ({source}):\n\n"
+                if isinstance(ffc, dict):
+                    for key, value in ffc.items():
+                        formatted_cmds += f"Key: {key}\n"
+                        if isinstance(value, list):
+                            for i, cmd in enumerate(value):
+                                formatted_cmds += f"  Command {i + 1}: {cmd}\n"
+                        else:
+                            formatted_cmds += f"  Command: {value}\n"
+                        formatted_cmds += "\n"
+                else:
+                    formatted_cmds += str(ffc)
+
+                msg_ecd = formatted_cmds.encode()
+                with BytesIO(msg_ecd) as ofile:
+                    ofile.name = "ffmpeg_commands.txt"
+                    msg = await send_file(message, ofile)
+                    # Auto delete file after viewing
+                    create_task(  # noqa: RUF006
+                        auto_delete_message(msg, time=60),
+                    )  # Delete after 60 seconds
+            else:
+                msg = await send_message(message, "No FFmpeg commands found!")
+                create_task(  # noqa: RUF006
+                    auto_delete_message(msg, time=10),
+                )  # Delete after 10 seconds
     elif data[2] in ["gd", "rc"]:
         await query.answer()
         du = "rc" if data[2] == "gd" else "gd"

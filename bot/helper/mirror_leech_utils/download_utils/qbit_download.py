@@ -25,6 +25,13 @@ from bot.helper.telegram_helper.message_utils import (
 
 
 async def add_qb_torrent(listener, path, ratio, seed_time):
+    # Check if torrent operations are enabled
+    if not Config.TORRENT_ENABLED:
+        await listener.on_download_error(
+            "❌ Torrent operations are disabled by the administrator."
+        )
+        return
+
     try:
         form = AddFormBuilder.with_client(TorrentManager.qbittorrent)
         if await aiopath.exists(listener.link):

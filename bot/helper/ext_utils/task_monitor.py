@@ -203,15 +203,54 @@ async def get_task_elapsed_time(task) -> int:
         return 0
 
 
+def is_ytdlp_task(task) -> bool:
+    """Check if a task is a YT-DLP task."""
+    return (
+        hasattr(task, "listener")
+        and hasattr(task.listener, "is_ytdlp")
+        and task.listener.is_ytdlp
+    )
+
+
+def is_jd_task(task) -> bool:
+    """Check if a task is a JDownloader task."""
+    return hasattr(task, "tool") and task.tool == "jd"
+
+
+def is_nzb_task(task) -> bool:
+    """Check if a task is an NZB task."""
+    return hasattr(task, "tool") and task.tool == "nzb"
+
+
+async def is_task_in_global_queue(mid: int) -> bool:
+    """Check if a task is queued by the global queue system."""
+    async with queue_dict_lock:
+        return mid in queued_dl or mid in queued_up
+
+
 async def is_task_slow(task, gid: str) -> bool:
     """Check if a task's download speed is consistently below threshold."""
     speed = await get_task_speed(task)
     task_speeds[gid].append(speed)
 
+    # Get the threshold based on task type
+    threshold = get_speed_threshold()
+
+    # Adjust threshold for specific task types
+    if is_ytdlp_task(task):
+        # YT-DLP tasks might have variable speeds due to processing
+        threshold = threshold * 0.75  # More lenient threshold
+    elif is_jd_task(task):
+        # JDownloader tasks might have connection issues
+        threshold = threshold * 0.8  # Slightly more lenient threshold
+    elif is_nzb_task(task):
+        # NZB tasks might be processing or repairing files
+        threshold = threshold * 0.8  # Slightly more lenient threshold
+
     # Check if we have enough data points and all are below threshold
     return bool(
         len(task_speeds[gid]) >= get_consecutive_checks()
-        and all(s <= get_speed_threshold() for s in task_speeds[gid])
+        and all(s <= threshold for s in task_speeds[gid])
     )
 
 
@@ -221,6 +260,11 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
         if not hasattr(task, "status") or not callable(task.status):
             return False, ""
 
+        # Check if task has listener attribute
+        if not hasattr(task, "listener"):
+            return False, ""
+
+        # Get task status
         status = (
             await task.status()
             if asyncio.iscoroutinefunction(task.status)
@@ -228,8 +272,52 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
         )
 
         # Only monitor download tasks
-        if status not in [MirrorStatus.STATUS_DOWNLOAD, MirrorStatus.STATUS_QUEUEDL]:
+        # Check for all relevant download statuses including specific task types
+        download_statuses = [
+            MirrorStatus.STATUS_DOWNLOAD,
+            MirrorStatus.STATUS_QUEUEDL,
+        ]
+
+        # Skip monitoring for tasks that are not in download state
+        if status not in download_statuses:
             return False, ""
+
+        # Special handling for different task types
+        # Get elapsed time for task type-specific checks
+        task_elapsed_time = await get_task_elapsed_time(task)
+
+        # Check if it's a ytdlp task
+        if is_ytdlp_task(task):
+            # For ytdlp tasks, we need to be more lenient as they might have variable speeds
+            # due to processing different formats or playlist items
+            if (
+                task_elapsed_time < get_elapsed_time_threshold() * 0.5
+            ):  # Give ytdlp tasks more time
+                return False, ""
+
+        # Check if it's a JDownloader task
+        if is_jd_task(task):
+            # JDownloader tasks might have connection issues or be in queue within JD itself
+            # Give them more time and be more lenient with speed checks
+            if task_elapsed_time < get_elapsed_time_threshold() * 0.75:
+                return False, ""
+
+        # Check if it's an NZB task
+        if is_nzb_task(task):
+            # NZB tasks might be processing or repairing files
+            # Give them more time before considering cancellation
+            if task_elapsed_time < get_elapsed_time_threshold() * 0.75:
+                return False, ""
+
+        # Check if task is queued by global queue system
+        # Don't cancel tasks that are queued by the global queue system
+        if hasattr(task.listener, "mid"):
+            mid = task.listener.mid
+            if await is_task_in_global_queue(mid):
+                LOGGER.debug(
+                    f"Task {mid} is queued by global queue system, skipping cancellation check"
+                )
+                return False, ""
     except Exception:
         return False, ""
 
@@ -237,12 +325,8 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
     eta = await get_task_eta(task)
     is_slow = await is_task_slow(task, gid)
 
-    # Get user tag for notifications
-    (
-        f"@{task.listener.user.username}"
-        if hasattr(task.listener.user, "username") and task.listener.user.username
-        else f"<a href='tg://user?id={task.listener.user_id}'>{task.listener.user_id}</a>"
-    )
+    # User tag is not needed here, it's only used in notifications
+    # which are handled in the cancel_task function
 
     # Case 1: Task estimation > 24h or no estimation && elapsed > 1h
     if (
@@ -298,6 +382,14 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
         # Check if we have enough data points and all are zero
         if gid in task_speeds and len(task_speeds[gid]) >= get_consecutive_checks():
             if all(s == 0 for s in task_speeds[gid]):
+                # Special handling for different task types
+                # Give more time to specific task types
+                if (
+                    is_ytdlp_task(task) or is_jd_task(task) or is_nzb_task(task)
+                ) and elapsed_time < get_elapsed_time_threshold() * 1.5:
+                    # These task types might take longer to start
+                    return False, ""
+
                 return (
                     True,
                     f"No download progress for {elapsed_time // 60} minutes. Task appears to be stalled.",
@@ -427,6 +519,14 @@ async def queue_task(mid: int, reason: str):
             # Mark as queued by monitor
             queued_by_monitor.add(mid)
 
+            # Check if task is already queued by global queue system
+            if await is_task_in_global_queue(mid):
+                LOGGER.debug(
+                    f"Task {mid} is already queued by global queue system, not queuing again"
+                )
+                queued_by_monitor.discard(mid)
+                return
+
             # Add to appropriate queue
             async with queue_dict_lock:
                 if mid in non_queued_dl:
@@ -489,23 +589,99 @@ async def resume_queued_tasks(resource_type: str):
         if not tasks_to_resume:
             return
 
-        # Resume identified tasks
+        # Check global queue limits before resuming tasks
+        dl_count = 0
+        up_count = 0
+        all_count = 0
+
+        async with queue_dict_lock:
+            dl_count = len(non_queued_dl)
+            up_count = len(non_queued_up)
+            all_count = dl_count + up_count
+
+        # Calculate how many tasks we can resume based on queue limits
+        dl_slots_available = (
+            0
+            if not Config.QUEUE_DOWNLOAD
+            else max(0, Config.QUEUE_DOWNLOAD - dl_count)
+        )
+        up_slots_available = (
+            0 if not Config.QUEUE_UPLOAD else max(0, Config.QUEUE_UPLOAD - up_count)
+        )
+        all_slots_available = (
+            0 if not Config.QUEUE_ALL else max(0, Config.QUEUE_ALL - all_count)
+        )
+
+        # Prepare lists of tasks to resume by type
+        dl_tasks_to_resume = []
+        up_tasks_to_resume = []
+
+        # Categorize tasks by type (download or upload)
         async with queue_dict_lock:
             for mid in tasks_to_resume:
+                if mid in queued_dl:
+                    dl_tasks_to_resume.append(mid)
+                elif mid in queued_up:
+                    up_tasks_to_resume.append(mid)
+
+        # Limit the number of tasks to resume based on available slots
+        if Config.QUEUE_ALL:
+            # If we have a global limit, we need to prioritize tasks
+            total_to_resume = min(
+                len(dl_tasks_to_resume) + len(up_tasks_to_resume),
+                all_slots_available,
+            )
+
+            # Prioritize downloads over uploads (can be adjusted based on preference)
+            dl_to_resume = min(
+                len(dl_tasks_to_resume),
+                dl_slots_available if Config.QUEUE_DOWNLOAD else float("inf"),
+                total_to_resume,
+            )
+
+            up_to_resume = min(
+                len(up_tasks_to_resume),
+                up_slots_available if Config.QUEUE_UPLOAD else float("inf"),
+                total_to_resume - dl_to_resume,
+            )
+
+            dl_tasks_to_resume = dl_tasks_to_resume[:dl_to_resume]
+            up_tasks_to_resume = up_tasks_to_resume[:up_to_resume]
+        else:
+            # If no global limit, just respect individual limits
+            if Config.QUEUE_DOWNLOAD:
+                dl_tasks_to_resume = dl_tasks_to_resume[:dl_slots_available]
+
+            if Config.QUEUE_UPLOAD:
+                up_tasks_to_resume = up_tasks_to_resume[:up_slots_available]
+
+        # Resume the selected tasks
+        async with queue_dict_lock:
+            # Resume download tasks
+            for mid in dl_tasks_to_resume:
                 try:
                     if mid in queued_dl:
                         queued_dl[mid].set()
+                        del queued_dl[mid]
+                        non_queued_dl.add(mid)
                         LOGGER.info(f"Resuming queued download task {mid}")
-                    elif mid in queued_up:
-                        queued_up[mid].set()
-                        LOGGER.info(f"Resuming queued upload task {mid}")
-                    else:
-                        continue
-
-                    # Remove from queued_by_monitor
-                    queued_by_monitor.discard(mid)
+                        # Remove from queued_by_monitor
+                        queued_by_monitor.discard(mid)
                 except Exception as e:
-                    LOGGER.error(f"Error resuming task {mid}: {e}")
+                    LOGGER.error(f"Error resuming download task {mid}: {e}")
+
+            # Resume upload tasks
+            for mid in up_tasks_to_resume:
+                try:
+                    if mid in queued_up:
+                        queued_up[mid].set()
+                        del queued_up[mid]
+                        non_queued_up.add(mid)
+                        LOGGER.info(f"Resuming queued upload task {mid}")
+                        # Remove from queued_by_monitor
+                        queued_by_monitor.discard(mid)
+                except Exception as e:
+                    LOGGER.error(f"Error resuming upload task {mid}: {e}")
     except Exception as e:
         LOGGER.error(f"Error in resume_queued_tasks: {e}")
 
@@ -553,6 +729,15 @@ async def cancel_task(task, gid: str, reason: str):
 
 async def monitor_tasks():
     try:
+        # Log task monitor activity periodically (every 10 minutes)
+        if time.time() % 600 < 1:
+            LOGGER.info(
+                f"Task monitor active. Monitoring {len(task_dict)} tasks. "
+                + f"Queue stats: DL={len(non_queued_dl)}/{len(queued_dl)}, "
+                + f"UP={len(non_queued_up)}/{len(queued_up)}, "
+                + f"Monitor queued={len(queued_by_monitor)}"
+            )
+
         # Update system resource usage history
         try:
             cpu_usage_history.append(psutil.cpu_percent())
@@ -590,8 +775,15 @@ async def monitor_tasks():
                 if not hasattr(task, "listener"):
                     continue
 
-                # Skip tasks that are already queued
+                # Skip tasks that are already queued by the monitor
                 if task.listener.mid in queued_by_monitor:
+                    continue
+
+                # Skip tasks that are queued by the global queue system
+                if await is_task_in_global_queue(task.listener.mid):
+                    LOGGER.debug(
+                        f"Task {task.listener.mid} is queued by global queue system, skipping monitoring"
+                    )
                     continue
 
                 # Skip tasks that are already being cancelled

@@ -68,6 +68,9 @@ FONT_STYLES = {
 
 def _map_to_serif(char):
     # Serif font (Mathematical Serif)
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝐚") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -79,6 +82,9 @@ def _map_to_serif(char):
 
 def _map_to_sans(char):
     # Sans-serif font
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝗮") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -90,6 +96,9 @@ def _map_to_sans(char):
 
 def _map_to_script(char):
     # Script/cursive font
+    # Handle non-alphabetic characters
+    if not char.isalpha():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝓪") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -99,6 +108,9 @@ def _map_to_script(char):
 
 def _map_to_double(char):
     # Double-struck (blackboard bold)
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝕒") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -110,6 +122,9 @@ def _map_to_double(char):
 
 def _map_to_gothic(char):
     # Gothic/Fraktur font
+    # Handle non-alphabetic characters
+    if not char.isalpha():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝖆") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -119,6 +134,9 @@ def _map_to_gothic(char):
 
 def _map_to_fraktur(char):
     # Fraktur font
+    # Handle non-alphabetic characters
+    if not char.isalpha():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝔞") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -128,6 +146,9 @@ def _map_to_fraktur(char):
 
 def _map_to_mono(char):
     # Monospace font
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("𝚊") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -139,6 +160,9 @@ def _map_to_mono(char):
 
 def _map_to_small_caps(char):
     # Small Caps font
+    # Handle non-alphabetic characters
+    if not char.isalpha():
+        return char
     if "a" <= char <= "z":
         return chr(ord("ᴀ") + ord(char) - ord("a"))
     return char
@@ -146,6 +170,9 @@ def _map_to_small_caps(char):
 
 def _map_to_circled(char):
     # Circled font
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("ⓐ") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -157,6 +184,9 @@ def _map_to_circled(char):
 
 def _map_to_bubble(char):
     # Bubble font (Fullwidth)
+    # Handle non-alphabetic characters
+    if not char.isalnum():
+        return char
     if "a" <= char <= "z":
         return chr(ord("ａ") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -266,6 +296,9 @@ def _map_to_squared(char):
 
 def _map_to_regional(char):
     # Regional indicator symbols (flag emojis)
+    # Handle non-alphabetic characters
+    if not char.isalpha():
+        return char
     if "a" <= char <= "z":
         return chr(ord("🇦") + ord(char) - ord("a"))
     if "A" <= char <= "Z":
@@ -506,6 +539,10 @@ async def apply_font_style(text, style):
     if not style:
         return text
 
+    # Handle empty text
+    if not text:
+        return ""
+
     # Handle the literal string "style" as a special case
     if style.lower() == "style":
         return f"<code>{text}</code>"
@@ -529,11 +566,17 @@ async def apply_font_style(text, style):
                 try:
                     hex_val = style[2:]
                     char = chr(int(hex_val, 16))
+                    # Handle empty text
+                    if not text:
+                        return char
                     return char + text + char
                 except ValueError:
                     LOGGER.error(f"Invalid Unicode format: {style}")
                     return text
             else:
+                # Handle empty text
+                if not text:
+                    return style
                 return style + text + style
         except Exception as e:
             LOGGER.error(f"Error applying custom style {style}: {e}")

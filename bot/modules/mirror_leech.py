@@ -135,7 +135,7 @@ class Mirror(TaskListener):
             "-sp": 0,
             "link": "",
             "-n": "",
-            "-m": "",
+            "-m": "",  # Same directory operation flag
             "-watermark": "",
             "-iwm": "",
             "-up": "",
@@ -243,12 +243,14 @@ class Mirror(TaskListener):
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
-        # Enable compression if -z flag is set
-        if self.compress:
+        # Enable compression if -z flag is set and archive flags are enabled
+        from bot.helper.ext_utils.bot_utils import is_flag_enabled
+
+        if self.compress and is_flag_enabled("-z"):
             self.compression_enabled = True
         self.extract = args["-e"]
-        # Enable extract_enabled if -e flag is set
-        if self.extract:
+        # Enable extract_enabled if -e flag is set and archive flags are enabled
+        if self.extract and is_flag_enabled("-e"):
             self.extract_enabled = True
 
         # Add settings
@@ -386,15 +388,124 @@ class Mirror(TaskListener):
         session = TgClient.bot
 
         try:
-            self.multi = int(args["-i"])
+            # Check if multi-link operations are enabled in the configuration
+            if not Config.MULTI_LINK_ENABLED and int(args["-i"]) > 0:
+                await send_message(
+                    self.message,
+                    "❌ Multi-link operations are disabled by the administrator.",
+                )
+                self.multi = 0
+            else:
+                self.multi = int(args["-i"])
         except Exception:
             self.multi = 0
 
+        # Check if same directory operations are enabled in the configuration
+        if not Config.SAME_DIR_ENABLED and self.folder_name:
+            await send_message(
+                self.message,
+                "❌ Same directory operations (-m flag) are disabled by the administrator.",
+            )
+            self.folder_name = None
+
+        # Check if leech is disabled but leech-related flags are used
+        if not Config.LEECH_ENABLED and (
+            self.hybrid_leech
+            or self.bot_trans
+            or self.user_trans
+            or self.thumbnail_layout
+            or self.split_size
+            or args["-es"]
+            or self.as_doc
+            or self.as_med
+        ):
+            leech_flags_used = []
+            if self.hybrid_leech:
+                leech_flags_used.append("-hl")
+            if self.bot_trans:
+                leech_flags_used.append("-bt")
+            if self.user_trans:
+                leech_flags_used.append("-ut")
+            if self.thumbnail_layout:
+                leech_flags_used.append("-tl")
+            if self.split_size:
+                leech_flags_used.append("-sp")
+            if args["-es"]:
+                leech_flags_used.append("-es")
+            if self.as_doc:
+                leech_flags_used.append("-doc")
+            if self.as_med:
+                leech_flags_used.append("-med")
+
+            flags_str = ", ".join(leech_flags_used)
+            await send_message(
+                self.message,
+                f"❌ Leech operations are disabled by the administrator. Cannot use leech-related flags: {flags_str}",
+            )
+            # Reset leech-related flags
+            self.hybrid_leech = False
+            self.bot_trans = False
+            self.user_trans = False
+            self.thumbnail_layout = ""
+            self.split_size = 0
+            args["-es"] = False
+            self.as_doc = False
+            self.as_med = False
+
+        # Initialize ratio and seed_time variables
+        ratio = None
+        seed_time = None
+
+        # Check if torrent operations are disabled but torrent seed flag is used
+        if not Config.TORRENT_ENABLED and self.seed:
+            await send_message(
+                self.message,
+                "❌ Torrent operations are disabled by the administrator. Cannot use torrent seed flag: -d",
+            )
+            # Reset torrent seed flag
+            self.seed = False
+
         try:
             if args["-ff"]:
+                # Process multiple commands or presets
                 if isinstance(args["-ff"], str):
+                    # Check if it contains multiple presets separated by spaces
+                    if " " in args["-ff"]:
+                        preset_names = args["-ff"].split()
+                        self.ffmpeg_cmds = []
+                        for preset_name in preset_names:
+                            # Look for preset in config
+                            if (
+                                Config.FFMPEG_CMDS
+                                and preset_name in Config.FFMPEG_CMDS
+                            ):
+                                self.ffmpeg_cmds.append(
+                                    Config.FFMPEG_CMDS[preset_name]
+                                )
+                                LOGGER.info(
+                                    f"Added FFmpeg command from owner config: {preset_name}"
+                                )
+                            elif (
+                                self.user_dict.get("FFMPEG_CMDS")
+                                and preset_name in self.user_dict["FFMPEG_CMDS"]
+                            ):
+                                self.ffmpeg_cmds.append(
+                                    self.user_dict["FFMPEG_CMDS"][preset_name]
+                                )
+                                LOGGER.info(
+                                    f"Added FFmpeg command from user config: {preset_name}"
+                                )
+                            else:
+                                # If not found as preset, treat as direct command
+                                import shlex
+
+                                self.ffmpeg_cmds.append(shlex.split(preset_name))
+                                LOGGER.info(
+                                    f"Added direct FFmpeg command: {preset_name}"
+                                )
+                    # Single preset or command
                     # Check if it's a key in the FFmpeg commands dictionary
-                    if (
+                    elif (
                         Config.FFMPEG_CMDS and args["-ff"] in Config.FFMPEG_CMDS
                     ) or (
                         self.user_dict.get("FFMPEG_CMDS")
@@ -402,7 +513,7 @@ class Mirror(TaskListener):
                     ):
                         # If it's a key in the config, get the command from the config
                         if Config.FFMPEG_CMDS and args["-ff"] in Config.FFMPEG_CMDS:
-                            self.ffmpeg_cmds = Config.FFMPEG_CMDS[args["-ff"]]
+                            self.ffmpeg_cmds = [Config.FFMPEG_CMDS[args["-ff"]]]
                             LOGGER.info(
                                 f"Using FFmpeg command key from owner config: {self.ffmpeg_cmds}"
                             )
@@ -410,27 +521,69 @@ class Mirror(TaskListener):
                             self.user_dict.get("FFMPEG_CMDS")
                             and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
                         ):
-                            self.ffmpeg_cmds = self.user_dict["FFMPEG_CMDS"][
-                                args["-ff"]
+                            self.ffmpeg_cmds = [
+                                self.user_dict["FFMPEG_CMDS"][args["-ff"]]
                             ]
                             LOGGER.info(
                                 f"Using FFmpeg command key from user config: {self.ffmpeg_cmds}"
                             )
-                        else:
-                            # If it's not a key, treat it as a direct command
-                            import shlex
+                    else:
+                        # If it's not a key, treat it as a direct command
+                        import shlex
 
-                            self.ffmpeg_cmds = shlex.split(args["-ff"])
-                            LOGGER.info(
-                                f"Using direct FFmpeg command: {self.ffmpeg_cmds}"
-                            )
+                        self.ffmpeg_cmds = [shlex.split(args["-ff"])]
+                        LOGGER.info(
+                            f"Using direct FFmpeg command: {self.ffmpeg_cmds}"
+                        )
                 elif isinstance(args["-ff"], set):
-                    # If it's already a set, use it as is
-                    self.ffmpeg_cmds = args["-ff"]
+                    # If it's already a set, convert to list for sequential processing
+                    self.ffmpeg_cmds = list(args["-ff"])
                     LOGGER.info(f"Using FFmpeg command keys: {self.ffmpeg_cmds}")
                 else:
                     # For any other type, try to evaluate it
-                    self.ffmpeg_cmds = eval(args["-ff"])
+                    # This handles cases like: ["-i mltb.mkv -c copy mltb.mkv", "-i mltb.m4a -c:a libmp3lame mltb.mp3"]
+                    # or [["cmd1", "arg1"], ["cmd2", "arg2"]]
+                    try:
+                        evaluated_cmds = eval(args["-ff"])
+                        LOGGER.info(f"Evaluated FFmpeg commands: {evaluated_cmds}")
+                    except Exception as e:
+                        LOGGER.error(f"Error evaluating FFmpeg commands: {e}")
+                        evaluated_cmds = []
+
+                    # Handle different formats
+                    if isinstance(evaluated_cmds, list):
+                        # Check if it's a list of strings or a list of lists
+                        if all(isinstance(item, str) for item in evaluated_cmds):
+                            # List of command strings
+                            import shlex
+
+                            self.ffmpeg_cmds = [
+                                shlex.split(cmd) for cmd in evaluated_cmds
+                            ]
+                        elif all(isinstance(item, list) for item in evaluated_cmds):
+                            # List of command lists
+                            self.ffmpeg_cmds = evaluated_cmds
+                        else:
+                            # Mixed list - try to handle each item appropriately
+                            self.ffmpeg_cmds = []
+                            for item in evaluated_cmds:
+                                if isinstance(item, str):
+                                    import shlex
+
+                                    self.ffmpeg_cmds.append(shlex.split(item))
+                                elif isinstance(item, list):
+                                    self.ffmpeg_cmds.append(item)
+                                else:
+                                    # Try to convert to string and split
+                                    import shlex
+
+                                    self.ffmpeg_cmds.append(shlex.split(str(item)))
+                    else:
+                        # Single command
+                        import shlex
+
+                        self.ffmpeg_cmds = [shlex.split(str(evaluated_cmds))]
+
                     LOGGER.info(
                         f"Using evaluated FFmpeg commands: {self.ffmpeg_cmds}"
                     )
@@ -450,6 +603,13 @@ class Mirror(TaskListener):
             if len(dargs) == 2:
                 bulk_end = dargs[1] or 0
             is_bulk = True
+
+        # Check if bulk operations are enabled in the configuration
+        if is_bulk and not Config.BULK_ENABLED:
+            await send_message(
+                self.message, "❌ Bulk operations are disabled by the administrator."
+            )
+            is_bulk = False
 
         if not is_bulk:
             if self.multi > 0:
@@ -567,6 +727,12 @@ class Mirror(TaskListener):
             ) or (
                 file_ and file_.file_name and file_.file_name.endswith(".torrent")
             ):
+                # Check if torrent operations are enabled
+                if not Config.TORRENT_ENABLED:
+                    await self.on_download_error(
+                        "❌ Torrent operations are disabled by the administrator."
+                    )
+                    return None
                 self.is_qbit = True
         except Exception:
             pass
@@ -685,6 +851,9 @@ class Mirror(TaskListener):
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
+            content_type = await get_content_type(self.link)  # recheck with new link
+            if content_type and "x-bittorrent" in content_type:
+                self.is_qbit = True
 
         if file_ is not None:
             create_task(
@@ -703,6 +872,12 @@ class Mirror(TaskListener):
         elif self.is_nzb:
             create_task(add_nzb(self, path))
         elif is_rclone_path(self.link):
+            # Check if Rclone operations are enabled in the configuration
+            if not Config.RCLONE_ENABLED:
+                await self.on_download_error(
+                    "❌ Rclone operations are disabled by the administrator."
+                )
+                return None
             create_task(add_rclone_download(self, f"{path}/"))
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             create_task(add_gd_download(self, path))
@@ -718,28 +893,88 @@ class Mirror(TaskListener):
 
 
 async def mirror(client, message):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message, "❌ Mirror operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(Mirror(client, message).new_event())
 
 
 async def leech(client, message):
+    # Check if leech operations are enabled in the configuration
+    if not Config.LEECH_ENABLED:
+        await send_message(
+            message, "❌ Leech operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(Mirror(client, message, is_leech=True).new_event())
 
 
 async def jd_mirror(client, message):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message, "❌ Mirror operations are disabled by the administrator."
+        )
+        return
+    # Check if JDownloader operations are enabled in the configuration
+    if not Config.JD_ENABLED:
+        await send_message(
+            message, "❌ JDownloader operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(Mirror(client, message, is_jd=True).new_event())
 
 
 async def nzb_mirror(client, message):
+    # Check if mirror operations are enabled in the configuration
+    if not Config.MIRROR_ENABLED:
+        await send_message(
+            message, "❌ Mirror operations are disabled by the administrator."
+        )
+        return
+    # Check if NZB operations are enabled in the configuration
+    if not Config.NZB_ENABLED:
+        await send_message(
+            message, "❌ NZB operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(Mirror(client, message, is_nzb=True).new_event())
 
 
 async def jd_leech(client, message):
+    # Check if leech operations are enabled in the configuration
+    if not Config.LEECH_ENABLED:
+        await send_message(
+            message, "❌ Leech operations are disabled by the administrator."
+        )
+        return
+    # Check if JDownloader operations are enabled in the configuration
+    if not Config.JD_ENABLED:
+        await send_message(
+            message, "❌ JDownloader operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(
         Mirror(client, message, is_leech=True, is_jd=True).new_event(),
     )
 
 
 async def nzb_leech(client, message):
+    # Check if leech operations are enabled in the configuration
+    if not Config.LEECH_ENABLED:
+        await send_message(
+            message, "❌ Leech operations are disabled by the administrator."
+        )
+        return
+    # Check if NZB operations are enabled in the configuration
+    if not Config.NZB_ENABLED:
+        await send_message(
+            message, "❌ NZB operations are disabled by the administrator."
+        )
+        return
     bot_loop.create_task(
         Mirror(client, message, is_leech=True, is_nzb=True).new_event(),
     )

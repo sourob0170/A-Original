@@ -41,6 +41,72 @@ from bot.helper.telegram_helper.message_utils import (
 MEDIA_LOGGER = LOGGER.getChild("media_search")
 MEDIA_LOGGER.setLevel("WARNING")  # Only show warnings and errors
 
+# Import for ID generation
+
+
+# Simple encryption/obfuscation functions using built-in libraries
+def get_encryption_key():
+    """Get encryption key based on bot token."""
+    if not hasattr(Config, "BOT_TOKEN"):
+        # Fallback to a default key if BOT_TOKEN is not available
+        return hashlib.sha256(b"default_encryption_key").digest()
+    return hashlib.sha256(Config.BOT_TOKEN.encode()).digest()
+
+
+# Cache for media IDs to avoid sending full IDs in callback data
+MEDIA_ID_CACHE = {}
+MEDIA_ID_COUNTER = 0
+
+
+def encrypt_data(data_string):
+    """Create an ultra-compact token for data.
+
+    Instead of encrypting the full data, we store it in a cache and just
+    return a short reference ID that can be used to look up the data later.
+    """
+    global MEDIA_ID_COUNTER
+    try:
+        # Check if this data is already in the cache
+        for key, value in MEDIA_ID_CACHE.items():
+            if value == data_string:
+                return key
+
+        # Generate a new short ID
+        MEDIA_ID_COUNTER += 1
+        short_id = f"m{MEDIA_ID_COUNTER}"
+
+        # Store in cache
+        MEDIA_ID_CACHE[short_id] = data_string
+
+        # Clean up cache if it gets too large (keep last 1000 entries)
+        if len(MEDIA_ID_CACHE) > 1000:
+            # Get oldest keys (first 100)
+            oldest_keys = list(MEDIA_ID_CACHE.keys())[:100]
+            for key in oldest_keys:
+                del MEDIA_ID_CACHE[key]
+
+        return short_id
+    except Exception as e:
+        MEDIA_LOGGER.error(f"ID generation error: {e}")
+        # Return a fallback ID
+        return f"m{int(time.time())}"
+
+
+def decrypt_data(short_id):
+    """Get the original data from the short ID."""
+    try:
+        # Look up the data in the cache
+        if short_id in MEDIA_ID_CACHE:
+            return MEDIA_ID_CACHE[short_id]
+
+        # If not found, return the ID itself (fallback)
+        MEDIA_LOGGER.warning(f"ID not found in cache: {short_id}")
+        return short_id
+    except Exception as e:
+        MEDIA_LOGGER.error(f"ID lookup error: {e}")
+        # Return the ID itself as fallback
+        return short_id
+
 
 # Cache for valid chat IDs to avoid repeated errors
 # Using LRU cache pattern with size limits to prevent memory leaks
@@ -110,6 +176,9 @@ VALID_CHAT_IDS = {
     "user": LRUCache(max_size=100, expiry_seconds=3600),  # 1 hour expiry
     "bot": LRUCache(max_size=100, expiry_seconds=3600),  # 1 hour expiry
 }
+
+# Cache for media information (for start command access)
+MEDIA_INFO_CACHE = LRUCache(max_size=500, expiry_seconds=3600)  # 1 hour expiry
 
 
 def generate_search_key(chat_id, query, client_type, media_type="all"):
@@ -602,6 +671,17 @@ async def media_search(_, message: Message):
     Users can either provide the search query directly with the command or
     reply to a message containing the search query.
     """
+    # Check if media search is enabled
+    if not Config.MEDIA_SEARCH_ENABLED:
+        error_msg = await send_message(
+            message,
+            "❌ Media search is disabled by the administrator.",
+        )
+        create_task(
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
     user_id = message.from_user.id
 
     # Store original command message for later deletion
@@ -1418,13 +1498,34 @@ async def media_get_callback(_, query):
     This approach ensures optimal performance and reliability, as bot clients are better suited
     for message retrieval, while user clients are necessary for searching functionality.
     """
-    data = query.data.split("_")
-    user_id = int(data[1])
-    cmd_message_id = int(data[2])
-    chat_id = int(data[3])
-    message_id = int(data[4])
-    # data[5] contains the client type that found the message during search
-    # We don't use it directly as we always try bot client first, then fall back to user client
+    # Extract parameters from the callback data
+    callback_parts = query.data.split("_")
+    MEDIA_LOGGER.info(f"Callback parts: {callback_parts}")
+
+    if len(callback_parts) < 4:
+        MEDIA_LOGGER.error("Invalid callback data: Not enough parts")
+        return
+
+    # Extract user_id, cmd_message_id, and encrypted media data
+    try:
+        user_id = int(callback_parts[1])
+        cmd_message_id = int(callback_parts[2])
+
+        # Get the encrypted media data (everything after the third underscore)
+        encrypted_data = query.data.split("_", 3)[3]
+
+        # Decrypt the media data
+        media_data = decrypt_data(encrypted_data)
+        MEDIA_LOGGER.info(f"Decrypted media data: {media_data}")
+
+        # Parse the decrypted data
+        media_parts = media_data.split("_")
+        chat_id = int(media_parts[0])
+        message_id = int(media_parts[1])
+        client_type = media_parts[2] if len(media_parts) > 2 else "bot"
+    except Exception as e:
+        MEDIA_LOGGER.error(f"Error parsing callback data: {e}")
+        return
 
     # Check if the user who clicked the button is the same as the one who initiated the search
     if query.from_user.id != user_id:
@@ -1545,30 +1646,18 @@ async def media_get_callback(_, query):
                 _ = create_task(auto_delete_message(query.message, time=300))
             return
 
-        # Forward the media to the user
+        # Copy the media to the user instead of forwarding
         if is_inline_result:
-            # Forward to the user's private chat
-            forwarded_msg = await message.forward(
-                query.from_user.id, disable_notification=True
-            )
-            # Auto-delete the forwarded message after 5 minutes
-            from contextlib import suppress
-
-            with suppress(Exception):
-                _ = create_task(auto_delete_message(forwarded_msg, time=300))
+            # Copy to the user's private chat
+            await message.copy(query.from_user.id, disable_notification=True)
+            # Do not auto-delete the actual media file
             # Delete the status message
             if status_msg:
                 await status_msg.delete()
         else:
-            # Forward to the chat where the query was made
-            forwarded_msg = await message.forward(
-                query.message.chat.id, disable_notification=True
-            )
-            # Auto-delete the forwarded message after 5 minutes
-            from contextlib import suppress
-
-            with suppress(Exception):
-                _ = create_task(auto_delete_message(forwarded_msg, time=300))
+            # Copy to the chat where the query was made
+            await message.copy(query.message.chat.id, disable_notification=True)
+            # Do not auto-delete the actual media file
             # Delete the search results message immediately
             await query.message.delete()
 
@@ -1633,8 +1722,10 @@ async def display_search_results_page(
     # Create buttons for the current page results
     buttons = ButtonMaker()
     for result in page_results:
-        # Create callback data
-        callback_data = f"medget_{user_id}_{cmd_message_id}_{result['chat_id']}_{result['message_id']}_{result['client']}"
+        # Create callback data with encrypted media info
+        media_data = f"{result['chat_id']}_{result['message_id']}_{result['client']}"
+        encrypted_data = encrypt_data(media_data)
+        callback_data = f"medget_{user_id}_{cmd_message_id}_{encrypted_data}"
 
         # Add button
         buttons.data_button(result["display_name"], callback_data)
@@ -1788,6 +1879,23 @@ async def inline_media_search(_, inline_query: InlineQuery):
     @bot_username photo:query - Search for photos
     @bot_username doc:query - Search for documents
     """
+    # Check if media search is enabled
+    if not Config.MEDIA_SEARCH_ENABLED:
+        await inline_query.answer(
+            results=[
+                InlineQueryResultArticle(
+                    id="disabled",
+                    title="Media search is disabled",
+                    description="Media search has been disabled by the administrator",
+                    input_message_content=InputTextMessageContent(
+                        "Media search is currently disabled by the administrator."
+                    ),
+                )
+            ],
+            cache_time=300,
+        )
+        return
+
     # Skip empty queries
     if not inline_query.query:
         return
@@ -2077,8 +2185,31 @@ async def inline_media_search(_, inline_query: InlineQuery):
                     ]
                 )
 
-                # Create a callback data for the button to send the media directly
-                callback_data = f"medget_{inline_query.from_user.id}_0_{result['chat_id']}_{result['message_id']}_{result['client']}"
+                # Create a unique ID for this media (unencrypted version for cache key)
+                cache_key = (
+                    f"{result['chat_id']}_{result['message_id']}_{result['client']}"
+                )
+
+                # Store media information in cache for retrieval via start command
+                media_info = {
+                    "chat_id": result["chat_id"],
+                    "message_id": result["message_id"],
+                    "client_type": result["client"],
+                    "media_type": result["media_type"],
+                    "title": result["title"],
+                    "performer": result["performer"],
+                    "duration": result["duration"],
+                    "file_size": result["file_size"],
+                    "file_id": result["file_id"],
+                }
+                MEDIA_INFO_CACHE.put(cache_key, media_info)
+
+                # Create encrypted media ID for URL
+                encrypted_data = encrypt_data(cache_key)
+
+                # Create a start command for new users instead of callback data
+                # This ensures that new users who haven't interacted with the bot can still get media
+                start_command = f"get_{encrypted_data}"
 
                 # Create buttons for sending media and searching again
                 reply_markup = InlineKeyboardMarkup(
@@ -2086,7 +2217,7 @@ async def inline_media_search(_, inline_query: InlineQuery):
                         [
                             InlineKeyboardButton(
                                 text=f"Send {result['media_type'].capitalize()}",
-                                callback_data=callback_data,
+                                url=f"https://t.me/{TgClient.NAME}?start={start_command}",
                             )
                         ],
                         [
@@ -2158,12 +2289,473 @@ async def inline_media_search(_, inline_query: InlineQuery):
         )
 
 
+@new_task
+async def chosen_inline_result_handler(_, chosen_inline_result):
+    """Handle chosen inline results for media search.
+
+    This function is called when a user selects a result from the inline query.
+    It will replace the message with the actual media file.
+    """
+    from asyncio import sleep
+
+    from pyrogram.enums import ParseMode
+
+    from bot.helper.ext_utils.status_utils import get_readable_file_size
+
+    # Helper function to format duration
+    def format_duration(seconds):
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours > 0:
+            return f"{hours}h {minutes}m {seconds}s"
+        if minutes > 0:
+            return f"{minutes}m {seconds}s"
+        return f"{seconds}s"
+
+    # Extract the result ID which contains chat_id and message_id
+    result_id = chosen_inline_result.result_id
+
+    try:
+        # Parse the result ID to get chat_id and message_id
+        chat_id, message_id, _ = result_id.split("_")
+        chat_id = int(chat_id)
+        message_id = int(message_id)
+
+        # Get the inline message ID to edit the message later
+        inline_message_id = chosen_inline_result.inline_message_id
+        if not inline_message_id:
+            return
+
+        # Try to get the message with bot client first
+        client = TgClient.bot if TgClient.bot else TgClient.user
+
+        # Check if the client is available
+        if not client:
+            return
+
+        try:
+            # Get the message
+            message = await client.get_messages(
+                chat_id=chat_id, message_ids=message_id
+            )
+
+            # If message not found with bot client, try user client
+            if not message and TgClient.user:
+                message = await TgClient.user.get_messages(
+                    chat_id=chat_id, message_ids=message_id
+                )
+
+            # If still no message found, return
+            if not message:
+                return
+
+            # Check if the message contains media
+            if not (
+                hasattr(message, "audio")
+                or hasattr(message, "video")
+                or hasattr(message, "photo")
+                or hasattr(message, "document")
+            ):
+                return
+
+            # Determine the media type
+            media_type = None
+            if hasattr(message, "audio") and message.audio:
+                media_type = "audio"
+            elif hasattr(message, "video") and message.video:
+                media_type = "video"
+            elif hasattr(message, "photo") and message.photo:
+                media_type = "photo"
+            elif hasattr(message, "document") and message.document:
+                media_type = "document"
+
+            if not media_type:
+                return
+
+            # Use send_inline_bot_result to replace the message with the actual media
+            # This is the most elegant way to handle this, but requires the bot to be
+            # able to send inline results, which might not be possible for all bots
+
+            # For now, we'll edit the message to indicate that the file is being sent
+            # The actual file will be sent when the user clicks the "Send" button
+
+            # Create a more informative message
+            title = ""
+            if hasattr(message, "audio") and message.audio:
+                title = message.audio.title or "Audio"
+                if message.audio.performer:
+                    title += f" - {message.audio.performer}"
+            elif hasattr(message, "video") and message.video:
+                title = message.caption or "Video"
+            elif hasattr(message, "document") and message.document:
+                title = message.document.file_name or "Document"
+            elif hasattr(message, "photo") and message.photo:
+                title = message.caption or "Photo"
+
+            # Create a unique ID for this media (unencrypted version for cache key)
+            cache_key = f"{chat_id}_{message_id}_bot"
+
+            # Extract additional media information
+            performer = ""
+            duration = 0
+            file_size = 0
+            file_id = ""
+
+            if hasattr(message, "audio") and message.audio:
+                performer = message.audio.performer or ""
+                duration = message.audio.duration or 0
+                file_size = message.audio.file_size or 0
+                file_id = message.audio.file_id
+            elif hasattr(message, "video") and message.video:
+                duration = message.video.duration or 0
+                file_size = message.video.file_size or 0
+                file_id = message.video.file_id
+            elif hasattr(message, "document") and message.document:
+                file_size = message.document.file_size or 0
+                file_id = message.document.file_id
+            elif hasattr(message, "photo") and message.photo:
+                # For photos, use the largest size
+                if message.photo:
+                    file_size = message.photo[-1].file_size or 0
+                    file_id = message.photo[-1].file_id
+
+            # Store media information in cache for retrieval via start command
+            media_info = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "client_type": "bot",  # Use bot client since we're getting the message with the bot client first
+                "media_type": media_type,
+                "title": title,
+                "performer": performer,
+                "duration": duration,
+                "file_size": file_size,
+                "file_id": file_id,
+            }
+            MEDIA_INFO_CACHE.put(cache_key, media_info)
+
+            # Create encrypted media ID for URL
+            encrypted_data = encrypt_data(cache_key)
+
+            # Create a start command for new users instead of callback data
+            # This ensures that new users who haven't interacted with the bot can still get media
+            start_command = f"get_{encrypted_data}"
+
+            # Create buttons for sending media
+            reply_markup = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            text=f"Send {media_type.capitalize()}",
+                            url=f"https://t.me/{TgClient.NAME}?start={start_command}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔍 Search Again",
+                            switch_inline_query_current_chat="",
+                        )
+                    ],
+                ]
+            )
+
+            # Edit the inline message with more details
+            message_text = f"<b>{title}</b>\n\n"
+            if (
+                hasattr(message, "audio")
+                and message.audio
+                and message.audio.duration
+            ):
+                message_text += (
+                    f"Duration: {format_duration(message.audio.duration)}\n"
+                )
+            elif (
+                hasattr(message, "video")
+                and message.video
+                and message.video.duration
+            ):
+                message_text += (
+                    f"Duration: {format_duration(message.video.duration)}\n"
+                )
+
+            if (
+                hasattr(message, "audio")
+                and message.audio
+                and message.audio.file_size
+            ):
+                message_text += (
+                    f"Size: {get_readable_file_size(message.audio.file_size)}\n"
+                )
+            elif (
+                hasattr(message, "video")
+                and message.video
+                and message.video.file_size
+            ):
+                message_text += (
+                    f"Size: {get_readable_file_size(message.video.file_size)}\n"
+                )
+            elif (
+                hasattr(message, "document")
+                and message.document
+                and message.document.file_size
+            ):
+                message_text += (
+                    f"Size: {get_readable_file_size(message.document.file_size)}\n"
+                )
+            elif (
+                hasattr(message, "photo")
+                and message.photo
+                and message.photo[-1].file_size
+            ):
+                message_text += (
+                    f"Size: {get_readable_file_size(message.photo[-1].file_size)}\n"
+                )
+
+            message_text += f"Type: {media_type.capitalize()}\n\n"
+            message_text += "Click the button below to get this file"
+
+            # Edit the inline message
+            await client.edit_inline_text(
+                inline_message_id=inline_message_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+
+            # We can't directly delete inline messages, but we can edit them after 5 minutes
+            # to indicate they've expired
+            async def expire_inline_message():
+                try:
+                    # Wait for 5 minutes
+                    await sleep(300)  # 300 seconds = 5 minutes
+
+                    # Edit the message to show it's expired
+                    expired_text = "⏱️ <b>This search result has expired.</b>\n\nPlease use the search again button to perform a new search."
+                    expired_markup = InlineKeyboardMarkup(
+                        [
+                            [
+                                InlineKeyboardButton(
+                                    text="🔍 Search Again",
+                                    switch_inline_query_current_chat="",
+                                )
+                            ]
+                        ]
+                    )
+
+                    # Edit the inline message
+                    await client.edit_inline_text(
+                        inline_message_id=inline_message_id,
+                        text=expired_text,
+                        reply_markup=expired_markup,
+                        parse_mode=ParseMode.HTML,
+                    )
+                except Exception as e:
+                    # Log the error but don't raise it
+                    MEDIA_LOGGER.error(f"Error expiring inline message: {e}")
+
+            # Start the expiration task
+            create_task(expire_inline_message())
+
+        except Exception as e:
+            # Log the error but don't raise it
+            MEDIA_LOGGER.error(f"Error in chosen_inline_result_handler: {e}")
+
+    except Exception as e:
+        # Log the error but don't raise it
+        MEDIA_LOGGER.error(f"Error parsing chosen inline result: {e}")
+
+
+@new_task
+async def handle_media_get_command(client, message):
+    """Handle media get command from start command.
+
+    This function is called when a user clicks on a media get button from inline search.
+    Format: /start get_media_id
+    """
+    try:
+        # Extract parameters from the command
+        MEDIA_LOGGER.info(f"Processing start command: {message.command}")
+
+        if len(message.command) < 2:
+            MEDIA_LOGGER.error("Invalid start command: No parameters provided")
+            return
+
+        command_parts = message.command[1].split("_")
+        MEDIA_LOGGER.info(f"Command parts: {command_parts}")
+
+        if len(command_parts) < 2 or command_parts[0] != "get":
+            MEDIA_LOGGER.error(f"Invalid command format: {command_parts}")
+            return
+
+        # Get the encrypted media ID (everything after "get_")
+        encrypted_media_id = message.command[1][4:]  # Skip the "get_" prefix
+        MEDIA_LOGGER.info(f"Encrypted Media ID: {encrypted_media_id}")
+
+        # Send a status message
+        status_msg = await client.send_message(
+            chat_id=message.chat.id, text="Retrieving media file... Please wait."
+        )
+
+        try:
+            # Decrypt the media ID
+            media_id = decrypt_data(encrypted_media_id)
+            MEDIA_LOGGER.info(f"Decrypted Media ID: {media_id}")
+
+            # Get media info from cache
+            media_info = MEDIA_INFO_CACHE.get(media_id)
+        except Exception as e:
+            MEDIA_LOGGER.error(f"Error decrypting media ID: {e}")
+            media_info = None
+
+        if not media_info:
+            MEDIA_LOGGER.error(f"Media info not found in cache for ID: {media_id}")
+            await status_msg.edit_text(
+                "Error: Media information not found or expired. Please try searching again."
+            )
+            # Auto-delete error message after 5 minutes
+            create_task(auto_delete_message(status_msg, time=300))
+            return
+
+        MEDIA_LOGGER.info(f"Retrieved media info from cache: {media_info}")
+
+        # Extract media information
+        chat_id = media_info.get("chat_id")
+        message_id = media_info.get("message_id")
+        client_type = media_info.get("client_type")
+
+        if not chat_id or not message_id or not client_type:
+            MEDIA_LOGGER.error("Invalid media info: Missing required fields")
+            await status_msg.edit_text(
+                "Error: Invalid media information. Please try searching again."
+            )
+            # Auto-delete error message after 5 minutes
+            create_task(auto_delete_message(status_msg, time=300))
+            return
+
+        # IMPORTANT: Always use bot client for message retrieval when possible
+        # Only fall back to user client if bot client fails
+        client_to_use = TgClient.bot if TgClient.bot else TgClient.user
+        client_type_to_use = "bot" if TgClient.bot else "user"
+
+        # Check if the selected client is available
+        if (client_type_to_use == "bot" and not TgClient.bot) or (
+            client_type_to_use == "user" and not TgClient.user
+        ):
+            MEDIA_LOGGER.error(f"Client not available: {client_type_to_use}")
+            await status_msg.edit_text(
+                f"Error: The {client_type_to_use} client is not available. Please try again."
+            )
+            # Auto-delete error message after 5 minutes
+            create_task(auto_delete_message(status_msg, time=300))
+            return
+
+        try:
+            # Try to get the message with the primary client
+            message_to_copy = None
+            try:
+                MEDIA_LOGGER.info(
+                    f"Trying to get message with {client_type_to_use} client"
+                )
+                message_to_copy = await client_to_use.get_messages(
+                    chat_id=int(chat_id), message_ids=int(message_id)
+                )
+            except Exception as e:
+                MEDIA_LOGGER.error(
+                    f"Error getting message with {client_type_to_use} client: {e}"
+                )
+
+            # If message not found with the primary client, try the other client as fallback
+            if not message_to_copy or not (
+                hasattr(message_to_copy, "audio")
+                or hasattr(message_to_copy, "video")
+                or hasattr(message_to_copy, "photo")
+                or hasattr(message_to_copy, "document")
+            ):
+                # Try the other client
+                fallback_client = None
+                fallback_client_type = None
+
+                # Since we're using bot client as primary, only fall back to user client if bot client fails
+                if client_type_to_use == "bot" and TgClient.user:
+                    fallback_client = TgClient.user
+                    fallback_client_type = "user"
+                elif client_type_to_use == "user" and TgClient.bot:
+                    fallback_client = TgClient.bot
+                    fallback_client_type = "bot"
+
+                if fallback_client:
+                    try:
+                        MEDIA_LOGGER.info(
+                            f"Trying fallback {fallback_client_type} client"
+                        )
+                        message_to_copy = await fallback_client.get_messages(
+                            chat_id=int(chat_id), message_ids=int(message_id)
+                        )
+                        if message_to_copy:
+                            MEDIA_LOGGER.info(
+                                f"Successfully retrieved message with fallback {fallback_client_type} client"
+                            )
+                            client_to_use = fallback_client
+                            client_type_to_use = fallback_client_type
+                    except Exception as e:
+                        MEDIA_LOGGER.error(
+                            f"Error getting message with fallback {fallback_client_type} client: {e}"
+                        )
+
+            # If still no message found
+            if not message_to_copy or not (
+                hasattr(message_to_copy, "audio")
+                or hasattr(message_to_copy, "video")
+                or hasattr(message_to_copy, "photo")
+                or hasattr(message_to_copy, "document")
+            ):
+                MEDIA_LOGGER.error("Media file not found or no longer available")
+                await status_msg.edit_text(
+                    "Media file not found or no longer available.\n\n"
+                    "The message might have been deleted or the media file removed."
+                )
+                # Auto-delete error message after 5 minutes
+                create_task(auto_delete_message(status_msg, time=300))
+                return
+
+            # Copy the media to the user
+            MEDIA_LOGGER.info(f"Copying media to user {message.chat.id}")
+            await message_to_copy.copy(message.chat.id, disable_notification=True)
+            MEDIA_LOGGER.info("Media copied successfully")
+
+            # Do not auto-delete the actual media file
+
+            # Delete the status message
+            await status_msg.delete()
+
+        except Exception as e:
+            MEDIA_LOGGER.error(f"Error retrieving media: {e}")
+            await status_msg.edit_text(
+                "Error retrieving media. Please try again later."
+            )
+            # Auto-delete error message after 5 minutes
+            create_task(auto_delete_message(status_msg, time=300))
+
+    except Exception as e:
+        # Log the error but don't raise it
+        MEDIA_LOGGER.error(f"Error in handle_media_get_command: {e}")
+
+        # Try to send an error message to the user if possible
+        try:
+            await client.send_message(
+                chat_id=message.chat.id,
+                text="Error processing your request. Please try again later.",
+            )
+        except Exception as send_error:
+            MEDIA_LOGGER.error(f"Failed to send error message: {send_error}")
+
+
 def init_media_search(bot):
     """Initialize the media search module."""
     from pyrogram import filters
     from pyrogram.filters import command
     from pyrogram.handlers import (
         CallbackQueryHandler,
+        ChosenInlineResultHandler,
         InlineQueryHandler,
         MessageHandler,
     )
@@ -2204,3 +2796,6 @@ def init_media_search(bot):
 
     # Register the inline query handler
     bot.add_handler(InlineQueryHandler(inline_media_search))
+
+    # Register the chosen inline result handler
+    bot.add_handler(ChosenInlineResultHandler(chosen_inline_result_handler))

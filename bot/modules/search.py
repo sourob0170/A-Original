@@ -219,6 +219,28 @@ async def plugin_buttons(user_id):
 
 @new_task
 async def torrent_search(_, message):
+    # Check if torrent operations and torrent search are enabled
+    if not Config.TORRENT_ENABLED:
+        error_msg = await send_message(
+            message,
+            "❌ Torrent operations are disabled by the administrator.",
+        )
+        create_task(  # noqa: RUF006
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
+    # Check if torrent search is specifically enabled
+    if not Config.TORRENT_SEARCH_ENABLED:
+        error_msg = await send_message(
+            message,
+            "❌ Torrent search is disabled by the administrator.",
+        )
+        create_task(  # noqa: RUF006
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
     user_id = message.from_user.id
     msg_parts = message.text.split(maxsplit=1)
 
