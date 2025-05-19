@@ -1,6 +1,7 @@
 import os
 import subprocess
 
+
 async def spectrum_handler(_, message):
     replied = message.reply_to_message
 
@@ -12,11 +13,13 @@ async def spectrum_handler(_, message):
         try:
             subprocess.run(
                 ["sox", file_path, "-n", "spectrogram", "-o", output_image],
-                check=True
+                check=True,
             )
             await message.reply_photo(output_image)
         except subprocess.CalledProcessError:
-            await message.reply_text("Failed to generate spectrum. Unsupported format or corrupted file.")
+            await message.reply_text(
+                "Failed to generate spectrum. Unsupported format or corrupted file."
+            )
         finally:
             os.remove(file_path)
             if os.path.exists(output_image):
