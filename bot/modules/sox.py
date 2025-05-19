@@ -6,7 +6,6 @@ async def spectrum_handler(_, message):
     replied = message.reply_to_message
 
     if replied.audio or replied.document:
-        file = replied.audio or replied.document
         file_path = await replied.download()
         output_image = "spectrum.png"
 
