@@ -38,6 +38,7 @@ from .users_settings import (
     send_user_settings,
 )
 from .ytdlp import ytdl, ytdl_leech
+from .sox import spectrum_handler
 
 __all__ = [
     "add_sudo",
@@ -82,6 +83,7 @@ __all__ = [
     "restart_notification",
     "rss_listener",
     "run_shell",
+    "spectrum_handler",
     "select",
     "select_type",
     "send_bot_settings",
