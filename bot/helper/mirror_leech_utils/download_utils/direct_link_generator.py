@@ -1265,7 +1265,10 @@ def doods(url):
             ) from e
     if not (link := search(r"window\.open\('(\S+)'", _res.text)):
         raise DirectDownloadLinkException("ERROR: Download link not found try again")
-    return (link.group(1), [f"Referer: {parsed_url.scheme}://{parsed_url.hostname}/"])
+    return (
+        link.group(1),
+        [f"Referer: {parsed_url.scheme}://{parsed_url.hostname}/"],
+    )
 
 
 def easyupload(url):
@@ -1609,7 +1612,9 @@ def swisstransfer(link):
 
         if response.status_code == 200:
             try:
-                return response.json(), [f"{k}: {v}" for k, v in headers.items() if v]
+                return response.json(), [
+                    f"{k}: {v}" for k, v in headers.items() if v
+                ]
             except ValueError:
                 raise DirectDownloadLinkException(
                     f"ERROR: Error parsing JSON response {response.text}"
