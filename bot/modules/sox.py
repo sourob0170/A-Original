@@ -1,11 +1,22 @@
 import os
-import subprocess
-import time
-import tempfile
 import shutil
+import subprocess
+import tempfile
+import time
 
-
-SUPPORTED_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif", ".aifc", ".au", ".snd", ".raw", ".gsm"}
+SUPPORTED_EXTS = {
+    ".wav",
+    ".mp3",
+    ".flac",
+    ".ogg",
+    ".aiff",
+    ".aif",
+    ".aifc",
+    ".au",
+    ".snd",
+    ".raw",
+    ".gsm",
+}
 
 
 def is_supported(filename: str) -> bool:
@@ -21,7 +32,9 @@ async def spectrum_handler(_, message):
         return
 
     if not is_supported(media.file_name):
-        await message.reply_text("Unsupported file format for Sox. Try WAV, MP3, FLAC, etc.")
+        await message.reply_text(
+            "Unsupported file format for Sox. Try WAV, MP3, FLAC, etc."
+        )
         return
 
     temp_dir = tempfile.mkdtemp(prefix="sox_")
@@ -48,15 +61,16 @@ async def spectrum_handler(_, message):
         await progress_message.edit("Generating spectrum...")
 
         subprocess.run(
-            ["sox", file_path, "-n", "spectrogram", "-o", output_path],
-            check=True
+            ["sox", file_path, "-n", "spectrogram", "-o", output_path], check=True
         )
 
         await message.reply_photo(output_path)
         await progress_message.delete()
 
     except subprocess.CalledProcessError:
-        await progress_message.edit("Failed to generate spectrum. The file may be corrupted or unsupported.")
+        await progress_message.edit(
+            "Failed to generate spectrum. The file may be corrupted or unsupported."
+        )
     except Exception as e:
         await progress_message.edit(f"Unexpected error: {e}")
     finally:
