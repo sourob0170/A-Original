@@ -4,6 +4,8 @@ import subprocess
 import tempfile
 import time
 
+from bot.helper.telegram_helper.message_utils import edit_message, send_message, delete_message
+
 SUPPORTED_EXTS = {
     ".wav",
     ".mp3",
@@ -28,11 +30,12 @@ async def spectrum_handler(_, message):
     media = replied.document or replied.audio
 
     if not media:
-        await message.reply_text("Reply to an audio or document message with /sox.")
+        await send_message(message, "Reply to an audio or document message with /sox.")
         return
 
     if not is_supported(media.file_name):
-        await message.reply_text(
+        await send_message(
+            message,
             "Unsupported file format for Sox. Try WAV, MP3, FLAC, etc."
         )
         return
@@ -41,7 +44,7 @@ async def spectrum_handler(_, message):
     file_path = os.path.join(temp_dir, media.file_name or "input")
     output_path = os.path.join(temp_dir, "spectrum.png")
 
-    progress_message = await message.reply("Downloading... 0%")
+    progress_message = await send_message(message, "Downloading... 0%")
     last_update = 0
 
     async def progress(current, total):
@@ -51,27 +54,28 @@ async def spectrum_handler(_, message):
             percent = current * 100 / total
             downloaded_mb = current / (1024 * 1024)
             total_mb = total / (1024 * 1024)
-            await progress_message.edit(
-                f"Downloading... {downloaded_mb:.2f}MB / {total_mb:.2f}MB ({percent:.1f}%)"
+            await edit_message(
+                progress_message, 
+                f"Downloading... {downloaded_mb:.2f}MB / {total_mb:.2f}MB {percent:.1f}%"
             )
             last_update = now
 
     try:
         await replied.download(file_path, progress=progress)
-        await progress_message.edit("Generating spectrum...")
+        await edit_message(progress_message, "Generating spectrum...")
 
         subprocess.run(
             ["sox", file_path, "-n", "spectrogram", "-o", output_path], check=True
         )
 
         await message.reply_photo(output_path)
-        await progress_message.delete()
+        await delete_message(progress_message)
 
     except subprocess.CalledProcessError:
         await progress_message.edit(
             "Failed to generate spectrum. The file may be corrupted or unsupported."
         )
     except Exception as e:
-        await progress_message.edit(f"Unexpected error: {e}")
+        await edit_message(progress_message, f"Unexpected error: {e}")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
