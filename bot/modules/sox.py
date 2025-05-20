@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import subprocess
@@ -69,17 +70,20 @@ async def spectrum_handler(_, message):
         await replied.download(file_path, progress=progress)
         await edit_message(progress_message, "Generating spectrum...")
 
-        subprocess.run(
-            ["sox", file_path, "-n", "spectrogram", "-o", output_path], check=True
+        process = await asyncio.create_subprocess_exec(
+            "sox", file_path, "-n", "spectrogram", "-o", output_path,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
         )
+        return_code = await process.wait()
+        
+        if return_code != 0:
+            await edit_message(progress_message, "Failed to generate spectrum. The file may be corrupted or unsupported.")
+            return
 
         await message.reply_photo(output_path)
         await delete_message(progress_message)
 
-    except subprocess.CalledProcessError:
-        await progress_message.edit(
-            "Failed to generate spectrum. The file may be corrupted or unsupported."
-        )
     except Exception as e:
         await edit_message(progress_message, f"Unexpected error: {e}")
     finally:

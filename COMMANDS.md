@@ -37,4 +37,5 @@ ping - Ping the Bot
 help - All cmds with description
 mediainfo - Check mediainfo
 broadcast - broadcast message
+spectrum - or /sox for generate spectrum from audio
 ```
