@@ -15,11 +15,11 @@
 | `USER_SESSION_STRING`     | `str`          | Use to access Telegram premium features. Generate using `python3 generate_string_session.py`. **Note:** Use in supergroup only. |
 | `DATABASE_URL`            | `str`          | MongoDB connection string. See [Create Database](https://github.com/anasty17/test?tab=readme-ov-file#create-database). Data includes bot/user settings, RSS, and tasks. |
 | `CMD_SUFFIX`              | `str` \| `int` | Suffix to add at the end of all commands. |
-| `AUTHORIZED_CHATS`        | `str`          | User/chat/topic IDs to authorize. Format: `chat_id`, `chat_id|thread_id`, etc. Separate by space. |
-| `SUDO_USERS`              | `str`          | User IDs with sudo permission. Separate by space. |
+| `AUTHORIZED_CHATS`        | `str`          | User/chat/topic IDs to authorize. Format: `chat_id`, `chat_id|thread_id`, etc. Separate by spaces. |
+| `SUDO_USERS`              | `str`          | User IDs with sudo permission. Separate by spaces. |
 | `UPLOAD_PATHS`            | `dict`         | Dict with upload paths. Example: `{"path 1": "remote:", "path 2": "gdrive id", ...}` |
 | `DEFAULT_UPLOAD`          | `str`          | `rc` for `RCLONE_PATH`, `gd` for `GDRIVE_ID`. Default: `rc`. [Read More](https://github.com/anasty17/mirror-leech-telegram-bot/tree/master#upload). |
-| `EXCLUDED_EXTENSIONS`     | `str`          | File extensions to skip. Separate by space. |
+| `EXCLUDED_EXTENSIONS`     | `str`          | File extensions to skip. Separate by spaces. |
 | `INCOMPLETE_TASK_NOTIFIER`| `bool`         | Notify after restart for incomplete tasks. Needs DB and supergroup. Default: `False`. |
 | `FILELION_API`            | `str`          | API key from [Filelion](https://vidhide.com/?op=my_account). |
 | `STREAMWISH_API`          | `str`          | API key from [Streamwish](https://streamwish.com/?op=my_account). |
@@ -118,19 +118,20 @@
 | `HYDRA_IP`        | `str` | IP of [nzbhydra2](https://github.com/theotherp/nzbhydra2). |
 | `HYDRA_API_KEY`   | `str` | API key from nzbhydra2. |
 
-## 13 Extra fields from Aeon
+## 13. Extra fields from Aeon
 
-    # No time for organising 😓
-    METADATA_KEY: str
-    WATERMARK_KEY: str
-    SET_COMMANDS: bool
-    TOKEN_TIMEOUT: int
-    PAID_CHANNEL_ID: int
-    PAID_CHANNEL_LINK: str
-    DELETE_LINKS: bool
-    FSUB_IDS: str
-    LOG_CHAT_ID: int
-    LEECH_FILENAME_CAPTION: str
-    INSTADL_API: str
-    HEROKU_APP_NAME: str
-    HEROKU_API_KEY: str
+| Variable               | Type   | Description |
+|------------------------|--------|-------------|
+| `METADATA_KEY`         | `str`  | Key used to tag or fetch metadata. |
+| `WATERMARK_KEY`        | `str`  | Key used for watermarking files or content. |
+| `SET_COMMANDS`         | `bool` | Whether to register bot commands on startup. |
+| `TOKEN_TIMEOUT`        | `int`  | Timeout in seconds for token/session expiry. |
+| `PAID_CHANNEL_ID`      | `int`  | Telegram channel ID where user need to join for no token. |
+| `PAID_CHANNEL_LINK`    | `str`  | Invite or public link to the paid Telegram channel. |
+| `DELETE_LINKS`         | `bool` | Whether to auto-delete download or share links. |
+| `FSUB_IDS`             | `str`  | Comma-separated IDs of forced subscription channels. |
+| `LOG_CHAT_ID`          | `int`  | Chat ID where leech logs sent. |
+| `LEECH_FILENAME_CAPTION` | `str` | Template caption used for leeched/downloaded filenames. |
+| `INSTADL_API`          | `str`  | URL or endpoint for InstaDL API integration. |
+| `HEROKU_APP_NAME`      | `str`  | Name of the Heroku app for get `BASE_URL` automatically. |
+| `HEROKU_API_KEY`       | `str`  | API key for accessing and controlling Heroku. |

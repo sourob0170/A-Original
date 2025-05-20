@@ -3,17 +3,17 @@
 **NOTES:**
 - Old authentication changed, now we can't use bot or replit to generate token.pickle. You need OS with a local browser. For example Termux.
 - Windows users should install python3 and pip. You can find how to install and use them from google or from this telegraph from Wiszky tutorial.
-- You can ONLY open the generated link from generate_drive_token.py in local browser.
+- You can ONLY open the generated link from generate_drive_token.py in a local browser.
 
 1. Visit the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
 2. Go to the OAuth Consent tab, fill it, and save.
 3. Go to the Credentials tab and click Create Credentials -> OAuth Client ID
 4. Choose Desktop and Create.
-5. Publish your OAuth consent screen App to prevent token.pickle from expire
+5. Publish your OAuth consent screen App to prevent token.pickle from expiring.
 6. Use the download button to download your credentials.
 7. Move that file to the root of mirrorbot, and rename it to credentials.json
 8. Visit [Google API page](https://console.cloud.google.com/apis/library)
-9. Search for Google Drive Api and enable it
+9. Search for Google Drive API and enable it
 10. Finally, run the script to generate token.pickle file for Google Drive:
 
 ```bash
@@ -25,7 +25,7 @@ python3 generate_drive_token.py
 
 1. Install rclone from [Official Site](https://rclone.org/install/)
 2. Create new remote(s) using rclone config command.
-3. Copy rclone.conf from .config/rclone/rclone.conf to repo folder
+3. Copy rclone.conf from your system’s config directory into the repo root. For example:
 
 ### Upload
 
@@ -41,7 +41,7 @@ If rclone.conf uploaded from usetting or added in rclone/{user_id}.conf then RCL
 
 Whenever you want to write path manually to use user rclone.conf that added from usetting then you must add the mrcc: at the beginning.
 
-So in short, up: has 4 possible values which is: gd(Upload to GDRIVE_ID), rc(Upload to RCLONE_PATH), rcl(Select Rclone Path) and rclone_path(remote:path(owner rclone.conf) or mrcc:remote:path(user rclone.conf))
+So in short, up: has 4 possible values which are: `gd` (Upload to GDRIVE_ID), `rc` (Upload to RCLONE_PATH), `rcl` (Select Rclone Path) and `rclone_path` (remote:path (owner rclone.conf) or `mrcc`:remote:path (user rclone.conf))
 
 ### UPSTREAM REPO (Recommended)
 
@@ -49,7 +49,7 @@ UPSTREAM_REPO variable can be used for edit/add any file in repository.
 
 You can add private/public repository link to grab/overwrite all files from it.
 
-You can skip adding the privates files like token.pickle or accounts folder before deploying, simply fill UPSTREAM_REPO private one incase you want to grab all files including private files.
+You can skip adding the private files like token.pickle or accounts folder before deploying, simply fill UPSTREAM_REPO private one in case you want to grab all files including private files.
 
 If you added private files while deploying and you have added private UPSTREAM_REPO and your private files in this private repository, so your private files will be overwritten from this repository. Also if you are using database for private files, then all files from database will override the private files that added before deploying or from private UPSTREAM_REPO.
 
