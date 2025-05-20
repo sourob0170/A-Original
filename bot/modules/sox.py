@@ -4,7 +4,11 @@ import subprocess
 import tempfile
 import time
 
-from bot.helper.telegram_helper.message_utils import edit_message, send_message, delete_message
+from bot.helper.telegram_helper.message_utils import (
+    delete_message,
+    edit_message,
+    send_message,
+)
 
 SUPPORTED_EXTS = {
     ".wav",
@@ -30,13 +34,14 @@ async def spectrum_handler(_, message):
     media = replied.document or replied.audio
 
     if not media:
-        await send_message(message, "Reply to an audio or document message with /sox.")
+        await send_message(
+            message, "Reply to an audio or document message with /sox."
+        )
         return
 
     if not is_supported(media.file_name):
         await send_message(
-            message,
-            "Unsupported file format for Sox. Try WAV, MP3, FLAC, etc."
+            message, "Unsupported file format for Sox. Try WAV, MP3, FLAC, etc."
         )
         return
 
@@ -55,8 +60,8 @@ async def spectrum_handler(_, message):
             downloaded_mb = current / (1024 * 1024)
             total_mb = total / (1024 * 1024)
             await edit_message(
-                progress_message, 
-                f"Downloading... {downloaded_mb:.2f}MB / {total_mb:.2f}MB {percent:.1f}%"
+                progress_message,
+                f"Downloading... {downloaded_mb:.2f}MB / {total_mb:.2f}MB {percent:.1f}%",
             )
             last_update = now
 
