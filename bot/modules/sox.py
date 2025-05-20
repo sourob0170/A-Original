@@ -1,43 +1,63 @@
 import os
 import subprocess
 import time
+import tempfile
+import shutil
+
+
+SUPPORTED_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif", ".aifc", ".au", ".snd", ".raw", ".gsm"}
+
+
+def is_supported(filename: str) -> bool:
+    return os.path.splitext(filename or "")[-1].lower() in SUPPORTED_EXTS
 
 
 async def spectrum_handler(_, message):
     replied = message.reply_to_message
+    media = replied.document or replied.audio
 
-    if not (replied.audio or replied.document):
+    if not media:
         await message.reply_text("Reply to an audio or document message with /sox.")
         return
 
-    progress_message = await message.reply("Downloading... 0%")
+    if not is_supported(media.file_name):
+        await message.reply_text("Unsupported file format for Sox. Try WAV, MP3, FLAC, etc.")
+        return
 
+    temp_dir = tempfile.mkdtemp(prefix="sox_")
+    file_path = os.path.join(temp_dir, media.file_name or "input")
+    output_path = os.path.join(temp_dir, "spectrum.png")
+
+    progress_message = await message.reply("Downloading... 0%")
     last_update = 0
 
     async def progress(current, total):
         nonlocal last_update
         now = time.time()
-        if now - last_update > 1:  # update every 1 second
-            percentage = current * 100 / total
-            await progress_message.edit(f"Downloading... {percentage:.1f}%")
+        if now - last_update > 2:
+            percent = current * 100 / total
+            downloaded_mb = current / (1024 * 1024)
+            total_mb = total / (1024 * 1024)
+            await progress_message.edit(
+                f"Downloading... {downloaded_mb:.2f}MB / {total_mb:.2f}MB ({percent:.1f}%)"
+            )
             last_update = now
 
-    file_path = await replied.download(progress=progress)
-    output_image = "spectrum.png"
-
     try:
+        await replied.download(file_path, progress=progress)
         await progress_message.edit("Generating spectrum...")
+
         subprocess.run(
-            ["sox", file_path, "-n", "spectrogram", "-o", output_image],
-            check=True,
+            ["sox", file_path, "-n", "spectrogram", "-o", output_path],
+            check=True
         )
-        await message.reply_photo(output_image)
+
+        await message.reply_photo(output_path)
         await progress_message.delete()
+
     except subprocess.CalledProcessError:
-        await progress_message.edit(
-            "Failed to generate spectrum. Unsupported format or corrupted file."
-        )
+        await progress_message.edit("Failed to generate spectrum. The file may be corrupted or unsupported.")
+    except Exception as e:
+        await progress_message.edit(f"Unexpected error: {e}")
     finally:
-        os.remove(file_path)
-        if os.path.exists(output_image):
-            os.remove(output_image)
+        shutil.rmtree(temp_dir, ignore_errors=True)
