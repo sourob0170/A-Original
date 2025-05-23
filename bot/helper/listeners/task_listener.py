@@ -41,6 +41,7 @@ from bot.helper.mirror_leech_utils.rclone_utils.transfer import RcloneTransferHe
 from bot.helper.mirror_leech_utils.status_utils.gdrive_status import (
     GoogleDriveStatus,
 )
+from bot.helper.mirror_leech_utils.status_utils.yt_status import YtStatus
 from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from bot.helper.mirror_leech_utils.status_utils.telegram_status import TelegramStatus
@@ -53,6 +54,8 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
     update_status_message,
 )
+from bot.helper.mirror_leech_utils.youtube_utils.youtube_upload import YouTubeUpload
+
 
 
 class TaskListener(TaskConfig):
@@ -333,7 +336,17 @@ class TaskListener(TaskConfig):
 
         self.size = await get_path_size(up_dir)
 
-        if self.is_leech:
+        if self.is_yt:
+            LOGGER.info(f"Up to yt Name: {self.name}")
+            yt = YouTubeUpload(self, up_path)
+            async with task_dict_lock:
+                task_dict[self.mid] = YtStatus(self, uploader, gid)
+            await gather(
+                update_status_message(self.message.chat.id),
+                sync_to_async(yt.upload),
+            )
+            del yt
+        elif self.is_leech:
             LOGGER.info(f"Leech Name: {self.name}")
             tg = TelegramUploader(self, up_dir)
             async with task_dict_lock:

@@ -117,6 +117,7 @@ def arg_parser(items, arg_base):
         "-med",
         "-ut",
         "-bt",
+        "-yt",
     }
 
     while i < total:
@@ -136,6 +137,7 @@ def arg_parser(items, arg_base):
                 "-med",
                 "-ut",
                 "-bt",
+                "-yt",
             ]:
                 arg_base[part] = True
             else:
@@ -148,10 +150,11 @@ def arg_parser(items, arg_base):
                         if not sub_list:
                             break
                         check = " ".join(sub_list).strip()
-                        if part == "-ff":
-                            if check.startswith("[") and check.endswith("]"):
-                                break
-                        else:
+                        if part != "-ff":
+                            break
+                        if check.startswith("[") and check.endswith("]"):
+                            break
+                        elif not check.startswith("["):
                             break
                     sub_list.append(items[j])
                 if sub_list:
