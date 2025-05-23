@@ -339,7 +339,7 @@ class TaskListener(TaskConfig):
             LOGGER.info(f"Up to yt Name: {self.name}")
             yt = YouTubeUpload(self, up_path)
             async with task_dict_lock:
-                task_dict[self.mid] = YtStatus(self, uploader, gid)
+                task_dict[self.mid] = YtStatus(self, yt, gid)
             await gather(
                 update_status_message(self.message.chat.id),
                 sync_to_async(yt.upload),
