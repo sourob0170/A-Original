@@ -23,7 +23,7 @@ class YouTubeHelper:
             "https://www.googleapis.com/auth/youtube.upload",
             "https://www.googleapis.com/auth/youtube",
         ]
-        self.token_path = "youtube_token.pickle"
+        self.token_path = "token.pickle"
         self.is_uploading = False
         self.service = None
         self.total_files = 0
@@ -68,7 +68,7 @@ class YouTubeHelper:
         token_path = self.token_path
 
         if user_id:
-            token_path = f"youtube_tokens/{user_id}.pickle"
+            token_path = f"tokens/{user_id}.pickle"
 
         if ospath.exists(token_path):
             LOGGER.info(f"Authorize YouTube with {token_path}")
