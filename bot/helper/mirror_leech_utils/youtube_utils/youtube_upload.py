@@ -119,7 +119,6 @@ class YouTubeUpload(YouTubeHelper):
         category_id = "22"  # People & Blogs
         privacy_status = "private"  # unlisted, private, public
 
-
         body = {
             "snippet": {
                 "title": title,
