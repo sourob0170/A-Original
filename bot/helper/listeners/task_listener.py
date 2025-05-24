@@ -397,15 +397,18 @@ class TaskListener(TaskConfig):
         done_msg = f"{self.tag}\nYour task is complete\nPlease check your inbox."
         LOGGER.info(f"Task Done: {self.name}")
         if self.is_yt:
-            msg += f"\n<b>Type: </b>Video"
+            msg += "\n<b>Type: </b>Video"
             if link:
                 msg += f"\n<b>Video Link: </b><a href='{link}'>YouTube</a>"
             msg += f"\n\n<b>cc: </b>{self.tag}"
-        
+
             await send_message(self.user_id, msg)
             if Config.LOG_CHAT_ID:
                 await send_message(int(Config.LOG_CHAT_ID), msg)
-            await send_message(self.message, f"{self.tag}\nYour video has been uploaded to YouTube successfully!")
+            await send_message(
+                self.message,
+                f"{self.tag}\nYour video has been uploaded to YouTube successfully!",
+            )
         elif self.is_leech:
             msg += f"\n<b>Total Files: </b>{folders}"
             if mime_type != 0:
