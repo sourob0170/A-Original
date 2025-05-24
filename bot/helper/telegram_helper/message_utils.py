@@ -57,6 +57,20 @@ async def send_message(
     """
     parse_mode = enums.ParseMode.MARKDOWN if markdown else enums.ParseMode.HTML
 
+    # Validate and truncate message length if necessary
+    max_length = 4096  # Telegram's message length limit
+    if len(text) > max_length:
+        # Check if message contains expandable blockquotes
+        if "<blockquote expandable=" not in text:
+            # Truncate the message and add a note
+            text = (
+                text[: max_length - 100]
+                + "\n\n<i>... (message truncated due to length)</i>"
+            )
+        else:
+            # If it has expandable blockquotes, let Telegram handle it
+            pass
+
     # Use the specified bot client or default to the main bot
     client = bot_client or TgClient.bot
 
@@ -145,6 +159,21 @@ async def edit_message(
         return "Invalid message object"
 
     parse_mode = enums.ParseMode.MARKDOWN if markdown else enums.ParseMode.HTML
+
+    # Validate and truncate message length if necessary
+    max_length = 4096  # Telegram's message length limit
+    if len(text) > max_length:
+        # Check if message contains expandable blockquotes
+        if "<blockquote expandable=" not in text:
+            # Truncate the message and add a note
+            text = (
+                text[: max_length - 100]
+                + "\n\n<i>... (message truncated due to length)</i>"
+            )
+        else:
+            # If it has expandable blockquotes, let Telegram handle it
+            pass
+
     try:
         # Check if message still exists by trying to get its chat and message ID
         chat_id = getattr(message.chat, "id", None)
@@ -153,12 +182,10 @@ async def edit_message(
         if not chat_id or not message_id:
             return "Message has invalid chat_id or message_id"
 
-        # Check message length but don't truncate if it contains expandable blockquotes
-        max_length = 4096  # Telegram's message length limit
-        if len(text) > max_length and "<blockquote expandable=" not in text:
-            # Don't truncate automatically - let Telegram API handle the error
-            # This will encourage proper use of expandable blockquotes
-            pass
+        # Handle case where buttons is None (could happen if build_menu returns None)
+        if buttons is None:
+            # Set to empty InlineKeyboardMarkup instead of logging a warning
+            buttons = None
 
         if message.media:
             if photo:
@@ -197,6 +224,19 @@ async def edit_message(
                     "The message is too long for Telegram. Please use expandable blockquotes for long content sections.",
                     quote=True,
                 )
+        # Handle REPLY_MARKUP_INVALID error
+        elif "REPLY_MARKUP_INVALID" in error_str:
+            LOGGER.error(f"Telegram says: {error_str}")
+            # Try to edit the message without buttons
+            try:
+                await message.edit(
+                    text=text,
+                    disable_web_page_preview=True,
+                    parse_mode=parse_mode,
+                )
+                return message
+            except Exception as e2:
+                LOGGER.error(f"Failed to edit message without buttons: {e2!s}")
         # Only log at debug level for common Telegram API errors
         elif (
             "MESSAGE_ID_INVALID" in error_str
@@ -292,16 +332,65 @@ async def delete_message(*args):
     msgs = []
     for msg in args:
         if msg:
+            # Check if this is a service message that cannot be deleted
+            is_service_msg = hasattr(msg, "service") and msg.service is not None
+            if is_service_msg:
+                LOGGER.debug(
+                    f"Skipping deletion of service message {msg.id} in chat {msg.chat.id}"
+                )
+                # Remove from database if it exists since we can't delete it
+                if hasattr(msg, "id") and hasattr(msg, "chat"):
+                    try:
+                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error removing scheduled deletion for service message: {e}"
+                        )
+                continue
+
             msgs.append(msg.delete())
             # Remove from database if it exists
             if hasattr(msg, "id") and hasattr(msg, "chat"):
-                await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(f"Error removing scheduled deletion: {e}")
 
     results = await gather(*msgs, return_exceptions=True)
 
     for msg, result in zip(args, results, strict=False):
         if isinstance(result, Exception):
-            LOGGER.error(f"Failed to delete message {msg}: {result}", exc_info=True)
+            error_str = str(result)
+            # Handle permission-related errors more gracefully
+            if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
+                LOGGER.warning(
+                    f"Cannot delete message {msg.id} in chat {msg.chat.id}: {error_str}"
+                )
+                # Remove from database since we can't delete it
+                if hasattr(msg, "id") and hasattr(msg, "chat"):
+                    try:
+                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error removing scheduled deletion for forbidden message: {e}"
+                        )
+            elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
+                LOGGER.debug(
+                    f"Message {msg.id} in chat {msg.chat.id} no longer exists: {error_str}"
+                )
+                # Remove from database since message doesn't exist
+                if hasattr(msg, "id") and hasattr(msg, "chat"):
+                    try:
+                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error removing scheduled deletion for invalid message: {e}"
+                        )
+            else:
+                # Log other errors as actual errors
+                LOGGER.error(
+                    f"Failed to delete message {msg}: {result}", exc_info=True
+                )
 
 
 async def delete_links(message):
@@ -356,13 +445,16 @@ async def auto_delete_message(*args, time=300, bot_id=None):
                     bot_id = TgClient.ID
                     # Using default bot ID
 
-            await database.store_scheduled_deletion(
-                chat_ids,
-                message_ids,
-                delete_time,
-                bot_id,
-            )
-            # Messages stored for deletion
+            try:
+                await database.store_scheduled_deletion(
+                    chat_ids,
+                    message_ids,
+                    delete_time,
+                    bot_id,
+                )
+                # Messages stored for deletion
+            except Exception as e:
+                LOGGER.error(f"Error storing scheduled deletion: {e}")
 
         # Instead of blocking with sleep, let the scheduled deletion system handle it
         # The process_pending_deletions function will handle this on next run

@@ -66,6 +66,40 @@ async def check_running_tasks(listener, state="dl"):
     state_limit = Config.QUEUE_DOWNLOAD if state == "dl" else Config.QUEUE_UPLOAD
     event = None
     is_over_limit = False
+
+    # Check system resources before allowing new tasks
+    try:
+        import psutil
+
+        memory_percent = psutil.virtual_memory().percent
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+
+        # If system resources are critically low, force queue regardless of limits
+        resource_critical = memory_percent > 90 or cpu_percent > 95
+
+        if resource_critical:
+            LOGGER.warning(
+                f"System resources critical: Memory {memory_percent}%, CPU {cpu_percent}%. "
+                f"Forcing task {listener.mid} to queue."
+            )
+            # Force garbage collection to try to free up resources
+            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
+
+            smart_garbage_collection(aggressive=True)
+
+            # Create event for queuing
+            event = Event()
+            async with queue_dict_lock:
+                if state == "dl":
+                    queued_dl[listener.mid] = event
+                else:
+                    queued_up[listener.mid] = event
+
+            return True, event
+    except ImportError:
+        # If psutil is not available, continue with normal limit checks
+        pass
+
     async with queue_dict_lock:
         if state == "up" and listener.mid in non_queued_dl:
             non_queued_dl.remove(listener.mid)
@@ -111,6 +145,31 @@ async def start_up_from_queued(mid: int):
 
 
 async def start_from_queued():
+    # Check system resources before starting queued tasks
+    try:
+        import psutil
+
+        memory_percent = psutil.virtual_memory().percent
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+
+        # If system resources are critically low, don't start new tasks
+        if memory_percent > 85 or cpu_percent > 90:
+            LOGGER.warning(
+                f"System resources too high to start queued tasks: Memory {memory_percent}%, CPU {cpu_percent}%. "
+                f"Will try again later."
+            )
+            # Force garbage collection to try to free up resources
+            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
+
+            smart_garbage_collection(aggressive=True)
+            return
+
+        # If resources are moderately high, start fewer tasks
+        resource_constraint = memory_percent > 75 or cpu_percent > 80
+    except ImportError:
+        # If psutil is not available, assume no resource constraints
+        resource_constraint = False
+
     if all_limit := Config.QUEUE_ALL:
         dl_limit = Config.QUEUE_DOWNLOAD
         up_limit = Config.QUEUE_UPLOAD
@@ -120,6 +179,11 @@ async def start_from_queued():
             all_ = dl + up
             if all_ < all_limit:
                 f_tasks = all_limit - all_
+                if resource_constraint:
+                    f_tasks = min(
+                        f_tasks, 2
+                    )  # Start at most 2 tasks when resources are constrained
+
                 if queued_up and (not up_limit or up < up_limit):
                     for index, mid in enumerate(list(queued_up.keys()), start=1):
                         await start_up_from_queued(mid)
@@ -132,6 +196,9 @@ async def start_from_queued():
                         if (dl_limit and index >= dl_limit - dl) or index == f_tasks:
                             break
         return
+
+    # If resources are constrained, be more conservative with task starts
+    1 if resource_constraint else float("inf")
 
     if up_limit := Config.QUEUE_UPLOAD:
         async with queue_dict_lock:

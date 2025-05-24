@@ -2,6 +2,7 @@ import contextlib
 import gc
 import logging
 import os
+import threading
 import time
 import tracemalloc
 
@@ -9,6 +10,11 @@ try:
     import psutil
 except ImportError:
     psutil = None
+
+try:
+    import resource
+except ImportError:
+    resource = None
 
 LOGGER = logging.getLogger(__name__)
 
@@ -375,7 +381,52 @@ def cleanup_large_objects():
         return 0
 
 
-def smart_garbage_collection(aggressive=False, for_split_file=False):
+def monitor_thread_usage():
+    """
+    Monitor thread usage and log warnings if approaching system limits.
+    Returns True if thread usage is high, False otherwise.
+    """
+    try:
+        # Get current thread count
+        thread_count = threading.active_count()
+
+        # Get system thread limit (ulimit -u)
+        # This is a rough approximation and may not be accurate on all systems
+        hard_limit = 1000  # Default fallback value
+
+        try:
+            if resource:
+                _, hard_limit = resource.getrlimit(resource.RLIMIT_NPROC)
+                if hard_limit == resource.RLIM_INFINITY:
+                    # If unlimited, use a reasonable default based on system
+                    hard_limit = os.cpu_count() * 100
+        except (ImportError, AttributeError, OSError):
+            # Default to a reasonable value if we can't get the actual limit
+            hard_limit = 1000
+
+        # Calculate percentage of thread usage
+        usage_percent = (thread_count / hard_limit) * 100
+
+        # Log warning if thread usage is high
+        if usage_percent > 80:
+            LOGGER.warning(
+                f"High thread usage: {thread_count}/{hard_limit} ({usage_percent:.1f}%)"
+            )
+            return True
+        if usage_percent > 60:
+            LOGGER.info(
+                f"Moderate thread usage: {thread_count}/{hard_limit} ({usage_percent:.1f}%)"
+            )
+
+        return usage_percent > 60  # Return True if usage is moderate or high
+    except Exception as e:
+        LOGGER.error(f"Error monitoring thread usage: {e}")
+        return False
+
+
+def smart_garbage_collection(
+    aggressive=False, for_split_file=False, memory_error=False
+):
     """
     Perform a smart garbage collection that adapts based on memory usage.
     This function decides whether to use optimized_garbage_collection or
@@ -400,16 +451,49 @@ def smart_garbage_collection(aggressive=False, for_split_file=False):
             except Exception:
                 pass
 
+        # Check thread usage
+        high_thread_usage = monitor_thread_usage()
+
+        # If thread usage is high, be more aggressive with garbage collection
+        if high_thread_usage:
+            aggressive = True
+
         # For split files, always be more aggressive
         if for_split_file:
             aggressive = True
 
-        # Decide which collection method to use based on memory pressure
-        if (
-            aggressive or memory_percent > 85
-        ):  # High memory usage or forced aggressive mode
-            # For very high memory usage or split files, do more thorough cleanup
-            if memory_percent > 90 or for_split_file:
+        # Decide which collection method to use based on memory pressure and thread usage
+
+        # If this is a memory error recovery, use the most aggressive approach
+        if memory_error:
+            LOGGER.warning("Performing emergency memory cleanup after memory error")
+            # Clear any unreachable objects first
+            if gc.garbage:
+                gc.garbage.clear()
+
+            # Do a thorough collection of all generations
+            gc.collect(0)
+            gc.collect(1)
+            gc.collect(2)
+
+            # Try to free as much memory as possible
+            cleanup_large_objects()
+
+            # Try to reduce memory fragmentation
+            try:
+                import ctypes
+
+                ctypes.CDLL("libc.so.6").malloc_trim(0)
+                LOGGER.info("Performed malloc_trim to reduce memory fragmentation")
+            except Exception as e:
+                LOGGER.error(f"Failed to perform malloc_trim: {e}")
+
+            return True
+
+        # For high memory usage, thread issues, or forced aggressive mode
+        if aggressive or memory_percent > 85 or high_thread_usage:
+            # For very high memory usage, thread issues, or split files, do more thorough cleanup
+            if memory_percent > 90 or for_split_file or high_thread_usage:
                 # Clear any unreachable objects first
                 if gc.garbage:
                     gc.garbage.clear()

@@ -35,6 +35,8 @@ install_packages() {
         libpython3.13 \
         sabnzbdplus \
         aria2 \
+        sox \
+        libsox-fmt-all \
         curl \
         zstd \
         xz-utils \

@@ -30,7 +30,6 @@ from bot import (
     user_data,
 )
 from bot.helper.ext_utils.db_handler import database
-from sabnzbdapi.exception import APIConnectionError, APIError
 
 from .aeon_client import TgClient
 from .config_manager import Config
@@ -66,76 +65,8 @@ async def update_aria2_options():
 
 
 async def update_nzb_options():
-    try:
-        if sabnzbd_client is None:
-            LOGGER.warning(
-                "SABnzbd client is not initialized, skipping NZB options update"
-            )
-            return
-
-        # Try to connect to SABnzbd with a timeout
-        try:
-            # First check if SABnzbd is responding at all
-            LOGGER.info("Checking if SABnzbd is responding...")
-            status_response = await sabnzbd_client.call(
-                {"mode": "version"},
-                requests_args={
-                    "timeout": 10
-                },  # Increased timeout for better reliability
-            )
-
-            # Check if the response indicates an error
-            if "error" in status_response:
-                LOGGER.warning(
-                    f"SABnzbd version check failed: {status_response['error']}"
-                )
-                return
-
-            if not status_response:
-                LOGGER.warning("SABnzbd returned empty response for version check")
-                return
-
-            LOGGER.info(f"SABnzbd version check successful: {status_response}")
-        except Exception as e:
-            LOGGER.warning(f"Failed to connect to SABnzbd: {e!s}")
-            return
-
-        # Now try to get the config
-        try:
-            LOGGER.info("Getting SABnzbd configuration...")
-            config_response = await sabnzbd_client.get_config()
-
-            # Check if the response indicates an error
-            if "error" in config_response:
-                LOGGER.warning(
-                    f"SABnzbd config retrieval failed: {config_response['error']}"
-                )
-                return
-
-            if (
-                config_response
-                and isinstance(config_response, dict)
-                and "config" in config_response
-                and "misc" in config_response["config"]
-            ):
-                no = config_response["config"]["misc"]
-                nzb_options.update(no)
-                LOGGER.info("Successfully updated NZB options")
-            else:
-                LOGGER.warning(
-                    f"Unexpected SABnzbd config response format: {config_response}"
-                )
-        except Exception as e:
-            LOGGER.warning(f"Error getting SABnzbd config: {e!s}")
-    except APIError as e:
-        LOGGER.error(f"SABnzbd API error: {e}")
-        # Continue with the bot startup even if NZB options update fails
-    except APIConnectionError as e:
-        LOGGER.error(f"SABnzbd connection error: {e}")
-        # Continue with the bot startup even if NZB options update fails
-    except Exception as e:
-        LOGGER.error(f"Error updating NZB options: {e}")
-        # Continue with the bot startup even if NZB options update fails
+    no = (await sabnzbd_client.get_config())["config"]["misc"]
+    nzb_options.update(no)
 
 
 async def load_settings():
@@ -224,36 +155,16 @@ async def load_settings():
         ):
             qbit_options.update(qbit_opt)
 
-        # Load SABnzbd config if it exists in the database
-        try:
-            if nzb_opt := await database.db.settings.nzb.find_one(
-                {"_id": BOT_ID},
-                {"_id": 0},
-            ):
-                # Make sure the sabnzbd directory exists
-                try:
-                    if not await aiopath.exists("sabnzbd"):
-                        await makedirs("sabnzbd")
-
-                    # Remove backup file if it exists
-                    if await aiopath.exists("sabnzbd/SABnzbd.ini.bak"):
-                        await remove("sabnzbd/SABnzbd.ini.bak")
-
-                    # Extract the key-value pair from the database
-                    if len(nzb_opt) > 0:
-                        ((key, value),) = nzb_opt.items()
-                        file_ = key.replace("__", ".")
-
-                        # Write the config file
-                        async with aiopen(f"sabnzbd/{file_}", "wb+") as f:
-                            await f.write(value)
-                        LOGGER.info("SABnzbd configuration loaded from database")
-                    else:
-                        pass
-                except Exception:
-                    pass
-        except Exception as e:
-            LOGGER.error(f"Error loading SABnzbd configuration from database: {e}")
+        if nzb_opt := await database.db.settings.nzb.find_one(
+            {"_id": BOT_ID},
+            {"_id": 0},
+        ):
+            if await aiopath.exists("sabnzbd/SABnzbd.ini.bak"):
+                await remove("sabnzbd/SABnzbd.ini.bak")
+            ((key, value),) = nzb_opt.items()
+            file_ = key.replace("__", ".")
+            async with aiopen(f"sabnzbd/{file_}", "wb+") as f:
+                await f.write(value)
 
         if await database.db.users.find_one():
             for p in ["thumbnails", "tokens", "rclone", "cookies"]:
@@ -292,6 +203,17 @@ async def load_settings():
                     await create_subprocess_exec("chmod", "600", cookies_path)
                     # Silently load user cookies without logging
                 user_data[uid] = row
+
+            # Ensure owner is authorized after loading all user data
+            if Config.OWNER_ID:
+                owner_id = Config.OWNER_ID
+                if owner_id not in user_data:
+                    user_data[owner_id] = {"AUTH": True}
+                else:
+                    user_data[owner_id]["AUTH"] = True
+                # Update owner data in database
+                await database.update_user_data(owner_id)
+
             LOGGER.info("Users data has been imported from Database")
 
         if await database.db.rss[BOT_ID].find_one():
@@ -320,34 +242,14 @@ async def save_settings():
         )
     if await database.db.settings.qbittorrent.find_one({"_id": TgClient.ID}) is None:
         await database.save_qbit_settings()
-    # Save SABnzbd config if it exists and hasn't been saved before
-    try:
-        if await database.db.settings.nzb.find_one({"_id": TgClient.ID}) is None:
-            try:
-                if await aiopath.exists("sabnzbd/SABnzbd.ini"):
-                    try:
-                        async with aiopen("sabnzbd/SABnzbd.ini", "rb+") as pf:
-                            nzb_conf = await pf.read()
-
-                        if nzb_conf:  # Make sure we have actual content
-                            await database.db.settings.nzb.update_one(
-                                {"_id": TgClient.ID},
-                                {"$set": {"SABnzbd__ini": nzb_conf}},
-                                upsert=True,
-                            )
-                            LOGGER.info("SABnzbd configuration saved to database")
-                        else:
-                            pass
-                    except Exception:
-                        pass
-                else:
-                    LOGGER.info(
-                        "SABnzbd configuration file not found, skipping save",
-                    )
-            except Exception:
-                pass
-    except Exception as e:
-        LOGGER.error(f"Error saving SABnzbd configuration to database: {e}")
+    if await database.db.settings.nzb.find_one({"_id": TgClient.ID}) is None:
+        async with aiopen("sabnzbd/SABnzbd.ini", "rb+") as pf:
+            nzb_conf = await pf.read()
+        await database.db.settings.nzb.update_one(
+            {"_id": TgClient.ID},
+            {"$set": {"SABnzbd__ini": nzb_conf}},
+            upsert=True,
+        )
 
 
 async def update_variables():
@@ -379,6 +281,19 @@ async def update_variables():
         and not Config.MEDIA_SEARCH_CHATS
     ):
         Config.MEDIA_SEARCH_CHATS = Config.MUSIC_SEARCH_CHATS
+
+    # Automatically authorize owner ID
+    if Config.OWNER_ID:
+        owner_id = Config.OWNER_ID
+        # Add owner to user_data with AUTH=True if not already present
+        if owner_id not in user_data:
+            user_data[owner_id] = {"AUTH": True}
+        else:
+            user_data[owner_id]["AUTH"] = True
+        # Update owner data in database if available
+        if hasattr(database, "db") and database.db is not None:
+            await database.update_user_data(owner_id)
+        LOGGER.info(f"Owner ID {owner_id} automatically authorized")
 
     if Config.AUTHORIZED_CHATS:
         aid = Config.AUTHORIZED_CHATS.split()
@@ -596,22 +511,51 @@ async def process_pending_deletions():
             # Successfully deleted the message
             success_count += 1
             # Remove from database after successful deletion
-            await database.remove_scheduled_deletion(chat_id, msg_id)
-            removed_from_db_count += 1
-        except Exception as e:
-            # Failed to delete message
-            fail_count += 1
-            # Check if it's a CHANNEL_INVALID or similar error
-            if (
-                "CHANNEL_INVALID" in str(e)
-                or "CHAT_INVALID" in str(e)
-                or "USER_INVALID" in str(e)
-                or "PEER_ID_INVALID" in str(e)
-            ):
-                # Chat is invalid, removing from database
-                # Remove from database since the chat is invalid
+            try:
                 await database.remove_scheduled_deletion(chat_id, msg_id)
                 removed_from_db_count += 1
+            except Exception as e:
+                LOGGER.error(
+                    f"Error removing scheduled deletion after successful deletion: {e}"
+                )
+        except Exception as e:
+            error_str = str(e)
+            # Handle different types of errors appropriately
+            if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
+                # Cannot delete message due to permissions, remove from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for forbidden message: {e}"
+                    )
+            elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
+                # Message doesn't exist, remove from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid message: {e}"
+                    )
+            elif (
+                "CHANNEL_INVALID" in error_str
+                or "CHAT_INVALID" in error_str
+                or "USER_INVALID" in error_str
+                or "PEER_ID_INVALID" in error_str
+            ):
+                # Chat is invalid, removing from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid chat: {e}"
+                    )
+            else:
+                # Other errors count as failures
+                fail_count += 1
 
     # Log summary
     LOGGER.info(

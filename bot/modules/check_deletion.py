@@ -190,21 +190,61 @@ async def delete_pending_messages(_, callback_query):
             )
             success_count += 1
             # Remove from database after successful deletion
-            await database.remove_scheduled_deletion(chat_id, msg_id)
-            removed_from_db_count += 1
-        except Exception as e:
-            LOGGER.error(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
-            fail_count += 1
-            # Check if it's a CHANNEL_INVALID or similar error
-            if (
-                "CHANNEL_INVALID" in str(e)
-                or "CHAT_INVALID" in str(e)
-                or "USER_INVALID" in str(e)
-                or "PEER_ID_INVALID" in str(e)
-            ):
-                # Remove from database since the chat is invalid
+            try:
                 await database.remove_scheduled_deletion(chat_id, msg_id)
                 removed_from_db_count += 1
+            except Exception as e:
+                LOGGER.error(
+                    f"Error removing scheduled deletion after successful deletion: {e}"
+                )
+        except Exception as e:
+            error_str = str(e)
+            # Handle different types of errors appropriately
+            if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
+                LOGGER.warning(
+                    f"Cannot delete message {msg_id} in chat {chat_id}: {error_str}"
+                )
+                # Remove from database since we can't delete it
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for forbidden message: {e}"
+                    )
+            elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
+                LOGGER.debug(
+                    f"Message {msg_id} in chat {chat_id} no longer exists: {error_str}"
+                )
+                # Remove from database since message doesn't exist
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid message: {e}"
+                    )
+            elif (
+                "CHANNEL_INVALID" in error_str
+                or "CHAT_INVALID" in error_str
+                or "USER_INVALID" in error_str
+                or "PEER_ID_INVALID" in error_str
+            ):
+                LOGGER.warning(f"Chat {chat_id} is invalid: {error_str}")
+                # Remove from database since the chat is invalid
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid chat: {e}"
+                    )
+            else:
+                # Log other errors as actual errors
+                LOGGER.error(
+                    f"Failed to delete message {msg_id} in chat {chat_id}: {e}"
+                )
+                fail_count += 1
 
     # Update the message with results
     result_msg = "Deletion results:\n"
@@ -270,8 +310,13 @@ async def force_delete_all_messages(_, callback_query):
 
                 if msg is None or getattr(msg, "empty", False):
                     # Message not found, removing from database
-                    await database.remove_scheduled_deletion(chat_id, msg_id)
-                    removed_from_db_count += 1
+                    try:
+                        await database.remove_scheduled_deletion(chat_id, msg_id)
+                        removed_from_db_count += 1
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error removing scheduled deletion for missing message: {e}"
+                        )
                     continue
 
                 # Message found, will attempt to delete
@@ -288,22 +333,51 @@ async def force_delete_all_messages(_, callback_query):
             # Successfully deleted the message
             success_count += 1
             # Remove from database after successful deletion
-            await database.remove_scheduled_deletion(chat_id, msg_id)
-            removed_from_db_count += 1
-        except Exception as e:
-            # Failed to delete message
-            fail_count += 1
-            # Check if it's a CHANNEL_INVALID or similar error
-            if (
-                "CHANNEL_INVALID" in str(e)
-                or "CHAT_INVALID" in str(e)
-                or "USER_INVALID" in str(e)
-                or "PEER_ID_INVALID" in str(e)
-            ):
-                # Chat is invalid, removing from database
-                # Remove from database since the chat is invalid
+            try:
                 await database.remove_scheduled_deletion(chat_id, msg_id)
                 removed_from_db_count += 1
+            except Exception as e:
+                LOGGER.error(
+                    f"Error removing scheduled deletion after successful deletion: {e}"
+                )
+        except Exception as e:
+            error_str = str(e)
+            # Handle different types of errors appropriately
+            if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
+                # Cannot delete message due to permissions, remove from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for forbidden message: {e}"
+                    )
+            elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
+                # Message doesn't exist, remove from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid message: {e}"
+                    )
+            elif (
+                "CHANNEL_INVALID" in error_str
+                or "CHAT_INVALID" in error_str
+                or "USER_INVALID" in error_str
+                or "PEER_ID_INVALID" in error_str
+            ):
+                # Chat is invalid, removing from database
+                try:
+                    await database.remove_scheduled_deletion(chat_id, msg_id)
+                    removed_from_db_count += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid chat: {e}"
+                    )
+            else:
+                # Other errors count as failures
+                fail_count += 1
 
     # Update the message with results
     result_msg = "Force deletion results:\n"

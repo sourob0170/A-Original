@@ -16,7 +16,7 @@ import aiofiles
 from aiofiles.os import makedirs, remove
 from aiofiles.os import path as aiopath
 from aioshutil import rmtree
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 
 from bot import DOWNLOAD_DIR, LOGGER, cpu_no
@@ -480,16 +480,16 @@ async def get_media_type(file_path):
         if streams:
             # Check for video streams
             for stream in streams:
-                if stream.get("codec_type") == "video":
-                    # Check if it's not just a cover art
-                    if not (
-                        stream.get("disposition")
-                        and stream.get("disposition").get("attached_pic") == 1
-                    ):
-                        media_type = "video"
-                        if cache_key:
-                            MEDIA_TYPE_CACHE[cache_key] = media_type
-                        return media_type
+                # Check if it's a video stream and not just a cover art
+                is_video_stream = stream.get("codec_type") == "video" and not (
+                    stream.get("disposition")
+                    and stream.get("disposition").get("attached_pic") == 1
+                )
+                if is_video_stream:
+                    media_type = "video"
+                    if cache_key:
+                        MEDIA_TYPE_CACHE[cache_key] = media_type
+                    return media_type
 
             # Check for audio streams
             for stream in streams:
@@ -1058,9 +1058,13 @@ async def extract_track(
 
         if indices_list and not extract_all:
             # Extract specific tracks by indices
-            for track in tracks[track_type]:
-                if track["index"] in indices_list:
-                    tracks_to_extract.append(track)
+            tracks_to_extract.extend(
+                [
+                    track
+                    for track in tracks[track_type]
+                    if track["index"] in indices_list
+                ]
+            )
 
             # Log if no matching tracks were found
             if not tracks_to_extract:
@@ -2103,9 +2107,13 @@ async def proceed_extract(
             extract_all_videos = True
 
         # Also check video_index for "all"
-        if not extract_all_videos and video_index is not None:
-            if isinstance(video_index, str) and video_index.lower() == "all":
-                extract_all_videos = True
+        if (
+            not extract_all_videos
+            and video_index is not None
+            and isinstance(video_index, str)
+            and video_index.lower() == "all"
+        ):
+            extract_all_videos = True
 
         if video_indices and not extract_all_videos:
             # Extract specific video tracks by indices
@@ -2376,9 +2384,13 @@ async def proceed_extract(
             extract_all_audios = True
 
         # Also check audio_index for "all"
-        if not extract_all_audios and audio_index is not None:
-            if isinstance(audio_index, str) and audio_index.lower() == "all":
-                extract_all_audios = True
+        if (
+            not extract_all_audios
+            and audio_index is not None
+            and isinstance(audio_index, str)
+            and audio_index.lower() == "all"
+        ):
+            extract_all_audios = True
 
         if audio_indices and not extract_all_audios:
             # Extract specific audio tracks by indices
@@ -2643,9 +2655,13 @@ async def proceed_extract(
             extract_all_subtitles = True
 
         # Also check subtitle_index for "all"
-        if not extract_all_subtitles and subtitle_index is not None:
-            if isinstance(subtitle_index, str) and subtitle_index.lower() == "all":
-                extract_all_subtitles = True
+        if (
+            not extract_all_subtitles
+            and subtitle_index is not None
+            and isinstance(subtitle_index, str)
+            and subtitle_index.lower() == "all"
+        ):
+            extract_all_subtitles = True
 
         # If no indices are specified, extract all
         if (
@@ -3239,6 +3255,7 @@ async def create_default_audio_thumbnail(output_dir, user_id=None):
 
 
 async def get_video_thumbnail(video_file, duration):
+    """Extract a thumbnail from a video file with error handling and fallbacks"""
     output_dir = f"{DOWNLOAD_DIR}thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
@@ -3248,39 +3265,40 @@ async def get_video_thumbnail(video_file, duration):
     if duration == 0:
         duration = 3
     duration = duration // 2
-    cmd = [
-        "xtra",  # Using xtra instead of ffmpeg
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-ss",
-        f"{duration}",
-        "-i",
-        video_file,
-        "-vf",
-        "scale=640:-1",
-        "-q:v",
-        "5",
-        "-vframes",
-        "1",
-        "-threads",
-        "1",
-        output,
-    ]
+
+    # First attempt - extract from middle of video
     try:
-        _, err, code = await wait_for(cmd_exec(cmd), timeout=60)
+        cmd = [
+            "xtra",  # Using xtra instead of ffmpeg
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            f"{duration}",
+            "-i",
+            video_file,
+            "-vf",
+            "scale=640:-1",
+            "-q:v",
+            "5",
+            "-vframes",
+            "1",
+            "-threads",
+            "1",
+            output,
+        ]
+
+        _, _, code = await wait_for(cmd_exec(cmd), timeout=60)
         if code == 0 and await aiopath.exists(output):
-            # Check if the extracted image is valid and not empty
             if await aiopath.getsize(output) > 0:
                 return output
             await remove(output)
-            LOGGER.warning(f"Extracted empty thumbnail from video: {video_file}")
-        else:
-            LOGGER.warning(
-                f"Failed to extract thumbnail with first method: {video_file} stderr: {err}",
-            )
+    except Exception:
+        # Suppress detailed errors
+        pass
 
-        # Try alternative method - extract frame from the beginning
+    # Second attempt - extract from beginning of video
+    try:
         alt_output = ospath.join(output_dir, f"thumb_alt_{int(time())}.jpg")
         alt_cmd = [
             "xtra",
@@ -3300,25 +3318,17 @@ async def get_video_thumbnail(video_file, duration):
             alt_output,
         ]
 
-        _, err, code = await wait_for(cmd_exec(alt_cmd), timeout=60)
+        _, _, code = await wait_for(cmd_exec(alt_cmd), timeout=60)
         if code == 0 and await aiopath.exists(alt_output):
             if await aiopath.getsize(alt_output) > 0:
                 return alt_output
             await remove(alt_output)
-            LOGGER.warning(
-                f"Extracted empty thumbnail from video (alt method): {video_file}"
-            )
-        else:
-            LOGGER.warning(
-                f"Failed to extract thumbnail with alternative method: {video_file} stderr: {err}",
-            )
-            return None
     except Exception:
-        LOGGER.error(
-            f"Error while extracting thumbnail from video. Name: {video_file}. Error: Timeout some issues with xtra with specific arch!",
-        )
-        return None
-    return output
+        # Suppress detailed errors
+        pass
+
+    # Both methods failed
+    return None
 
 
 async def create_default_text_thumbnail(output_dir, user_id=None):
@@ -3363,16 +3373,24 @@ async def create_default_text_thumbnail(output_dir, user_id=None):
 
 
 async def create_default_video_thumbnail(output_dir, user_id=None):
-    # Try user thumbnail first if available
-    if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
-        return f"thumbnails/{user_id}.jpg"
-    # Then try owner thumbnail
-    if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
-        return f"thumbnails/{Config.OWNER_ID}.jpg"
+    try:
+        # Try user thumbnail first if available
+        if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
+            return f"thumbnails/{user_id}.jpg"
+        # Then try owner thumbnail
+        if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
+            return f"thumbnails/{Config.OWNER_ID}.jpg"
 
-    # Create a default thumbnail for video files if no user/owner thumbnail
-    default_thumb = ospath.join(output_dir, "default_video.jpg")
-    if not await aiopath.exists(default_thumb):
+        # Create a default thumbnail for video files if no user/owner thumbnail
+        default_thumb = ospath.join(output_dir, "default_video.jpg")
+
+        # Make sure the output directory exists
+        await makedirs(output_dir, exist_ok=True)
+
+        # If a default thumbnail already exists, use it
+        if await aiopath.exists(default_thumb):
+            return default_thumb
+
         # Create a simple default video thumbnail
         cmd = [
             "xtra",  # Using xtra instead of ffmpeg
@@ -3386,7 +3404,27 @@ async def create_default_video_thumbnail(output_dir, user_id=None):
             "1",
             default_thumb,
         ]
-        _, _, code = await cmd_exec(cmd)
+
+        try:
+            # Try with a timeout to prevent hanging
+            _, _, code = await wait_for(cmd_exec(cmd), timeout=30)
+
+            if code != 0 or not await aiopath.exists(default_thumb):
+                # Try with a simpler command
+                cmd = [
+                    "xtra",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=c=black:s=640x360",
+                    "-frames:v",
+                    "1",
+                    default_thumb,
+                ]
+                _, _, code = await wait_for(cmd_exec(cmd), timeout=30)
+        except Exception as e:
+            LOGGER.error(f"Error creating thumbnail with xtra: {e}")
+            code = 1  # Force fallback to PIL
 
         if code != 0 or not await aiopath.exists(default_thumb):
             # If FFmpeg fails, try with PIL
@@ -3396,13 +3434,47 @@ async def create_default_video_thumbnail(output_dir, user_id=None):
 
                 # Create a simple black image
                 img = Image.new("RGB", (640, 360), color=(0, 0, 0))
-                img.save(default_thumb)
-            except Exception:
-                return None
 
-    if await aiopath.exists(default_thumb):
-        return default_thumb
-    return None
+                # Try to add text if possible
+                try:
+                    draw = ImageDraw.Draw(img)
+                    # Try to load a font, fall back to default if not available
+                    try:
+                        font = ImageFont.truetype("DejaVuSans.ttf", 24)
+                    except Exception:
+                        font = ImageFont.load_default()
+
+                    # Add text to the image
+                    draw.text(
+                        (320, 180),
+                        "Video",
+                        fill=(255, 255, 255),
+                        font=font,
+                        anchor="mm",
+                    )
+                except Exception:
+                    # If text drawing fails, just use the black image
+                    pass
+
+                img.save(default_thumb)
+                LOGGER.info(f"Created default thumbnail with PIL: {default_thumb}")
+            except Exception as e:
+                LOGGER.error(f"Error creating thumbnail with PIL: {e}")
+                # Last resort: create a tiny image
+                try:
+                    img = Image.new("RGB", (32, 32), color=(0, 0, 0))
+                    img.save(default_thumb)
+                    LOGGER.info(f"Created minimal thumbnail: {default_thumb}")
+                except Exception as e:
+                    LOGGER.error(f"Failed to create even minimal thumbnail: {e}")
+                    return None
+
+        if await aiopath.exists(default_thumb):
+            return default_thumb
+        return None
+    except Exception as e:
+        LOGGER.error(f"Unexpected error in create_default_video_thumbnail: {e}")
+        return None
 
 
 async def create_default_image_thumbnail(output_dir, user_id=None):
@@ -4823,29 +4895,35 @@ class FFMpeg:
                                     f"Error checking for audio stream: {e}"
                                 )
 
-                            if has_audio:
+                            if (
+                                has_audio
+                                and f_path not in used_inputs[requested_type]
+                            ):
                                 # If we haven't used the main file for this type yet, use it
-                                if f_path not in used_inputs[requested_type]:
-                                    ffmpeg[idx] = f_path
-                                    used_inputs[requested_type].append(f_path)
-                                    LOGGER.info(
-                                        f"Using main video file with audio stream {f_path} for placeholder mltb.{requested_type}"
-                                    )
-                                    continue
-
-                        # If no additional file was found, check if the main input file matches the requested type
-                        if (
-                            requested_type == "image"
-                            and media_type in ["image", "animated_image"]
-                        ) or requested_type == media_type:
-                            # If we haven't used the main file for this type yet, use it
-                            if f_path not in used_inputs[requested_type]:
                                 ffmpeg[idx] = f_path
                                 used_inputs[requested_type].append(f_path)
                                 LOGGER.info(
-                                    f"Using main file {f_path} for placeholder mltb.{requested_type}"
+                                    f"Using main video file with audio stream {f_path} for placeholder mltb.{requested_type}"
                                 )
                                 continue
+
+                        # If no additional file was found, check if the main input file matches the requested type
+                        is_matching_type = (
+                            requested_type == "image"
+                            and media_type in ["image", "animated_image"]
+                        ) or requested_type == media_type
+
+                        # If we haven't used the main file for this type yet, use it
+                        if (
+                            is_matching_type
+                            and f_path not in used_inputs[requested_type]
+                        ):
+                            ffmpeg[idx] = f_path
+                            used_inputs[requested_type].append(f_path)
+                            LOGGER.info(
+                                f"Using main file {f_path} for placeholder mltb.{requested_type}"
+                            )
+                            continue
 
                         # If we still haven't found a file, log a warning and use the main file
                         if requested_type != media_type:
@@ -4900,17 +4978,21 @@ class FFMpeg:
                             continue
 
                     # If no additional file was found, check if the main input file matches the requested type
-                    if (
+                    is_matching_type = (
                         requested_type == "image"
                         and media_type in ["image", "animated_image"]
-                    ) or requested_type == media_type:
-                        if f_path not in used_inputs[requested_type]:
-                            ffmpeg[idx] = f_path
-                            used_inputs[requested_type].append(f_path)
-                            LOGGER.info(
-                                f"Using main file {f_path} for placeholder ending with .{requested_type}"
-                            )
-                            continue
+                    ) or requested_type == media_type
+
+                    if (
+                        is_matching_type
+                        and f_path not in used_inputs[requested_type]
+                    ):
+                        ffmpeg[idx] = f_path
+                        used_inputs[requested_type].append(f_path)
+                        LOGGER.info(
+                            f"Using main file {f_path} for placeholder ending with .{requested_type}"
+                        )
+                        continue
 
                     # If we still haven't found a file, log a warning and use the main file
                     if requested_type != media_type:
@@ -4971,9 +5053,15 @@ class FFMpeg:
 
             # If we still don't have an output file, check if the second-to-last argument
             # looks like a file path (before the -y flag)
-            if not output_file and len(ffmpeg) >= 2 and ffmpeg[-1] == "-y":
-                if not ffmpeg[-2].startswith("-") and "." in ffmpeg[-2]:
-                    output_file = ffmpeg[-2]
+            is_valid_output = (
+                not output_file
+                and len(ffmpeg) >= 2
+                and ffmpeg[-1] == "-y"
+                and not ffmpeg[-2].startswith("-")
+                and "." in ffmpeg[-2]
+            )
+            if is_valid_output:
+                output_file = ffmpeg[-2]
 
             # If we found an output file, add it to the outputs list
             outputs = [output_file] if output_file else []
@@ -8477,28 +8565,28 @@ async def merge_images(
         save_kwargs = {}
 
         # Handle quality parameter for formats that support it
-        if output_format.lower() in ["jpg", "jpeg", "webp"]:
-            if quality is not None:
-                try:
-                    quality_value = (
-                        int(quality) if isinstance(quality, str) else quality
-                    )
-                    quality_value = max(
-                        1, min(100, quality_value)
-                    )  # Ensure valid range
-                    save_kwargs["quality"] = quality_value
-                except (ValueError, TypeError):
-                    # If conversion fails, use default quality
-                    save_kwargs["quality"] = 85
+        supports_quality = output_format.lower() in ["jpg", "jpeg", "webp"]
+        if supports_quality and quality is not None:
+            try:
+                quality_value = int(quality) if isinstance(quality, str) else quality
+                quality_value = max(1, min(100, quality_value))  # Ensure valid range
+                save_kwargs["quality"] = quality_value
+            except (ValueError, TypeError):
+                # If conversion fails, use default quality
+                save_kwargs["quality"] = 85
 
         # Handle DPI parameter for formats that support it
         if dpi is not None and dpi != "none":
             try:
                 dpi_value = int(dpi) if isinstance(dpi, str) else dpi
-                if dpi_value > 0:
-                    # Only set DPI for formats that support it
-                    if output_format.lower() in ["jpg", "jpeg", "tiff", "png"]:
-                        save_kwargs["dpi"] = (dpi_value, dpi_value)
+                supports_dpi = output_format.lower() in [
+                    "jpg",
+                    "jpeg",
+                    "tiff",
+                    "png",
+                ]
+                if dpi_value > 0 and supports_dpi:
+                    save_kwargs["dpi"] = (dpi_value, dpi_value)
             except (ValueError, TypeError):
                 # If conversion fails, don't set DPI
                 LOGGER.warning(f"Invalid DPI value: {dpi}, using default")

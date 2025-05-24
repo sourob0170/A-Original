@@ -25,6 +25,20 @@ from bot.helper.telegram_helper.message_utils import (
 
 @new_task
 async def start(client, message):
+    # Check if message.command exists and has elements before accessing it
+    if not hasattr(message, "command") or message.command is None:
+        # Handle the case where message.command is None
+        if message.from_user and hasattr(message.from_user, "id"):
+            await database.update_pm_users(message.from_user.id)
+        if await CustomFilters.authorized(client, message):
+            help_command = f"/{BotCommands.HelpCommand}"
+            start_string = f"This bot can mirror all your links|files|torrents to Google Drive or any rclone cloud or to telegram.\n<b>Type {help_command} to get a list of available commands</b>"
+            await send_message(message, start_string)
+        else:
+            await send_message(message, "You are not a authorized user!")
+        return None
+
+    # Now we can safely access message.command
     if len(message.command) > 1 and message.command[1] == "private":
         await delete_message(message)
     elif len(message.command) > 1 and message.command[1] == "gensession":

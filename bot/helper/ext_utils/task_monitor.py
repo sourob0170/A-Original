@@ -26,6 +26,7 @@ from bot import (
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.gc_utils import (
     log_memory_usage,
+    monitor_thread_usage,
     smart_garbage_collection,
 )
 from bot.helper.ext_utils.status_utils import (
@@ -742,6 +743,15 @@ async def monitor_tasks():
         try:
             cpu_usage_history.append(psutil.cpu_percent())
             memory_usage_history.append(psutil.virtual_memory().percent)
+
+            # Check thread usage
+            high_thread_usage = monitor_thread_usage()
+            if high_thread_usage:
+                # If thread usage is high, force garbage collection
+                LOGGER.warning(
+                    "High thread usage detected, forcing garbage collection"
+                )
+                smart_garbage_collection(aggressive=True)
         except Exception as e:
             LOGGER.error(f"Error getting system resource usage: {e}")
             # Use default values if we can't get actual usage

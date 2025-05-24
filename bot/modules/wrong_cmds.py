@@ -17,6 +17,10 @@ async def handle_qb_commands(_, message):
         _: The client instance (unused)
         message: The message object containing the command
     """
+    # Check if command warnings are enabled
+    if not Config.WRONG_CMD_WARNINGS_ENABLED:
+        return
+
     command = message.text.split()[0].lower()
 
     if "qbleech" in command:
@@ -46,6 +50,9 @@ async def handle_no_suffix_commands(client, message):
         client: The client instance
         message: The message object containing the command
     """
+    # Check if command warnings are enabled
+    if not Config.WRONG_CMD_WARNINGS_ENABLED:
+        return
     # Get the full command text (including any suffix)
     full_command = message.text.split()[0].lower()
     # Extract the base command without the leading slash
@@ -126,6 +133,10 @@ async def handle_no_suffix_commands(client, message):
         "ask",
         "mediainfo",
         "mi",
+        "spectrum",
+        "sox",
+        "paste",
+        "virustotal",
     ]
 
     # Special handling for commands - forward to the appropriate handler
@@ -275,6 +286,19 @@ async def handle_no_suffix_commands(client, message):
     if base_command.endswith(cmd_suffix):
         # Command already has the correct suffix, no warning needed
         return
+
+    # Get the list of correct command suffixes (if any)
+    correct_cmd_suffixes = []
+    if Config.CORRECT_CMD_SUFFIX:
+        correct_cmd_suffixes = [
+            suffix.strip() for suffix in Config.CORRECT_CMD_SUFFIX.split(",")
+        ]
+
+    # Check if the command has a suffix that's in the list of correct suffixes
+    for suffix in correct_cmd_suffixes:
+        if suffix and base_command.endswith(suffix):
+            # This is an allowed suffix, no warning needed
+            return
 
     # Command with non-standard suffix (like /leech3 or /mirrorz)
     if found_standard_cmd:

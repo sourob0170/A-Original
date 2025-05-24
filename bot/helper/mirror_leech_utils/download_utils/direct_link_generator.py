@@ -415,7 +415,7 @@ def hxfile(url):
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
     if direct_link := html.xpath("//a[@class='btn btn-dow']/@href"):
-        header = f"Referer: {url}"
+        header = [f"Referer: {url}"]
         return direct_link[0], header
     raise DirectDownloadLinkException("ERROR: Direct download link not found")
 
@@ -1069,14 +1069,14 @@ def gofile(url):
             token = __get_token(session)
         except Exception as e:
             raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
-        details["header"] = f"Cookie: accountToken={token}"
+        details["header"] = [f"Cookie: accountToken={token}"]
         try:
             __fetch_links(session, _id)
         except Exception as e:
             raise DirectDownloadLinkException(e)
 
     if len(details["contents"]) == 1:
-        return (details["contents"][0]["url"], details["header"])
+        return (details["contents"][0]["url"], [details["header"]])
     return details
 
 
@@ -1121,7 +1121,7 @@ def send_cm_file(url, file_id=None):
                 data["password"] = _password
             _res = session.post("https://send.cm/", data=data, allow_redirects=False)
             if "Location" in _res.headers:
-                return (_res.headers["Location"], "Referer: https://send.cm/")
+                return (_res.headers["Location"], ["Referer: https://send.cm/"])
         except Exception as e:
             raise DirectDownloadLinkException(
                 f"ERROR: {e.__class__.__name__}",
@@ -1236,7 +1236,7 @@ def send_cm(url):
     finally:
         session.close()
     if len(details["contents"]) == 1:
-        return (details["contents"][0]["url"], details["header"])
+        return (details["contents"][0]["url"], [details["header"]])
     return details
 
 
@@ -1265,7 +1265,10 @@ def doods(url):
             ) from e
     if not (link := search(r"window\.open\('(\S+)'", _res.text)):
         raise DirectDownloadLinkException("ERROR: Download link not found try again")
-    return (link.group(1), f"Referer: {parsed_url.scheme}://{parsed_url.hostname}/")
+    return (
+        link.group(1),
+        [f"Referer: {parsed_url.scheme}://{parsed_url.hostname}/"],
+    )
 
 
 def easyupload(url):
@@ -1513,7 +1516,7 @@ def tmpsend(url):
     elif not (file_id := parsed_url.path.strip("/")):
         raise DirectDownloadLinkException("ERROR: Invalid URL format")
     referer_url = f"https://tmpsend.com/thank-you?d={file_id}"
-    header = f"Referer: {referer_url}"
+    header = [f"Referer: {referer_url}"]
     download_link = f"https://tmpsend.com/download?d={file_id}"
     return download_link, header
 
@@ -1541,7 +1544,7 @@ def mp4upload(url):
             req = session.get(url).text
             tree = HTML(req)
             inputs = tree.xpath("//input")
-            header = {"Referer": "https://www.mp4upload.com/"}
+            header = ["Referer: https://www.mp4upload.com/"]
             data = {input.get("name"): input.get("value") for input in inputs}
             if not data:
                 raise DirectDownloadLinkException("ERROR: File Not Found!")
@@ -1609,7 +1612,9 @@ def swisstransfer(link):
 
         if response.status_code == 200:
             try:
-                return response.json(), headers
+                return response.json(), [
+                    f"{k}: {v}" for k, v in headers.items() if v
+                ]
             except ValueError:
                 raise DirectDownloadLinkException(
                     f"ERROR: Error parsing JSON response {response.text}"
@@ -1657,7 +1662,7 @@ def swisstransfer(link):
         file_uuid = file["UUID"]
         token = gettoken(password, container_uuid, file_uuid)
         download_url = f"https://{download_host}/api/download/{transfer_id}/{file_uuid}?token={token}"
-        return download_url, "User-Agent:Mozilla/5.0"
+        return download_url, ["User-Agent:Mozilla/5.0"]
 
     contents = []
     for file in files:

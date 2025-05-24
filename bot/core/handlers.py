@@ -67,6 +67,7 @@ from bot.modules import (
     mirror,
     nzb_leech,
     nzb_mirror,
+    paste_text,
     ping,
     remove_from_queue,
     remove_sudo,
@@ -77,6 +78,7 @@ from bot.modules import (
     select_type,
     send_bot_settings,
     send_user_settings,
+    spectrum_handler,
     speedtest,
     start,
     status_pages,
@@ -85,6 +87,7 @@ from bot.modules import (
     torrent_search_update,
     truecaller_lookup,
     unauthorize,
+    virustotal_scan,
     ytdl,
     ytdl_leech,
 )
@@ -311,6 +314,11 @@ def add_handlers():
             BotCommands.HydraSearchCommamd,
             CustomFilters.authorized,
         ),
+        "spectrum_handler": (
+            spectrum_handler,
+            BotCommands.SoxCommand,
+            CustomFilters.authorized,
+        ),
         # font_styles_cmd entry removed - now handled by direct handler registration
         "imdb_search": (
             imdb_search,
@@ -342,6 +350,16 @@ def add_handlers():
         "ask_ai": (
             ask_ai,
             BotCommands.AskCommand,
+            CustomFilters.authorized,
+        ),
+        "paste": (
+            paste_text,
+            BotCommands.PasteCommand,
+            CustomFilters.authorized,
+        ),
+        "virustotal": (
+            virustotal_scan,
+            BotCommands.VirusTotalCommand,
             CustomFilters.authorized,
         ),
     }
@@ -441,7 +459,7 @@ def add_handlers():
         MessageHandler(
             handle_no_suffix_commands,
             filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|settings|usettings|us|speedtest|broadcast|broadcastall|sel|rss|fontstyles|fonts|check_deletions|cd|imdb|login|mediasearch|mds|mediatools|mt|mthelp|mth|gensession|gs|truecaller|ask|mediainfo|mi)([a-zA-Z0-9_]*)($| )"
+                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|settings|usettings|us|speedtest|broadcast|broadcastall|sel|rss|fontstyles|fonts|check_deletions|cd|imdb|login|mediasearch|mds|mediatools|mt|mthelp|mth|gensession|gs|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
             )
             & CustomFilters.pm_or_authorized,
         ),
@@ -600,3 +618,8 @@ def add_handlers():
 
     # Initialize media search module (this will register the inline query handler)
     init_media_search(TgClient.bot)
+
+    # Initialize ad broadcaster module
+    from bot.modules.ad_broadcaster import init_ad_broadcaster
+
+    init_ad_broadcaster()

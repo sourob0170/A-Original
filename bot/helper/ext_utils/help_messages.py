@@ -19,7 +19,8 @@ Run commands sequentially, using output of one as input for the next.
 <code>/cmd link -ff '[
   "-i mltb.video -c:v libx264 output1.mp4",
   "-i mltb -vf scale=640:360 output2.mp4",
-  "-i mltb -ss 00:00:01 -vframes 1 thumb.jpg"
+  "-i mltb -ss 00:00:01 -vframes 1 thumb.jpg",
+  "-i mltb -i tg://openmessage?user_id=5272663208&message_id=322801 -filter_complex 'overlay=W-w-10:H-h-10' -c:a copy mltb"
 ]'</code>
 
 <b>List Format:</b>
@@ -128,6 +129,7 @@ These placeholders are automatically replaced with the actual file path.
 • For complex commands, test on small files first
 • In multiple commands, use <code>mltb</code> to reference the previous command's output
 • JSON array format is more readable for complex command sequences
+• You can add telegram link for small size input like photo to set watermark
 </blockquote>"""
 
 nsfw_keywords = [
@@ -951,7 +953,7 @@ MIRROR_HELP_DICT = {
     "main": mirror,
     "New-Name": new_name,
     "DL-Auth": "<b>Direct link authorization</b>: -au -ap\n\n/cmd link -au username -ap password",
-    "Headers": "<b>Direct link custom headers</b>: -h\n\n/cmd link -h key: value key1: value1",
+    "Headers": "<b>Direct link custom headers</b>: -h\n\n/cmd link -h key:value|key1:value1",
     "Extract/Zip": extract_zip,
     "Select-Files": "<b>Bittorrent/JDownloader/Sabnzbd File Selection</b>: -s\n\n/cmd link -s or by replying to file/link",
     "Torrent-Seed": seed,
@@ -991,6 +993,31 @@ AI_HELP_DICT = {
     "main": ai_help,
 }
 
+virustotal_help = """<b>VirusTotal Scanner</b>
+
+Scan files and URLs for viruses and malware using VirusTotal.
+
+<b>Usage:</b>
+1. Reply to a file with /virustotal to scan it
+2. Reply to a message containing a URL with /virustotal
+3. Use /virustotal <url> to scan a URL directly
+
+<b>Features:</b>
+• Automatic scanning in private chats (when enabled)
+• Manual scanning in groups
+• Detailed threat analysis
+• Link to full VirusTotal report
+
+<b>Note:</b>
+• Maximum file size: 32MB
+• Requires a VirusTotal API key to be configured
+• Files are temporarily downloaded for scanning and then deleted
+"""
+
+VT_HELP_DICT = {
+    "main": virustotal_help,
+}
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -1026,10 +1053,8 @@ PASSWORD_ERROR_MESSAGE = """
 
 user_settings_text = {
     "DEFAULT_AI_PROVIDER": "Select the default AI provider to use with the /ask command. Options: mistral, deepseek. Timeout: 60 sec",
-    "MISTRAL_API_KEY": "Send your Mistral AI API key. This will be used to access the Mistral AI API directly. Leave empty to use the bot owner's API key. Timeout: 60 sec",
-    "MISTRAL_API_URL": "Send your custom Mistral AI API URL. This will be used as a fallback if the API key is not provided or fails. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
-    "DEEPSEEK_API_KEY": "Send your DeepSeek AI API key. This will be used to access the DeepSeek AI API directly. Leave empty to use the bot owner's API key. Timeout: 60 sec",
-    "DEEPSEEK_API_URL": "Send your custom DeepSeek AI API URL. This will be used as a fallback if the API key is not provided or fails. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
+    "MISTRAL_API_URL": "Send your custom Mistral AI API URL. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
+    "DEEPSEEK_API_URL": "Send your custom DeepSeek AI API URL. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
     # Metadata Settings
     "METADATA_KEY": "Set legacy metadata key for backward compatibility.\n\nExample: title=My Video,author=John Doe - set title and author\nExample: none - don't use legacy metadata\n\nThis is a legacy option, consider using the specific metadata options instead.\n\nTimeout: 60 sec",
     "METADATA_ALL": "Set metadata text to be used for all metadata fields (title, author, comment) for all track types.\n\nExample: My Project - apply to all metadata fields\nExample: none - don't set global metadata\n\nThis takes priority over all other metadata settings.\n\nTimeout: 60 sec",
@@ -1413,37 +1438,129 @@ media_tools_text = {
     "SAMPLE_VIDEO_ENABLED": "Enable or disable the sample video feature. This allows creating short sample clips from videos.\n\nExample: true - enable sample video feature\nExample: false - disable sample video feature\n\nTimeout: 60 sec",
 }
 
-help_string = f"""
-NOTE: Try each command without any argument to see more detalis.
+# Main help page
+main_help_string = """
+<b>📚 Bot Commands Guide</b>
+
+<b>NOTE:</b> Try each command without any argument to see more details.
+Use the buttons below to navigate through different command categories.
+"""
+
+# Download Commands page
+download_commands = f"""
+<b>🔄 Download Commands</b>
+
 /{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to cloud.
-/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start Mirroring to cloud using JDownloader.
-/{BotCommands.NzbMirrorCommand[0]} or /{BotCommands.NzbMirrorCommand[1]}: Start Mirroring to cloud using Sabnzbd.
+/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start mirroring to cloud using JDownloader.
+/{BotCommands.NzbMirrorCommand[0]} or /{BotCommands.NzbMirrorCommand[1]}: Start mirroring to cloud using Sabnzbd.
 /{BotCommands.YtdlCommand[0]} or /{BotCommands.YtdlCommand[1]}: Mirror yt-dlp supported link.
 /{BotCommands.LeechCommand[0]} or /{BotCommands.LeechCommand[1]}: Start leeching to Telegram. If helper bots are configured, hyper download will be used for faster downloads.
 /{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
 /{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.
 /{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
+"""
+
+# Status & Management page
+status_commands = f"""
+<b>📊 Status & Management</b>
+
+/{BotCommands.StatusCommand[0]} or /{BotCommands.StatusCommand[1]} or /{BotCommands.StatusCommand[2]} or /{BotCommands.StatusCommand[3]}: Shows a status of all the downloads.
+/{BotCommands.StatsCommand}: Show stats of the machine where the bot is hosted in.
+/{BotCommands.PingCommand}: Check how long it takes to ping the bot.
+/{BotCommands.SpeedTest}: Check internet speed of the host machine.
+/{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
+/{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
+/{BotCommands.SelectCommand}: Select files from torrents by gid or reply.
+/{BotCommands.CheckDeletionsCommand[0]} or /{BotCommands.CheckDeletionsCommand[1]}: Check and manage scheduled message deletions.
+"""
+
+# Search Tools page
+search_commands = f"""
+<b>🔍 Search Tools</b>
+
+/{BotCommands.ListCommand} [query]: Search in Google Drive(s).
+/{BotCommands.SearchCommand} [query]: Search for torrents with API.
+/{BotCommands.HydraSearchCommamd} [query]: Search for NZB files.
+/{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
+/{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.
+"""
+
+# File Management page
+file_commands = f"""
+<b>📁 File Management</b>
+
 /{BotCommands.MediaInfoCommand[0]} or /{BotCommands.MediaInfoCommand[1]}: Get MediaInfo from telegram file or direct link.
 /{BotCommands.CountCommand} [drive_url]: Count file/folder of Google Drive.
 /{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
+/{BotCommands.SoxCommand[0]} or /{BotCommands.SoxCommand[1]}: Generate audio spectrum from audio files.
+/{BotCommands.PasteCommand}: Paste text/code to a pastebin service.
+"""
+
+# Security & Authentication page
+security_commands = f"""
+<b>🔒 Security & Authentication</b>
+
+/{BotCommands.LoginCommand}: Login to the bot using password for permanent access.
+/{BotCommands.AuthorizeCommand}: Authorize a chat or a user to use the bot (Owner & Sudo only).
+/{BotCommands.UnAuthorizeCommand}: Unauthorize a chat or a user from using the bot (Owner & Sudo only).
+/{BotCommands.AddSudoCommand}: Add a user to Sudo (Owner only).
+/{BotCommands.RmSudoCommand}: Remove a user from Sudo (Owner only).
+/{BotCommands.UsersCommand}: Show authorized users (Owner & Sudo only).
+/{BotCommands.GenSessionCommand[0]} or /{BotCommands.GenSessionCommand[1]}: Generate a Pyrogram session string securely.
+/{BotCommands.VirusTotalCommand}: Scan files or URLs for viruses using VirusTotal.
+"""
+
+# Settings & Configuration page
+settings_commands = f"""
+<b>⚙️ Settings & Configuration</b>
+
 /{BotCommands.UserSetCommand[0]} or /{BotCommands.UserSetCommand[1]} or /{BotCommands.UserSetCommand[2]} [query]: Users settings.
+/{BotCommands.BotSetCommand} [query]: Bot settings (Owner & Sudo only).
 /{BotCommands.MediaToolsCommand[0]} or /{BotCommands.MediaToolsCommand[1]}: Media tools settings for watermark and other media features.
 /{BotCommands.MediaToolsHelpCommand[0]} or /{BotCommands.MediaToolsHelpCommand[1]}: View detailed help for merge and watermark features.
-/{BotCommands.GenSessionCommand[0]} or /{BotCommands.GenSessionCommand[1]}: Generate a Pyrogram session string securely.
-/{BotCommands.BotSetCommand} [query]: Bot settings.
 /{BotCommands.FontStylesCommand[0]} or /{BotCommands.FontStylesCommand[1]}: View available font styles for leech.
-/{BotCommands.SelectCommand}: Select files from torrents by gid or reply.
-/{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
-/{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
-/{BotCommands.ListCommand} [query]: Search in Google Drive(s).
-/{BotCommands.SearchCommand} [query]: Search for torrents with API.
-/{BotCommands.StatusCommand[0]} or /{BotCommands.StatusCommand[1]} or /{BotCommands.StatusCommand[2]} or /{BotCommands.StatusCommand[3]}: Shows a status of all the downloads.
-/{BotCommands.StatsCommand}: Show stats of the machine where the bot is hosted in.
-/{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.
-/{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
-/{BotCommands.CheckDeletionsCommand[0]} or /{BotCommands.CheckDeletionsCommand[1]}: Check and manage scheduled message deletions.
-/{BotCommands.AskCommand}: Chat with AI using the bot (Mistral or DeepSeek).
-/{BotCommands.LoginCommand}: Login to the bot using password for permanent access.
-/{BotCommands.RssCommand}: [Owner Only] Subscribe to RSS feeds.
+/{BotCommands.RssCommand}: Subscribe to RSS feeds (Owner only).
 """
+
+# AI & Special Features page
+special_commands = f"""
+<b>🤖 AI & Special Features</b>
+
+/{BotCommands.AskCommand}: Chat with AI using the bot (Mistral or DeepSeek).
+/{BotCommands.TruecallerCommand}: Lookup phone numbers using Truecaller.
+"""
+
+# System Commands page
+system_commands = f"""
+<b>🛠️ System Commands (Owner & Sudo only)</b>
+
+/{BotCommands.RestartCommand[0]} or /{BotCommands.RestartCommand[1]}: Restart and update the bot.
+/{BotCommands.LogCommand}: Get the bot log file.
+/{BotCommands.ShellCommand}: Execute shell commands.
+/{BotCommands.ExecCommand}: Execute sync functions.
+/{BotCommands.AExecCommand}: Execute async functions.
+/{BotCommands.ClearLocalsCommand}: Clear locals in exec functions.
+/{BotCommands.BroadcastCommand[0]} or /{BotCommands.BroadcastCommand[1]}: Broadcast a message to bot users.
+"""
+
+# Help page
+help_commands = f"""
+<b>❓ Help</b>
+
+/{BotCommands.HelpCommand}: Show this help message.
+"""
+
+# Dictionary to store all help pages
+help_string = {
+    "main": main_help_string,
+    "download": download_commands,
+    "status": status_commands,
+    "search": search_commands,
+    "file": file_commands,
+    "security": security_commands,
+    "settings": settings_commands,
+    "special": special_commands,
+    "system": system_commands,
+    "help": help_commands,
+}

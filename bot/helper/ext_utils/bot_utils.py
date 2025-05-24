@@ -1,5 +1,6 @@
 import contextlib
 import math
+import os
 from asyncio import (
     create_subprocess_exec,
     create_subprocess_shell,
@@ -8,12 +9,11 @@ from asyncio import (
 )
 from asyncio.subprocess import PIPE
 from base64 import urlsafe_b64decode, urlsafe_b64encode
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial, wraps
 
 from httpx import AsyncClient
 
-from bot import bot_loop, user_data
+from bot import LOGGER, bot_loop, user_data
 from bot.core.config_manager import Config
 from bot.helper.telegram_helper.button_build import ButtonMaker
 
@@ -26,15 +26,12 @@ from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     MIRROR_HELP_DICT,
+    VT_HELP_DICT,
     YT_HELP_DICT,
 )
 from .telegraph_helper import telegraph
 
 COMMAND_USAGE = {}
-
-THREAD_POOL = ThreadPoolExecutor(
-    max_workers=100
-)  # Reduced from 500 to improve memory usage
 
 
 class SetInterval:
@@ -66,6 +63,7 @@ def create_help_buttons():
     _build_command_usage(YT_HELP_DICT, "yt")
     _build_command_usage(CLONE_HELP_DICT, "clone")
     _build_command_usage(AI_HELP_DICT, "ai")
+    _build_command_usage(VT_HELP_DICT, "virustotal")
 
 
 def bt_selection_buttons(id_):
@@ -247,9 +245,10 @@ def arg_parser(items, arg_base):
                         if not sub_list:
                             break
                         check = " ".join(sub_list).strip()
-                        if (
-                            check.startswith("[") and check.endswith("]")
-                        ) or not check.startswith("["):
+                        if part == "-ff":
+                            if check.startswith("[") and check.endswith("]"):
+                                break
+                        else:
                             break
                     sub_list.append(items[j])
                 if sub_list:
@@ -426,8 +425,15 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
 
 
 def update_user_ldata(id_, key, value):
+    from bot.core.config_manager import Config
+
     user_data.setdefault(id_, {})
     user_data[id_][key] = value
+
+    # Special handling for owner ID
+    if id_ == Config.OWNER_ID and key == "AUTH":
+        # Always ensure owner is authorized
+        user_data[id_]["AUTH"] = True
 
 
 async def getdailytasks(
@@ -529,7 +535,6 @@ async def _save_user_data():
     to ensure data persistence across bot restarts.
     """
     import json
-    import os
 
     import aiofiles
 
@@ -563,7 +568,6 @@ async def _load_user_data():
     This function is called during bot startup to load saved user data.
     """
     import json
-    import os
 
     import aiofiles
 
@@ -737,22 +741,63 @@ def new_task(func):
 
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
-    pfunc = partial(func, *args, **kwargs)
-    future = bot_loop.run_in_executor(THREAD_POOL, pfunc)
-    result = await future if wait else future
+    """
+    Run a synchronous function in a thread pool and return its result.
 
-    # Force garbage collection after large operations
-    if (
-        smart_garbage_collection is not None
-        and hasattr(func, "__name__")
-        and func.__name__
-        in ["walk", "get_media_info", "extract", "zip", "get_path_size"]
-    ):
-        smart_garbage_collection(
-            aggressive=False
-        )  # Use normal mode for standard operations
+    Args:
+        func: The synchronous function to run
+        *args: Arguments to pass to the function
+        wait: Whether to wait for the result
+        **kwargs: Keyword arguments to pass to the function
 
-    return result
+    Returns:
+        The result of the function if wait=True, otherwise the future
+    """
+    try:
+        # Check if we should run garbage collection before creating a new thread
+        # This helps prevent resource exhaustion in high-load situations
+        if smart_garbage_collection is not None:
+            # Monitor thread usage and run garbage collection if needed
+            from bot.helper.ext_utils.gc_utils import monitor_thread_usage
+
+            if monitor_thread_usage():
+                smart_garbage_collection(aggressive=True)
+
+        # Create partial function with arguments
+        pfunc = partial(func, *args, **kwargs)
+
+        # Run in executor using default thread pool
+        future = bot_loop.run_in_executor(None, pfunc)
+        result = await future if wait else future
+
+        # Force garbage collection after large operations
+        if (
+            smart_garbage_collection is not None
+            and hasattr(func, "__name__")
+            and func.__name__
+            in ["walk", "get_media_info", "extract", "zip", "get_path_size"]
+        ):
+            smart_garbage_collection(
+                aggressive=False
+            )  # Use normal mode for standard operations
+
+        return result
+    except RuntimeError as e:
+        # Handle thread creation errors
+        if "can't start new thread" in str(e):
+            LOGGER.error(f"Thread limit reached: {e}")
+            # Force aggressive garbage collection
+            if smart_garbage_collection is not None:
+                smart_garbage_collection(aggressive=True)
+            # Wait a bit and retry
+            await sleep(1)
+
+            # Retry the operation
+            pfunc = partial(func, *args, **kwargs)
+            future = bot_loop.run_in_executor(None, pfunc)
+            return await future if wait else future
+        # Re-raise other runtime errors
+        raise
 
 
 def async_to_sync(func, *args, wait=True, **kwargs):
@@ -1012,7 +1057,6 @@ def check_storage_threshold(size, threshold, arch=False):
         For very large archives with high compression ratios, this might underestimate
         the required space.
     """
-    import os
     import shutil
 
     from bot import DOWNLOAD_DIR, LOGGER

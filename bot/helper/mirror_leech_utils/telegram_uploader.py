@@ -1,4 +1,5 @@
 import contextlib
+import gc
 import re
 from asyncio import sleep
 from logging import getLogger
@@ -8,6 +9,7 @@ from re import match as re_match
 from re import sub as re_sub
 from time import time
 
+import psutil
 from aiofiles.os import (
     path as aiopath,
 )
@@ -52,6 +54,29 @@ from bot.helper.ext_utils.template_processor import extract_metadata_from_filena
 from bot.helper.telegram_helper.message_utils import delete_message
 
 LOGGER = getLogger(__name__)
+
+
+def get_memory_usage():
+    """Get current memory usage percentage"""
+    try:
+        return psutil.virtual_memory().percent
+    except Exception:
+        return 0
+
+
+async def wait_for_memory_availability(max_memory_percent=80, max_wait_time=60):
+    """Wait for memory usage to drop below threshold"""
+    start_time = time()
+    while time() - start_time < max_wait_time:
+        memory_percent = get_memory_usage()
+        if memory_percent < max_memory_percent:
+            return True
+        LOGGER.warning(
+            f"Memory usage high ({memory_percent}%). Waiting for memory to free up..."
+        )
+        gc.collect()
+        await sleep(2)
+    return False
 
 
 class TelegramUploader:
@@ -1046,7 +1071,7 @@ class TelegramUploader:
                 continue
             for file_ in natsorted(files):
                 self._error = ""
-                self._up_path = f_path = ospath.join(dirpath, file_)
+                self._up_path = ospath.join(dirpath, file_)
                 if not await aiopath.exists(self._up_path):
                     LOGGER.error(f"{self._up_path} not exists! Continue uploading!")
                     continue
@@ -1081,13 +1106,15 @@ class TelegramUploader:
                         return
                     # Prepare the file (apply prefix, suffix, font style, etc.)
                     cap_mono = await self._prepare_file(file_, dirpath)
+                    # Use the updated path after file preparation (in case file was renamed)
+                    actual_file_path = self._up_path
                     if self._last_msg_in_group:
                         group_lists = [
                             x for v in self._media_dict.values() for x in v
                         ]
                         match = re_match(
                             r".+(?=\.0*\d+$)|.+(?=\.part\d+\..+$)",
-                            f_path,
+                            actual_file_path,
                         )
                         if not match or (
                             match and match.group(0) not in group_lists
@@ -1119,7 +1146,35 @@ class TelegramUploader:
                             )
                     self._last_msg_in_group = False
                     self._last_uploaded = 0
-                    await self._upload_file(cap_mono, file_, f_path)
+                    # Add memory management before upload to prevent memory issues
+                    file_size = await aiopath.getsize(actual_file_path)
+
+                    # Check memory usage before upload
+                    memory_percent = get_memory_usage()
+                    if memory_percent > 75:
+                        LOGGER.warning(
+                            f"High memory usage ({memory_percent}%) detected before upload. Waiting for memory to free up..."
+                        )
+                        await wait_for_memory_availability(
+                            max_memory_percent=70, max_wait_time=30
+                        )
+
+                    # For large files (>500MB), add extra memory management
+                    if file_size > 524288000:  # 500MB
+                        LOGGER.info(
+                            f"Large file detected ({file_size} bytes). Applying extra memory management."
+                        )
+                        # Wait for even lower memory usage for large files
+                        await wait_for_memory_availability(
+                            max_memory_percent=60, max_wait_time=60
+                        )
+                        gc.collect()
+                        await sleep(0.5)  # Longer delay for large files
+                    else:
+                        gc.collect()
+                        await sleep(0.1)
+
+                    await self._upload_file(cap_mono, file_, actual_file_path)
                     if self._listener.is_cancelled:
                         return
                     # Store the actual filename (which may have been modified by leech filename)
@@ -1142,8 +1197,12 @@ class TelegramUploader:
                     self._corrupted += 1
                     if self._listener.is_cancelled:
                         return
-                # Don't delete the file here - it will be cleaned up by task_listener.py
-                # This ensures MediaInfo generation and upload can complete before the file is deleted
+                if not self._listener.is_cancelled and await aiopath.exists(
+                    self._up_path,
+                ):
+                    await remove(self._up_path)
+                # Force garbage collection after each file to prevent memory buildup
+                gc.collect()
         # Process any remaining media groups at the end of the task
         try:
             for key, value in list(self._media_dict.items()):
@@ -1193,64 +1252,48 @@ class TelegramUploader:
         retry=retry_if_exception_type(Exception),
     )
     async def _upload_file(self, cap_mono, file, o_path, force_document=False):
-        # Check if file exists before attempting to upload
-        if not await aiopath.exists(self._up_path):
-            LOGGER.error(f"File does not exist before upload: {self._up_path}")
-
-            # This is likely happening because the file is being processed by another part of the system
-            # Let's mark it as corrupted and skip this file instead of trying to find alternatives
-            LOGGER.error("File is missing. Skipping this file.")
-            self._is_corrupted = True
-
-            # Instead of raising an exception, we'll return None to skip this file
-            # This allows the upload process to continue with other files if available
-            return None
-
-        # Generate MediaInfo right before uploading the file
-        # Check if MediaInfo is enabled for this user
-        user_mediainfo_enabled = self._listener.user_dict.get(
-            "MEDIAINFO_ENABLED", None
-        )
-        if user_mediainfo_enabled is None:
-            user_mediainfo_enabled = Config.MEDIAINFO_ENABLED
-
-        # Generate MediaInfo if enabled
-        if user_mediainfo_enabled:
-            from bot.modules.mediainfo import gen_mediainfo
-
+        # Generate MediaInfo with memory management
+        if hasattr(self._listener, "user_dict") and self._listener.user_dict.get(
+            "MEDIAINFO_ENABLED", Config.MEDIAINFO_ENABLED
+        ):
             try:
-                # Generate MediaInfo for the file
-                self._listener.mediainfo_link = await gen_mediainfo(
-                    None, media_path=self._up_path, silent=True
-                )
-
-                # Check if MediaInfo was successfully generated
-                if (
-                    self._listener.mediainfo_link
-                    and self._listener.mediainfo_link.strip()
-                ):
-                    LOGGER.info(f"Generated MediaInfo for file: {self._up_path}")
-
-                    # File should exist after MediaInfo generation since we've fixed the cleanup timing
-                    if not await aiopath.exists(self._up_path):
-                        LOGGER.error(
-                            f"File disappeared after MediaInfo generation: {self._up_path}"
-                        )
-                        LOGGER.error(
-                            "This is unexpected since cleanup should happen after task completion."
-                        )
-                        self._is_corrupted = True
-                        return None
-                else:
-                    # Set mediainfo_link to None if it's empty or None
-                    self._listener.mediainfo_link = None
-                    LOGGER.info(
-                        "MediaInfo generation skipped or failed. Proceeding with upload..."
+                # Check memory before MediaInfo generation
+                memory_percent = get_memory_usage()
+                if memory_percent > 80:
+                    LOGGER.warning(
+                        f"High memory usage ({memory_percent}%) detected. Skipping MediaInfo generation to prevent memory issues."
                     )
+                    self._listener.mediainfo_link = None
+                else:
+                    # Force garbage collection before MediaInfo generation
+                    gc.collect()
+
+                    from bot.modules.mediainfo import gen_mediainfo
+
+                    LOGGER.info(f"Generating MediaInfo for file: {self._up_path}")
+                    self._listener.mediainfo_link = await gen_mediainfo(
+                        None, media_path=self._up_path, silent=True
+                    )
+
+                    if (
+                        self._listener.mediainfo_link
+                        and self._listener.mediainfo_link.strip()
+                    ):
+                        LOGGER.info(
+                            f"MediaInfo generated successfully for: {self._up_path}"
+                        )
+                    else:
+                        self._listener.mediainfo_link = None
+                        LOGGER.info("MediaInfo generation returned empty result")
+
+                    # Force garbage collection after MediaInfo generation
+                    gc.collect()
+
             except Exception as e:
-                # Set mediainfo_link to None on error
                 self._listener.mediainfo_link = None
-                LOGGER.error(f"Error generating MediaInfo before upload: {e}")
+                LOGGER.error(f"Error generating MediaInfo: {e}")
+                # Force garbage collection on error
+                gc.collect()
 
         if (
             self._thumb is not None
@@ -1259,10 +1302,7 @@ class TelegramUploader:
         ):
             self._thumb = None
         thumb = self._thumb
-
-        # Only reset the corrupted flag if it's not already set
-        if not self._is_corrupted:
-            self._is_corrupted = False
+        self._is_corrupted = False
         try:
             is_video, is_audio, is_image = await get_document_type(self._up_path)
 
@@ -1298,7 +1338,12 @@ class TelegramUploader:
                 )
             elif is_video:
                 key = "videos"
-                duration = (await get_media_info(self._up_path))[0]
+                try:
+                    duration = (await get_media_info(self._up_path))[0]
+                except Exception as e:
+                    LOGGER.error(f"Error getting video duration: {e}")
+                    duration = 0
+
                 if thumb is None and self._listener.thumbnail_layout:
                     thumb = await get_multiple_frames_thumbnail(
                         self._up_path,
@@ -1313,6 +1358,7 @@ class TelegramUploader:
                 else:
                     width = 480
                     height = 320
+
                 if self._listener.is_cancelled:
                     return None
                 if thumb == "none":
@@ -1452,25 +1498,38 @@ class TelegramUploader:
                 await remove(thumb)
             err_type = "RPCError: " if isinstance(err, RPCError) else ""
             LOGGER.error(f"{err_type}{err}. Path: {self._up_path}")
-            # Check if key is defined before using it
-            if isinstance(err, BadRequest | RPCError):
-                err_str = str(err)
-                # Handle PHOTO_EXT_INVALID error specifically
-                if "PHOTO_EXT_INVALID" in err_str:
-                    LOGGER.error(
-                        f"Invalid photo extension. Retrying as document. Path: {self._up_path}"
+
+            # Handle memory errors specifically
+            if "MemoryError" in str(
+                err
+            ) or "'NoneType' object has no attribute 'write'" in str(err):
+                LOGGER.error(
+                    f"Memory error detected during upload. Current memory usage: {get_memory_usage()}%. Path: {self._up_path}"
+                )
+
+                # Aggressive memory cleanup
+                gc.collect()
+
+                # Wait for memory to be available
+                memory_available = await wait_for_memory_availability(
+                    max_memory_percent=60, max_wait_time=120
+                )
+
+                if memory_available and not force_document:
+                    LOGGER.info(
+                        f"Memory freed up. Retrying upload as document. Path: {self._up_path}"
                     )
                     return await self._upload_file(cap_mono, file, o_path, True)
-                # Handle PHOTO_SAVE_FILE_INVALID error specifically
-                if "PHOTO_SAVE_FILE_INVALID" in err_str:
-                    LOGGER.error(
-                        f"Telegram couldn't save the photo. Retrying As Document. Path: {self._up_path}"
-                    )
-                    return await self._upload_file(cap_mono, file, o_path, True)
-                # Handle other BadRequest errors for non-document uploads
-                if "key" in locals() and key != "documents":
-                    LOGGER.error(f"Retrying As Document. Path: {self._up_path}")
-                    return await self._upload_file(cap_mono, file, o_path, True)
+
+                LOGGER.error(
+                    f"Unable to free enough memory for upload. Skipping file. Path: {self._up_path}"
+                )
+                self._is_corrupted = True
+                return None
+
+            if isinstance(err, BadRequest) and key != "documents":
+                LOGGER.error(f"Retrying As Document. Path: {self._up_path}")
+                return await self._upload_file(cap_mono, file, o_path, True)
             raise err
 
     async def _copy_media_group(self, msgs_list):

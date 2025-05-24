@@ -204,7 +204,7 @@ def source(self):
 
 async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=1):
     msg = ""
-    msg += "<blockquote><b>Powered by @aimmirror</b></blockquote>\n\n"
+    msg += f"<blockquote><b>{Config.CREDIT}</b></blockquote>\n\n"
     button = None
 
     tasks = await get_specific_tasks(status, sid if is_user else None)
@@ -223,30 +223,50 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     # Ensure STATUS_LIMIT is an integer for slicing
     status_limit = int(STATUS_LIMIT)
 
+    # Track message length to prevent exceeding Telegram's limit
+    MAX_MESSAGE_LENGTH = 3800  # Leave some buffer for buttons and footer
+    current_length = len(msg)
+    tasks_added = 0
     for index, task in enumerate(
         tasks[start_position : status_limit + start_position],
         start=1,
     ):
+        # Create task message first to check length
+        task_msg = ""
+
         if status != "All":
             tstatus = status
         elif iscoroutinefunction(task.status):
             tstatus = await task.status()
         else:
             tstatus = task.status()
+
+        # Truncate task name if too long
+        task_name = task.name()
+        if len(task_name) > 50:
+            task_name = task_name[:47] + "..."
+
         if task.listener.is_super_chat:
-            msg += f"<b>{index + start_position}. <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
+            task_msg += f"<b>{index + start_position}. <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
         else:
-            msg += f"<b>{index + start_position}. {tstatus}: </b>"
-        msg += f"[<code>{escape(f'{task.name()}')}</code>]"
+            task_msg += f"<b>{index + start_position}. {tstatus}: </b>"
+        task_msg += f"[<code>{escape(task_name)}</code>]"
+
+        # Truncate subname if too long
         if task.listener.subname:
-            msg += f"\n<i>{task.listener.subname}</i>"
-        msg += f"\nby <b>{source(task.listener)}</b>"
+            subname = task.listener.subname
+            if len(subname) > 40:
+                subname = subname[:37] + "..."
+            task_msg += f"\n<i>{subname}</i>"
+        task_msg += f"\nby <b>{source(task.listener)}</b>"
         if (
             tstatus not in [MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_QUEUEUP]
             and task.listener.progress
         ):
             progress = task.progress()
-            msg += f"\n<blockquote>{get_progress_bar_string(progress)} {progress}"
+            task_msg += (
+                f"\n<blockquote>{get_progress_bar_string(progress)} {progress}"
+            )
             if task.listener.subname:
                 subsize = f"/{get_readable_file_size(task.listener.subsize)}"
                 # Check if files_to_proceed exists and has items
@@ -262,30 +282,57 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             else:
                 subsize = ""
                 count = ""
-            msg += f"\n<b>Processed:</b> {task.processed_bytes()}{subsize}"
+            task_msg += f"\n<b>Processed:</b> {task.processed_bytes()}{subsize}"
             if count:
-                msg += f"\n<b>Count:</b> {count}"
-            msg += f"\n<b>Size:</b> {task.size()}"
-            msg += f"\n<b>Speed:</b> {task.speed()}"
-            msg += f"\n<b>Estimated:</b> {task.eta()}"
+                task_msg += f"\n<b>Count:</b> {count}"
+            task_msg += f"\n<b>Size:</b> {task.size()}"
+            task_msg += f"\n<b>Speed:</b> {task.speed()}"
+            task_msg += f"\n<b>Estimated:</b> {task.eta()}"
             if (
                 tstatus == MirrorStatus.STATUS_DOWNLOAD and task.listener.is_torrent
             ) or task.listener.is_qbit:
                 with contextlib.suppress(Exception):
-                    msg += f"\n<b>Seeders:</b> {task.seeders_num()} | <b>Leechers:</b> {task.leechers_num()}"
+                    task_msg += f"\n<b>Seeders:</b> {task.seeders_num()} | <b>Leechers:</b> {task.leechers_num()}"
         elif tstatus == MirrorStatus.STATUS_SEED:
-            msg += f"\n<blockquote><b>Size: </b>{task.size()}"
-            msg += f"\n<b>Speed: </b>{task.seed_speed()}"
-            msg += f"\n<b>Uploaded: </b>{task.uploaded_bytes()}"
-            msg += f"\n<b>Ratio: </b>{task.ratio()}"
-            msg += f" | <b>Time: </b>{task.seeding_time()}"
+            task_msg += f"\n<blockquote><b>Size: </b>{task.size()}"
+            task_msg += f"\n<b>Speed: </b>{task.seed_speed()}"
+            task_msg += f"\n<b>Uploaded: </b>{task.uploaded_bytes()}"
+            task_msg += f"\n<b>Ratio: </b>{task.ratio()}"
+            task_msg += f" | <b>Time: </b>{task.seeding_time()}"
         else:
-            msg += f"\n<blockquote><b>Size: </b>{task.size()}"
-        msg += f"\n<b>Tool:</b> {task.tool}"
-        msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - task.listener.message.date.timestamp())}</blockquote>"
+            task_msg += f"\n<blockquote><b>Size: </b>{task.size()}"
+        task_msg += f"\n<b>Tool:</b> {task.tool}"
+        task_msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - task.listener.message.date.timestamp())}</blockquote>"
         task_gid = str(task.gid())  # Ensure task_gid is a string
         short_gid = task_gid[-8:] if task_gid.startswith("SABnzbd") else task_gid[:8]
-        msg += f"\n<blockquote>/stop_{short_gid}</blockquote>\n\n"
+        task_msg += f"\n<blockquote>/stop_{short_gid}</blockquote>\n\n"
+
+        # Check if adding this task would exceed message length limit
+        if current_length + len(task_msg) > MAX_MESSAGE_LENGTH:
+            # If we haven't added any tasks yet, we need to truncate this one
+            if tasks_added == 0:
+                # Truncate the task message to fit
+                available_space = (
+                    MAX_MESSAGE_LENGTH - current_length - 100
+                )  # Leave some buffer
+                if available_space > 200:  # Only add if we have reasonable space
+                    task_msg = task_msg[:available_space] + "...</blockquote>\n\n"
+                    msg += task_msg
+                    tasks_added += 1
+            break
+
+        msg += task_msg
+        current_length += len(task_msg)
+        tasks_added += 1
+
+    # Add note if some tasks were truncated due to message length
+    if tasks_added < len(tasks[start_position : status_limit + start_position]):
+        remaining_tasks = (
+            len(tasks[start_position : status_limit + start_position]) - tasks_added
+        )
+        msg += (
+            f"<i>... and {remaining_tasks} more task(s) (message truncated)</i>\n\n"
+        )
 
     if len(msg) == 0:
         if status == "All":

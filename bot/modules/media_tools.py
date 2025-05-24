@@ -10251,13 +10251,23 @@ async def find_next_available_index(file_info, track_type, target_index=None):
     """Find the next available index for a track type.
 
     Args:
-        file_info (dict): Media info dictionary from get_media_info
+        file_info (dict or tuple): Media info dictionary from get_media_info
         track_type (str): Type of track ('video', 'audio', 'subtitle', 'attachment')
         target_index (int, optional): Target index to start from. Defaults to None.
 
     Returns:
         int: Next available index
     """
+    # Import logging
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Check if file_info is a tuple or not a dictionary
+    if not isinstance(file_info, dict):
+        logger.warning(f"Invalid file_info type: {type(file_info)}. Expected dict.")
+        return 0  # Default to 0 if file_info is not a dictionary
+
     # Map track_type to stream type in file_info
     stream_type_map = {
         "video": "video",
@@ -10302,12 +10312,22 @@ async def find_first_available_index(file_info, track_type):
     """Find the first available index for a track type.
 
     Args:
-        file_info (dict): Media info dictionary from get_media_info
+        file_info (dict or tuple): Media info dictionary from get_media_info
         track_type (str): Type of track ('video', 'audio', 'subtitle', 'attachment')
 
     Returns:
         int: First available index
     """
+    # Import logging
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Check if file_info is a tuple or not a dictionary
+    if not isinstance(file_info, dict):
+        logger.warning(f"Invalid file_info type: {type(file_info)}. Expected dict.")
+        return 0  # Default to 0 if file_info is not a dictionary
+
     # Map track_type to stream type in file_info
     stream_type_map = {
         "video": "video",
@@ -10542,8 +10562,7 @@ async def add_media(path, user_id, mid=None, multi_files=None):
 
             # replace_tracks is already set from user settings
     else:
-        # Legacy mode - path flags have been removed
-        # Check if at least one track type is enabled
+        # Legacy mode - check if at least one track type is enabled
         if not (
             video_enabled or audio_enabled or subtitle_enabled or attachment_enabled
         ):
@@ -10554,13 +10573,61 @@ async def add_media(path, user_id, mid=None, multi_files=None):
         if not file_info:
             return False, None, "Failed to get media info"
 
-        # Path flags have been removed
-        # We now only support adding tracks from multi-files
-        # Return an error message if no multi-files are provided
+        # Check if path flags are used
+        if (
+            user_dict.get("ADD_VIDEO_PATH")
+            or user_dict.get("ADD_AUDIO_PATH")
+            or user_dict.get("ADD_SUBTITLE_PATH")
+            or user_dict.get("ADD_ATTACHMENT_PATH")
+        ):
+            # Convert path flags to multi-input mode
+            LOGGER.info("Converting path flags to multi-input mode")
+
+            # Create a list of files based on path flags
+            converted_multi_files = []
+
+            # Add additional files based on path flags
+            if video_enabled and user_dict.get("ADD_VIDEO_PATH"):
+                video_path = user_dict.get("ADD_VIDEO_PATH")
+                if os.path.exists(video_path):
+                    converted_multi_files.append(video_path)
+                    LOGGER.info(f"Added video path: {video_path}")
+
+            if audio_enabled and user_dict.get("ADD_AUDIO_PATH"):
+                audio_path = user_dict.get("ADD_AUDIO_PATH")
+                if os.path.exists(audio_path):
+                    converted_multi_files.append(audio_path)
+                    LOGGER.info(f"Added audio path: {audio_path}")
+
+            if subtitle_enabled and user_dict.get("ADD_SUBTITLE_PATH"):
+                subtitle_path = user_dict.get("ADD_SUBTITLE_PATH")
+                if os.path.exists(subtitle_path):
+                    converted_multi_files.append(subtitle_path)
+                    LOGGER.info(f"Added subtitle path: {subtitle_path}")
+
+            if attachment_enabled and user_dict.get("ADD_ATTACHMENT_PATH"):
+                attachment_path = user_dict.get("ADD_ATTACHMENT_PATH")
+                if os.path.exists(attachment_path):
+                    converted_multi_files.append(attachment_path)
+                    LOGGER.info(f"Added attachment path: {attachment_path}")
+
+            # If we have converted multi-files, use them
+            if converted_multi_files:
+                LOGGER.info(
+                    f"Converted to multi-input mode with files: {converted_multi_files}"
+                )
+
+                # Call add_media recursively with the converted multi-files
+                return await add_media(
+                    path, user_id, mid, multi_files=converted_multi_files
+                )
+            return False, None, "No valid paths found in path flags"
+
+        # If no path flags are used, return an error message
         return (
             False,
             None,
-            "Path flags have been removed. Please use multi-file mode instead.",
+            "No input files specified. Please use multi-file mode.",
         )
 
         # Get indices

@@ -54,3 +54,6 @@ class BotCommands:
     GenSessionCommand = [f"gensession{i}", f"gs{i}"]
     TruecallerCommand = f"truecaller{i}"
     AskCommand = f"ask{i}"
+    SoxCommand = [f"spectrum{i}", f"sox{i}"]
+    PasteCommand = f"paste{i}"
+    VirusTotalCommand = f"virustotal{i}"

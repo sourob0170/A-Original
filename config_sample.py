@@ -14,6 +14,10 @@ USER_SESSION_STRING = (
 )
 DOWNLOAD_DIR = "/usr/src/app/downloads/"  # Directory where downloads will be stored
 CMD_SUFFIX = ""  # Command suffix to distinguish commands, e.g. "1" would make commands like /mirror1
+CORRECT_CMD_SUFFIX = ""  # Comma-separated list of command suffixes that won't trigger warnings, e.g. "1,2,3"
+WRONG_CMD_WARNINGS_ENABLED = (
+    True  # Enable/disable warnings for wrong command suffixes
+)
 AUTHORIZED_CHATS = (
     ""  # List of authorized chat IDs where the bot can be used, separated by space
 )
@@ -39,6 +43,10 @@ MEDIA_SEARCH_ENABLED = True  # Enable/disable media search feature
 MEDIA_SEARCH_CHATS = []  # List of chat IDs where media search is enabled
 DELETE_LINKS = False  # Delete links after download
 FSUB_IDS = ""  # Force subscribe channel IDs, separated by space
+AD_KEYWORDS = ""  # Custom keywords/phrases for ad detection, separated by comma (e.g., "#ad,#ad bangla,#sponsored,InsideAds")
+AD_BROADCASTER_ENABLED = (
+    False  # Enable/disable automatic ad broadcasting from FSUB channels to users
+)
 TOKEN_TIMEOUT = 0  # Token timeout in seconds (0 = no timeout)
 LOGIN_PASS = ""  # Password for web login
 PAID_CHANNEL_ID = 0  # Paid channel ID for premium features
@@ -244,10 +252,8 @@ IMDB_TEMPLATE = """<b>🎬 Title:</b> <code>{title}</code> [{year}]
 DEFAULT_AI_PROVIDER = (
     "mistral"  # Default AI provider for /ask command: mistral, deepseek
 )
-MISTRAL_API_KEY = ""  # Mistral AI API key
-MISTRAL_API_URL = ""  # Custom Mistral AI API URL (optional)
-DEEPSEEK_API_KEY = ""  # DeepSeek AI API key
-DEEPSEEK_API_URL = ""  # Custom DeepSeek AI API URL (optional)
+MISTRAL_API_URL = ""  # Custom Mistral AI API URL
+DEEPSEEK_API_URL = ""  # Custom DeepSeek AI API URL
 
 # Media Tools Settings
 MEDIA_TOOLS_ENABLED = (
@@ -703,3 +709,7 @@ METADATA_SUBTITLE_AUTHOR = (
 METADATA_SUBTITLE_COMMENT = (
     ""  # Default comment metadata specifically for subtitle files
 )
+
+# Branding Settings
+CREDIT = "Powered by @aimmirror"  # Credit text shown in status messages and RSS feeds (default: "Powered by @aimmirror")
+OWNER_THUMB = "https://graph.org/file/80b7fb095063a18f9e232.jpg"  # Default thumbnail URL for owner (accepts Telegram file links)

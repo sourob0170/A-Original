@@ -102,6 +102,8 @@ class Config:
     PAID_CHANNEL_LINK: str = ""
     DELETE_LINKS: bool = False
     FSUB_IDS: str = ""
+    AD_KEYWORDS: str = ""  # Custom keywords for ad detection, separated by comma
+    AD_BROADCASTER_ENABLED: bool = False  # Enable/disable ad broadcaster module
     LOG_CHAT_ID: int = 0
     LEECH_FILENAME_CAPTION: str = ""
     INSTADL_API: str = ""
@@ -563,15 +565,31 @@ class Config:
     DEFAULT_AI_PROVIDER: str = "mistral"
 
     # Mistral AI Settings
-    MISTRAL_API_KEY: str = ""
     MISTRAL_API_URL: str = ""
 
     # DeepSeek AI Settings
-    DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_API_URL: str = ""
+
+    # Command Suffix Settings
+    CORRECT_CMD_SUFFIX: str = ""  # Comma-separated list of allowed command suffixes
+    WRONG_CMD_WARNINGS_ENABLED: bool = (
+        True  # Enable/disable warnings for wrong command suffixes
+    )
+
+    # VirusTotal Settings
+    VT_API_KEY: str = ""
+    VT_API_TIMEOUT: int = 500
+    VT_ENABLED: bool = False
+    VT_MAX_FILE_SIZE: int = 32 * 1024 * 1024  # 32MB default limit
 
     HEROKU_APP_NAME: str = ""
     HEROKU_API_KEY: str = ""
+
+    # Branding Settings
+    CREDIT: str = (
+        "Powered by @aimmirror"  # Credit text shown in status messages and RSS feeds
+    )
+    OWNER_THUMB: str = "https://graph.org/file/80b7fb095063a18f9e232.jpg"  # Default thumbnail URL for owner
 
     @classmethod
     def _convert(cls, key, value):
@@ -627,6 +645,7 @@ class Config:
                     "metadata",
                     "xtra",
                     "sample",
+                    "screenshot",
                 ]
                 # Sort the tools to maintain consistent order
                 all_tools.sort()

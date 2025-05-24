@@ -1,7 +1,6 @@
 from asyncio import create_subprocess_exec, create_task, sleep
 from functools import partial
 from html import escape
-from http.cookiejar import MozillaCookieJar
 from io import BytesIO
 from os import getcwd
 from re import findall
@@ -34,7 +33,7 @@ from bot.helper.telegram_helper.message_utils import (
 )
 
 handler_dict = {}
-no_thumb = "https://graph.org/file/80b7fb095063a18f9e232.jpg"
+no_thumb = Config.OWNER_THUMB
 
 leech_options = [
     "THUMBNAIL",
@@ -53,9 +52,7 @@ leech_options = [
 
 ai_options = [
     "DEFAULT_AI_PROVIDER",
-    "MISTRAL_API_KEY",
     "MISTRAL_API_URL",
-    "DEEPSEEK_API_KEY",
     "DEEPSEEK_API_URL",
 ]
 metadata_options = [
@@ -382,24 +379,16 @@ async def get_user_settings(from_user, stype="main"):
         default_ai = user_dict.get(
             "DEFAULT_AI_PROVIDER", Config.DEFAULT_AI_PROVIDER
         ).capitalize()
-        mistral_api_key = (
-            "✅ Set" if user_dict.get("MISTRAL_API_KEY", False) else "❌ Not Set"
-        )
         mistral_api_url = user_dict.get("MISTRAL_API_URL", "Not Set")
-        deepseek_api_key = (
-            "✅ Set" if user_dict.get("DEEPSEEK_API_KEY", False) else "❌ Not Set"
-        )
         deepseek_api_url = user_dict.get("DEEPSEEK_API_URL", "Not Set")
 
         text = f"""<u><b>AI Settings for {name}</b></u>
 <b>Default AI Provider:</b> <code>{default_ai}</code>
 
 <b>Mistral AI:</b>
--> API Key: <b>{mistral_api_key}</b>
 -> API URL: <code>{mistral_api_url}</code>
 
 <b>DeepSeek AI:</b>
--> API Key: <b>{deepseek_api_key}</b>
 -> API URL: <code>{deepseek_api_url}</code>
 
 <i>Note: For each AI provider, configure either API Key or API URL. If both are set, API Key will be used first with fallback to API URL.</i>
@@ -769,74 +758,156 @@ async def send_user_settings(_, message):
 async def add_file(_, message, ftype):
     user_id = message.from_user.id
     handler_dict[user_id] = False
-    if ftype == "THUMBNAIL":
-        des_dir = await create_thumb(message, user_id)
-    elif ftype == "RCLONE_CONFIG":
-        rpath = f"{getcwd()}/rclone/"
-        await makedirs(rpath, exist_ok=True)
-        des_dir = f"{rpath}{user_id}.conf"
-        await message.download(file_name=des_dir)
-    elif ftype == "TOKEN_PICKLE":
-        tpath = f"{getcwd()}/tokens/"
-        await makedirs(tpath, exist_ok=True)
-        des_dir = f"{tpath}{user_id}.pickle"
-        await message.download(file_name=des_dir)  # TODO user font
-    elif ftype == "USER_COOKIES":
-        cpath = f"{getcwd()}/cookies/"
-        await makedirs(cpath, exist_ok=True)
-        des_dir = f"{cpath}{user_id}.txt"
-        await message.download(file_name=des_dir)
 
-        # Set secure permissions for the cookies file
-        await (await create_subprocess_exec("chmod", "600", des_dir)).wait()
-        LOGGER.info(f"Set secure permissions for cookies file of user ID: {user_id}")
+    # Get file size for logging purposes (no limits enforced)
+    if hasattr(message, "document") and message.document:
+        file_size = message.document.file_size
+    elif hasattr(message, "photo") and message.photo:
+        file_size = message.photo.file_size
+    else:
+        file_size = 0
 
-        # Check if the cookies file contains YouTube authentication cookies
-        has_youtube_auth = False
+    if file_size > 0:
+        LOGGER.info(
+            f"Processing {ftype} file of size: {get_readable_file_size(file_size)} for user {user_id}"
+        )
+
+    try:
+        if ftype == "THUMBNAIL":
+            des_dir = await create_thumb(message, user_id)
+        elif ftype == "RCLONE_CONFIG":
+            rpath = f"{getcwd()}/rclone/"
+            await makedirs(rpath, exist_ok=True)
+            des_dir = f"{rpath}{user_id}.conf"
+            await message.download(file_name=des_dir)
+        elif ftype == "TOKEN_PICKLE":
+            tpath = f"{getcwd()}/tokens/"
+            await makedirs(tpath, exist_ok=True)
+            des_dir = f"{tpath}{user_id}.pickle"
+            await message.download(file_name=des_dir)  # TODO user font
+        elif ftype == "USER_COOKIES":
+            cpath = f"{getcwd()}/cookies/"
+            await makedirs(cpath, exist_ok=True)
+            des_dir = f"{cpath}{user_id}.txt"
+            await message.download(file_name=des_dir)
+    except Exception as e:
+        error_msg = await send_message(message, f"❌ Error downloading file: {e!s}")
+        create_task(
+            auto_delete_message(error_msg, time=300)
+        )  # Auto-delete after 5 minutes
+        await delete_message(message)
+        return
+
+    # Handle special processing for USER_COOKIES
+    if ftype == "USER_COOKIES":
         try:
-            cookie_jar = MozillaCookieJar()
-            cookie_jar.load(des_dir)
-
-            # Check for YouTube authentication cookies
-            yt_cookies = [c for c in cookie_jar if c.domain.endswith("youtube.com")]
-            auth_cookies = [
-                c
-                for c in yt_cookies
-                if c.name
-                in ("SID", "HSID", "SSID", "APISID", "SAPISID", "LOGIN_INFO")
-            ]
-
-            if auth_cookies:
-                has_youtube_auth = True
-                LOGGER.info(
-                    f"YouTube authentication cookies found for user ID: {user_id}"
-                )
-        except Exception as e:
-            LOGGER.error(f"Error checking cookies file: {e}")
-            error_msg = await send_message(
-                message.chat.id,
-                f"⚠️ Warning: Error checking cookies file: {e}. Your cookies will still be used, but may not work correctly.",
+            # Set secure permissions for the cookies file
+            await (await create_subprocess_exec("chmod", "600", des_dir)).wait()
+            LOGGER.info(
+                f"Set secure permissions for cookies file of user ID: {user_id}"
             )
-            create_task(
-                auto_delete_message(error_msg, time=300)
-            )  # Auto-delete after 5 minutes
 
-        if has_youtube_auth:
-            success_msg = await send_message(
-                message.chat.id,
-                "✅ Cookies file uploaded successfully! YouTube authentication cookies detected. Your cookies will be used for YouTube and other yt-dlp downloads.",
+            # Check if the cookies file contains YouTube authentication cookies
+            has_youtube_auth = False
+            try:
+                from http.cookiejar import MozillaCookieJar
+
+                cookie_jar = MozillaCookieJar()
+                cookie_jar.load(des_dir)
+
+                # Check for YouTube authentication cookies
+                yt_cookies = [
+                    c for c in cookie_jar if c.domain.endswith("youtube.com")
+                ]
+                auth_cookies = [
+                    c
+                    for c in yt_cookies
+                    if c.name
+                    in ("SID", "HSID", "SSID", "APISID", "SAPISID", "LOGIN_INFO")
+                ]
+
+                if auth_cookies:
+                    has_youtube_auth = True
+                    LOGGER.info(
+                        f"YouTube authentication cookies found for user ID: {user_id}"
+                    )
+            except Exception as e:
+                LOGGER.error(f"Error checking cookies file: {e}")
+                error_msg = await send_message(
+                    message.chat.id,
+                    f"⚠️ Warning: Error checking cookies file: {e}. Your cookies will still be used, but may not work correctly.",
+                )
+                create_task(
+                    auto_delete_message(error_msg, time=300)
+                )  # Auto-delete after 5 minutes
+
+            if has_youtube_auth:
+                success_msg = await send_message(
+                    message.chat.id,
+                    "✅ Cookies file uploaded successfully! YouTube authentication cookies detected. Your cookies will be used for YouTube and other yt-dlp downloads.",
+                )
+            else:
+                success_msg = await send_message(
+                    message.chat.id,
+                    "✅ Cookies file uploaded successfully! Your cookies will be used for YouTube and other yt-dlp downloads. Note: No YouTube authentication cookies detected, which might limit access to restricted content.",
+                )
+            create_task(
+                auto_delete_message(success_msg, time=60)
+            )  # Auto-delete after 1 minute
+        except Exception as e:
+            LOGGER.error(f"Error processing cookies file: {e}")
+            error_msg = await send_message(
+                message, f"❌ Error processing cookies file: {e!s}"
+            )
+            create_task(auto_delete_message(error_msg, time=300))
+            await delete_message(message)
+            return
+
+    # Update user data and database
+    try:
+        update_user_ldata(user_id, ftype, des_dir)
+        await delete_message(message)
+
+        # Show processing message for large files
+        if file_size > 50 * 1024 * 1024:  # 50MB
+            processing_msg = await send_message(
+                message,
+                f"🔄 Processing large {ftype.replace('_', ' ').lower()} file ({get_readable_file_size(file_size)}). This may take a moment...",
             )
         else:
-            success_msg = await send_message(
-                message.chat.id,
-                "✅ Cookies file uploaded successfully! Your cookies will be used for YouTube and other yt-dlp downloads. Note: No YouTube authentication cookies detected, which might limit access to restricted content.",
-            )
-        create_task(
-            auto_delete_message(success_msg, time=60)
-        )  # Auto-delete after 1 minute
-    update_user_ldata(user_id, ftype, des_dir)
-    await delete_message(message)
-    await database.update_user_doc(user_id, ftype, des_dir)
+            processing_msg = None
+
+        await database.update_user_doc(user_id, ftype, des_dir)
+
+        # Delete processing message if it was shown
+        if processing_msg:
+            await delete_message(processing_msg)
+
+    except MemoryError as e:
+        LOGGER.error(
+            f"Memory error updating database for user {user_id}, ftype {ftype}: {e}"
+        )
+        error_msg = await send_message(
+            message,
+            f"❌ Memory Error: The {ftype.replace('_', ' ').lower()} file is too large for the current system memory. "
+            f"Please try uploading a smaller file or contact the bot administrator.",
+        )
+        create_task(auto_delete_message(error_msg, time=300))
+        # Clean up the file if database update fails
+        if await aiopath.exists(des_dir):
+            await remove(des_dir)
+    except Exception as e:
+        LOGGER.error(
+            f"Error updating database for user {user_id}, ftype {ftype}: {e}"
+        )
+        error_msg = await send_message(
+            message,
+            f"❌ Error saving file to database: {e!s}. The file was uploaded but may not be saved properly.",
+        )
+        create_task(auto_delete_message(error_msg, time=300))
+        # Clean up the file if database update fails
+        if await aiopath.exists(des_dir):
+            await remove(des_dir)
 
 
 @new_task

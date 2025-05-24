@@ -1,3 +1,4 @@
+from .ad_broadcaster import init_ad_broadcaster
 from .ai import ask_ai
 from .bot_settings import edit_bot_settings, send_bot_settings
 from .broadcast import (
@@ -50,6 +51,7 @@ from .mirror_leech import (
     nzb_mirror,
 )
 from .nzb_search import hydra_search
+from .paste import paste_text
 from .restart import (
     confirm_restart,
     restart_bot,
@@ -59,6 +61,7 @@ from .rss import get_rss_menu, rss_listener
 from .search import initiate_search_tools, torrent_search, torrent_search_update
 from .services import aeon_callback, log, login, ping, start
 from .shell import run_shell
+from .sox import spectrum_handler
 from .speedtest import speedtest
 from .stats import bot_stats, get_packages_version
 from .status import status_pages, task_status
@@ -68,6 +71,7 @@ from .users_settings import (
     get_users_settings,
     send_user_settings,
 )
+from .virustotal import virustotal_scan
 from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
 from .ytdlp import ytdl, ytdl_leech
 
@@ -134,6 +138,7 @@ __all__ = [
     "mirror",
     "nzb_leech",
     "nzb_mirror",
+    "paste_text",
     "ping",
     "remove_from_queue",
     "remove_sudo",
@@ -145,6 +150,7 @@ __all__ = [
     "select_type",
     "send_bot_settings",
     "send_user_settings",
+    "spectrum_handler",
     "speedtest",
     "start",
     "status_pages",
@@ -153,6 +159,7 @@ __all__ = [
     "torrent_search_update",
     "truecaller_lookup",
     "unauthorize",
+    "virustotal_scan",
     "ytdl",
     "ytdl_leech",
 ]

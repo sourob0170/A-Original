@@ -258,12 +258,22 @@ class YoutubeDLHelper:
         # YouTube-specific optimizations
         if "youtube.com" in self._listener.link or "youtu.be" in self._listener.link:
             LOGGER.info("YouTube link detected, applying optimizations")
-            # Use TV client to avoid SSAP experiment issues
-            self.opts["extractor_args"]["youtube"]["player_client"] = ["tv"]
+            # Initialize client list - we'll try these in sequence if needed
+            self.youtube_clients = ["tv", "android", "web", "ios"]
+            self.current_client_index = 0
+
+            # Use TV client first to avoid SSAP experiment issues
+            self.opts["extractor_args"]["youtube"]["player_client"] = [
+                self.youtube_clients[self.current_client_index]
+            ]
             # Skip comments to reduce memory usage
             self.opts["extractor_args"]["youtube"]["max_comments"] = [0]
             # Skip webpage parsing for better performance
             self.opts["extractor_args"]["youtube"]["skip_webpage"] = [True]
+
+            LOGGER.info(
+                f"Using YouTube client: {self.youtube_clients[self.current_client_index]}"
+            )
 
             # Check for YouTube Shorts
             if "/shorts/" in self._listener.link:
@@ -420,17 +430,42 @@ class YoutubeDLHelper:
                 if result.get("extractor") == "youtube" and not result.get(
                     "formats"
                 ):
-                    # Try with Android client as fallback
-                    self.opts["extractor_args"]["youtube"]["player_client"] = [
-                        "android"
-                    ]
-                    # Retry extraction
-                    result = ydl.extract_info(self._listener.link, download=False)
-                    if not result.get("formats"):
-                        # Try with web client as last resort
+                    LOGGER.warning(
+                        f"No formats found with {self.youtube_clients[self.current_client_index]} client, trying other clients"
+                    )
+
+                    # Try all available clients in sequence
+                    for i in range(1, len(self.youtube_clients)):
+                        next_client_index = (self.current_client_index + i) % len(
+                            self.youtube_clients
+                        )
+                        next_client = self.youtube_clients[next_client_index]
+
+                        LOGGER.info(f"Trying YouTube client: {next_client}")
                         self.opts["extractor_args"]["youtube"]["player_client"] = [
-                            "web"
+                            next_client
                         ]
+
+                        # Retry extraction
+                        try:
+                            result = ydl.extract_info(
+                                self._listener.link, download=False
+                            )
+                            if result and result.get("formats"):
+                                LOGGER.info(
+                                    f"Successfully found formats with {next_client} client"
+                                )
+                                self.current_client_index = next_client_index
+                                break
+                        except Exception as e:
+                            LOGGER.warning(f"Error with {next_client} client: {e!s}")
+                            continue
+
+                    # If we still don't have formats, log a detailed error
+                    if not result or not result.get("formats"):
+                        LOGGER.error(
+                            "All YouTube clients failed to find formats. This might be due to YouTube's SSAP experiment or region restrictions."
+                        )
 
             except Exception as e:
                 return self._on_download_error(str(e))
@@ -579,9 +614,15 @@ class YoutubeDLHelper:
                                     return
                                 if (
                                     "Unable to extract video data" in error_msg
-                                    and "youtube" in self._listener.link.lower()
-                                ):
-                                    error_msg += "\nThis might be due to YouTube's SSAP experiment. Try again later."
+                                    or "No video formats found" in error_msg
+                                    or "YouTube is forcing SABR streaming"
+                                    in error_msg
+                                ) and "youtube" in self._listener.link.lower():
+                                    error_msg += "\nThis might be due to YouTube's SSAP experiment or region restrictions. The bot tried multiple YouTube clients (TV, Android, Web, iOS) but all failed. You can try:\n"
+                                    error_msg += "1. Try again later\n"
+                                    error_msg += "2. Try with a different video\n"
+                                    error_msg += "3. Try extracting just the audio with the 'ytdlpa' command\n"
+                                    error_msg += "4. Upload your own cookies file with a YouTube Premium subscription"
                                     self._on_download_error(error_msg)
                                     return
                                 if (
@@ -603,19 +644,56 @@ class YoutubeDLHelper:
                                     and retry_count < max_retries - 1
                                 ):
                                     retry_count += 1
-                                    # Try different client types in sequence
-                                    available_clients = [
-                                        "tv",
-                                        "android",
-                                        "web",
-                                        "ios",
-                                    ]
-                                    # Filter out clients we've already tried
-                                    next_clients = [
-                                        c
-                                        for c in available_clients
-                                        if c not in tried_clients
-                                    ]
+
+                                    # Use our predefined client list and tracking
+                                    if hasattr(self, "youtube_clients"):
+                                        # Move to the next client in the rotation
+                                        self.current_client_index = (
+                                            self.current_client_index + 1
+                                        ) % len(self.youtube_clients)
+                                        next_client = self.youtube_clients[
+                                            self.current_client_index
+                                        ]
+
+                                        # Check if we've already tried this client
+                                        if next_client in tried_clients:
+                                            # Find the first client we haven't tried yet
+                                            untried_clients = [
+                                                c
+                                                for c in self.youtube_clients
+                                                if c not in tried_clients
+                                            ]
+                                            if untried_clients:
+                                                next_client = untried_clients[0]
+                                                self.current_client_index = (
+                                                    self.youtube_clients.index(
+                                                        next_client
+                                                    )
+                                                )
+                                            else:
+                                                # We've tried all clients, just use the next one in sequence
+                                                pass
+
+                                        LOGGER.info(
+                                            f"Retrying with YouTube client: {next_client}"
+                                        )
+                                        self.opts["extractor_args"]["youtube"][
+                                            "player_client"
+                                        ] = [next_client]
+                                    else:
+                                        # Fallback to the old method if youtube_clients isn't defined
+                                        available_clients = [
+                                            "tv",
+                                            "android",
+                                            "web",
+                                            "ios",
+                                        ]
+                                        # Filter out clients we've already tried
+                                        next_clients = [
+                                            c
+                                            for c in available_clients
+                                            if c not in tried_clients
+                                        ]
 
                                     if next_clients:
                                         next_client = next_clients[0]
@@ -950,6 +1028,21 @@ class YoutubeDLHelper:
             "bestaudio[vcodec=none]",
         }:
             self._listener.name = f"{base_name}{self._ext}"
+
+        # Enhanced format selection for YouTube
+        if "youtube.com" in self._listener.link or "youtu.be" in self._listener.link:
+            # If the user requested a specific quality but we're having issues
+            if qual not in ["best", "bestaudio"]:
+                # Add fallback format string that will work even with SSAP restrictions
+                if "format" in self.opts:
+                    original_format = self.opts["format"]
+                    # Add fallback format string
+                    self.opts["format"] = (
+                        f"{original_format}/bestvideo+bestaudio/best"
+                    )
+                    LOGGER.info(
+                        f"Enhanced format selection for YouTube: {self.opts['format']}"
+                    )
 
         if self._listener.is_leech and not self._listener.thumbnail_layout:
             self.opts["postprocessors"].append(

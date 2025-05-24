@@ -6303,6 +6303,108 @@ def find_first_available_index(existing_indices, target_idx=None):
     return idx
 
 
+def resolve_track_index(
+    target_idx, existing_indices, replace_mode=False, preserve_mode=False
+):
+    """
+    Resolve the actual index to use for track placement based on mode and conflicts.
+
+    Args:
+        target_idx: The desired index
+        existing_indices: List of currently occupied indices
+        replace_mode: Whether to replace existing tracks
+        preserve_mode: Whether to preserve existing tracks
+
+    Returns:
+        int: The actual index to use
+    """
+    if target_idx is None:
+        # No specific index requested, find first available
+        idx = 0
+        while idx in existing_indices:
+            idx += 1
+        return idx
+
+    target_idx = int(target_idx)
+
+    if replace_mode:
+        # In replace mode, use the specified index even if occupied
+        return target_idx
+    if preserve_mode or target_idx in existing_indices:
+        # In preserve mode or if index is occupied, find next available
+        idx = target_idx
+        while idx in existing_indices:
+            idx += 1
+        return idx
+    # Index is not occupied and not in replace mode, use as-is
+    return target_idx
+
+
+async def validate_and_get_stream_type(file_path, expected_type):
+    """
+    Validate file and get appropriate stream type.
+
+    Args:
+        file_path: Path to the file to validate
+        expected_type: Expected stream type ('video', 'audio', 'subtitle', 'attachment')
+
+    Returns:
+        tuple: (has_expected_stream, actual_stream_type)
+    """
+    from bot.helper.ext_utils.media_utils import get_streams
+
+    streams = await get_streams(file_path)
+    if not streams:
+        return False, None
+
+    # Check for expected stream type
+    type_map = {"video": "v", "audio": "a", "subtitle": "s", "attachment": "t"}
+
+    expected_codec_type = expected_type
+    expected_stream_type = type_map.get(expected_type, "v")
+
+    has_expected = any(
+        stream.get("codec_type") == expected_codec_type for stream in streams
+    )
+
+    if has_expected:
+        return True, expected_stream_type
+
+    # Fallback to other available stream types
+    for codec_type, stream_type in [
+        ("video", "v"),
+        ("audio", "a"),
+        ("subtitle", "s"),
+        ("attachment", "t"),
+    ]:
+        if any(stream.get("codec_type") == codec_type for stream in streams):
+            LOGGER.info(
+                f"Using {codec_type} stream instead of {expected_type} stream from {file_path}"
+            )
+            return False, stream_type
+
+    return False, None
+
+
+class StreamCache:
+    """Cache for stream information to avoid repeated calls to get_streams()"""
+
+    def __init__(self):
+        self._cache = {}
+
+    async def get_streams(self, file_path):
+        """Get streams for a file, using cache if available"""
+        if file_path not in self._cache:
+            from bot.helper.ext_utils.media_utils import get_streams
+
+            self._cache[file_path] = await get_streams(file_path)
+        return self._cache[file_path]
+
+    def clear(self):
+        """Clear the cache"""
+        self._cache.clear()
+
+
 async def get_add_cmd(
     file_path,
     add_video=False,
@@ -6439,6 +6541,38 @@ async def get_add_cmd(
                 "MP3 files can only contain one audio stream. Converting to MKV format."
             )
             temp_file = f"{file_path}.temp.mkv"
+    # For subtitle files with video tracks being added, use MKV format
+    elif file_ext in [".srt", ".ass", ".vtt", ".sub"] and (add_video or multi_files):
+        # Check if we're adding video tracks or using multi-input mode
+        if multi_files:
+            has_video = False
+            for additional_file in multi_files:
+                from bot.helper.ext_utils.media_utils import get_streams
+
+                streams = await get_streams(additional_file)
+                if streams and any(
+                    stream.get("codec_type") == "video" for stream in streams
+                ):
+                    has_video = True
+                    break
+
+            if has_video:
+                LOGGER.warning(
+                    "Subtitle files cannot contain video streams. Converting to MKV format."
+                )
+                temp_file = f"{file_path}.temp.mkv"
+            else:
+                # For other files, preserve the original extension
+                temp_file = f"{file_path}.temp{file_ext}"
+        # If we're not using multi-input mode but adding video to subtitle
+        elif add_video:
+            LOGGER.warning(
+                "Subtitle files cannot contain video streams. Converting to MKV format."
+            )
+            temp_file = f"{file_path}.temp.mkv"
+        else:
+            # For other files, preserve the original extension
+            temp_file = f"{file_path}.temp{file_ext}"
     else:
         # For other files, preserve the original extension
         temp_file = f"{file_path}.temp{file_ext}"
@@ -6499,108 +6633,6 @@ async def get_add_cmd(
     audio_stream_type = "a"  # Default stream type for audio files
     subtitle_stream_type = "s"  # Default stream type for subtitle files
     attachment_stream_type = "t"  # Default stream type for attachment files
-
-    # Determine stream types based on file content
-    if multi_files:
-        from bot.helper.ext_utils.media_utils import get_streams
-
-        # Check each input file for stream types
-        for i, additional_file in enumerate(multi_files):
-            streams = await get_streams(additional_file)
-            if not streams:
-                LOGGER.warning(f"No streams found in file: {additional_file}")
-                continue
-
-            # Determine the primary stream type for this file
-            has_video = any(
-                stream.get("codec_type") == "video" for stream in streams
-            )
-            has_audio = any(
-                stream.get("codec_type") == "audio" for stream in streams
-            )
-            has_subtitle = any(
-                stream.get("codec_type") == "subtitle" for stream in streams
-            )
-            has_attachment = any(
-                stream.get("codec_type") == "attachment" for stream in streams
-            )
-
-            # Update the stream type for this input index
-            if i == 0 and video_input_idx is not None:
-                if has_video:
-                    video_stream_type = "v"
-                elif has_audio:
-                    video_stream_type = "a"
-                    LOGGER.info(
-                        f"Using audio stream from file {additional_file} as video input"
-                    )
-                elif has_subtitle:
-                    video_stream_type = "s"
-                    LOGGER.info(
-                        f"Using subtitle stream from file {additional_file} as video input"
-                    )
-                elif has_attachment:
-                    video_stream_type = "t"
-                    LOGGER.info(
-                        f"Using attachment stream from file {additional_file} as video input"
-                    )
-
-            if i == 1 and audio_input_idx is not None:
-                if has_audio:
-                    audio_stream_type = "a"
-                elif has_video:
-                    audio_stream_type = "v"
-                    LOGGER.info(
-                        f"Using video stream from file {additional_file} as audio input"
-                    )
-                elif has_subtitle:
-                    audio_stream_type = "s"
-                    LOGGER.info(
-                        f"Using subtitle stream from file {additional_file} as audio input"
-                    )
-                elif has_attachment:
-                    audio_stream_type = "t"
-                    LOGGER.info(
-                        f"Using attachment stream from file {additional_file} as audio input"
-                    )
-
-            if i == 2 and subtitle_input_idx is not None:
-                if has_subtitle:
-                    subtitle_stream_type = "s"
-                elif has_video:
-                    subtitle_stream_type = "v"
-                    LOGGER.info(
-                        f"Using video stream from file {additional_file} as subtitle input"
-                    )
-                elif has_audio:
-                    subtitle_stream_type = "a"
-                    LOGGER.info(
-                        f"Using audio stream from file {additional_file} as subtitle input"
-                    )
-                elif has_attachment:
-                    subtitle_stream_type = "t"
-                    LOGGER.info(
-                        f"Using attachment stream from file {additional_file} as subtitle input"
-                    )
-
-            if i == 3 and attachment_input_idx is not None:
-                if has_attachment:
-                    attachment_stream_type = "t"
-                elif has_video:
-                    attachment_stream_type = "v"
-                    LOGGER.info(
-                        f"Using video stream from file {additional_file} as attachment input"
-                    )
-                elif has_audio:
-                    attachment_stream_type = "a"
-                    LOGGER.info(
-                        f"Using audio stream from file {additional_file} as attachment input"
-                    )
-                elif has_subtitle:
-                    attachment_stream_type = "s"
-                    LOGGER.info(
-                        f"Using subtitle stream from file {additional_file} as attachment input"
-                    )
 
     # Determine stream types based on file content
     if multi_files:
@@ -6782,29 +6814,18 @@ async def get_add_cmd(
                                     for track in existing_tracks["video"]
                                 ]
 
-                                # Check if the target index is beyond the current count of tracks
-                                # If so, use the first available index
-                                if target_idx >= len(existing_video_indices) + i:
-                                    actual_idx = find_first_available_index(
-                                        existing_video_indices, target_idx
+                                # Use the new helper function to resolve the index
+                                actual_idx = resolve_track_index(
+                                    target_idx,
+                                    existing_video_indices,
+                                    replace_mode=replace_tracks,
+                                    preserve_mode=preserve_tracks,
+                                )
+
+                                if actual_idx != target_idx:
+                                    LOGGER.info(
+                                        f"Index {target_idx} adjusted to {actual_idx} based on mode and conflicts."
                                     )
-
-                                # Check if the index is already occupied
-                                elif target_idx in existing_video_indices:
-                                    if replace_tracks:
-                                        # If replace flag is set, use the specified index
-                                        actual_idx = target_idx
-
-                                    else:
-                                        # Find the next available index
-                                        actual_idx = find_next_available_index(
-                                            existing_video_indices, target_idx
-                                        )
-                                        LOGGER.info(
-                                            f"Index {target_idx} is already occupied. Using next available index {actual_idx} instead."
-                                        )
-                                else:
-                                    actual_idx = target_idx
 
                                 # Log the existing indices and target index
                                 LOGGER.info(

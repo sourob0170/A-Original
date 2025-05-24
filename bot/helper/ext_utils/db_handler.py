@@ -167,31 +167,43 @@ class DbManager:
             await self.ensure_connection()  # Try to reconnect for next operation
 
     async def update_aria2(self, key, value):
-        if self._return:
+        if not await self.ensure_connection():
             return
-        await self.db.settings.aria2c.update_one(
-            {"_id": TgClient.ID},
-            {"$set": {key: value}},
-            upsert=True,
-        )
+        try:
+            await self.db.settings.aria2c.update_one(
+                {"_id": TgClient.ID},
+                {"$set": {key: value}},
+                upsert=True,
+            )
+        except PyMongoError as e:
+            LOGGER.error(f"Error updating aria2 config: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
 
     async def update_qbittorrent(self, key, value):
-        if self._return:
+        if not await self.ensure_connection():
             return
-        await self.db.settings.qbittorrent.update_one(
-            {"_id": TgClient.ID},
-            {"$set": {key: value}},
-            upsert=True,
-        )
+        try:
+            await self.db.settings.qbittorrent.update_one(
+                {"_id": TgClient.ID},
+                {"$set": {key: value}},
+                upsert=True,
+            )
+        except PyMongoError as e:
+            LOGGER.error(f"Error updating qbittorrent config: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
 
     async def save_qbit_settings(self):
-        if self._return:
+        if not await self.ensure_connection():
             return
-        await self.db.settings.qbittorrent.update_one(
-            {"_id": TgClient.ID},
-            {"$set": qbit_options},
-            upsert=True,
-        )
+        try:
+            await self.db.settings.qbittorrent.update_one(
+                {"_id": TgClient.ID},
+                {"$set": qbit_options},
+                upsert=True,
+            )
+        except PyMongoError as e:
+            LOGGER.error(f"Error saving qbittorrent settings: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
 
     async def update_private_file(self, path):
         if self._return:
@@ -285,7 +297,7 @@ class DbManager:
         await self.db.users.update_one({"_id": user_id}, pipeline, upsert=True)
 
     async def update_user_doc(self, user_id, key, path="", binary_data=None):
-        """Update a user document in the database.
+        """Update a user document in the database with memory-efficient handling.
 
         Args:
             user_id: The user ID
@@ -300,9 +312,62 @@ class DbManager:
             # Use the provided binary data directly
             doc_bin = binary_data
         elif path:
-            # Read binary data from the file
-            async with aiopen(path, "rb+") as doc:
-                doc_bin = await doc.read()
+            try:
+                # Get file size for logging
+                file_size = await aiopath.getsize(path)
+                LOGGER.info(
+                    f"Reading file {path} of size {file_size} bytes for user {user_id}"
+                )
+
+                # Use chunked reading for memory efficiency
+                chunk_size = 8 * 1024 * 1024  # 8MB chunks
+                doc_bin = bytearray()
+
+                async with aiopen(path, "rb") as doc:
+                    while True:
+                        try:
+                            chunk = await doc.read(chunk_size)
+                            if not chunk:
+                                break
+                            doc_bin.extend(chunk)
+
+                            # Force garbage collection periodically for large files
+                            if len(doc_bin) % (32 * 1024 * 1024) == 0:  # Every 32MB
+                                if smart_garbage_collection is not None:
+                                    smart_garbage_collection(aggressive=False)
+
+                        except MemoryError:
+                            LOGGER.error(
+                                f"Memory error while reading chunk from {path}"
+                            )
+                            # Try to free up memory
+                            if smart_garbage_collection is not None:
+                                smart_garbage_collection(aggressive=True)
+                            raise MemoryError(
+                                f"Not enough memory to read file: {path}"
+                            )
+
+                # Convert to bytes for database storage
+                doc_bin = bytes(doc_bin)
+
+                # Verify the data was read correctly
+                if len(doc_bin) != file_size:
+                    LOGGER.error(
+                        f"File read size mismatch: expected {file_size}, got {len(doc_bin)}"
+                    )
+                    raise ValueError("File read size mismatch")
+
+                LOGGER.info(f"Successfully read {len(doc_bin)} bytes from {path}")
+
+            except MemoryError as e:
+                LOGGER.error(f"Memory error reading file {path}: {e}")
+                # Force aggressive garbage collection
+                if smart_garbage_collection is not None:
+                    smart_garbage_collection(aggressive=True)
+                raise MemoryError(f"Not enough memory to read file: {path}")
+            except Exception as e:
+                LOGGER.error(f"Error reading file {path}: {e}")
+                raise
         else:
             # Remove the key if no data is provided
             await self.db.users.update_one(
@@ -312,12 +377,40 @@ class DbManager:
             )
             return
 
-        # Store the binary data in the database
-        await self.db.users.update_one(
-            {"_id": user_id},
-            {"$set": {key: doc_bin}},
-            upsert=True,
-        )
+        try:
+            # Store the binary data in the database
+            LOGGER.info(
+                f"Storing {len(doc_bin)} bytes in database for user {user_id}, key {key}"
+            )
+            await self.db.users.update_one(
+                {"_id": user_id},
+                {"$set": {key: doc_bin}},
+                upsert=True,
+            )
+            LOGGER.info(
+                f"Successfully updated user document for user {user_id}, key {key}"
+            )
+
+            # Force garbage collection after large database operations
+            if (
+                len(doc_bin) > 10 * 1024 * 1024
+                and smart_garbage_collection is not None
+            ):  # 10MB
+                smart_garbage_collection(aggressive=False)
+
+        except MemoryError as e:
+            LOGGER.error(
+                f"Memory error storing data in database for user {user_id}: {e}"
+            )
+            # Force aggressive garbage collection
+            if smart_garbage_collection is not None:
+                smart_garbage_collection(aggressive=True)
+            raise MemoryError("Not enough memory to store data in database")
+        except Exception as e:
+            LOGGER.error(
+                f"Error updating user document for user {user_id}, key {key}: {e}"
+            )
+            raise
 
     async def rss_update_all(self):
         if self._return:
@@ -477,7 +570,7 @@ class DbManager:
             delete_time: Timestamp when the message should be deleted
             bot_id: ID of the bot that created the message (default: main bot ID)
         """
-        if self.db is None:
+        if not await self.ensure_connection():
             return
 
         # Default to main bot ID if not specified
@@ -494,18 +587,23 @@ class DbManager:
                     {"$set": {"delete_time": delete_time, "bot_id": bot_id}},
                     upsert=True,
                 )
-            except Exception as e:
+            except PyMongoError as e:
                 LOGGER.error(f"Error storing scheduled deletion: {e}")
+                await self.ensure_connection()  # Try to reconnect for next operation
 
         # Messages stored for deletion
 
     async def remove_scheduled_deletion(self, chat_id, message_id):
         """Remove a message from scheduled deletions"""
-        if self.db is None:
+        if not await self.ensure_connection():
             return
-        await self.db.scheduled_deletions.delete_one(
-            {"chat_id": chat_id, "message_id": message_id},
-        )
+        try:
+            await self.db.scheduled_deletions.delete_one(
+                {"chat_id": chat_id, "message_id": message_id},
+            )
+        except PyMongoError as e:
+            LOGGER.error(f"Error removing scheduled deletion: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
 
     async def get_pending_deletions(self):
         """Get messages that are due for deletion"""
@@ -551,66 +649,76 @@ class DbManager:
         Args:
             days: Number of days after which to clean up entries (default: 1)
         """
-        if self.db is None:
+        if not await self.ensure_connection():
             return 0
 
-        # Calculate the timestamp for 'days' ago
-        one_day_ago = int(get_time() - (days * 86400))  # 86400 seconds = 1 day
+        try:
+            # Calculate the timestamp for 'days' ago
+            one_day_ago = int(get_time() - (days * 86400))  # 86400 seconds = 1 day
 
-        # Cleaning up old scheduled deletion entries
+            # Cleaning up old scheduled deletion entries
 
-        # Get all entries to check which ones are actually old and processed
-        entries_to_check = [
-            doc async for doc in self.db.scheduled_deletions.find({})
-        ]
+            # Get all entries to check which ones are actually old and processed
+            entries_to_check = [
+                doc async for doc in self.db.scheduled_deletions.find({})
+            ]
 
-        # Count entries by type
-        current_time = int(get_time())
-        past_due = [
-            doc for doc in entries_to_check if doc["delete_time"] < current_time
-        ]
+            # Count entries by type
+            current_time = int(get_time())
+            past_due = [
+                doc for doc in entries_to_check if doc["delete_time"] < current_time
+            ]
 
-        # Only delete entries that are more than 'days' old AND have already been processed
-        # (i.e., their delete_time is in the past)
-        deleted_count = 0
-        for doc in past_due:
-            # If the entry is more than 'days' old from its scheduled deletion time
-            if doc["delete_time"] < one_day_ago:
-                result = await self.db.scheduled_deletions.delete_one(
-                    {"_id": doc["_id"]},
-                )
-                if result.deleted_count > 0:
-                    deleted_count += 1
+            # Only delete entries that are more than 'days' old AND have already been processed
+            # (i.e., their delete_time is in the past)
+            deleted_count = 0
+            for doc in past_due:
+                # If the entry is more than 'days' old from its scheduled deletion time
+                if doc["delete_time"] < one_day_ago:
+                    result = await self.db.scheduled_deletions.delete_one(
+                        {"_id": doc["_id"]},
+                    )
+                    if result.deleted_count > 0:
+                        deleted_count += 1
 
-        # No need to log cleanup results
+            # No need to log cleanup results
 
-        return deleted_count
+            return deleted_count
+        except PyMongoError as e:
+            LOGGER.error(f"Error cleaning old scheduled deletions: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
+            return 0
 
     async def get_all_scheduled_deletions(self):
         """Get all scheduled deletions for debugging purposes"""
-        if self.db is None:
+        if not await self.ensure_connection():
             return []
 
-        cursor = self.db.scheduled_deletions.find({})
-        current_time = int(get_time())
+        try:
+            cursor = self.db.scheduled_deletions.find({})
+            current_time = int(get_time())
 
-        # Return all scheduled deletions
-        result = [
-            {
-                "chat_id": doc["chat_id"],
-                "message_id": doc["message_id"],
-                "delete_time": doc["delete_time"],
-                "bot_id": doc.get("bot_id", TgClient.ID),
-                "time_remaining": doc["delete_time"] - current_time
-                if "delete_time" in doc
-                else "unknown",
-                "is_due": doc["delete_time"]
-                <= current_time + 30  # 30 seconds buffer
-                if "delete_time" in doc
-                else False,
-            }
-            async for doc in cursor
-        ]
+            # Return all scheduled deletions
+            result = [
+                {
+                    "chat_id": doc["chat_id"],
+                    "message_id": doc["message_id"],
+                    "delete_time": doc["delete_time"],
+                    "bot_id": doc.get("bot_id", TgClient.ID),
+                    "time_remaining": doc["delete_time"] - current_time
+                    if "delete_time" in doc
+                    else "unknown",
+                    "is_due": doc["delete_time"]
+                    <= current_time + 30  # 30 seconds buffer
+                    if "delete_time" in doc
+                    else False,
+                }
+                async for doc in cursor
+            ]
+        except PyMongoError as e:
+            LOGGER.error(f"Error getting all scheduled deletions: {e}")
+            await self.ensure_connection()  # Try to reconnect for next operation
+            return []
 
         # Only log detailed information when called from check_deletion.py
         caller_frame = inspect.currentframe().f_back

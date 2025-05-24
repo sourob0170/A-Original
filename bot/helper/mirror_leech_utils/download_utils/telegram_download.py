@@ -17,7 +17,16 @@ except ImportError:
 
         StopTransmissionError = None
 
-from bot import LOGGER, task_dict, task_dict_lock
+try:
+    from bot import LOGGER, task_dict, task_dict_lock
+except ImportError:
+    # Fallback logger in case of import issues
+    from asyncio import Lock
+    from logging import getLogger
+
+    LOGGER = getLogger(__name__)
+    task_dict = {}
+    task_dict_lock = Lock()
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.hyperdl_utils import HyperTGDownload
@@ -60,6 +69,7 @@ class TelegramDownloadHelper:
         return self._processed_bytes
 
     async def _on_download_start(self, file_id, from_queue):
+        global LOGGER  # Ensure LOGGER is treated as global
         async with global_lock:
             GLOBAL_GID.add(file_id)
         self._id = file_id
@@ -92,6 +102,7 @@ class TelegramDownloadHelper:
         self._processed_bytes = current
 
     async def _on_download_error(self, error):
+        global LOGGER  # Ensure LOGGER is treated as global
         async with global_lock:
             if self._id in GLOBAL_GID:
                 GLOBAL_GID.remove(self._id)
@@ -114,6 +125,7 @@ class TelegramDownloadHelper:
         await self._listener.on_download_complete()
 
     async def _download(self, message, path):
+        global LOGGER  # Ensure LOGGER is treated as global
         try:
             if self._hyper_dl:
                 try:
@@ -193,6 +205,7 @@ class TelegramDownloadHelper:
             await self._on_download_error("Internal error occurred")
 
     async def add_download(self, message, path, session):
+        global LOGGER  # Ensure LOGGER is treated as global
         self.session = session
         if not self.session:
             if self._hyper_dl:
@@ -343,6 +356,7 @@ class TelegramDownloadHelper:
             )
 
     async def cancel_task(self):
+        global LOGGER  # Ensure LOGGER is treated as global
         self._listener.is_cancelled = True
         LOGGER.info(
             f"Cancelling download on user request: name: {self._listener.name} id: {self._id}",

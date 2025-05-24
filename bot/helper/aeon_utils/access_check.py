@@ -93,8 +93,18 @@ async def error_check(message):
                 button.data_button("Start", f"aeon {user_id} private", "header")
                 msg.append("You haven't initiated the bot in a private message!")
 
+    # Always authorize owner ID
+    if user_id == Config.OWNER_ID:
+        # Ensure owner is in user_data with AUTH=True
+        if user_id not in user_data:
+            from bot.helper.ext_utils.bot_utils import update_user_ldata
+
+            update_user_ldata(user_id, "AUTH", True)
+        elif not user_data[user_id].get("AUTH", False):
+            user_data[user_id]["AUTH"] = True
+        return None, None
+
     if user_id not in {
-        Config.OWNER_ID,
         Config.RSS_CHAT,
         user_data.get(user_id, {}).get("SUDO"),
     }:
@@ -195,7 +205,19 @@ async def is_paid(user_id):
 
 async def token_check(user_id, button=None):
     token_timeout = Config.TOKEN_TIMEOUT
-    if not token_timeout or user_id == Config.OWNER_ID:
+
+    # Always authorize owner ID without token
+    if user_id == Config.OWNER_ID:
+        # Ensure owner is in user_data with AUTH=True
+        if user_id not in user_data:
+            from bot.helper.ext_utils.bot_utils import update_user_ldata
+
+            update_user_ldata(user_id, "AUTH", True)
+        elif not user_data[user_id].get("AUTH", False):
+            user_data[user_id]["AUTH"] = True
+        return None, button
+
+    if not token_timeout:
         return None, button
     if Config.PAID_CHANNEL_ID and await is_paid(user_id):
         return None, button

@@ -3,6 +3,7 @@ from bot.helper.ext_utils.help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     MIRROR_HELP_DICT,
+    VT_HELP_DICT,
     YT_HELP_DICT,
     help_string,
 )
@@ -38,6 +39,33 @@ async def arg_usage(_, query):
         await query.answer("Not Yours!", show_alert=True)
         return
 
+    # Handle page navigation
+    if data[1] == "page":
+        page = data[2]
+
+        # Create navigation buttons
+        buttons = ButtonMaker()
+
+        # Add category buttons
+        buttons.data_button("🔄 Download", "help page download")
+        buttons.data_button("📊 Status", "help page status")
+        buttons.data_button("🔍 Search", "help page search")
+        buttons.data_button("📁 Files", "help page file")
+        buttons.data_button("🔒 Security", "help page security")
+        buttons.data_button("⚙️ Settings", "help page settings")
+        buttons.data_button("🤖 Special", "help page special")
+        buttons.data_button("🛠️ System", "help page system")
+
+        # Add Close button
+        buttons.data_button("❌ Close", "help close")
+
+        # Build menu with 3 buttons per row
+        button = buttons.build_menu(3)
+
+        await edit_message(message, help_string[page], button)
+        await query.answer()
+        return
+
     buttons = ButtonMaker()
     buttons.data_button("Close", "help close")
     button = buttons.build_menu(2)
@@ -67,6 +95,12 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["ai"][0],
                 COMMAND_USAGE["ai"][1],
             )
+        elif data[2] == "v":
+            await edit_message(
+                message,
+                COMMAND_USAGE["virustotal"][0],
+                COMMAND_USAGE["virustotal"][1],
+            )
     elif data[1] == "mirror":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back m")
@@ -91,6 +125,12 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, AI_HELP_DICT[data[2]], button)
+    elif data[1] == "vt":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back v")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, VT_HELP_DICT[data[2]], button)
 
     try:
         await query.answer()
@@ -104,11 +144,33 @@ async def bot_help(_, message):
     # Delete the /help command and any replied message immediately
     await delete_links(message)
 
-    # Add Close button to help menu
-    buttons = ButtonMaker()
-    buttons.data_button("Close", "help close")
-    button = buttons.build_menu(2)
+    # Extract page from command if provided
+    cmd = message.text.split()
+    page = "main"
+    if len(cmd) > 1:
+        requested_page = cmd[1].lower()
+        if requested_page in help_string:
+            page = requested_page
 
-    # Send help menu with Close button and set 5-minute auto-delete
-    help_msg = await send_message(message, help_string, button)
+    # Create navigation buttons
+    buttons = ButtonMaker()
+
+    # Add category buttons
+    buttons.data_button("🔄 Download", "help page download")
+    buttons.data_button("📊 Status", "help page status")
+    buttons.data_button("🔍 Search", "help page search")
+    buttons.data_button("📁 Files", "help page file")
+    buttons.data_button("🔒 Security", "help page security")
+    buttons.data_button("⚙️ Settings", "help page settings")
+    buttons.data_button("🤖 Special", "help page special")
+    buttons.data_button("🛠️ System", "help page system")
+
+    # Add Close button
+    buttons.data_button("❌ Close", "help close")
+
+    # Build menu with 3 buttons per row
+    button = buttons.build_menu(3)
+
+    # Send help menu with navigation buttons and set 5-minute auto-delete
+    help_msg = await send_message(message, help_string[page], button)
     await auto_delete_message(help_msg, time=300)

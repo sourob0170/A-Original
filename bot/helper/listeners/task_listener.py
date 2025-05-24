@@ -608,7 +608,12 @@ class TaskListener(TaskConfig):
                     ext = current_name.split(".")[-1] if "." in current_name else ""
                     current_name = f"{base_name}.{ext}" if ext else base_name
 
-        msg = f"<b>Name: </b><code>{escape(current_name)}</code>\n\n<blockquote><b>Size: </b>{get_readable_file_size(self.size)}"
+        # Truncate name if too long to prevent message length issues
+        display_name = current_name
+        if len(display_name) > 100:
+            display_name = display_name[:97] + "..."
+
+        msg = f"<b>Name: </b><code>{escape(display_name)}</code>\n\n<blockquote><b>Size: </b>{get_readable_file_size(self.size)}"
         done_msg = f"<b><blockquote>Hey, {self.tag}</blockquote>\nYour task is complete\nPlease check your inbox.</b>"
         LOGGER.info(f"Task Done: {current_name}")
         if self.is_leech:
@@ -652,7 +657,11 @@ class TaskListener(TaskConfig):
             else:
                 fmsg = ""
                 for index, (url, name) in enumerate(files.items(), start=1):
-                    fmsg += f"{index}. <a href='{url}'>{name}</a>"
+                    # Truncate file name if too long
+                    display_file_name = name
+                    if len(display_file_name) > 80:
+                        display_file_name = display_file_name[:77] + "..."
+                    fmsg += f"{index}. <a href='{url}'>{display_file_name}</a>"
 
                     # Add store link if enabled
                     # Check if Media Store is enabled for this user

@@ -1,4 +1,4 @@
-FROM 5hojib/aeon:beta
+FROM shabbirmahmud/aimmlbot:latest
 
 WORKDIR /usr/src/app
 RUN chmod 777 /usr/src/app

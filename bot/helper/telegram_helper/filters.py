@@ -81,10 +81,20 @@ class CustomFilters:
         uid = user.id
         chat_id = chat.id
 
+        # Always authorize owner ID
+        if uid == Config.OWNER_ID:
+            # Ensure owner is in user_data with AUTH=True
+            if uid not in user_data:
+                from bot.helper.ext_utils.bot_utils import update_user_ldata
+
+                update_user_ldata(uid, "AUTH", True)
+            elif not user_data[uid].get("AUTH", False):
+                user_data[uid]["AUTH"] = True
+            return True
+
         # Use the same authorization logic as in authorized_user
         return bool(
-            uid == Config.OWNER_ID
-            or (
+            (
                 uid in user_data
                 and (
                     user_data[uid].get("AUTH", False)
@@ -168,9 +178,19 @@ class CustomFilters:
         uid = user.id
         chat_id = chat.id
 
+        # Always authorize owner ID
+        if uid == Config.OWNER_ID:
+            # Ensure owner is in user_data with AUTH=True
+            if uid not in user_data:
+                from bot.helper.ext_utils.bot_utils import update_user_ldata
+
+                update_user_ldata(uid, "AUTH", True)
+            elif not user_data[uid].get("AUTH", False):
+                user_data[uid]["AUTH"] = True
+            return True
+
         return bool(
-            uid == Config.OWNER_ID
-            or (
+            (
                 uid in user_data
                 and (
                     user_data[uid].get("AUTH", False)
@@ -213,10 +233,20 @@ class CustomFilters:
             return False
 
         uid = user.id
+
+        # Always authorize owner ID as sudo
+        if uid == Config.OWNER_ID:
+            # Ensure owner is in user_data with SUDO=True
+            if uid not in user_data:
+                from bot.helper.ext_utils.bot_utils import update_user_ldata
+
+                update_user_ldata(uid, "SUDO", True)
+            elif not user_data[uid].get("SUDO", False):
+                user_data[uid]["SUDO"] = True
+            return True
+
         return bool(
-            uid == Config.OWNER_ID
-            or (uid in user_data and user_data[uid].get("SUDO"))
-            or uid in sudo_users,
+            (uid in user_data and user_data[uid].get("SUDO")) or uid in sudo_users,
         )
 
     sudo = create(sudo_user)

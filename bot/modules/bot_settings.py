@@ -20,6 +20,7 @@ from pyrogram.filters import create
 from pyrogram.handlers import MessageHandler
 
 from bot import (
+    LOGGER,
     aria2_options,
     auth_chats,
     drives_ids,
@@ -103,10 +104,16 @@ DEFAULT_VALUES = {
     "NZB_ENABLED": True,
     "NZB_SEARCH_ENABLED": True,
     "JD_ENABLED": True,
+    "VT_ENABLED": False,
+    "VT_API_TIMEOUT": 500,
+    "VT_MAX_FILE_SIZE": 32 * 1024 * 1024,  # 32MB in bytes,
+    "CORRECT_CMD_SUFFIX": "",
+    "WRONG_CMD_WARNINGS_ENABLED": True,
     "HYPERDL_ENABLED": True,
     "MEDIA_SEARCH_ENABLED": True,
     "RCLONE_ENABLED": True,
     "ARCHIVE_FLAGS_ENABLED": True,
+    "AD_BROADCASTER_ENABLED": False,
     # Watermark Settings
     "WATERMARK_ENABLED": False,
     "WATERMARK_KEY": "",
@@ -118,19 +125,14 @@ DEFAULT_VALUES = {
     "WATERMARK_THREADING": True,
     "WATERMARK_THREAD_NUMBER": 4,
     "WATERMARK_QUALITY": "none",
-    # Screenshot Settings
-    "SCREENSHOT_ENABLED": False,
-    "SCREENSHOT_PRIORITY": 3,
-    "SCREENSHOT_COUNT": 5,
-    "SCREENSHOT_INTERVAL": "auto",
-    "SCREENSHOT_FORMAT": "jpg",
-    "SCREENSHOT_QUALITY": 80,
-    "SCREENSHOT_RESOLUTION": "original",
     "WATERMARK_SPEED": "none",
     "WATERMARK_OPACITY": 0.0,
     "WATERMARK_REMOVE_ORIGINAL": True,
     # Audio Watermark Settings
     "AUDIO_WATERMARK_VOLUME": 0.0,
+    # Branding Settings
+    "CREDIT": "Powered by @aimmirror",
+    "OWNER_THUMB": "https://graph.org/file/80b7fb095063a18f9e232.jpg",
     "AUDIO_WATERMARK_INTERVAL": 0,
     # Subtitle Watermark Settings
     "SUBTITLE_WATERMARK_STYLE": "none",
@@ -1162,11 +1164,10 @@ Send one of the following position options:
                         "TRIM_",
                         "EXTRACT_",
                         "ADD_",
+                        "SCREENSHOT_",
                         "TASK_MONITOR_",
                         "MISTRAL_",
                         "DEEPSEEK_",
-                        "CHATGPT_",
-                        "GEMINI_",
                     )
                 )
                 or k
@@ -1508,7 +1509,6 @@ Send only the file name as text message.
             buttons.data_button("➕ Add", "botset mediatools_add")
         if is_media_tool_enabled("metadata"):
             buttons.data_button("📝 Metadata", "botset mediatools_metadata")
-        # Screenshot button removed as requested
 
         # Count enabled tools for display
         all_tools = [
@@ -1563,16 +1563,10 @@ Select a tool category to configure its settings."""
 
         # Mistral settings
         buttons.data_button(
-            "🔑 Mistral API Key", f"{callback_prefix} MISTRAL_API_KEY"
-        )
-        buttons.data_button(
             "🔗 Mistral API URL", f"{callback_prefix} MISTRAL_API_URL"
         )
 
         # DeepSeek settings
-        buttons.data_button(
-            "🔑 DeepSeek API Key", f"{callback_prefix} DEEPSEEK_API_KEY"
-        )
         buttons.data_button(
             "🔗 DeepSeek API URL", f"{callback_prefix} DEEPSEEK_API_URL"
         )
@@ -1588,9 +1582,7 @@ Select a tool category to configure its settings."""
 
         # Get current AI settings
         default_ai = Config.DEFAULT_AI_PROVIDER.capitalize()
-        mistral_api_key = "✅ Set" if Config.MISTRAL_API_KEY else "❌ Not Set"
         mistral_api_url = Config.MISTRAL_API_URL or "Not Set"
-        deepseek_api_key = "✅ Set" if Config.DEEPSEEK_API_KEY else "❌ Not Set"
         deepseek_api_url = Config.DEEPSEEK_API_URL or "Not Set"
 
         msg = f"""<b>AI Settings</b> | State: {state}
@@ -1598,20 +1590,17 @@ Select a tool category to configure its settings."""
 <b>Default AI Provider:</b> <code>{default_ai}</code>
 
 <b>Mistral AI:</b>
-• <b>API Key:</b> {mistral_api_key}
 • <b>API URL:</b> <code>{mistral_api_url}</code>
 
 <b>DeepSeek AI:</b>
-• <b>API Key:</b> {deepseek_api_key}
 • <b>API URL:</b> <code>{deepseek_api_url}</code>
 
 <b>Usage:</b>
-• Configure at least one AI provider with API Key or URL
+• Configure at least one AI provider with API URL
 • Set your preferred default provider
 • Use /ask command to chat with the AI
 
-<i>Note: For each provider, configure either API Key or URL. If both are set, API Key will be used first with fallback to URL.</i>
-<i>Users can override these settings in their user settings.</i>"""
+<i>Note: Users can override these settings in their user settings.</i>"""
 
     elif key == "operations":
         # Operations settings
@@ -1632,6 +1621,9 @@ Select a tool category to configure its settings."""
             "HYPERDL_ENABLED",
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
+            "WRONG_CMD_WARNINGS_ENABLED",
+            "VT_ENABLED",
+            "AD_BROADCASTER_ENABLED",
         ]
 
         try:
@@ -1678,6 +1670,13 @@ Select a tool category to configure its settings."""
             "✅ Enabled" if Config.MEDIA_SEARCH_ENABLED else "❌ Disabled"
         )
         rclone_enabled = "✅ Enabled" if Config.RCLONE_ENABLED else "❌ Disabled"
+        wrong_cmd_warnings_enabled = (
+            "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
+        )
+        virustotal_enabled = "✅ Enabled" if Config.VT_ENABLED else "❌ Disabled"
+        ad_broadcaster_enabled = (
+            "✅ Enabled" if Config.AD_BROADCASTER_ENABLED else "❌ Disabled"
+        )
 
         # Create toggle buttons for operations
         buttons.data_button(
@@ -1736,6 +1735,18 @@ Select a tool category to configure its settings."""
             f"☁️ Rclone Operations: {rclone_enabled}",
             f"botset toggle RCLONE_ENABLED {not Config.RCLONE_ENABLED}",
         )
+        buttons.data_button(
+            f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
+            f"botset toggle WRONG_CMD_WARNINGS_ENABLED {not Config.WRONG_CMD_WARNINGS_ENABLED}",
+        )
+        buttons.data_button(
+            f"🦠 VirusTotal Scan: {virustotal_enabled}",
+            f"botset toggle VT_ENABLED {not Config.VT_ENABLED}",
+        )
+        buttons.data_button(
+            f"📢 Ad Broadcaster: {ad_broadcaster_enabled}",
+            f"botset toggle AD_BROADCASTER_ENABLED {not Config.AD_BROADCASTER_ENABLED}",
+        )
 
         buttons.data_button("⬅️ Back", "botset back", "footer")
         buttons.data_button("❌ Close", "botset close", "footer")
@@ -1756,6 +1767,9 @@ Select a tool category to configure its settings."""
 <b>Hyper Download:</b> {hyperdl_enabled}
 <b>Media Search:</b> {media_search_enabled}
 <b>Rclone Operations:</b> {rclone_enabled}
+<b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
+<b>VirusTotal Scan:</b> {virustotal_enabled}
+<b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
 
 <b>Description:</b>
 • <b>Bulk Operations:</b> Controls whether users can use the -b flag for bulk operations
@@ -1771,7 +1785,10 @@ Select a tool category to configure its settings."""
 • <b>JDownloader Operations:</b> Controls whether users can use JDownloader commands
 • <b>Hyper Download:</b> Controls whether users can use Hyper Download for faster Telegram downloads
 • <b>Media Search:</b> Controls whether users can search for media in configured channels
-• <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations"""
+• <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations
+• <b>Command Warnings:</b> Controls whether warnings are shown for wrong command suffixes
+• <b>VirusTotal Scan:</b> Controls whether users can scan files and URLs for viruses using VirusTotal
+• <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users"""
 
     elif key == "taskmonitor":
         # Group task monitoring settings by category
@@ -2948,98 +2965,6 @@ Current page shows: {category_text} settings."""
 • Settings with value 'None' will not be used in command generation
 
 Configure global extract settings that will be used when user settings are not available."""
-
-    elif key == "mediatools_screenshot":
-        # Create a new ButtonMaker instance to avoid duplicate buttons
-        buttons = ButtonMaker()
-
-        # Add screenshot settings
-        screenshot_settings = [
-            "SCREENSHOT_ENABLED",
-            "SCREENSHOT_PRIORITY",
-            "SCREENSHOT_COUNT",
-            "SCREENSHOT_INTERVAL",
-            "SCREENSHOT_FORMAT",
-            "SCREENSHOT_QUALITY",
-            "SCREENSHOT_RESOLUTION",
-        ]
-
-        # Add buttons for each setting
-        for setting in screenshot_settings:
-            # Create a more user-friendly display name
-            display_name = setting.replace("SCREENSHOT_", "").title()
-
-            # For boolean settings, add toggle buttons with status
-            if setting == "SCREENSHOT_ENABLED":
-                setting_value = getattr(Config, setting, False)
-                status = "✅ ON" if setting_value else "❌ OFF"
-                display_name = f"{display_name}: {status}"
-                buttons.data_button(
-                    display_name, f"botset toggle {setting} {not setting_value}"
-                )
-                continue
-
-            # For non-boolean settings, use editvar
-            buttons.data_button(display_name, f"botset editvar {setting}")
-
-        if state == "view":
-            buttons.data_button("✏️ Edit", "botset edit mediatools_screenshot")
-        else:
-            buttons.data_button("👁️ View", "botset view mediatools_screenshot")
-
-        # Add settings buttons
-        buttons.data_button("⬅️ Back", "botset mediatools", "footer")
-        buttons.data_button("🔄 Reset to Default", "botset default_screenshot")
-        buttons.data_button("❌ Close", "botset close", "footer")
-
-        # Get current screenshot settings
-        screenshot_enabled = (
-            "✅ Enabled" if Config.SCREENSHOT_ENABLED else "❌ Disabled"
-        )
-        screenshot_priority = Config.SCREENSHOT_PRIORITY or DEFAULT_VALUES.get(
-            "SCREENSHOT_PRIORITY", 3
-        )
-        screenshot_count = Config.SCREENSHOT_COUNT or DEFAULT_VALUES.get(
-            "SCREENSHOT_COUNT", 5
-        )
-        screenshot_interval = Config.SCREENSHOT_INTERVAL or DEFAULT_VALUES.get(
-            "SCREENSHOT_INTERVAL", "auto"
-        )
-        screenshot_format = Config.SCREENSHOT_FORMAT or DEFAULT_VALUES.get(
-            "SCREENSHOT_FORMAT", "jpg"
-        )
-        screenshot_quality = Config.SCREENSHOT_QUALITY or DEFAULT_VALUES.get(
-            "SCREENSHOT_QUALITY", 80
-        )
-        screenshot_resolution = Config.SCREENSHOT_RESOLUTION or DEFAULT_VALUES.get(
-            "SCREENSHOT_RESOLUTION", "original"
-        )
-
-        # Create a message with information about the screenshot tool
-        msg = f"""<b>Screenshot Tool Settings</b>
-
-<b>Status:</b> {screenshot_enabled}
-<b>Priority:</b> {screenshot_priority}
-<b>Count:</b> {screenshot_count}
-<b>Interval:</b> {screenshot_interval}
-<b>Format:</b> {screenshot_format}
-<b>Quality:</b> {screenshot_quality}
-<b>Resolution:</b> {screenshot_resolution}
-
-<b>Usage:</b>
-• Use the <code>-ss</code> flag to enable taking screenshots
-
-<b>Example:</b>
-<code>/mirror -ss https://example.com/video.mp4</code>
-
-<b>Details:</b>
-• Screenshots are taken at equal intervals throughout the video
-• By default, multiple screenshots are taken
-• Screenshots are saved in a folder with the video name
-"""
-
-        # Show the message with buttons
-        return msg, buttons.build_menu(2)
 
     elif key == "mediatools_add":
         # Add buttons for add settings
@@ -5580,23 +5505,13 @@ async def edit_nzb(_, message, pre_message, key):
     elif value.startswith("[") and value.endswith("]"):
         try:
             value = ",".join(eval(value))
-        except Exception:
-            # Get the current state before updating the UI
-            current_state = globals()["state"]
-            # Set the state back to what it was
-            globals()["state"] = current_state
+        except Exception as e:
+            LOGGER.error(e)
             await update_buttons(pre_message, "nzb")
-
             return
     res = await sabnzbd_client.set_config("misc", key, value)
     nzb_options[key] = res["config"]["misc"][key]
-
-    # Get the current state before updating the UI
-    current_state = globals()["state"]
-    # Set the state back to what it was
-    globals()["state"] = current_state
     await update_buttons(pre_message, "nzb")
-
     await delete_message(message)
     await database.update_nzb_config()
 
@@ -5605,135 +5520,36 @@ async def edit_nzb(_, message, pre_message, key):
 async def edit_nzb_server(_, message, pre_message, key, index=0):
     handler_dict[message.chat.id] = False
     value = message.text
-
-    # Get the current state before making changes
-    current_state = globals()["state"]
-
-    # Check if SABnzbd client is available
-    if sabnzbd_client is None:
-        await send_message(message, "SABnzbd client is not available!")
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(pre_message, "nzbserver")
-        return
-
     if key == "newser":
         if value.startswith("{") and value.endswith("}"):
             try:
                 value = eval(value)
-            except Exception as e:
-                await send_message(message, f"Invalid dict format! Error: {e!s}")
-
-                # Set the state back to what it was
-                globals()["state"] = current_state
+            except Exception:
+                await send_message(message, "Invalid dict format!")
                 await update_buttons(pre_message, "nzbserver")
                 return
-
-            try:
-                res = await sabnzbd_client.add_server(value)
-
-                # Check if the response indicates an error
-                if "error" in res:
-                    await send_message(
-                        message, f"Error adding server: {res['error']}"
-                    )
-
-                    # Set the state back to what it was
-                    globals()["state"] = current_state
-                    await update_buttons(pre_message, "nzbserver")
-                    return
-
-                # Check if the response has the expected structure
-                if (
-                    "config" not in res
-                    or "servers" not in res["config"]
-                    or not res["config"]["servers"]
-                ):
-                    await send_message(message, "Invalid response from SABnzbd!")
-
-                    # Set the state back to what it was
-                    globals()["state"] = current_state
-                    await update_buttons(pre_message, "nzbserver")
-                    return
-
-                if not res["config"]["servers"][0]["host"]:
-                    await send_message(message, "Invalid server!")
-
-                    # Set the state back to what it was
-                    globals()["state"] = current_state
-                    await update_buttons(pre_message, "nzbserver")
-                    return
-
-                Config.USENET_SERVERS.append(value)
-
-                # Set the state back to what it was
-                globals()["state"] = current_state
-                await update_buttons(pre_message, "nzbserver")
-            except Exception as e:
-                await send_message(
-                    message, f"Error communicating with SABnzbd: {e!s}"
-                )
-
-                # Set the state back to what it was
-                globals()["state"] = current_state
+            res = await sabnzbd_client.add_server(value)
+            if not res["config"]["servers"][0]["host"]:
+                await send_message(message, "Invalid server!")
                 await update_buttons(pre_message, "nzbserver")
                 return
+            Config.USENET_SERVERS.append(value)
+            await update_buttons(pre_message, "nzbserver")
         else:
             await send_message(message, "Invalid dict format!")
-
-            # Set the state back to what it was
-            globals()["state"] = current_state
             await update_buttons(pre_message, "nzbserver")
             return
     else:
         if value.isdigit():
             value = int(value)
-
-        try:
-            res = await sabnzbd_client.add_server(
-                {"name": Config.USENET_SERVERS[index]["name"], key: value},
-            )
-
-            # Check if the response indicates an error
-            if "error" in res:
-                await send_message(message, f"Error updating server: {res['error']}")
-
-                # Set the state back to what it was
-                globals()["state"] = current_state
-                await update_buttons(pre_message, f"nzbser{index}")
-                return
-
-            # Check if the response has the expected structure
-            if (
-                "config" not in res
-                or "servers" not in res["config"]
-                or not res["config"]["servers"]
-            ):
-                await send_message(message, "Invalid response from SABnzbd!")
-
-                # Set the state back to what it was
-                globals()["state"] = current_state
-                await update_buttons(pre_message, f"nzbser{index}")
-                return
-
-            if res["config"]["servers"][0][key] == "":
-                await send_message(message, "Invalid value")
-                return
-
-            Config.USENET_SERVERS[index][key] = value
-
-            # Set the state back to what it was
-            globals()["state"] = current_state
-            await update_buttons(pre_message, f"nzbser{index}")
-        except Exception as e:
-            await send_message(message, f"Error communicating with SABnzbd: {e!s}")
-
-            # Set the state back to what it was
-            globals()["state"] = current_state
-            await update_buttons(pre_message, f"nzbser{index}")
+        res = await sabnzbd_client.add_server(
+            {"name": Config.USENET_SERVERS[index]["name"], key: value},
+        )
+        if res["config"]["servers"][0][key] == "":
+            await send_message(message, "Invalid value")
             return
-
+        Config.USENET_SERVERS[index][key] = value
+        await update_buttons(pre_message, f"nzbser{index}")
     await delete_message(message)
     await database.update_config({"USENET_SERVERS": Config.USENET_SERVERS})
 
@@ -6709,25 +6525,6 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_add")
 
-    elif data[1] == "mediatools_screenshot":
-        from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
-
-        await query.answer()
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        # Check if screenshot is enabled
-        if not is_media_tool_enabled("screenshot"):
-            await query.answer(
-                "Screenshot tool is disabled by the bot owner.", show_alert=True
-            )
-            return
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        # Note: Button removed from menu but functionality still accessible via direct URL
-        await update_buttons(message, "mediatools_screenshot")
-
     elif data[1] == "mediatools_compression":
         from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
 
@@ -7480,61 +7277,6 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_convert")
 
-    elif data[1] == "default_screenshot_setting":
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        # Reset the specific SCREENSHOT_ setting to its default value
-        setting_key = data[2]
-        default_value = DEFAULT_VALUES.get(setting_key)
-
-        if default_value is not None:
-            # Update the Config class
-            Config.set(setting_key, default_value)
-
-            # Update the database
-            await database.update_config({setting_key: default_value})
-
-            # Show a success message
-            await query.answer(
-                f"Reset {setting_key} to default value: {default_value}",
-                show_alert=True,
-            )
-        else:
-            # Show an error message
-            await query.answer(
-                f"Error: No default value found for {setting_key}", show_alert=True
-            )
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(message, "mediatools_screenshot")
-
-    elif data[1] == "default_screenshot":
-        await query.answer("Resetting all screenshot settings to default...")
-        # Reset all screenshot settings to default using DEFAULT_VALUES
-
-        # Create a dictionary of all SCREENSHOT_ settings from DEFAULT_VALUES
-        screenshot_settings = {
-            key: value
-            for key, value in DEFAULT_VALUES.items()
-            if key.startswith("SCREENSHOT_")
-        }
-
-        # Update the Config object
-        for key, value in screenshot_settings.items():
-            Config.set(key, value)
-
-        # Update the database
-        await database.update_config(screenshot_settings)
-
-        # Update the UI - maintain the current state (edit/view)
-        # Get the current state before updating the UI
-        current_state = globals()["state"]
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(message, "mediatools_screenshot")
-
     elif data[1] == "default_add":
         await query.answer("Resetting all add settings to default...")
         # Reset all add settings to default using DEFAULT_VALUES
@@ -7678,18 +7420,14 @@ async def edit_bot_settings(client, query):
         await query.answer("Resetting all AI settings to default...")
         # Reset all AI settings to default
         Config.DEFAULT_AI_PROVIDER = "mistral"
-        Config.MISTRAL_API_KEY = ""
         Config.MISTRAL_API_URL = ""
-        Config.DEEPSEEK_API_KEY = ""
         Config.DEEPSEEK_API_URL = ""
 
         # Update the database
         await database.update_config(
             {
                 "DEFAULT_AI_PROVIDER": "mistral",
-                "MISTRAL_API_KEY": "",
                 "MISTRAL_API_URL": "",
-                "DEEPSEEK_API_KEY": "",
                 "DEEPSEEK_API_URL": "",
             }
         )
@@ -7894,7 +7632,6 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
-        "mediatools_screenshot",
         "ai",
     ]:
         await query.answer()
@@ -7919,9 +7656,6 @@ async def edit_bot_settings(client, query):
         elif data[2] == "mediatools_add":
             # Force a refresh of the UI to ensure the toggle buttons show the correct state
             await update_buttons(message, "mediatools_add")
-        elif data[2] == "mediatools_screenshot":
-            # Force a refresh of the UI to ensure the toggle buttons show the correct state
-            await update_buttons(message, "mediatools_screenshot")
         elif data[2] == "ai":
             await update_buttons(message, "ai")
         elif data[2] == "taskmonitor":
@@ -7938,7 +7672,6 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
-        "mediatools_screenshot",
         "ai",
     ]:
         await query.answer()
@@ -7962,9 +7695,6 @@ async def edit_bot_settings(client, query):
         elif data[2] == "mediatools_add":
             # Force a refresh of the UI to ensure the toggle buttons show the correct state
             await update_buttons(message, "mediatools_add")
-        elif data[2] == "mediatools_screenshot":
-            # Force a refresh of the UI to ensure the toggle buttons show the correct state
-            await update_buttons(message, "mediatools_screenshot")
         elif data[2] == "ai":
             await update_buttons(message, "ai")
         else:
@@ -8167,61 +7897,6 @@ async def edit_bot_settings(client, query):
 
             # Set up the return function to preserve the edit state
             rfunc = partial(update_buttons, message, "mediatools_add", "edit")
-
-            # Launch the event handler to capture user input
-            handler_dict[message.chat.id] = True
-            await event_handler(client, query, pfunc, rfunc)
-            return
-
-        # Handle screenshot settings
-        if data[2].startswith("SCREENSHOT_"):
-            # Create a more user-friendly display name
-            display_name = data[2].replace("SCREENSHOT_", "").title()
-
-            # Get the current value
-            current_value = getattr(Config, data[2], DEFAULT_VALUES.get(data[2], ""))
-
-            # Create a message with instructions
-            msg = f"<b>Edit {display_name}</b>\n\n"
-
-            # Add specific instructions based on the setting
-            if data[2] == "SCREENSHOT_PRIORITY":
-                msg += "Enter a number (1-10) for the screenshot task priority.\n"
-                msg += "Lower numbers = higher priority."
-            elif data[2] == "SCREENSHOT_COUNT":
-                msg += "Enter the number of screenshots to take from each video.\n"
-                msg += "Recommended: 3-10 screenshots."
-            elif data[2] == "SCREENSHOT_INTERVAL":
-                msg += "Enter the interval between screenshots.\n"
-                msg += "Use 'auto' for automatic spacing, or specify in seconds."
-            elif data[2] == "SCREENSHOT_FORMAT":
-                msg += "Enter the format for screenshots (jpg, png, etc).\n"
-                msg += "Recommended: jpg for smaller files, png for higher quality."
-            elif data[2] == "SCREENSHOT_QUALITY":
-                msg += "Enter the quality for screenshots (1-100).\n"
-                msg += "Higher values = better quality but larger files."
-            elif data[2] == "SCREENSHOT_RESOLUTION":
-                msg += "Enter the resolution for screenshots.\n"
-                msg += "Use 'original' to keep source resolution, or specify like '1280x720'."
-
-            # Add the current value
-            msg += f"\n\n<b>Current value:</b> <code>{current_value}</code>\n\n<i>Timeout: 60 seconds</i>"
-
-            # Add buttons
-            buttons = ButtonMaker()
-            buttons.data_button("⬅️ Back", "botset mediatools_screenshot", "footer")
-            buttons.data_button(
-                "🔄 Default", f"botset default_screenshot_setting {data[2]}"
-            )
-            buttons.data_button("❌ Close", "botset close", "footer")
-
-            await edit_message(message, msg, buttons.build_menu(1))
-
-            # Set up the edit function
-            pfunc = partial(edit_variable, pre_message=message, key=data[2])
-
-            # Set up the return function to preserve the edit state
-            rfunc = partial(update_buttons, message, "mediatools_screenshot", "edit")
 
             # Launch the event handler to capture user input
             handler_dict[message.chat.id] = True
@@ -8554,7 +8229,6 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
-        "mediatools_screenshot",
         "ai",
         "taskmonitor",
         "operations",
@@ -8691,8 +8365,6 @@ async def edit_bot_settings(client, query):
             previous_menu = "mediatools_extract"
         elif data[2].startswith("ADD_"):
             previous_menu = "mediatools_add"
-        elif data[2].startswith("SCREENSHOT_"):
-            previous_menu = "mediatools_screenshot"
         elif data[2].startswith("TASK_MONITOR_"):
             previous_menu = "taskmonitor"
         elif data[2] == "DEFAULT_AI_PROVIDER" or data[2].startswith(
@@ -8738,8 +8410,6 @@ async def edit_bot_settings(client, query):
                 previous_menu = "mediatools_extract"
             elif "Add" in message.text:
                 previous_menu = "mediatools_add"
-            elif "Screenshot" in message.text:
-                previous_menu = "mediatools_screenshot"
             elif "Task Monitor" in message.text:
                 previous_menu = "taskmonitor"
             elif "qBittorrent" in message.text:
@@ -10314,6 +9984,9 @@ async def edit_bot_settings(client, query):
             "HYPERDL_ENABLED",
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
+            "WRONG_CMD_WARNINGS_ENABLED",
+            "VT_ENABLED",
+            "AD_BROADCASTER_ENABLED",
         }:
             return_menu = "operations"
         elif key in {"ENABLE_EXTRA_MODULES", "MEDIA_TOOLS_ENABLED"}:

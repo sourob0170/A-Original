@@ -1,4 +1,5 @@
 import json
+import os
 from asyncio import create_task
 from collections import defaultdict
 from os import getcwd
@@ -849,23 +850,54 @@ async def gen_mediainfo(
         if silent
         else await send_message(message, "Generating MediaInfo with ffprobe...")
     )
-    des_path = media_path
+    des_path = None
     tc = ""
 
     # Initialize file_size to 0
     file_size = 0
 
     try:
-        path = "Mediainfo/"
-        if not await aiopath.isdir(path):
-            await mkdir(path)
+        # Initialize the temporary download directory path (only used for downloads)
+        temp_download_path = "Mediainfo/"
 
-        file_size = 0
+        # Handle direct file path (from telegram_uploader or other internal calls)
         if media_path and await aiopath.exists(media_path):
-            # If direct file path is provided, get its size
-            file_size = await aiopath.getsize(media_path)
+            # If direct file path is provided, use it directly
             des_path = media_path
-        elif link:
+            file_size = await aiopath.getsize(media_path)
+            LOGGER.info(f"Using provided media_path: {des_path}")
+        elif link or media:
+            # Only create the Mediainfo directory if we need to download files
+            # Ensure the Mediainfo directory exists for downloads
+            if not await aiopath.isdir(temp_download_path):
+                try:
+                    await mkdir(temp_download_path)
+                    LOGGER.info(f"Created directory: {temp_download_path}")
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error creating directory {temp_download_path}: {e}"
+                    )
+                    # Try with absolute path
+                    abs_path = ospath.abspath(temp_download_path)
+                    if not ospath.isdir(abs_path):
+                        try:
+                            os.makedirs(abs_path, exist_ok=True)
+                            LOGGER.info(
+                                f"Created directory with absolute path: {abs_path}"
+                            )
+                        except Exception as e2:
+                            LOGGER.error(
+                                f"Error creating directory with absolute path {abs_path}: {e2}"
+                            )
+                            # Fall back to a different directory
+                            temp_download_path = "downloads/Mediainfo/"
+                            if not await aiopath.isdir(temp_download_path):
+                                await mkdir(temp_download_path)
+                                LOGGER.info(
+                                    f"Created fallback directory: {temp_download_path}"
+                                )
+
+        if link:
             if not is_url(link):
                 raise ValueError(f"Invalid URL: {link}")
 
@@ -888,7 +920,7 @@ async def gen_mediainfo(
 
             # Clean filename of any problematic characters
             filename = filename.replace(" ", "_").replace("'", "").replace('"', "")
-            des_path = ospath.join(path, filename)
+            des_path = ospath.join(temp_download_path, filename)
 
             # Update status message if not in silent mode
             if not silent and temp_send:
@@ -1015,7 +1047,9 @@ async def gen_mediainfo(
             else:
                 file_name = media.file_name
 
-            des_path = ospath.join(path, file_name)
+            # Clean filename of any problematic characters
+            file_name = file_name.replace(" ", "_").replace("'", "").replace('"', "")
+            des_path = ospath.join(temp_download_path, file_name)
             file_size = getattr(media, "file_size", 0)
 
             # Update status message if not in silent mode
@@ -1113,8 +1147,16 @@ async def gen_mediainfo(
                 finally:
                     # Run garbage collection after download to free memory
                     smart_garbage_collection(aggressive=False)
+        else:
+            # No media_path, link, or media provided
+            error_msg = "MediaInfo: No file path, link, or media provided"
+            LOGGER.error(error_msg)
+            if not silent:
+                await send_message(message, error_msg)
+            return None
 
         # Check if file exists and is accessible
+        LOGGER.info(f"MediaInfo: Checking file path: {des_path}")
         if (
             not des_path
             or not isinstance(des_path, str | bytes)
@@ -2183,6 +2225,31 @@ async def gen_mediainfo(
             # Check if the file exists and is accessible
             if not await aiopath.exists(des_path):
                 LOGGER.error(f"File does not exist at path: {des_path}")
+
+                # Try with underscores instead of spaces
+                if " " in des_path:
+                    fixed_path = des_path.replace(" ", "_")
+                    LOGGER.info(f"Trying with fixed path: {fixed_path}")
+                    if await aiopath.exists(fixed_path):
+                        # Use the fixed path instead
+                        des_path = fixed_path
+                        # Retry the command with the fixed path
+                        cmd[-1] = des_path  # Update the path in the command
+                        stdout, stderr, return_code = await cmd_exec(cmd)
+                        if return_code == 0:
+                            # If successful, continue with processing
+                            if stdout:
+                                try:
+                                    data = json.loads(stdout)
+                                    return parse_ffprobe_info(
+                                        data, file_size, ospath.basename(des_path)
+                                    )
+                                except json.JSONDecodeError as e:
+                                    LOGGER.error(f"JSON decode error: {e}")
+                                    # Continue to fallback methods
+                            # If we get here, the retry didn't work completely
+
+                # If we couldn't fix it or the fixed path doesn't exist
                 raise Exception(f"File not found: {des_path}")
 
             # Check if the file has zero size
@@ -2248,6 +2315,39 @@ async def gen_mediainfo(
                 # Check if this is a "No such file or directory" error
                 if "No such file or directory" in str(e):
                     # This is likely a file path issue
+                    # Try with underscores instead of spaces
+                    fixed_path = des_path
+                    if " " in des_path:
+                        fixed_path = des_path.replace(" ", "_")
+                        LOGGER.info(f"Trying with fixed path: {fixed_path}")
+                        if await aiopath.exists(fixed_path):
+                            # Use the fixed path instead
+                            des_path = fixed_path
+                            # Retry the command with the fixed path
+                            cmd = ["file", "-b", ospath.abspath(fixed_path)]
+                            stdout, stderr, return_code = await cmd_exec(cmd)
+                            if return_code == 0 and stdout:
+                                # Create basic info for the file based on file command output
+                                tc = f"<h4>{ospath.basename(des_path)}</h4><br><br><blockquote>General</blockquote><pre>"
+                                tc += f"{'Complete name':<28}: {ospath.basename(des_path)}\n"
+                                # Try to determine file type from file command output
+                                file_type = "Unknown"
+                                if "video" in stdout.lower():
+                                    file_type = "Video"
+                                elif "audio" in stdout.lower():
+                                    file_type = "Audio"
+                                elif "image" in stdout.lower():
+                                    file_type = "Image"
+                                elif "text" in stdout.lower():
+                                    file_type = "Text"
+                                tc += f"{'Format':<28}: {file_type} file\n"
+                                tc += f"{'File analysis':<28}: {stdout.strip()}\n"
+                                tc += f"{'File size':<28}: {file_size / (1024 * 1024):.2f} MiB\n"
+                                tc += f"{'Note':<28}: ffprobe analysis failed. Limited information available.\n"
+                                tc += "</pre><br>"
+                                return tc
+
+                    # If we couldn't fix it or the fixed path doesn't exist
                     raise Exception(
                         f"File not found or inaccessible: {des_path}. If this is a Google Drive index link, try downloading the file first."
                     )
@@ -2278,7 +2378,22 @@ async def gen_mediainfo(
         # Provide more helpful error messages for common issues
         if "findpath" in error_message or "Google Drive index link" in error_message:
             user_message = "MediaInfo failed: Cannot directly process Google Drive index links. Please download the file first and then use the /mediainfo command on the downloaded file."
-        elif "No such file or directory" in error_message:
+        elif (
+            "No such file or directory" in error_message
+            or "File not found" in error_message
+        ):
+            # Check if the file might exist with a different name format (spaces vs underscores)
+            if " " in des_path:
+                fixed_path = des_path.replace(" ", "_")
+                if await aiopath.exists(fixed_path):
+                    # Try one more time with the fixed path
+                    LOGGER.info(
+                        f"Found file with fixed path: {fixed_path}, retrying..."
+                    )
+                    return await gen_mediainfo(
+                        message, media_path=fixed_path, silent=silent
+                    )
+
             user_message = "MediaInfo failed: File not found or inaccessible. If using a link, try downloading the file first."
         elif "Failed to download" in error_message:
             user_message = f"MediaInfo failed: {error_message}. The link may be private or require authentication."
