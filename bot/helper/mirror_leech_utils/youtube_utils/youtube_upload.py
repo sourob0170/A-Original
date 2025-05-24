@@ -117,25 +117,8 @@ class YouTubeUpload(YouTubeHelper):
         description = f"Uploaded by Mirror-leech-telegram-bot\n\nOriginal filename: {file_name}"
         tags = ["mirror-leech-bot", "telegram-bot", "upload"]
         category_id = "22"  # People & Blogs
-        privacy_status = "unlisted"  # unlisted, private, public
+        privacy_status = "private"  # unlisted, private, public
 
-        # Parse upload destination for custom settings
-        if hasattr(self.listener, "up_dest") and self.listener.up_dest:
-            try:
-                # Expected format: title|description|tags|category|privacy
-                parts = self.listener.up_dest.split("|")
-                if len(parts) >= 1 and parts[0].strip():
-                    title = parts[0].strip()
-                if len(parts) >= 2 and parts[1].strip():
-                    description = parts[1].strip()
-                if len(parts) >= 3 and parts[2].strip():
-                    tags = [tag.strip() for tag in parts[2].split(",")]
-                if len(parts) >= 4 and parts[3].strip():
-                    category_id = parts[3].strip()
-                if len(parts) >= 5 and parts[4].strip():
-                    privacy_status = parts[4].strip().lower()
-            except Exception as e:
-                LOGGER.warning(f"Error parsing upload destination: {e}")
 
         body = {
             "snippet": {
