@@ -100,7 +100,6 @@ class YouTubeUpload(YouTubeHelper):
             1,  # total_files
             0,  # total_folders
             "Video",  # mime_type
-            video_id=self.get_video_id_from_url(video_url) if video_url else None,
         )
         return
 
