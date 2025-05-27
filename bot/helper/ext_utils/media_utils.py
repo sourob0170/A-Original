@@ -13,14 +13,13 @@ from re import search as re_search
 from time import time
 
 import aiofiles
-from aiofiles.os import makedirs, remove
-from aiofiles.os import path as aiopath
 from aioshutil import rmtree
 from PIL import Image, ImageDraw, ImageFont
-from PyPDF2 import PdfMerger, PdfReader, PdfWriter
+from pypdf import PdfMerger, PdfReader, PdfWriter
 
 from bot import DOWNLOAD_DIR, LOGGER, cpu_no
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 
 from .bot_utils import cmd_exec, sync_to_async
 from .files_utils import get_mime_type, get_path_size, is_archive, is_archive_split

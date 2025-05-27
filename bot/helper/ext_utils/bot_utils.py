@@ -26,6 +26,7 @@ from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     MIRROR_HELP_DICT,
+    STREAMRIP_HELP_DICT,
     VT_HELP_DICT,
     YT_HELP_DICT,
 )
@@ -64,6 +65,7 @@ def create_help_buttons():
     _build_command_usage(CLONE_HELP_DICT, "clone")
     _build_command_usage(AI_HELP_DICT, "ai")
     _build_command_usage(VT_HELP_DICT, "virustotal")
+    _build_command_usage(STREAMRIP_HELP_DICT, "streamrip")
 
 
 def bt_selection_buttons(id_):
@@ -233,6 +235,10 @@ def arg_parser(items, arg_base):
                 "-preserve",
                 "-replace",
                 "-mt",
+                "-hl",
+                "-bt",
+                "-ut",
+                "-es",
             ]:
                 arg_base[part] = True
             else:
@@ -968,6 +974,12 @@ def is_flag_enabled(flag_name):
         # If torrent operations are disabled, the seed flag should be disabled too
         return Config.TORRENT_ENABLED
 
+    # Check for streamrip-related flags
+    streamrip_flags = ["q", "quality", "c", "codec"]
+    if clean_flag in streamrip_flags:
+        # If streamrip is disabled, these flags should be disabled too
+        return Config.STREAMRIP_ENABLED
+
     # Map flags to their corresponding media tools
     flag_to_tool_map = {
         "ff": "xtra",  # Custom FFmpeg commands flag
@@ -982,17 +994,36 @@ def is_flag_enabled(flag_name):
         "merge-image": "merge",
         "merge-pdf": "merge",
         "watermark": "watermark",
+        "wm": "watermark",  # Short for watermark
         "iwm": "watermark",  # Image watermark flag
         "extract": "extract",
         "extract-video": "extract",
         "extract-audio": "extract",
         "extract-subtitle": "extract",
         "extract-attachment": "extract",
+        "extract-video-index": "extract",
+        "extract-audio-index": "extract",
+        "extract-subtitle-index": "extract",
+        "extract-attachment-index": "extract",
+        "vi": "extract",  # Short for extract-video-index
+        "ai": "extract",  # Short for extract-audio-index
+        "si": "extract",  # Short for extract-subtitle-index
+        "ati": "extract",  # Short for extract-attachment-index
         "add": "add",
         "add-video": "add",
         "add-audio": "add",
         "add-subtitle": "add",
         "add-attachment": "add",
+        "add-video-index": "add",
+        "add-audio-index": "add",
+        "add-subtitle-index": "add",
+        "add-attachment-index": "add",
+        "avi": "add",  # Short for add-video-index
+        "aai": "add",  # Short for add-audio-index
+        "asi": "add",  # Short for add-subtitle-index
+        "aati": "add",  # Short for add-attachment-index
+        "preserve": "add",
+        "replace": "add",
         "trim": "trim",
         "compress": "compression",
         "comp-video": "compression",
@@ -1001,11 +1032,44 @@ def is_flag_enabled(flag_name):
         "comp-document": "compression",
         "comp-subtitle": "compression",
         "comp-archive": "compression",
+        "video-fast": "compression",
+        "video-medium": "compression",
+        "video-slow": "compression",
+        "audio-fast": "compression",
+        "audio-medium": "compression",
+        "audio-slow": "compression",
+        "image-fast": "compression",
+        "image-medium": "compression",
+        "image-slow": "compression",
+        "document-fast": "compression",
+        "document-medium": "compression",
+        "document-slow": "compression",
+        "subtitle-fast": "compression",
+        "subtitle-medium": "compression",
+        "subtitle-slow": "compression",
+        "archive-fast": "compression",
+        "archive-medium": "compression",
+        "archive-slow": "compression",
         "cv": "convert",  # Convert video flag
         "ca": "convert",  # Convert audio flag
         "cs": "convert",  # Convert subtitle flag
         "cd": "convert",  # Convert document flag
         "cr": "convert",  # Convert archive flag
+        "del": "convert",  # Delete original after conversion
+        "metadata-title": "metadata",
+        "metadata-author": "metadata",
+        "metadata-artist": "metadata",
+        "metadata-album": "metadata",
+        "metadata-year": "metadata",
+        "metadata-genre": "metadata",
+        "metadata-comment": "metadata",
+        "metadata-all": "metadata",
+        "metadata-video-title": "metadata",
+        "metadata-audio-title": "metadata",
+        "metadata-subtitle-title": "metadata",
+        "metadata-video-author": "metadata",
+        "metadata-audio-author": "metadata",
+        "metadata-subtitle-author": "metadata",
         "z": "archive",  # Archive compression flag
         "e": "archive",  # Archive extraction flag
     }

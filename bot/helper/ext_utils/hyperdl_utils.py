@@ -17,8 +17,9 @@ from sys import argv
 from time import time
 
 from aiofiles import open as aiopen
-from aiofiles.os import makedirs, remove
 from aioshutil import move
+
+from bot.helper.ext_utils.aiofiles_compat import makedirs, remove
 
 # Import from pyrogram/electrogram (they are compatible)
 try:

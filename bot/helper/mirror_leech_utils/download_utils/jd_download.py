@@ -6,14 +6,13 @@ from time import time
 
 import psutil
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove
 from pyrogram.filters import regex, user
 from pyrogram.handlers import CallbackQueryHandler
 
 from bot import LOGGER, jd_downloads, jd_listener_lock, task_dict, task_dict_lock
 from bot.core.config_manager import Config
 from bot.core.jdownloader_booter import jdownloader
+from bot.helper.ext_utils.aiofiles_compat import aiopath, remove
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.limit_checker import limit_checker
 from bot.helper.ext_utils.task_manager import (

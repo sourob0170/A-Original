@@ -45,8 +45,7 @@ async def _on_download_complete(gid):
                 )
         try:
             # Ensure the download directory exists before proceeding
-            from aiofiles.os import makedirs
-            from aiofiles.os import path as aiopath
+            from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs
 
             if not await aiopath.exists(task.listener.dir):
                 LOGGER.error(

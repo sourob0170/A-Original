@@ -3,10 +3,11 @@ from random import randint
 from re import match
 
 from aiofiles import open as aiopen
-from aiofiles.os import listdir, makedirs, path, rename
 from aioshutil import rmtree
 
 from bot import LOGGER
+from bot.helper.ext_utils.aiofiles_compat import aiopath as path
+from bot.helper.ext_utils.aiofiles_compat import listdir, makedirs, rename
 from bot.helper.ext_utils.bot_utils import cmd_exec, new_task
 from myjd import MyJdApi
 

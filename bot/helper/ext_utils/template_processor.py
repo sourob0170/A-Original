@@ -672,10 +672,7 @@ async def process_template(template, data_dict):
                         return await apply_google_font_style(value, style_name)
                     # Check if it's an HTML style
                     if style_name.lower() in FONT_STYLES:
-                        styled_value = await apply_font_style(value, style_name)
-                        # Special handling for combined HTML styles
-                        if "_" in style_name.lower():
-                            return styled_value
+                        return await apply_font_style(value, style_name)
                     # Check if it's a single character (emoji/unicode)
                     if (
                         len(style_name) == 1 or len(style_name) == 2

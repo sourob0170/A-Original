@@ -14,16 +14,16 @@ except ImportError:
     PIL_AVAILABLE = False
 
 from aiofiles import open as aiopen
-from aiofiles.os import makedirs
-from aiofiles.os import remove as aioremove
 from pyrogram import filters
 from pyrogram.filters import create
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import CallbackQuery
 
-from bot import user_data
+from bot import LOGGER, user_data
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import makedirs
+from bot.helper.ext_utils.aiofiles_compat import remove as aioremove
 from bot.helper.ext_utils.bot_utils import (
     is_media_tool_enabled,
     new_task,
@@ -45,6 +45,150 @@ from bot.helper.telegram_helper.message_utils import (
 handler_dict = {}
 merge_config_page = 0  # Global variable to track merge_config page
 watermark_config_page = 0  # Global variable to track watermark_config page
+
+# Dictionary to store task contexts for -mt flag
+task_contexts = {}
+
+# Dictionary to track which users are in task context (using -mt flag)
+task_context_users = set()
+
+# Dictionary to track users who should be in task context but show_media_tools_for_task wasn't called
+# This helps with debugging and implementing fallback behavior
+pending_task_users = set()
+
+# Dictionary to store direct task results for users who clicked Done/Cancel before show_media_tools_for_task was called
+# This handles the race condition where user clicks buttons before the event waiting mechanism is set up
+direct_task_results = {}
+
+
+def register_pending_task_user(user_id):
+    """Register a user as pending task user when -mt flag is detected."""
+    pending_task_users.add(user_id)
+
+
+async def show_media_tools_for_task(client, message, task_instance):
+    """Show media tools settings for a task and wait for user response.
+
+    Args:
+        client: Telegram client
+        message: Original command message
+        task_instance: Mirror/Leech task instance
+
+    Returns:
+        bool: True if user clicked Done, False if user clicked Cancel or timeout
+    """
+    user_id = None
+    try:
+        user_id = message.from_user.id
+
+        # Check if user already clicked Done/Cancel before this function was called (race condition handling)
+        if user_id in direct_task_results:
+            result = direct_task_results[user_id]
+            # Clean up
+            del direct_task_results[user_id]
+            task_context_users.discard(user_id)
+            pending_task_users.discard(user_id)
+            return result
+
+        # Check if media tools are enabled
+        if not is_media_tool_enabled("mediatools"):
+            await send_message(
+                message,
+                "<b>Media Tools are disabled</b>\n\nMedia Tools have been disabled by the bot owner.",
+            )
+            return False
+
+        # Store the task context
+        task_contexts[user_id] = {
+            "task_instance": task_instance,
+            "event": asyncio.Event(),
+            "result": False,
+        }
+        # Add user to task context set
+        task_context_users.add(user_id)
+        # Remove from pending set since we're now handling it
+        pending_task_users.discard(user_id)
+
+        # Get media tools settings
+        msg, btns = await get_media_tools_settings(message.from_user, "main")
+
+        # Create new buttons with Done and Cancel
+        buttons = ButtonMaker()
+
+        # Add all existing buttons except Close
+        if btns and hasattr(btns, "inline_keyboard"):
+            for row in btns.inline_keyboard:
+                for btn in row:
+                    # Skip the Close button as we'll replace it with Done/Cancel
+                    if btn.text == "Close":
+                        continue  # Skip the Close button
+                    if "footer" in btn.callback_data:
+                        buttons.data_button(btn.text, btn.callback_data, "footer")
+                    else:
+                        buttons.data_button(btn.text, btn.callback_data)
+
+        # Add Done and Cancel buttons
+        buttons.data_button("✅ Done", f"mediatools {user_id} task_done", "footer")
+        buttons.data_button(
+            "❌ Cancel", f"mediatools {user_id} task_cancel", "footer"
+        )
+
+        # Send the media tools menu
+        settings_msg = await send_message(message, msg, buttons.build_menu(2))
+
+        # Wait for user response (5 minutes timeout)
+        try:
+            # Check if event is already set (user clicked before we started waiting)
+            if task_contexts[user_id]["event"].is_set():
+                pass  # Event already set, proceed to get result
+
+            await asyncio.wait_for(
+                task_contexts[user_id]["event"].wait(), timeout=300.0
+            )
+            result = task_contexts[user_id]["result"]
+            if result:
+                await edit_message(
+                    settings_msg, "✅ Settings saved! Starting task..."
+                )
+            else:
+                await edit_message(settings_msg, "❌ Task cancelled by user.")
+        except TimeoutError:
+            await edit_message(
+                settings_msg,
+                "⏰ Media tools configuration timed out. Task cancelled.",
+            )
+            result = False
+        except Exception:
+            await edit_message(settings_msg, "❌ Error occurred. Task cancelled.")
+            result = False
+
+        # Clean up
+        task_contexts.pop(user_id, None)
+        # Remove user from all tracking structures
+        task_context_users.discard(user_id)
+        pending_task_users.discard(user_id)
+        direct_task_results.pop(user_id, None)
+
+        # Wait a moment for user to see the result, then delete the message
+        await sleep(2)
+        await delete_message(settings_msg)
+
+        return result
+
+    except Exception as e:
+        LOGGER.error(f"Error in show_media_tools_for_task: {e}")
+        import traceback
+
+        LOGGER.error(f"Traceback: {traceback.format_exc()}")
+        # Clean up on error
+        if user_id and user_id in task_contexts:
+            del task_contexts[user_id]
+        # Remove user from all tracking structures
+        if user_id:
+            task_context_users.discard(user_id)
+            pending_task_users.discard(user_id)
+            direct_task_results.pop(user_id, None)
+        return False
 
 
 async def get_media_tools_settings(from_user, stype="main", page_no=0):
@@ -6487,20 +6631,7 @@ async def update_media_tools_settings(query, stype="main"):
         handler_dict[f"{query.from_user.id}_watermark_page"] = page_no
 
     # Check if we're in a task context (using -mt flag)
-    # We can determine this by checking if there's a task_done button in the original message
-    is_task_context = False
-    if (
-        hasattr(query, "message")
-        and hasattr(query.message, "reply_markup")
-        and query.message.reply_markup
-    ):
-        for row in query.message.reply_markup.inline_keyboard:
-            for btn in row:
-                if btn.text == "Done" and "task_done" in btn.callback_data:
-                    is_task_context = True
-                    break
-            if is_task_context:
-                break
+    is_task_context = user_id in task_context_users
 
     # If we're in a task context, we need to preserve the Done and Cancel buttons
     if is_task_context:
@@ -6518,8 +6649,10 @@ async def update_media_tools_settings(query, stype="main"):
                     buttons.data_button(btn.text, btn.callback_data)
 
         # Add the Done and Cancel buttons to the footer
-        buttons.data_button("Done", f"mediatools {user_id} task_done", "footer")
-        buttons.data_button("Cancel", f"mediatools {user_id} task_cancel", "footer")
+        buttons.data_button("✅ Done", f"mediatools {user_id} task_done", "footer")
+        buttons.data_button(
+            "❌ Cancel", f"mediatools {user_id} task_cancel", "footer"
+        )
 
         # Use the modified buttons
         button = buttons.build_menu(2)
@@ -6697,22 +6830,15 @@ async def get_menu(option, message, user_id):
     buttons.data_button("Back", f"mediatools {user_id} {back_target}", "footer")
 
     # Check if we're in a task context (using -mt flag)
-    # We can determine this by checking if there's a task_done button in the message's reply markup
-    is_task_context = False
-    if hasattr(message, "reply_markup") and message.reply_markup:
-        for row in message.reply_markup.inline_keyboard:
-            for btn in row:
-                if btn.text == "Done" and "task_done" in btn.callback_data:
-                    is_task_context = True
-                    break
-            if is_task_context:
-                break
+    is_task_context = user_id in task_context_users
 
     # Add appropriate buttons based on context
     if is_task_context:
         # In task context, add Done and Cancel buttons
-        buttons.data_button("Done", f"mediatools {user_id} task_done", "footer")
-        buttons.data_button("Cancel", f"mediatools {user_id} task_cancel", "footer")
+        buttons.data_button("✅ Done", f"mediatools {user_id} task_done", "footer")
+        buttons.data_button(
+            "❌ Cancel", f"mediatools {user_id} task_cancel", "footer"
+        )
     else:
         # In normal context, add Close button
         buttons.data_button("Close", f"mediatools {user_id} close", "footer")
@@ -7903,6 +8029,66 @@ async def edit_media_tools_settings(client, query):
     elif data[2] == "close":
         await query.answer()
         await delete_message(message)
+    elif data[2] == "task_done":
+        await query.answer("✅ Settings saved! Starting task...")
+        # Check if there's a task context for this user
+        if user_id in task_contexts:
+            # Set the result to True and trigger the event
+            task_contexts[user_id]["result"] = True
+            task_contexts[user_id]["event"].set()
+            # Note: Don't remove from task_context_users here, let show_media_tools_for_task handle cleanup
+        # Fallback behavior: If no task context found but user clicked Done,
+        # this could mean:
+        # 1. They used -mt flag but something went wrong with context tracking
+        # 2. They're using the regular media tools menu (accessed via /mediatools)
+
+        # Check if user is in task context set or pending set (they should be if using -mt flag)
+        elif user_id in task_context_users or user_id in pending_task_users:
+            # Store the direct result for when show_media_tools_for_task is called
+            direct_task_results[user_id] = True
+            # Add to task context set and remove from pending
+            task_context_users.add(user_id)
+            pending_task_users.discard(user_id)
+
+            # Since this is a fallback, we should also close the menu
+            await edit_message(message, "✅ Settings saved! Starting task...")
+            await sleep(2)
+            await delete_message(message)
+        else:
+            # This is normal behavior when using regular media tools menu (not -mt flag)
+            # Just close the menu since settings are already saved
+            await edit_message(message, "✅ Settings saved!")
+            await sleep(2)
+            await delete_message(message)
+    elif data[2] == "task_cancel":
+        await query.answer("❌ Task cancelled!")
+        # Check if there's a task context for this user
+        if user_id in task_contexts:
+            # Set the result to False and trigger the event
+            task_contexts[user_id]["result"] = False
+            task_contexts[user_id]["event"].set()
+            # Note: Don't remove from task_context_users here, let show_media_tools_for_task handle cleanup
+        # Fallback behavior: If no task context found but user clicked Cancel,
+        # this means they used -mt flag but something went wrong with context tracking
+
+        # Check if user is in task context set or pending set (they should be if using -mt flag)
+        elif user_id in task_context_users or user_id in pending_task_users:
+            # Store the direct result for when show_media_tools_for_task is called
+            direct_task_results[user_id] = False
+            # Add to task context set and remove from pending
+            task_context_users.add(user_id)
+            pending_task_users.discard(user_id)
+
+            # Since this is a fallback, we should also close the menu
+            await edit_message(message, "❌ Task cancelled by user.")
+            await sleep(2)
+            await delete_message(message)
+        else:
+            # This is normal behavior when using regular media tools menu (not -mt flag)
+            # Just close the menu
+            await edit_message(message, "❌ Operation cancelled!")
+            await sleep(2)
+            await delete_message(message)
     elif data[2] in [
         "watermark",
         "merge",
@@ -9493,195 +9679,6 @@ async def add_media_tools_button_to_bot_settings(buttons):
         buttons.data_button("Media Tools", "botset mediatools")
 
     return buttons
-
-
-async def show_media_tools_for_task(client, message, _):
-    """Show media tools settings with a Done button for task execution.
-
-    This function is called when a command is used with the -mt flag.
-    It displays the media tools settings and adds a Done button to start the task.
-
-    Args:
-        client: The client instance
-        message: The message object containing the command
-        task_obj: The task object (Mirror instance) to be executed after settings
-
-    Returns:
-        bool: True if the task should proceed, False if it was cancelled
-    """
-    # Check if media tools are enabled
-    if not is_media_tool_enabled("mediatools"):
-        error_msg = await send_message(
-            message,
-            "<b>Media Tools are disabled</b>\n\nMedia Tools have been disabled by the bot owner. The -mt flag cannot be used.",
-        )
-        # Auto-delete the error message after 5 minutes
-        await auto_delete_message(error_msg, time=300)
-        return False
-
-    user_id = message.from_user.id if message.from_user else 0
-    handler_dict[user_id] = True
-
-    # Get media tools settings
-    msg, btns = await get_media_tools_settings(message.from_user)
-
-    # Create new buttons with the original menu buttons
-    buttons = ButtonMaker()
-
-    # Copy all buttons from the original menu except Close
-    for row in btns.inline_keyboard:
-        for btn in row:
-            if btn.text == "Close":
-                continue  # Skip the Close button
-            if "footer" in btn.callback_data:
-                buttons.data_button(btn.text, btn.callback_data, "footer")
-            else:
-                buttons.data_button(btn.text, btn.callback_data)
-
-    # Add the Done and Cancel buttons to the footer
-    buttons.data_button("Done", f"mediatools {user_id} task_done", "footer")
-    buttons.data_button("Cancel", f"mediatools {user_id} task_cancel", "footer")
-
-    # Send the message with the settings and buttons
-    settings_msg = await send_message(message, msg, buttons.build_menu(2))
-
-    # Create an event to wait for the user's response
-    from asyncio import Event
-
-    done_event = Event()
-    task_proceed = [True]  # Use a list to store the result (mutable)
-
-    # Define the callback handler for the buttons
-    async def task_button_callback(c, query):
-        if query.from_user.id != user_id:
-            await query.answer("Not Yours!", show_alert=True)
-            return
-
-        data = query.data.split()
-        if len(data) < 3:
-            return
-
-        if data[2] == "task_done":
-            # User clicked Done, proceed with the task
-            await query.answer("Starting task with current media tools settings...")
-            handler_dict[user_id] = False
-
-            # Send a confirmation message that will be auto-deleted
-            done_msg = await send_message(
-                message,
-                "✅ Starting task with current media tools settings...",
-            )
-            await auto_delete_message(
-                done_msg, time=5
-            )  # Auto-delete after 5 seconds
-
-            done_event.set()
-
-        elif data[2] == "task_cancel":
-            # User clicked Cancel, cancel the task
-            await query.answer("Task cancelled!")
-            task_proceed[0] = False
-            handler_dict[user_id] = False
-
-            # Send cancellation message and auto-delete after 5 minutes
-            cancel_msg = await send_message(
-                message,
-                "❌ Task cancelled by user.",
-            )
-            await auto_delete_message(cancel_msg, time=300)
-
-            done_event.set()
-
-        elif data[2] in [
-            "watermark",
-            "watermark_config",
-            "merge",
-            "convert",
-            "compression",
-            "compression_config",
-            "trim",
-            "trim_config",
-            "extract",
-            "extract_config",
-            "add",
-            "add_config",
-            "add_video_config",
-            "add_audio_config",
-            "add_subtitle_config",
-            "add_attachment_config",
-            "help",
-            "help_watermark",
-            "help_merge",
-            "help_convert",
-            "help_compression",
-            "help_trim",
-            "help_extract",
-            "help_priority",
-            "help_examples",
-            "convert_video",
-            "convert_audio",
-            "convert_subtitle",
-            "convert_document",
-            "convert_archive",
-            "merge_config",
-            "back",
-        ]:
-            # Handle navigation within the media tools settings
-            await query.answer()
-            await update_media_tools_settings(query, data[2])
-
-        elif (
-            data[2] == "tog"
-            or data[2] == "menu"
-            or data[2] == "set"
-            or data[2] == "reset"
-            or data[2].startswith("reset_")
-            or data[2].startswith("remove_")
-            or data[2] == "toggle_concat_filter"
-        ):
-            # Handle other media tools settings actions
-            # This will reuse the existing edit_media_tools_settings logic
-            await edit_media_tools_settings(c, query)
-
-    # Add the callback handler
-    handler = client.add_handler(
-        CallbackQueryHandler(
-            task_button_callback,
-            filters=filters.regex("^mediatools"),
-        ),
-        group=-1,
-    )
-
-    try:
-        # Wait for the user to click Done or Cancel, or for the timeout
-        timeout = 60  # 60 seconds timeout
-        for _ in range(timeout):
-            if done_event.is_set():
-                break
-            await sleep(1)
-
-        # If we timed out, cancel the task
-        if not done_event.is_set():
-            task_proceed[0] = False
-            handler_dict[user_id] = False
-
-            # Send timeout message
-            timeout_msg = await send_message(
-                message,
-                "⏱️ Media tools settings timeout. Task has been cancelled!",
-            )
-
-            # Auto-delete the timeout message after 5 minutes
-            await auto_delete_message(timeout_msg, time=300)
-    finally:
-        # Clean up
-        client.remove_handler(*handler)
-
-        # Delete the settings message
-        await delete_message(settings_msg)
-
-    # Return whether to proceed with the task
-    return task_proceed[0]
 
 
 async def get_watermark_settings(user_id):

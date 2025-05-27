@@ -3,6 +3,7 @@ from bot.helper.ext_utils.help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     MIRROR_HELP_DICT,
+    STREAMRIP_HELP_DICT,
     VT_HELP_DICT,
     YT_HELP_DICT,
     help_string,
@@ -101,6 +102,12 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["virustotal"][0],
                 COMMAND_USAGE["virustotal"][1],
             )
+        elif data[2] == "sr":
+            await edit_message(
+                message,
+                COMMAND_USAGE["streamrip"][0],
+                COMMAND_USAGE["streamrip"][1],
+            )
     elif data[1] == "mirror":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back m")
@@ -131,6 +138,12 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, VT_HELP_DICT[data[2]], button)
+    elif data[1] == "streamrip":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back sr")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, STREAMRIP_HELP_DICT[data[2]], button)
 
     try:
         await query.answer()

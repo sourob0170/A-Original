@@ -2,7 +2,6 @@ from asyncio import create_task, gather
 from re import search as research
 from time import time
 
-from aiofiles.os import path as aiopath
 from psutil import (
     boot_time,
     cpu_count,
@@ -15,6 +14,7 @@ from psutil import (
 
 from bot import bot_start_time
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 from bot.helper.ext_utils.bot_utils import cmd_exec, new_task
 from bot.helper.ext_utils.status_utils import (
     get_readable_file_size,
@@ -35,6 +35,10 @@ commands = {
     "yt-dlp": (["yt-dlp", "--version"], r"([\d.]+)"),
     "xtra": (["xtra", "-version"], r"ffmpeg version ([\d.\w-]+)"),
     "7z": (["7z", "i"], r"7-Zip ([\d.]+)"),
+    "streamrip": (
+        ["python3", "-c", "import streamrip; print(streamrip.__version__)"],
+        r"([\d.\w-]+)",
+    ),
 }
 
 
@@ -92,6 +96,7 @@ async def bot_stats(_, message):
 <b>Leech Limit:</b> {format_limit(Config.LEECH_LIMIT)}
 <b>JDownloader Limit:</b> {format_limit(Config.JD_LIMIT)}
 <b>NZB Limit:</b> {format_limit(Config.NZB_LIMIT)}
+<b>Streamrip Limit:</b> {format_limit(Config.STREAMRIP_LIMIT)}
 <b>Playlist Limit:</b> {format_limit(Config.PLAYLIST_LIMIT, unit="videos")}
 
 <b>Daily Task Limit:</b> {format_limit(Config.DAILY_TASK_LIMIT, unit="tasks")}
@@ -110,6 +115,7 @@ async def bot_stats(_, message):
 <b>SABnzbd+:</b> {commands["SABnzbd+"]}
 <b>rclone:</b> {commands["rclone"]}
 <b>yt-dlp:</b> {commands["yt-dlp"]}
+<b>streamrip:</b> {commands["streamrip"]}
 <b>xtra:</b> {commands["xtra"]}
 <b>7z:</b> {commands["7z"]}
 """

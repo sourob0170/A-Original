@@ -2,10 +2,9 @@ from asyncio import create_task, gather
 from json import loads
 from secrets import token_hex
 
-from aiofiles.os import remove
-
 from bot import LOGGER, bot_loop, task_dict, task_dict_lock
 from bot.helper.aeon_utils.access_check import error_check
+from bot.helper.ext_utils.aiofiles_compat import remove
 from bot.helper.ext_utils.bot_utils import (
     COMMAND_USAGE,
     arg_parser,

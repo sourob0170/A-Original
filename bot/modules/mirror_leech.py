@@ -3,12 +3,11 @@ from asyncio import create_task
 from base64 import b64encode
 from re import match as re_match
 
-from aiofiles.os import path as aiopath
-
 from bot import DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.aeon_utils.access_check import error_check
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 from bot.helper.ext_utils.bot_utils import (
     COMMAND_USAGE,
     arg_parser,
@@ -43,9 +42,13 @@ from bot.helper.mirror_leech_utils.download_utils.qbit_download import add_qb_to
 from bot.helper.mirror_leech_utils.download_utils.rclone_download import (
     add_rclone_download,
 )
+from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
+    add_streamrip_download,
+)
 from bot.helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
+from bot.helper.streamrip_utils.url_parser import is_streamrip_url
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     delete_links,
@@ -277,6 +280,12 @@ class Mirror(TaskListener):
         self.as_doc = args["-doc"]
         self.as_med = args["-med"]
         self.media_tools = args["-mt"]
+
+        # Register user as pending task user if -mt flag is used
+        if self.media_tools:
+            from bot.modules.media_tools import register_pending_task_user
+
+            register_pending_task_user(user_id)
         self.metadata = args["-md"]
         self.metadata_title = args["-metadata-title"]
         self.metadata_author = args["-metadata-author"]
@@ -751,6 +760,7 @@ class Mirror(TaskListener):
                 and not is_gdrive_id(self.link)
                 and not is_gdrive_link(self.link)
                 and not is_mega_link(self.link)
+                and not (Config.STREAMRIP_ENABLED and is_streamrip_url(self.link))
             )
         ):
             x = await send_message(
@@ -780,9 +790,21 @@ class Mirror(TaskListener):
             if not proceed:
                 # User cancelled or timeout occurred
                 await self.remove_from_same_dir()
-                # Delete the command message
                 await delete_links(self.message)
                 return None
+        else:
+            # Check if user has a direct result stored (fallback for race condition)
+            from bot.modules.media_tools import direct_task_results
+
+            if user_id in direct_task_results:
+                result = direct_task_results[user_id]
+                del direct_task_results[user_id]
+                if not result:
+                    # User clicked Cancel
+                    await self.remove_from_same_dir()
+                    await delete_links(self.message)
+                    return None
+                # If result is True, continue with the task
 
         try:
             await self.before_start()
@@ -883,6 +905,9 @@ class Mirror(TaskListener):
             create_task(add_rclone_download(self, f"{path}/"))
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             create_task(add_gd_download(self, path))
+        elif Config.STREAMRIP_ENABLED and is_streamrip_url(self.link):
+            # Handle streamrip downloads
+            create_task(add_streamrip_download(self, self.link))
         else:
             ussr = args["-au"]
             pssw = args["-ap"]

@@ -9,8 +9,6 @@ from time import time
 
 import aiohttp
 from aiofiles import open as aiopen
-from aiofiles.os import makedirs, remove
-from aiofiles.os import path as aiopath
 from aioshutil import rmtree  # type: ignore
 
 from bot import (
@@ -29,6 +27,9 @@ from bot import (
     sudo_users,
     user_data,
 )
+
+# Use compatibility layer for aiofiles
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.db_handler import database
 
 from .aeon_client import TgClient
@@ -223,6 +224,19 @@ async def load_settings():
                 del row["_id"]
                 rss_dict[user_id] = row
             LOGGER.info("Rss data has been imported from Database.")
+
+        # Initialize streamrip configuration
+        if Config.STREAMRIP_ENABLED:
+            try:
+                from bot.helper.streamrip_utils.streamrip_config import (
+                    streamrip_config,
+                )
+
+                await streamrip_config.initialize()
+                LOGGER.info("Streamrip configuration initialized successfully")
+            except Exception as e:
+                LOGGER.error(f"Failed to initialize streamrip configuration: {e}")
+                Config.STREAMRIP_ENABLED = False
 
 
 async def save_settings():

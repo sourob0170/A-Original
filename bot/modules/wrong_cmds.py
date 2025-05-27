@@ -136,6 +136,12 @@ async def handle_no_suffix_commands(client, message):
         "spectrum",
         "sox",
         "paste",
+        "streamripmirror",
+        "srmirror",
+        "streamripleech",
+        "srleech",
+        "streamripsearch",
+        "srsearch",
         "virustotal",
     ]
 

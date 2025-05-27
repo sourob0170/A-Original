@@ -1,10 +1,8 @@
 from asyncio import gather, sleep
 
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove
-
 from bot import LOGGER, sabnzbd_client, task_dict, task_dict_lock
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath, remove
 from bot.helper.ext_utils.bot_utils import bt_selection_buttons
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.limit_checker import limit_checker

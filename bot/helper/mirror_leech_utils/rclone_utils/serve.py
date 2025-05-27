@@ -2,9 +2,9 @@ from asyncio import create_subprocess_exec
 from configparser import RawConfigParser
 
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
 
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 
 RcloneServe = []
 

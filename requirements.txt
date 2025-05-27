@@ -1,5 +1,5 @@
 asyncio
-aiofiles
+aiofiles>=23.1.0
 aioshutil
 anytree
 apscheduler
@@ -28,8 +28,8 @@ pymongo
 pyshorteners
 python-magic
 pytz
-PyPDF2
-reportlab
+pypdf
+reportlab>=4.0.0
 requests
 speedtest-cli
 telegraph
@@ -39,3 +39,4 @@ uvloop
 vt-py>=0.17.5
 xattr
 yt-dlp[default,curl-cffi]
+git+https://github.com/shabbirmahmud/streamrip.git@dev

@@ -3,13 +3,13 @@ from functools import partial
 from logging import getLogger
 from time import time
 
-from aiofiles.os import path as aiopath
 from natsort import natsorted
 from pyrogram.filters import regex, user
 from pyrogram.handlers import CallbackQueryHandler
 from tenacity import RetryError
 
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 from bot.helper.ext_utils.bot_utils import new_task, update_user_ldata
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.status_utils import (

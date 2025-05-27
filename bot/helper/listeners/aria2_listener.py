@@ -2,12 +2,10 @@ import contextlib
 from asyncio import create_task, sleep
 from time import time
 
-from aiofiles.os import makedirs, remove
-from aiofiles.os import path as aiopath
-
 from bot import LOGGER, intervals, task_dict, task_dict_lock
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager, aria2_name, is_metadata
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.bot_utils import bt_selection_buttons
 from bot.helper.ext_utils.files_utils import clean_unwanted
 from bot.helper.ext_utils.status_utils import get_task_by_gid

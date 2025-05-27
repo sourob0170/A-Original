@@ -5,13 +5,13 @@ from json import loads
 from time import time
 
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
 from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 from pyrogram.filters import regex, user
 from pyrogram.handlers import CallbackQueryHandler
 
 from bot import LOGGER
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 from bot.helper.ext_utils.bot_utils import cmd_exec, new_task, update_user_ldata
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.status_utils import (

@@ -1,13 +1,12 @@
 from base64 import b64encode
 
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove
 from aiohttp.client_exceptions import ClientError
 
 from bot import LOGGER, task_dict, task_dict_lock
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager, aria2_name, is_metadata
+from bot.helper.ext_utils.aiofiles_compat import aiopath, remove
 from bot.helper.ext_utils.bot_utils import bt_selection_buttons
 from bot.helper.ext_utils.limit_checker import limit_checker
 from bot.helper.ext_utils.task_manager import check_running_tasks

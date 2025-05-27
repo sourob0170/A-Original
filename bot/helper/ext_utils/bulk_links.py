@@ -1,6 +1,6 @@
 from aiofiles import open as aiopen
-from aiofiles.os import remove
 
+from bot.helper.ext_utils.aiofiles_compat import remove
 from bot.helper.telegram_helper.message_utils import delete_message
 
 

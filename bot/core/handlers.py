@@ -364,6 +364,35 @@ def add_handlers():
         ),
     }
 
+    # Add streamrip handlers if streamrip is enabled
+    if Config.STREAMRIP_ENABLED:
+        from bot.modules.streamrip import (
+            streamrip_leech,
+            streamrip_mirror,
+            streamrip_search,
+        )
+
+        streamrip_handlers = {
+            "streamrip_mirror": (
+                streamrip_mirror,
+                BotCommands.StreamripMirrorCommand,
+                CustomFilters.authorized,
+            ),
+            "streamrip_leech": (
+                streamrip_leech,
+                BotCommands.StreamripLeechCommand,
+                CustomFilters.authorized,
+            ),
+            "streamrip_search": (
+                streamrip_search,
+                BotCommands.StreamripSearchCommand,
+                CustomFilters.authorized,
+            ),
+        }
+
+        # Add streamrip handlers to command_filters
+        command_filters.update(streamrip_handlers)
+
     for handler_func, command_name, custom_filter in command_filters.values():
         if custom_filter:
             filters_to_apply = (
@@ -459,7 +488,7 @@ def add_handlers():
         MessageHandler(
             handle_no_suffix_commands,
             filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|settings|usettings|us|speedtest|broadcast|broadcastall|sel|rss|fontstyles|fonts|check_deletions|cd|imdb|login|mediasearch|mds|mediatools|mt|mthelp|mth|gensession|gs|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
+                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|streamripleech|srleech|streamripsearch|srsearch|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|settings|usettings|us|speedtest|broadcast|broadcastall|sel|rss|fontstyles|fonts|check_deletions|cd|imdb|login|mediasearch|mds|mediatools|mt|mthelp|mth|gensession|gs|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
             )
             & CustomFilters.pm_or_authorized,
         ),

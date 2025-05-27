@@ -9,13 +9,13 @@ from time import time
 
 import aiohttp
 from aiofiles import open as aiopen
-from aiofiles.os import mkdir
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove as aioremove
 
 from bot import LOGGER
 from bot.core.aeon_client import TgClient
 from bot.helper.aeon_utils.access_check import token_check
+from bot.helper.ext_utils.aiofiles_compat import aiopath
+from bot.helper.ext_utils.aiofiles_compat import makedirs as mkdir
+from bot.helper.ext_utils.aiofiles_compat import remove as aioremove
 from bot.helper.ext_utils.bot_utils import cmd_exec
 from bot.helper.ext_utils.gc_utils import smart_garbage_collection
 from bot.helper.ext_utils.links_utils import (
@@ -860,12 +860,25 @@ async def gen_mediainfo(
         # Initialize the temporary download directory path (only used for downloads)
         temp_download_path = "Mediainfo/"
 
+        # Initialize des_path to None
+        des_path = None
+
         # Handle direct file path (from telegram_uploader or other internal calls)
-        if media_path and await aiopath.exists(media_path):
-            # If direct file path is provided, use it directly
-            des_path = media_path
-            file_size = await aiopath.getsize(media_path)
-            LOGGER.info(f"Using provided media_path: {des_path}")
+        if media_path:
+            if await aiopath.exists(media_path):
+                # If direct file path is provided, use it directly
+                des_path = media_path
+                file_size = await aiopath.getsize(media_path)
+            else:
+                LOGGER.error(
+                    f"MediaInfo: Provided media_path does not exist: {media_path}"
+                )
+                # Don't fall through - return error immediately for missing files
+                error_msg = f"MediaInfo: File not found: {media_path}"
+                LOGGER.error(error_msg)
+                if not silent:
+                    await send_message(message, error_msg)
+                return None
         elif link or media:
             # Only create the Mediainfo directory if we need to download files
             # Ensure the Mediainfo directory exists for downloads
@@ -897,144 +910,152 @@ async def gen_mediainfo(
                                     f"Created fallback directory: {temp_download_path}"
                                 )
 
-        if link:
-            if not is_url(link):
-                raise ValueError(f"Invalid URL: {link}")
+            if link:
+                if not is_url(link):
+                    raise ValueError(f"Invalid URL: {link}")
 
-            # Extract filename from URL, handling special cases like 'findpath'
-            # First check if the URL contains 'findpath' with an id parameter
-            findpath_match = re_search(r"findpath\?id=([^&]+)", link)
-            if findpath_match:
-                # This is a Google Drive index link with findpath parameter
-                # Use the id as part of the filename
-                drive_id = findpath_match.group(1)
-                filename = f"gdrive_{drive_id}_{int(time())}"
-            else:
-                # Regular URL filename extraction
-                filename_match = re_search(".+/([^/?]+)", link)
+                # Extract filename from URL, handling special cases like 'findpath'
+                # First check if the URL contains 'findpath' with an id parameter
+                findpath_match = re_search(r"findpath\?id=([^&]+)", link)
+                if findpath_match:
+                    # This is a Google Drive index link with findpath parameter
+                    # Use the id as part of the filename
+                    drive_id = findpath_match.group(1)
+                    filename = f"gdrive_{drive_id}_{int(time())}"
+                else:
+                    # Regular URL filename extraction
+                    filename_match = re_search(".+/([^/?]+)", link)
+                    filename = (
+                        filename_match.group(1)
+                        if filename_match
+                        else f"mediainfo_{int(time())}"
+                    )
+
+                # Clean filename of any problematic characters
                 filename = (
-                    filename_match.group(1)
-                    if filename_match
-                    else f"mediainfo_{int(time())}"
+                    filename.replace(" ", "_").replace("'", "").replace('"', "")
                 )
+                des_path = ospath.join(temp_download_path, filename)
 
-            # Clean filename of any problematic characters
-            filename = filename.replace(" ", "_").replace("'", "").replace('"', "")
-            des_path = ospath.join(temp_download_path, filename)
+                # Update status message if not in silent mode
+                if not silent and temp_send:
+                    await edit_message(
+                        temp_send,
+                        f"Downloading a sample of {filename} for analysis...",
+                    )
 
-            # Update status message if not in silent mode
-            if not silent and temp_send:
-                await edit_message(
-                    temp_send, f"Downloading a sample of {filename} for analysis..."
-                )
+                headers = {
+                    "user-agent": "Mozilla/5.0 (Linux; Android 12; 2201116PI) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36",
+                    "Range": "bytes=0-10485760",  # Download up to 10MB for analysis
+                }
 
-            headers = {
-                "user-agent": "Mozilla/5.0 (Linux; Android 12; 2201116PI) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36",
-                "Range": "bytes=0-10485760",  # Download up to 10MB for analysis
-            }
-
-            async with aiohttp.ClientSession() as session:
-                try:
-                    # Set a reasonable timeout (5 minutes)
-                    async with session.get(
-                        link, headers=headers, timeout=300
-                    ) as response:
-                        # Get total file size from Content-Range header if available
-                        content_range = response.headers.get("Content-Range", "")
-                        if content_range:
-                            try:
-                                file_size = int(content_range.split("/")[1])
-                            except (IndexError, ValueError):
-                                file_size = 0
-
-                        # If Content-Range not available, use Content-Length
-                        if not file_size:
-                            file_size = int(
-                                response.headers.get("Content-Length", 0)
-                            )
-
-                        # Download sample of the file using read() with a size limit
-                        # This approach avoids ContentLengthError when we don't read the entire response
-                        downloaded_size = 0
-                        max_sample_size = 10 * 1024 * 1024  # 10MB
-
-                        async with aiopen(des_path, "wb") as f:
-                            # Read in 1MB chunks to have better control and progress updates
-                            chunk_size = 1024 * 1024  # 1MB
-                            while downloaded_size < max_sample_size:
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        # Set a reasonable timeout (5 minutes)
+                        async with session.get(
+                            link, headers=headers, timeout=300
+                        ) as response:
+                            # Get total file size from Content-Range header if available
+                            content_range = response.headers.get("Content-Range", "")
+                            if content_range:
                                 try:
-                                    # Read just one chunk at a time
-                                    chunk = await response.content.read(chunk_size)
-                                    if (
-                                        not chunk
-                                    ):  # Empty chunk means end of response
+                                    file_size = int(content_range.split("/")[1])
+                                except (IndexError, ValueError):
+                                    file_size = 0
+
+                            # If Content-Range not available, use Content-Length
+                            if not file_size:
+                                file_size = int(
+                                    response.headers.get("Content-Length", 0)
+                                )
+
+                            # Download sample of the file using read() with a size limit
+                            # This approach avoids ContentLengthError when we don't read the entire response
+                            downloaded_size = 0
+                            max_sample_size = 10 * 1024 * 1024  # 10MB
+
+                            async with aiopen(des_path, "wb") as f:
+                                # Read in 1MB chunks to have better control and progress updates
+                                chunk_size = 1024 * 1024  # 1MB
+                                while downloaded_size < max_sample_size:
+                                    try:
+                                        # Read just one chunk at a time
+                                        chunk = await response.content.read(
+                                            chunk_size
+                                        )
+                                        if (
+                                            not chunk
+                                        ):  # Empty chunk means end of response
+                                            break
+
+                                        await f.write(chunk)
+                                        downloaded_size += len(chunk)
+
+                                        # Periodically update status for large files if not in silent mode
+                                        if (
+                                            not silent
+                                            and temp_send
+                                            and downloaded_size % (5 * 1024 * 1024)
+                                            == 0
+                                        ):  # Every 5MB
+                                            await edit_message(
+                                                temp_send,
+                                                f"Downloading sample of {filename} for analysis... ({downloaded_size / (1024 * 1024):.1f} MB)",
+                                            )
+                                    except Exception:
                                         break
 
-                                    await f.write(chunk)
-                                    downloaded_size += len(chunk)
+                                # If we got at least some data, consider it a success
+                                if downloaded_size > 0:
+                                    LOGGER.info(
+                                        f"Successfully downloaded {downloaded_size / (1024 * 1024):.1f} MB sample of {filename}"
+                                    )
+                                # Check if this might be a Google Drive index link with findpath
+                                elif "findpath" in link:
+                                    LOGGER.error(
+                                        f"Failed to download data from Google Drive index link: {link}. This might require authentication or the file might not be directly accessible."
+                                    )
+                                    raise Exception(
+                                        "Failed to download from Google Drive index link. Try downloading the file first and then generating MediaInfo."
+                                    )
+                                else:
+                                    LOGGER.error(
+                                        f"Failed to download any data from {link}"
+                                    )
+                                    raise Exception(
+                                        "Failed to download any data from the link"
+                                    )
 
-                                    # Periodically update status for large files if not in silent mode
-                                    if (
-                                        not silent
-                                        and temp_send
-                                        and downloaded_size % (5 * 1024 * 1024) == 0
-                                    ):  # Every 5MB
-                                        await edit_message(
-                                            temp_send,
-                                            f"Downloading sample of {filename} for analysis... ({downloaded_size / (1024 * 1024):.1f} MB)",
-                                        )
-                                except Exception:
-                                    break
+                    except aiohttp.ClientError as ce:
+                        # Handle specific aiohttp client errors
+                        LOGGER.error(
+                            f"HTTP client error downloading from {link}: {ce}"
+                        )
+                        if (
+                            not await aiopath.exists(des_path)
+                            or await aiopath.getsize(des_path) == 0
+                        ):
+                            raise Exception(f"Failed to download file sample: {ce}")
+                        # If we have some data, continue with what we have
+                        LOGGER.info(
+                            f"Continuing with partial download ({await aiopath.getsize(des_path) / (1024 * 1024):.1f} MB)"
+                        )
 
-                            # If we got at least some data, consider it a success
-                            if downloaded_size > 0:
-                                LOGGER.info(
-                                    f"Successfully downloaded {downloaded_size / (1024 * 1024):.1f} MB sample of {filename}"
-                                )
-                            # Check if this might be a Google Drive index link with findpath
-                            elif "findpath" in link:
-                                LOGGER.error(
-                                    f"Failed to download data from Google Drive index link: {link}. This might require authentication or the file might not be directly accessible."
-                                )
-                                raise Exception(
-                                    "Failed to download from Google Drive index link. Try downloading the file first and then generating MediaInfo."
-                                )
-                            else:
-                                LOGGER.error(
-                                    f"Failed to download any data from {link}"
-                                )
-                                raise Exception(
-                                    "Failed to download any data from the link"
-                                )
+                    except Exception as e:
+                        LOGGER.error(f"Error downloading from {link}: {e}")
+                        if (
+                            not await aiopath.exists(des_path)
+                            or await aiopath.getsize(des_path) == 0
+                        ):
+                            raise Exception(f"Failed to download file sample: {e}")
+                        # If we have some data, continue with what we have
+                        LOGGER.info(
+                            f"Continuing with partial download ({await aiopath.getsize(des_path) / (1024 * 1024):.1f} MB)"
+                        )
 
-                except aiohttp.ClientError as ce:
-                    # Handle specific aiohttp client errors
-                    LOGGER.error(f"HTTP client error downloading from {link}: {ce}")
-                    if (
-                        not await aiopath.exists(des_path)
-                        or await aiopath.getsize(des_path) == 0
-                    ):
-                        raise Exception(f"Failed to download file sample: {ce}")
-                    # If we have some data, continue with what we have
-                    LOGGER.info(
-                        f"Continuing with partial download ({await aiopath.getsize(des_path) / (1024 * 1024):.1f} MB)"
-                    )
-
-                except Exception as e:
-                    LOGGER.error(f"Error downloading from {link}: {e}")
-                    if (
-                        not await aiopath.exists(des_path)
-                        or await aiopath.getsize(des_path) == 0
-                    ):
-                        raise Exception(f"Failed to download file sample: {e}")
-                    # If we have some data, continue with what we have
-                    LOGGER.info(
-                        f"Continuing with partial download ({await aiopath.getsize(des_path) / (1024 * 1024):.1f} MB)"
-                    )
-
-                finally:
-                    # Run garbage collection after download to free memory
-                    smart_garbage_collection(aggressive=False)
+                    finally:
+                        # Run garbage collection after download to free memory
+                        smart_garbage_collection(aggressive=False)
 
         elif media:
             # Ensure media.file_name is not None
@@ -1155,8 +1176,15 @@ async def gen_mediainfo(
                 await send_message(message, error_msg)
             return None
 
+        # Check if des_path was set by any of the above branches
+        if not des_path:
+            error_msg = "MediaInfo: Failed to determine file path"
+            LOGGER.error(error_msg)
+            if not silent:
+                await send_message(message, error_msg)
+            return None
+
         # Check if file exists and is accessible
-        LOGGER.info(f"MediaInfo: Checking file path: {des_path}")
         if (
             not des_path
             or not isinstance(des_path, str | bytes)

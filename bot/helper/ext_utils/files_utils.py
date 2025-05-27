@@ -8,26 +8,15 @@ from re import IGNORECASE, escape
 from re import search as re_search
 from re import split as re_split
 
-from aiofiles.os import (
-    listdir,
-    remove,
-    rmdir,
-    symlink,
-)
-from aiofiles.os import (
-    makedirs as aiomakedirs,
-)
-from aiofiles.os import (
-    path as aiopath,
-)
-from aiofiles.os import (
-    readlink as aioreadlink,
-)
 from aioshutil import rmtree as aiormtree
 from magic import Magic
 
 from bot import DOWNLOAD_DIR, LOGGER
 from bot.core.torrent_manager import TorrentManager
+from bot.helper.ext_utils.aiofiles_compat import listdir, remove, rmdir, symlink
+from bot.helper.ext_utils.aiofiles_compat import makedirs as aiomakedirs
+from bot.helper.ext_utils.aiofiles_compat import path as aiopath
+from bot.helper.ext_utils.aiofiles_compat import readlink as aioreadlink
 
 from .bot_utils import cmd_exec, sync_to_async
 from .exceptions import NotSupportedExtractionArchive

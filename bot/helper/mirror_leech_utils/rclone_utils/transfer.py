@@ -8,10 +8,9 @@ from random import randrange
 from re import findall as re_findall
 
 from aiofiles import open as aiopen
-from aiofiles.os import listdir, makedirs
-from aiofiles.os import path as aiopath
 
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath, listdir, makedirs
 from bot.helper.ext_utils.bot_utils import cmd_exec
 from bot.helper.ext_utils.files_utils import count_files_and_folders, get_mime_type
 

@@ -74,6 +74,131 @@ class Config:
     WEB_PINCODE: bool = False
     YT_DLP_OPTIONS: ClassVar[dict[str, Any]] = {}
 
+    # Streamrip Settings
+    STREAMRIP_ENABLED: bool = True
+    STREAMRIP_CONCURRENT_DOWNLOADS: int = 4
+    STREAMRIP_MAX_SEARCH_RESULTS: int = 20
+    STREAMRIP_ENABLE_DATABASE: bool = True
+    STREAMRIP_AUTO_CONVERT: bool = True
+
+    # Streamrip Quality and Format Settings
+    STREAMRIP_DEFAULT_QUALITY: int = 3
+    STREAMRIP_FALLBACK_QUALITY: int = 2
+    STREAMRIP_DEFAULT_CODEC: str = "flac"
+    STREAMRIP_SUPPORTED_CODECS: ClassVar[list[str]] = [
+        "flac",
+        "mp3",
+        "m4a",
+        "ogg",
+        "opus",
+    ]
+    STREAMRIP_QUALITY_FALLBACK_ENABLED: bool = True
+
+    # Streamrip Platform Settings
+    STREAMRIP_QOBUZ_ENABLED: bool = True
+    STREAMRIP_TIDAL_ENABLED: bool = True
+    STREAMRIP_DEEZER_ENABLED: bool = True
+    STREAMRIP_SOUNDCLOUD_ENABLED: bool = True
+    STREAMRIP_LASTFM_ENABLED: bool = True
+
+    # Streamrip Authentication
+    STREAMRIP_QOBUZ_EMAIL: str = ""
+    STREAMRIP_QOBUZ_PASSWORD: str = ""
+    STREAMRIP_TIDAL_EMAIL: str = ""
+    STREAMRIP_TIDAL_PASSWORD: str = ""
+    STREAMRIP_TIDAL_ACCESS_TOKEN: str = ""
+    STREAMRIP_TIDAL_REFRESH_TOKEN: str = ""
+    STREAMRIP_TIDAL_USER_ID: str = ""
+    STREAMRIP_TIDAL_COUNTRY_CODE: str = ""
+    STREAMRIP_DEEZER_ARL: str = ""
+    STREAMRIP_SOUNDCLOUD_CLIENT_ID: str = ""
+
+    # Streamrip Advanced Features
+    STREAMRIP_METADATA_EXCLUDE: ClassVar[list[str]] = []
+    STREAMRIP_FILENAME_TEMPLATE: str = ""
+    STREAMRIP_FOLDER_TEMPLATE: str = ""
+    STREAMRIP_EMBED_COVER_ART: bool = True
+    STREAMRIP_SAVE_COVER_ART: bool = True
+    STREAMRIP_COVER_ART_SIZE: str = "large"
+
+    # Streamrip Limits
+    STREAMRIP_LIMIT: float = 0  # GB
+
+    # Streamrip Downloads Configuration
+    STREAMRIP_MAX_CONNECTIONS: int = 6
+    STREAMRIP_REQUESTS_PER_MINUTE: int = 60
+
+    # Streamrip Qobuz Configuration
+    STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS: bool = True
+
+    # Streamrip Tidal Configuration
+    STREAMRIP_TIDAL_DOWNLOAD_VIDEOS: bool = True
+    STREAMRIP_TIDAL_TOKEN_EXPIRY: str = ""
+
+    # Streamrip Deezer Configuration
+    STREAMRIP_DEEZER_USE_DEEZLOADER: bool = True
+    STREAMRIP_DEEZER_DEEZLOADER_WARNINGS: bool = True
+
+    # Streamrip SoundCloud Configuration
+    STREAMRIP_SOUNDCLOUD_APP_VERSION: str = ""
+
+    # Streamrip YouTube Configuration
+    STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS: bool = False
+    STREAMRIP_YOUTUBE_VIDEO_FOLDER: str = ""
+
+    # Streamrip Database Configuration
+    STREAMRIP_DATABASE_DOWNLOADS_ENABLED: bool = True
+    STREAMRIP_DATABASE_DOWNLOADS_PATH: str = "./downloads.db"
+    STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED: bool = True
+    STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH: str = "./failed_downloads.db"
+
+    # Streamrip Conversion Configuration
+    STREAMRIP_CONVERSION_ENABLED: bool = False
+    STREAMRIP_CONVERSION_CODEC: str = "ALAC"
+    STREAMRIP_CONVERSION_SAMPLING_RATE: int = 48000
+    STREAMRIP_CONVERSION_BIT_DEPTH: int = 24
+    STREAMRIP_CONVERSION_LOSSY_BITRATE: int = 320
+
+    # Streamrip Qobuz Filters Configuration
+    STREAMRIP_QOBUZ_FILTERS_EXTRAS: bool = False
+    STREAMRIP_QOBUZ_FILTERS_REPEATS: bool = False
+    STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS: bool = False
+    STREAMRIP_QOBUZ_FILTERS_FEATURES: bool = False
+    STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS: bool = False
+    STREAMRIP_QOBUZ_FILTERS_NON_REMASTER: bool = False
+
+    # Streamrip Artwork Configuration
+    STREAMRIP_ARTWORK_EMBED: bool = True
+    STREAMRIP_ARTWORK_EMBED_SIZE: str = "large"
+    STREAMRIP_ARTWORK_EMBED_MAX_WIDTH: int = -1
+    STREAMRIP_ARTWORK_SAVE_ARTWORK: bool = True
+    STREAMRIP_ARTWORK_SAVED_MAX_WIDTH: int = -1
+
+    # Streamrip Metadata Configuration
+    STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM: bool = True
+    STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS: bool = True
+
+    # Streamrip Filepaths Configuration
+    STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER: bool = False
+    STREAMRIP_FILEPATHS_FOLDER_FORMAT: str = "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]"
+    STREAMRIP_FILEPATHS_TRACK_FORMAT: str = (
+        "{tracknumber:02}. {artist} - {title}{explicit}"
+    )
+    STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS: bool = False
+    STREAMRIP_FILEPATHS_TRUNCATE_TO: int = 120
+
+    # Streamrip Last.fm Configuration
+    STREAMRIP_LASTFM_SOURCE: str = "qobuz"
+    STREAMRIP_LASTFM_FALLBACK_SOURCE: str = ""
+
+    # Streamrip CLI Configuration
+    STREAMRIP_CLI_TEXT_OUTPUT: bool = True
+    STREAMRIP_CLI_PROGRESS_BARS: bool = True
+    STREAMRIP_CLI_MAX_SEARCH_RESULTS: int = 100
+
+    # Streamrip Misc Configuration
+    STREAMRIP_MISC_CHECK_FOR_UPDATES: bool = True
+
     # INKYPINKY
     # Global metadata settings
     METADATA_KEY: str = ""  # Legacy metadata key

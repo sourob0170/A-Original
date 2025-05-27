@@ -1,12 +1,10 @@
 import contextlib
 from asyncio import iscoroutinefunction
 
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove
-
 from bot import LOGGER, sabnzbd_client, task_dict, task_dict_lock, user_data
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager
+from bot.helper.ext_utils.aiofiles_compat import aiopath, remove
 from bot.helper.ext_utils.bot_utils import bt_selection_buttons, new_task
 from bot.helper.ext_utils.status_utils import MirrorStatus, get_task_by_gid
 from bot.helper.telegram_helper.message_utils import (

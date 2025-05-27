@@ -2,8 +2,6 @@
 from asyncio import create_task, gather, sleep
 from html import escape
 
-from aiofiles.os import listdir, makedirs, remove
-from aiofiles.os import path as aiopath
 from aioshutil import move
 from requests import utils as rutils
 
@@ -24,6 +22,7 @@ from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager
 from bot.helper.common import TaskConfig
+from bot.helper.ext_utils.aiofiles_compat import aiopath, listdir, makedirs, remove
 from bot.helper.ext_utils.bot_utils import encode_slink, sync_to_async
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.files_utils import (
@@ -487,10 +486,10 @@ class TaskListener(TaskConfig):
             # We don't want to delete the command messages in dump chats anymore
             # This was causing the auto-deleted command messages issue
             # Instead, we'll keep them for reference
-            if hasattr(tg, "dump_chat_msgs") and tg.dump_chat_msgs:
+            if (hasattr(tg, "dump_chat_msgs") and tg.dump_chat_msgs) or (
+                hasattr(tg, "log_msg") and tg.log_msg
+            ):
                 pass
-            elif hasattr(tg, "log_msg") and tg.log_msg:
-                LOGGER.info(f"Keeping log message in chat: {tg.log_msg.chat.id}")
 
             # Delete the original command message if it's not in the dump chats list
             # This prevents duplicate command messages
@@ -547,8 +546,30 @@ class TaskListener(TaskConfig):
                         )
             # Don't delete the tg reference as we need it for cancellation
             # We'll keep the reference in self.telegram_uploader
-        elif is_gdrive_id(self.up_dest):
+        elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
+            # If up_dest is "gd", use the configured GDRIVE_ID
+            if self.up_dest == "gd":
+                gdrive_id = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
+                if gdrive_id:
+                    self.up_dest = gdrive_id
+                else:
+                    LOGGER.warning(
+                        "DEFAULT_UPLOAD is 'gd' but no GDRIVE_ID configured, falling back to Rclone"
+                    )
+                    LOGGER.info(f"Rclone Upload Name: {self.name}")
+                    RCTransfer = RcloneTransferHelper(self)
+                    async with task_dict_lock:
+                        task_dict[self.mid] = RcloneStatus(
+                            self, RCTransfer, gid, "up"
+                        )
+                    await gather(
+                        update_status_message(self.message.chat.id),
+                        RCTransfer.upload(up_path),
+                    )
+                    del RCTransfer
+                    return
+
             drive = GoogleDriveUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
@@ -1253,25 +1274,6 @@ class TaskListener(TaskConfig):
                                     f"Failed to send leech log to destination {dest}: {e}"
                                 )
 
-                # Send completion message only to the original chat if it's a group or supergroup
-                # Add "Checkout Inbox" button for group/supergroup chats
-                button = None
-                if (
-                    self.message.chat.type != "private"
-                    and self.message.chat.id != self.user_id
-                ):
-                    # Only send completion message to the original chat if it's a group or supergroup
-                    # and not the user's PM
-                    buttons = ButtonMaker()
-                    buttons.url_button(
-                        "Checkout Inbox", f"https://t.me/{TgClient.NAME}"
-                    )
-                    button = buttons.build_menu(1)
-
-                    LOGGER.info(
-                        f"Sending completion message to original chat {self.message.chat.id}"
-                    )
-                    await send_message(self.message, done_msg, button)
         else:
             msg += f"\n\n<b>Type: </b>{mime_type}"
             if mime_type == "Folder":
@@ -1396,7 +1398,8 @@ class TaskListener(TaskConfig):
             # Add "Checkout Inbox" button for group/supergroup chats
             button = None
             if (
-                self.message.chat.type != "private"
+                not self.is_leech  # Only for mirror operations
+                and self.message.chat.type != "private"
                 and self.message.chat.id != self.user_id
             ):
                 # Only send completion message to the original chat if it's a group or supergroup
@@ -1406,9 +1409,24 @@ class TaskListener(TaskConfig):
                 button = buttons.build_menu(1)
 
                 LOGGER.info(
-                    f"Sending completion message to original chat {self.message.chat.id}"
+                    f"Sending mirror completion message to original chat {self.message.chat.id}"
                 )
                 await send_message(self.message, done_msg, button)
+
+        # For leech operations, send simple completion message to groups/supergroups
+        if self.is_leech and (
+            self.message.chat.type != "private"
+            and self.message.chat.id != self.user_id
+        ):
+            # Send simple completion message to groups/supergroups for leech operations
+            buttons = ButtonMaker()
+            buttons.url_button("Checkout Inbox", f"https://t.me/{TgClient.NAME}")
+            button = buttons.build_menu(1)
+
+            LOGGER.info(
+                f"Sending leech completion message to original chat {self.message.chat.id}"
+            )
+            await send_message(self.message, done_msg, button)
         # We don't need to delete command messages here
         # They are already being deleted in the on_download_complete method
 

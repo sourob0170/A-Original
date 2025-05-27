@@ -6,14 +6,13 @@ from os import getcwd
 from re import findall
 from time import time
 
-from aiofiles.os import makedirs, remove
-from aiofiles.os import path as aiopath
 from pyrogram.filters import create
 from pyrogram.handlers import MessageHandler
 
 from bot import LOGGER, auth_chats, excluded_extensions, sudo_users, user_data
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.bot_utils import (
     get_size_bytes,
     new_task,

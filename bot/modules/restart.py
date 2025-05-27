@@ -3,14 +3,13 @@ from os import execl as osexecl
 from sys import executable
 
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove
 
 from bot import LOGGER, intervals, sabnzbd_client, scheduler
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.core.jdownloader_booter import jdownloader
 from bot.core.torrent_manager import TorrentManager
+from bot.helper.ext_utils.aiofiles_compat import aiopath, remove
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.files_utils import clean_all

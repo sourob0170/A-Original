@@ -1018,6 +1018,297 @@ VT_HELP_DICT = {
     "main": virustotal_help,
 }
 
+# Streamrip help content
+streamrip_main = """<b>🎵 Streamrip Downloads</b>
+
+Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, and SoundCloud.
+
+<b>Commands:</b>
+• <code>/srmirror</code> or <code>/streamripmirror</code> - Mirror music to cloud storage
+• <code>/srleech</code> or <code>/streamripleech</code> - Leech music to Telegram
+• <code>/srsearch</code> or <code>/streamripsearch</code> - Search for music across platforms
+
+<b>Supported Platforms:</b>
+• <b>Qobuz</b> - Up to Hi-Res+ quality (24-bit/192kHz)
+• <b>Tidal</b> - Up to Hi-Res/MQA quality (24-bit/96kHz)
+• <b>Deezer</b> - Up to CD quality (16-bit/44.1kHz)
+• <b>SoundCloud</b> - Up to 320 kbps
+
+<b>Input Types:</b>
+• Direct URLs from supported platforms
+• ID format: <code>platform:type:id</code> (e.g., <code>qobuz:album:123456</code>)
+• Last.fm playlist URLs (converted to source platforms)
+• Batch files (text/JSON with multiple URLs/IDs)
+
+<b>Quality Levels:</b>
+• <b>0</b> - 128 kbps (~4MB/track)
+• <b>1</b> - 320 kbps (~10MB/track)
+• <b>2</b> - CD Quality 16-bit/44.1kHz (~35MB/track)
+• <b>3</b> - Hi-Res 24-bit/≤96kHz (~80MB/track)
+• <b>4</b> - Hi-Res+ 24-bit/≤192kHz (~150MB/track)
+
+<b>Note:</b> Higher quality levels require premium subscriptions on respective platforms."""
+
+streamrip_quality_flags = """<b>🎯 Quality & Format Flags</b>
+
+Control the quality and format of your music downloads.
+
+<b>Quality Selection:</b>
+• <code>-q &lt;0-4&gt;</code> - Set quality level
+  - <code>-q 0</code> - 128 kbps (smallest files)
+  - <code>-q 1</code> - 320 kbps (good quality)
+  - <code>-q 2</code> - CD Quality (lossless)
+  - <code>-q 3</code> - Hi-Res (studio quality)
+  - <code>-q 4</code> - Hi-Res+ (maximum quality)
+
+<b>Codec Selection:</b>
+• <code>-c &lt;codec&gt;</code> - Set audio codec
+  - <code>-c flac</code> - Lossless compression (recommended)
+  - <code>-c mp3</code> - Lossy compression, smaller files
+  - <code>-c m4a</code> - Apple's format, good quality
+  - <code>-c ogg</code> - Open source, good compression
+  - <code>-c opus</code> - Modern codec, excellent quality
+
+<b>Examples:</b>
+• <code>/srmirror https://qobuz.com/album/... -q 3 -c flac</code>
+• <code>/srleech qobuz:album:123456 -q 2</code>
+• <code>/srmirror -q 4 -c flac</code> (reply to URL)
+
+<b>Platform Compatibility:</b>
+• <b>Qobuz:</b> All quality levels (0-4)
+• <b>Tidal:</b> Levels 0-3 (MQA support)
+• <b>Deezer:</b> Levels 0-2 (HiFi subscription required for 2)
+• <b>SoundCloud:</b> Levels 0-1 (free platform)"""
+
+streamrip_download_flags = """<b>📁 Download Control Flags</b>
+
+Customize how your music downloads are handled.
+
+<b>File Naming:</b>
+• <code>-n &lt;name&gt;</code> - Custom filename/folder name
+  - <code>/srmirror url -n "My Album Collection"</code>
+  - <code>/srleech url -n "Artist - Album (Year)"</code>
+
+<b>Upload Control (Mirror only):</b>
+• <code>-up &lt;path&gt;</code> - Custom upload path
+• <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
+• <code>-sync</code> - Sync with cloud storage
+
+<b>Telegram Upload (Leech only):</b>
+• <code>-thumb &lt;url&gt;</code> - Custom thumbnail URL
+• <code>-sp &lt;size&gt;</code> - Split size for large files
+• <code>-cap &lt;caption&gt;</code> - Custom caption for uploads
+
+<b>File Selection:</b>
+• <code>-s</code> - Select specific files from multi-track downloads
+• <code>-e &lt;extensions&gt;</code> - Exclude file extensions
+• <code>-j</code> - Join files if multiple parts
+
+<b>Upload Type:</b>
+• <code>-doc</code> - Upload as document
+• <code>-med</code> - Upload as media
+
+<b>Headers & Authentication:</b>
+• <code>-h &lt;headers&gt;</code> - Custom headers (key:value|key1:value1)
+
+<b>Examples:</b>
+• <code>/srmirror url -n "Jazz Collection" -up "Music/Jazz"</code>
+• <code>/srleech url -sp 2GB -doc -cap "High Quality Music"</code>"""
+
+streamrip_media_tools = """<b>🎬 Media Tools Integration</b>
+
+Enhance your music downloads with powerful media processing tools.
+
+<b>Main Media Tools Flag:</b>
+• <code>-mt</code> - Enable media tools processing
+
+<b>Core Operations:</b>
+• <code>-compress</code> - Enable compression
+• <code>-extract</code> - Enable extraction
+• <code>-add</code> - Enable adding tracks/metadata
+
+<b>Compression Presets:</b>
+• <code>-audio-fast</code> - Fast audio compression
+• <code>-audio-medium</code> - Balanced audio compression
+• <code>-audio-slow</code> - High-quality audio compression
+
+<b>Specific Compression Types:</b>
+• <code>-comp-audio</code> - Compress audio tracks
+• <code>-comp-image</code> - Compress album artwork
+• <code>-comp-document</code> - Compress metadata files
+• <code>-comp-archive</code> - Compress final archive
+
+<b>Extract Operations:</b>
+• <code>-extract-audio</code> - Extract audio tracks
+• <code>-extract-attachment</code> - Extract embedded files
+
+<b>Add Operations:</b>
+• <code>-add-audio</code> - Add audio tracks
+• <code>-add-attachment</code> - Add metadata/artwork
+• <code>-preserve</code> - Keep existing tracks when adding
+• <code>-replace</code> - Replace existing tracks
+
+<b>Examples:</b>
+• <code>/srmirror url -mt -compress -audio-medium</code>
+• <code>/srleech url -mt -add-attachment -preserve</code>
+• <code>/srmirror url -mt -comp-audio -extract-attachment</code>
+
+<b>Note:</b> Media tools require additional processing time but provide enhanced output quality."""
+
+streamrip_control_flags = """<b>🔧 Advanced Control Flags</b>
+
+Fine-tune your streamrip downloads with advanced options.
+
+<b>Archive & Security:</b>
+• <code>-z &lt;password&gt;</code> - Archive password protection
+  - <code>/srmirror url -z "mypassword"</code>
+  - Works with compressed downloads
+
+<b>Force Operations:</b>
+• <code>-f</code> - Force run (bypass some checks)
+• <code>-fd</code> - Force download (ignore cache)
+• <code>-fu</code> - Force upload (re-upload existing)
+
+<b>Processing Control:</b>
+• <code>-s</code> - Select files from multi-track downloads
+• <code>-j</code> - Join files if multiple parts
+• <code>-e &lt;extensions&gt;</code> - Exclude file extensions
+  - <code>-e "log,cue,m3u"</code> - Exclude metadata files
+
+<b>Cloud Integration (Mirror):</b>
+• <code>-sync</code> - Sync with cloud storage
+• <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
+  - <code>-rcf "--buffer-size:8M|--transfers:4"</code>
+
+<b>Upload Options (Leech):</b>
+• <code>-doc</code> - Upload as document (preserves quality)
+• <code>-med</code> - Upload as media (Telegram compression)
+
+<b>Examples:</b>
+• <code>/srmirror url -z "secure123" -sync -f</code>
+• <code>/srleech url -s -j -doc -e "log,cue"</code>
+• <code>/srmirror url -rcf "--transfers:8" -fd</code>
+
+<b>Tips:</b>
+• Use <code>-doc</code> for lossless audio preservation
+• Use <code>-s</code> for large albums to select specific tracks
+• Combine flags for complex workflows"""
+
+streamrip_examples = """<b>📋 Usage Examples</b>
+
+Real-world examples of streamrip commands for different scenarios.
+
+<b>🎵 Basic Downloads:</b>
+• <code>/srmirror https://qobuz.com/album/xyz</code>
+• <code>/srleech https://tidal.com/browse/track/123</code>
+• <code>/srsearch Daft Punk Random Access Memories</code>
+
+<b>🎯 Quality-Focused Downloads:</b>
+• <code>/srmirror qobuz:album:123456 -q 4 -c flac</code>
+• <code>/srleech tidal:album:789012 -q 3 -doc</code>
+• <code>/srmirror url -q 2 -c flac -n "Lossless Collection"</code>
+
+<b>📁 Organized Downloads:</b>
+• <code>/srmirror url -n "Artist - Album (2023)" -up "Music/2023"</code>
+• <code>/srleech url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
+
+<b>🎬 Media Tools Enhanced:</b>
+• <code>/srmirror url -mt -compress -audio-medium</code>
+• <code>/srleech url -mt -add-attachment -preserve</code>
+• <code>/srmirror url -mt -comp-audio -extract-attachment</code>
+
+<b>🔒 Secure Downloads:</b>
+• <code>/srmirror url -z "mypassword" -compress</code>
+• <code>/srleech url -doc -z "secure123"</code>
+
+<b>📦 Batch Processing:</b>
+• Upload a text file with multiple URLs and use:
+• <code>/srmirror -q 3 -c flac -mt</code> (reply to file)
+• <code>/srleech -doc -sp 2GB</code> (reply to file)
+
+<b>🔍 Advanced Selection:</b>
+• <code>/srmirror url -s -e "log,cue" -j</code>
+• <code>/srleech url -s -doc -thumb "https://image.url"</code>
+
+<b>☁️ Cloud Integration:</b>
+• <code>/srmirror url -sync -rcf "--transfers:8"</code>
+• <code>/srmirror url -up "Music/Streamrip" -sync</code>
+
+<b>💡 Pro Tips:</b>
+• Combine quality and media tools for best results
+• Use batch files for downloading entire discographies
+• Select specific tracks from large albums with <code>-s</code>
+• Use <code>-doc</code> for preserving audio quality in Telegram"""
+
+streamrip_platforms = """<b>🎵 Platform Support & Features</b>
+
+Detailed information about supported streaming platforms and their capabilities.
+
+<b>🎯 Qobuz (Premium Recommended):</b>
+• <b>Quality Levels:</b> 0-4 (up to 24-bit/192kHz)
+• <b>Formats:</b> FLAC, MP3, M4A
+• <b>Features:</b> Hi-Res audio, extensive classical catalog
+• <b>Requirements:</b> Premium subscription for Hi-Res
+• <b>Best For:</b> Audiophiles, classical music, jazz
+
+<b>🌊 Tidal (HiFi/HiFi Plus):</b>
+• <b>Quality Levels:</b> 0-3 (up to MQA 24-bit/96kHz)
+• <b>Formats:</b> FLAC, MQA, AAC, MP3
+• <b>Features:</b> MQA support, exclusive content
+• <b>Requirements:</b> HiFi subscription for lossless
+• <b>Best For:</b> Hip-hop, R&B, exclusive releases
+
+<b>🎶 Deezer (HiFi):</b>
+• <b>Quality Levels:</b> 0-2 (up to 16-bit/44.1kHz)
+• <b>Formats:</b> FLAC, MP3, M4A
+• <b>Features:</b> Large catalog, good discovery
+• <b>Requirements:</b> HiFi subscription for CD quality
+• <b>Best For:</b> Pop music, international content
+
+<b>☁️ SoundCloud (Free/Pro):</b>
+• <b>Quality Levels:</b> 0-1 (up to 320 kbps)
+• <b>Formats:</b> MP3, AAC
+• <b>Features:</b> Independent artists, remixes, podcasts
+• <b>Requirements:</b> Free access, Pro for higher quality
+• <b>Best For:</b> Independent music, DJ sets, podcasts
+
+<b>🎵 Last.fm Integration:</b>
+• <b>Playlist Support:</b> Convert Last.fm playlists to downloads
+• <b>Scrobbling Data:</b> Use listening history for downloads
+• <b>Discovery:</b> Find similar tracks and artists
+
+<b>📋 Input Format Examples:</b>
+• <b>Direct URLs:</b>
+  - <code>https://qobuz.com/album/xyz</code>
+  - <code>https://tidal.com/browse/track/123</code>
+  - <code>https://deezer.com/album/456</code>
+  - <code>https://soundcloud.com/artist/track</code>
+
+• <b>ID Format:</b>
+  - <code>qobuz:album:123456</code>
+  - <code>tidal:track:789012</code>
+  - <code>deezer:playlist:345678</code>
+  - <code>soundcloud:user:901234</code>
+
+• <b>Last.fm URLs:</b>
+  - <code>https://last.fm/user/username/playlists/123</code>
+
+<b>💡 Platform Tips:</b>
+• Use Qobuz for highest quality classical and jazz
+• Tidal excels for hip-hop and exclusive content
+• Deezer offers great international music discovery
+• SoundCloud is perfect for independent and remix content"""
+
+STREAMRIP_HELP_DICT = {
+    "main": streamrip_main,
+    "Quality-Flags": streamrip_quality_flags,
+    "Download-Flags": streamrip_download_flags,
+    "Media-Tools": streamrip_media_tools,
+    "Control-Flags": streamrip_control_flags,
+    "Examples": streamrip_examples,
+    "Platforms": streamrip_platforms,
+}
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -1458,6 +1749,9 @@ download_commands = f"""
 /{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
 /{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.
 /{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
+/{BotCommands.StreamripMirrorCommand[0]} or /{BotCommands.StreamripMirrorCommand[1]}: Mirror music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud).
+/{BotCommands.StreamripLeechCommand[0]} or /{BotCommands.StreamripLeechCommand[1]}: Leech music from streaming platforms to Telegram.
+/{BotCommands.StreamripSearchCommand[0]} or /{BotCommands.StreamripSearchCommand[1]}: Search for music across streaming platforms.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
 """
 

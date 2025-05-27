@@ -11,8 +11,6 @@ from re import IGNORECASE, findall, sub
 from secrets import token_hex
 from time import time
 
-from aiofiles.os import listdir, makedirs, remove
-from aiofiles.os import path as aiopath
 from aioshutil import move, rmtree
 from pyrogram.enums import ChatAction
 
@@ -40,6 +38,7 @@ from bot.helper.aeon_utils.command_gen import (
     get_trim_cmd,
     get_watermark_cmd,
 )
+from bot.helper.ext_utils.aiofiles_compat import aiopath, listdir, makedirs, remove
 
 from .ext_utils.bot_utils import get_size_bytes, new_task, sync_to_async
 from .ext_utils.bulk_links import extract_bulk_links
@@ -287,6 +286,8 @@ class TaskConfig:
         self.excluded_extensions = []
         self.files_to_proceed = []
         self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
+        # Set client attribute for Telegram operations
+        self.client = TgClient.bot
 
     def get_token_path(self, dest):
         if dest.startswith("mtp:"):

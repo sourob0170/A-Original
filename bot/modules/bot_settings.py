@@ -13,8 +13,6 @@ from time import time
 
 import aiofiles
 from aiofiles import open as aiopen
-from aiofiles.os import makedirs, remove, rename
-from aiofiles.os import path as aiopath
 from aioshutil import rmtree
 from pyrogram.filters import create
 from pyrogram.handlers import MessageHandler
@@ -46,6 +44,7 @@ from bot.core.startup import (
     update_variables,
 )
 from bot.core.torrent_manager import TorrentManager
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove, rename
 from bot.helper.ext_utils.bot_utils import SetInterval, new_task
 from bot.helper.ext_utils.db_handler import database
 from bot.helper.ext_utils.status_utils import get_readable_file_size
@@ -114,6 +113,67 @@ DEFAULT_VALUES = {
     "RCLONE_ENABLED": True,
     "ARCHIVE_FLAGS_ENABLED": True,
     "AD_BROADCASTER_ENABLED": False,
+    "STREAMRIP_ENABLED": True,
+    # Streamrip Settings
+    "STREAMRIP_CONCURRENT_DOWNLOADS": 4,
+    "STREAMRIP_MAX_SEARCH_RESULTS": 20,
+    "STREAMRIP_ENABLE_DATABASE": False,
+    "STREAMRIP_AUTO_CONVERT": False,
+    "STREAMRIP_DEFAULT_QUALITY": 3,
+    "STREAMRIP_FALLBACK_QUALITY": 2,
+    "STREAMRIP_DEFAULT_CODEC": "flac",
+    "STREAMRIP_QUALITY_FALLBACK_ENABLED": False,
+    "STREAMRIP_QOBUZ_ENABLED": False,
+    "STREAMRIP_QOBUZ_EMAIL": "",
+    "STREAMRIP_QOBUZ_PASSWORD": "",
+    "STREAMRIP_TIDAL_ENABLED": False,
+    "STREAMRIP_TIDAL_EMAIL": "",
+    "STREAMRIP_TIDAL_PASSWORD": "",
+    "STREAMRIP_TIDAL_ACCESS_TOKEN": "",
+    "STREAMRIP_TIDAL_REFRESH_TOKEN": "",
+    "STREAMRIP_TIDAL_USER_ID": "",
+    "STREAMRIP_TIDAL_COUNTRY_CODE": "",
+    "STREAMRIP_DEEZER_ENABLED": False,
+    "STREAMRIP_DEEZER_ARL": "",
+    "STREAMRIP_SOUNDCLOUD_ENABLED": False,
+    "STREAMRIP_SOUNDCLOUD_CLIENT_ID": "",
+    "STREAMRIP_FILENAME_TEMPLATE": "",
+    "STREAMRIP_FOLDER_TEMPLATE": "",
+    "STREAMRIP_EMBED_COVER_ART": False,
+    "STREAMRIP_SAVE_COVER_ART": False,
+    "STREAMRIP_COVER_ART_SIZE": "large",
+    # Missing Streamrip Settings
+    "STREAMRIP_LIMIT": 0,
+    "STREAMRIP_MAX_CONNECTIONS": 6,
+    "STREAMRIP_REQUESTS_PER_MINUTE": 60,
+    "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS": False,
+    "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS": False,
+    "STREAMRIP_TIDAL_TOKEN_EXPIRY": "",
+    "STREAMRIP_DEEZER_USE_DEEZLOADER": False,
+    "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS": True,
+    "STREAMRIP_SOUNDCLOUD_APP_VERSION": "",
+    "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS": False,
+    "STREAMRIP_YOUTUBE_VIDEO_FOLDER": "",
+    "STREAMRIP_DATABASE_DOWNLOADS_ENABLED": True,
+    "STREAMRIP_DATABASE_DOWNLOADS_PATH": "./downloads.db",
+    "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED": True,
+    "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH": "./failed_downloads.db",
+    "STREAMRIP_CONVERSION_ENABLED": False,
+    "STREAMRIP_CONVERSION_CODEC": "ALAC",
+    "STREAMRIP_CONVERSION_SAMPLING_RATE": 48000,
+    "STREAMRIP_CONVERSION_BIT_DEPTH": 24,
+    "STREAMRIP_CONVERSION_LOSSY_BITRATE": 320,
+    "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER": False,
+    "STREAMRIP_FILEPATHS_FOLDER_FORMAT": "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]",
+    "STREAMRIP_FILEPATHS_TRACK_FORMAT": "{tracknumber:02}. {artist} - {title}{explicit}",
+    "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS": False,
+    "STREAMRIP_FILEPATHS_TRUNCATE_TO": 120,
+    "STREAMRIP_LASTFM_SOURCE": "qobuz",
+    "STREAMRIP_LASTFM_FALLBACK_SOURCE": "",
+    "STREAMRIP_CLI_TEXT_OUTPUT": True,
+    "STREAMRIP_CLI_PROGRESS_BARS": True,
+    "STREAMRIP_CLI_MAX_SEARCH_RESULTS": 100,
+    "STREAMRIP_MISC_CHECK_FOR_UPDATES": True,
     # Watermark Settings
     "WATERMARK_ENABLED": False,
     "WATERMARK_KEY": "",
@@ -459,6 +519,10 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
             buttons.data_button("🤖 AI Settings", "botset ai")
+
+        # Only show Streamrip Settings button if Streamrip is enabled
+        if Config.STREAMRIP_ENABLED:
+            buttons.data_button("🎵 Streamrip", "botset streamrip")
 
         buttons.data_button("❌ Close", "botset close")
         msg = "<b>Bot Settings</b>\nSelect a category to configure:"
@@ -1146,7 +1210,7 @@ Send one of the following position options:
                 msg = f"Send a valid value for {key} in server {Config.USENET_SERVERS[index]['name']}. Current value is {Config.USENET_SERVERS[index][key]}. Timeout: 60 sec"
     elif key == "var":
         conf_dict = Config.get_all()
-        # Filter out watermark, merge configs, metadata, convert, add, task monitor, and AI settings
+        # Filter out watermark, merge configs, metadata, convert, add, task monitor, AI settings, and streamrip settings
         filtered_keys = [
             k
             for k in list(conf_dict.keys())
@@ -1168,6 +1232,7 @@ Send one of the following position options:
                         "TASK_MONITOR_",
                         "MISTRAL_",
                         "DEEPSEEK_",
+                        "STREAMRIP_",  # Added STREAMRIP_ to exclude streamrip configs from main config menu
                     )
                 )
                 or k
@@ -1310,12 +1375,15 @@ Send any of these files:
 • list_drives.txt
 • cookies.txt
 • .netrc
+• streamrip_config.toml
 • Any other private file
 
 <b>Delete a private file:</b>
 Send only the file name as text message.
 
-<b>Note:</b> Changing .netrc will not take effect for aria2c until restart.
+<b>Note:</b>
+• Changing .netrc will not take effect for aria2c until restart.
+• streamrip_config.toml will be used for custom streamrip configuration.
 
 <i>Timeout: 60 seconds</i>"""
     elif key == "aria":
@@ -1602,6 +1670,740 @@ Select a tool category to configure its settings."""
 
 <i>Note: Users can override these settings in their user settings.</i>"""
 
+    elif key == "streamrip":
+        # Streamrip Settings section
+        buttons.data_button("⚙️ General Settings", "botset streamrip_general")
+        buttons.data_button("🎵 Quality & Codec", "botset streamrip_quality")
+        buttons.data_button(
+            "🔐 Platform Credentials", "botset streamrip_credentials"
+        )
+        buttons.data_button("📁 Download Settings", "botset streamrip_download")
+        buttons.data_button("🎛️ Platform Settings", "botset streamrip_platforms")
+        buttons.data_button("🗄️ Database Settings", "botset streamrip_database")
+        buttons.data_button("🔄 Conversion Settings", "botset streamrip_conversion")
+        buttons.data_button("🖥️ CLI Settings", "botset streamrip_cli")
+        buttons.data_button("🔧 Advanced Settings", "botset streamrip_advanced")
+        buttons.data_button("📄 Config File", "botset streamrip_config")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+        msg = "<b>🎵 Streamrip Settings</b>\nSelect a category to configure:"
+
+    elif key == "streamrip_general":
+        # General Streamrip Settings
+        general_settings = [
+            "STREAMRIP_ENABLED",
+            "STREAMRIP_AUTO_CONVERT",
+            "STREAMRIP_LIMIT",
+        ]
+
+        for setting in general_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in ["STREAMRIP_ENABLED", "STREAMRIP_AUTO_CONVERT"]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_general", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_general", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_general", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current general settings
+        enabled = "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
+        auto_convert = (
+            "✅ Enabled" if Config.STREAMRIP_AUTO_CONVERT else "❌ Disabled"
+        )
+        limit = (
+            f"{Config.STREAMRIP_LIMIT} GB" if Config.STREAMRIP_LIMIT else "No Limit"
+        )
+
+        msg = f"""<b>🎵 Streamrip General Settings</b> | State: {state}
+
+<b>Status:</b> {enabled}
+<b>Auto Convert:</b> {auto_convert}
+<b>Download Limit:</b> <code>{limit}</code>
+
+<b>Description:</b>
+• <b>Enabled:</b> Master toggle for streamrip functionality
+• <b>Auto Convert:</b> Automatically convert downloaded files after download
+• <b>Download Limit:</b> Maximum download size per task (0 = no limit)
+
+<b>Note:</b>
+Other settings like concurrent downloads, search results, and database tracking have been moved to their dedicated sections for better organization."""
+
+    elif key == "streamrip_quality":
+        # Quality & Codec Settings
+        quality_settings = [
+            "STREAMRIP_DEFAULT_QUALITY",
+            "STREAMRIP_FALLBACK_QUALITY",
+            "STREAMRIP_DEFAULT_CODEC",
+            "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+        ]
+
+        for setting in quality_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in ["STREAMRIP_QUALITY_FALLBACK_ENABLED"]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_quality", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_quality", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_quality", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current quality settings
+        default_quality = Config.STREAMRIP_DEFAULT_QUALITY or "3 (Default)"
+        fallback_quality = Config.STREAMRIP_FALLBACK_QUALITY or "2 (Default)"
+        default_codec = Config.STREAMRIP_DEFAULT_CODEC or "flac (Default)"
+        quality_fallback = (
+            "✅ Enabled"
+            if Config.STREAMRIP_QUALITY_FALLBACK_ENABLED
+            else "❌ Disabled"
+        )
+
+        msg = f"""<b>🎵 Streamrip Quality & Codec Settings</b> | State: {state}
+
+<b>Default Quality:</b> <code>{default_quality}</code>
+<b>Fallback Quality:</b> <code>{fallback_quality}</code>
+<b>Default Codec:</b> <code>{default_codec}</code>
+<b>Quality Fallback:</b> {quality_fallback}
+
+<b>Quality Levels:</b>
+• <b>0:</b> MP3 320kbps
+• <b>1:</b> FLAC 16bit/44.1kHz
+• <b>2:</b> FLAC 24bit/96kHz
+• <b>3:</b> FLAC 24bit/192kHz (Highest)
+
+<b>Supported Codecs:</b>
+• <b>flac:</b> Lossless compression
+• <b>mp3:</b> Lossy compression (320kbps)
+• <b>m4a:</b> AAC format
+• <b>ogg:</b> Ogg Vorbis
+• <b>opus:</b> Opus codec"""
+
+    elif key == "streamrip_credentials":
+        # Platform Credentials Settings
+        credential_settings = [
+            "STREAMRIP_QOBUZ_ENABLED",
+            "STREAMRIP_QOBUZ_EMAIL",
+            "STREAMRIP_QOBUZ_PASSWORD",
+            "STREAMRIP_TIDAL_ENABLED",
+            "STREAMRIP_TIDAL_EMAIL",
+            "STREAMRIP_TIDAL_PASSWORD",
+            "STREAMRIP_TIDAL_ACCESS_TOKEN",
+            "STREAMRIP_TIDAL_REFRESH_TOKEN",
+            "STREAMRIP_TIDAL_USER_ID",
+            "STREAMRIP_TIDAL_COUNTRY_CODE",
+            "STREAMRIP_DEEZER_ENABLED",
+            "STREAMRIP_DEEZER_ARL",
+            "STREAMRIP_SOUNDCLOUD_ENABLED",
+            "STREAMRIP_SOUNDCLOUD_CLIENT_ID",
+        ]
+
+        for setting in credential_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting.endswith("_ENABLED"):
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For credential settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button(
+                "✏️ Edit", "botset edit streamrip_credentials", "footer"
+            )
+        else:
+            buttons.data_button(
+                "👁️ View", "botset view streamrip_credentials", "footer"
+            )
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_credentials", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current platform status
+        qobuz_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_QOBUZ_ENABLED else "❌ Disabled"
+        )
+        tidal_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_TIDAL_ENABLED else "❌ Disabled"
+        )
+        deezer_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_DEEZER_ENABLED else "❌ Disabled"
+        )
+        soundcloud_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_SOUNDCLOUD_ENABLED else "❌ Disabled"
+        )
+
+        msg = f"""<b>🎵 Streamrip Platform Credentials</b> | State: {state}
+
+<b>Platform Status:</b>
+• <b>Qobuz:</b> {qobuz_enabled}
+• <b>Tidal:</b> {tidal_enabled}
+• <b>Deezer:</b> {deezer_enabled}
+• <b>SoundCloud:</b> {soundcloud_enabled}
+
+<b>Setup Instructions:</b>
+• <b>Qobuz:</b> Enter email and password
+• <b>Tidal:</b> Enter username and password
+• <b>Deezer:</b> Enter ARL token from browser cookies
+• <b>SoundCloud:</b> Enter client ID (optional)
+
+<b>Security Note:</b>
+All credentials are stored securely in the database and encrypted."""
+
+    elif key == "streamrip_download":
+        # Download Settings
+        download_settings = [
+            "STREAMRIP_CONCURRENT_DOWNLOADS",
+            "STREAMRIP_MAX_SEARCH_RESULTS",
+            "STREAMRIP_MAX_CONNECTIONS",
+            "STREAMRIP_REQUESTS_PER_MINUTE",
+        ]
+
+        for setting in download_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_download", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_download", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_download", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current download settings
+        concurrent = Config.STREAMRIP_CONCURRENT_DOWNLOADS or "4 (Default)"
+        max_results = Config.STREAMRIP_MAX_SEARCH_RESULTS or "20 (Default)"
+        max_connections = Config.STREAMRIP_MAX_CONNECTIONS or "6 (Default)"
+        requests_per_minute = Config.STREAMRIP_REQUESTS_PER_MINUTE or "60 (Default)"
+
+        msg = f"""<b>🎵 Streamrip Download Settings</b> | State: {state}
+
+<b>Concurrent Downloads:</b> <code>{concurrent}</code>
+<b>Max Search Results:</b> <code>{max_results}</code>
+<b>Max Connections:</b> <code>{max_connections}</code>
+<b>Requests Per Minute:</b> <code>{requests_per_minute}</code>
+
+<b>Description:</b>
+• <b>Concurrent Downloads:</b> Number of simultaneous downloads (1-10 recommended)
+• <b>Max Search Results:</b> Maximum results returned from platform searches
+• <b>Max Connections:</b> Maximum HTTP connections per download
+• <b>Requests Per Minute:</b> Rate limiting for API requests
+
+<b>Performance Tips:</b>
+• Higher concurrent downloads = faster but more resource usage
+• Lower values = more stable on slower connections
+• Adjust rate limits to avoid being blocked by streaming services"""
+
+    elif key == "streamrip_advanced":
+        # Advanced Settings
+        advanced_settings = [
+            "STREAMRIP_FILENAME_TEMPLATE",
+            "STREAMRIP_FOLDER_TEMPLATE",
+            "STREAMRIP_EMBED_COVER_ART",
+            "STREAMRIP_SAVE_COVER_ART",
+            "STREAMRIP_COVER_ART_SIZE",
+            "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+            "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+            "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+            "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+            "STREAMRIP_FILEPATHS_TRUNCATE_TO",
+        ]
+
+        for setting in advanced_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_EMBED_COVER_ART",
+                "STREAMRIP_SAVE_COVER_ART",
+                "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_advanced", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_advanced", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_advanced", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current advanced settings
+        filename_template = Config.STREAMRIP_FILENAME_TEMPLATE or "Default Template"
+        folder_template = Config.STREAMRIP_FOLDER_TEMPLATE or "Default Template"
+        embed_cover = (
+            "✅ Enabled" if Config.STREAMRIP_EMBED_COVER_ART else "❌ Disabled"
+        )
+        save_cover = (
+            "✅ Enabled" if Config.STREAMRIP_SAVE_COVER_ART else "❌ Disabled"
+        )
+        cover_size = Config.STREAMRIP_COVER_ART_SIZE or "large (Default)"
+
+        msg = f"""<b>🎵 Streamrip Advanced Settings</b> | State: {state}
+
+<b>Filename Template:</b> <code>{filename_template}</code>
+<b>Folder Template:</b> <code>{folder_template}</code>
+<b>Embed Cover Art:</b> {embed_cover}
+<b>Save Cover Art:</b> {save_cover}
+<b>Cover Art Size:</b> <code>{cover_size}</code>
+
+<b>Template Variables:</b>
+• <code>{{artist}}</code> - Artist name
+• <code>{{album}}</code> - Album title
+• <code>{{title}}</code> - Track title
+• <code>{{track}}</code> - Track number
+• <code>{{year}}</code> - Release year
+
+<b>Cover Art Sizes:</b>
+• <b>small:</b> 300x300px
+• <b>large:</b> 1200x1200px (recommended)"""
+
+    elif key == "streamrip_config":
+        # Config File Management
+        buttons.data_button("📄 View Current Config", "botset view_streamrip_config")
+        buttons.data_button(
+            "📤 Upload Custom Config", "botset upload_streamrip_config"
+        )
+        buttons.data_button("🔄 Reset to Default", "botset reset_streamrip_config")
+
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        msg = """<b>🎵 Streamrip Config File Management</b>
+
+<b>Current Config:</b> Click "View Current Config" to see the active configuration
+
+<b>Upload Custom Config:</b>
+• Upload a custom streamrip_config.toml file
+• Will override bot settings with your custom configuration
+• Useful for advanced users with specific requirements
+
+<b>Reset to Default:</b>
+• Removes any custom configuration
+• Reverts to bot's default streamrip settings
+• All platform credentials will be preserved
+
+<b>Note:</b>
+Custom config files take precedence over bot settings. If you upload a custom config, the individual setting menus will show the custom values."""
+
+    elif key == "streamrip_platforms":
+        # Platform-specific Settings
+        platform_settings = [
+            "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+            "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+            "STREAMRIP_TIDAL_TOKEN_EXPIRY",
+            "STREAMRIP_DEEZER_USE_DEEZLOADER",
+            "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+            "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+            "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+            "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+            "STREAMRIP_LASTFM_SOURCE",
+            "STREAMRIP_LASTFM_FALLBACK_SOURCE",
+        ]
+
+        for setting in platform_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                "STREAMRIP_DEEZER_USE_DEEZLOADER",
+                "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button(
+                "✏️ Edit", "botset edit streamrip_platforms", "footer"
+            )
+        else:
+            buttons.data_button(
+                "👁️ View", "botset view streamrip_platforms", "footer"
+            )
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_platforms", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current platform settings
+        qobuz_booklets = (
+            "✅ Enabled"
+            if Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS
+            else "❌ Disabled"
+        )
+        tidal_videos = (
+            "✅ Enabled" if Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS else "❌ Disabled"
+        )
+        tidal_token_expiry = Config.STREAMRIP_TIDAL_TOKEN_EXPIRY or "Not Set"
+        deezer_deezloader = (
+            "✅ Enabled" if Config.STREAMRIP_DEEZER_USE_DEEZLOADER else "❌ Disabled"
+        )
+        deezer_warnings = (
+            "✅ Enabled"
+            if Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS
+            else "❌ Disabled"
+        )
+        soundcloud_app_version = (
+            Config.STREAMRIP_SOUNDCLOUD_APP_VERSION or "Auto-detect"
+        )
+        youtube_videos = (
+            "✅ Enabled"
+            if Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS
+            else "❌ Disabled"
+        )
+        youtube_folder = Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER or "Default"
+        lastfm_source = Config.STREAMRIP_LASTFM_SOURCE or "qobuz (Default)"
+        lastfm_fallback = Config.STREAMRIP_LASTFM_FALLBACK_SOURCE or "None"
+
+        msg = f"""<b>🎵 Streamrip Platform Settings</b> | State: {state}
+
+<b>Qobuz Settings:</b>
+• <b>Download Booklets:</b> {qobuz_booklets}
+
+<b>Tidal Settings:</b>
+• <b>Download Videos:</b> {tidal_videos}
+• <b>Token Expiry:</b> <code>{tidal_token_expiry}</code>
+
+<b>Deezer Settings:</b>
+• <b>Use Deezloader:</b> {deezer_deezloader}
+• <b>Deezloader Warnings:</b> {deezer_warnings}
+
+<b>SoundCloud Settings:</b>
+• <b>App Version:</b> <code>{soundcloud_app_version}</code>
+
+<b>YouTube Settings:</b>
+• <b>Download Videos:</b> {youtube_videos}
+• <b>Video Folder:</b> <code>{youtube_folder}</code>
+
+<b>Last.fm Settings:</b>
+• <b>Primary Source:</b> <code>{lastfm_source}</code>
+• <b>Fallback Source:</b> <code>{lastfm_fallback}</code>
+
+<b>Description:</b>
+Platform-specific settings for enhanced functionality and compatibility with different streaming services."""
+
+    elif key == "streamrip_database":
+        # Database Settings
+        database_settings = [
+            "STREAMRIP_ENABLE_DATABASE",
+            "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+            "STREAMRIP_DATABASE_DOWNLOADS_PATH",
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+        ]
+
+        for setting in database_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_ENABLE_DATABASE",
+                "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_database", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_database", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_database", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current database settings
+        main_database = (
+            "✅ Enabled" if Config.STREAMRIP_ENABLE_DATABASE else "❌ Disabled"
+        )
+        downloads_enabled = (
+            "✅ Enabled"
+            if Config.STREAMRIP_DATABASE_DOWNLOADS_ENABLED
+            else "❌ Disabled"
+        )
+        downloads_path = (
+            Config.STREAMRIP_DATABASE_DOWNLOADS_PATH or "./downloads.db (Default)"
+        )
+        failed_enabled = (
+            "✅ Enabled"
+            if Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED
+            else "❌ Disabled"
+        )
+        failed_path = (
+            Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH
+            or "./failed_downloads.db (Default)"
+        )
+
+        msg = f"""<b>🗄️ Streamrip Database Settings</b> | State: {state}
+
+<b>Main Database Toggle:</b> {main_database}
+
+<b>Downloads Database:</b>
+• <b>Enabled:</b> {downloads_enabled}
+• <b>Path:</b> <code>{downloads_path}</code>
+
+<b>Failed Downloads Database:</b>
+• <b>Enabled:</b> {failed_enabled}
+• <b>Path:</b> <code>{failed_path}</code>
+
+<b>Description:</b>
+• <b>Main Database Toggle:</b> Master control for all streamrip database features (controls --no-db flag)
+• <b>Downloads Database:</b> Track successfully downloaded files to avoid duplicates
+• <b>Failed Downloads Database:</b> Track failed downloads for retry functionality
+• <b>Database Paths:</b> File paths where the SQLite databases are stored
+
+<b>Benefits:</b>
+• Prevents duplicate downloads
+• Enables smart retry functionality
+• Provides download history tracking
+• Controls streamrip CLI database usage"""
+
+    elif key == "streamrip_conversion":
+        # Conversion Settings
+        conversion_settings = [
+            "STREAMRIP_CONVERSION_ENABLED",
+            "STREAMRIP_CONVERSION_CODEC",
+            "STREAMRIP_CONVERSION_SAMPLING_RATE",
+            "STREAMRIP_CONVERSION_BIT_DEPTH",
+            "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+        ]
+
+        for setting in conversion_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in ["STREAMRIP_CONVERSION_ENABLED"]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button(
+                "✏️ Edit", "botset edit streamrip_conversion", "footer"
+            )
+        else:
+            buttons.data_button(
+                "👁️ View", "botset view streamrip_conversion", "footer"
+            )
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_conversion", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current conversion settings
+        conversion_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_CONVERSION_ENABLED else "❌ Disabled"
+        )
+        conversion_codec = Config.STREAMRIP_CONVERSION_CODEC or "ALAC (Default)"
+        sampling_rate = (
+            f"{Config.STREAMRIP_CONVERSION_SAMPLING_RATE} Hz"
+            if Config.STREAMRIP_CONVERSION_SAMPLING_RATE
+            else "48000 Hz (Default)"
+        )
+        bit_depth = (
+            f"{Config.STREAMRIP_CONVERSION_BIT_DEPTH} bit"
+            if Config.STREAMRIP_CONVERSION_BIT_DEPTH
+            else "24 bit (Default)"
+        )
+        lossy_bitrate = (
+            f"{Config.STREAMRIP_CONVERSION_LOSSY_BITRATE} kbps"
+            if Config.STREAMRIP_CONVERSION_LOSSY_BITRATE
+            else "320 kbps (Default)"
+        )
+
+        msg = f"""<b>🔄 Streamrip Conversion Settings</b> | State: {state}
+
+<b>Conversion Status:</b> {conversion_enabled}
+<b>Target Codec:</b> <code>{conversion_codec}</code>
+<b>Sampling Rate:</b> <code>{sampling_rate}</code>
+<b>Bit Depth:</b> <code>{bit_depth}</code>
+<b>Lossy Bitrate:</b> <code>{lossy_bitrate}</code>
+
+<b>Available Codecs:</b>
+• <b>ALAC:</b> Apple Lossless (recommended for Apple devices)
+• <b>FLAC:</b> Free Lossless Audio Codec
+• <b>MP3:</b> MPEG Audio Layer III (lossy)
+• <b>AAC:</b> Advanced Audio Coding (lossy)
+• <b>OGG:</b> Ogg Vorbis (lossy)
+
+<b>Description:</b>
+Convert downloaded audio files to different formats and quality settings. Useful for device compatibility and storage optimization."""
+
+    elif key == "streamrip_cli":
+        # CLI Settings
+        cli_settings = [
+            "STREAMRIP_CLI_TEXT_OUTPUT",
+            "STREAMRIP_CLI_PROGRESS_BARS",
+            "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
+            "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+        ]
+
+        for setting in cli_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_CLI_TEXT_OUTPUT",
+                "STREAMRIP_CLI_PROGRESS_BARS",
+                "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_cli", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_cli", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_cli", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current CLI settings
+        text_output = (
+            "✅ Enabled" if Config.STREAMRIP_CLI_TEXT_OUTPUT else "❌ Disabled"
+        )
+        progress_bars = (
+            "✅ Enabled" if Config.STREAMRIP_CLI_PROGRESS_BARS else "❌ Disabled"
+        )
+        max_search_results = (
+            Config.STREAMRIP_CLI_MAX_SEARCH_RESULTS or "100 (Default)"
+        )
+        check_updates = (
+            "✅ Enabled"
+            if Config.STREAMRIP_MISC_CHECK_FOR_UPDATES
+            else "❌ Disabled"
+        )
+
+        msg = f"""<b>🖥️ Streamrip CLI Settings</b> | State: {state}
+
+<b>Text Output:</b> {text_output}
+<b>Progress Bars:</b> {progress_bars}
+<b>Max Search Results:</b> <code>{max_search_results}</code>
+<b>Check for Updates:</b> {check_updates}
+
+<b>Description:</b>
+• <b>Text Output:</b> Enable detailed text output during downloads
+• <b>Progress Bars:</b> Show progress bars for download operations
+• <b>Max Search Results:</b> Maximum results returned from CLI searches
+• <b>Check for Updates:</b> Automatically check for streamrip updates
+
+<b>Note:</b>
+These settings primarily affect the streamrip CLI behavior and may not directly impact bot functionality."""
+
     elif key == "operations":
         # Operations settings
 
@@ -1621,6 +2423,7 @@ Select a tool category to configure its settings."""
             "HYPERDL_ENABLED",
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
+            "STREAMRIP_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
@@ -1670,6 +2473,9 @@ Select a tool category to configure its settings."""
             "✅ Enabled" if Config.MEDIA_SEARCH_ENABLED else "❌ Disabled"
         )
         rclone_enabled = "✅ Enabled" if Config.RCLONE_ENABLED else "❌ Disabled"
+        streamrip_enabled = (
+            "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
+        )
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
         )
@@ -1736,6 +2542,10 @@ Select a tool category to configure its settings."""
             f"botset toggle RCLONE_ENABLED {not Config.RCLONE_ENABLED}",
         )
         buttons.data_button(
+            f"🎵 Streamrip Downloads: {streamrip_enabled}",
+            f"botset toggle STREAMRIP_ENABLED {not Config.STREAMRIP_ENABLED}",
+        )
+        buttons.data_button(
             f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
             f"botset toggle WRONG_CMD_WARNINGS_ENABLED {not Config.WRONG_CMD_WARNINGS_ENABLED}",
         )
@@ -1751,7 +2561,7 @@ Select a tool category to configure its settings."""
         buttons.data_button("⬅️ Back", "botset back", "footer")
         buttons.data_button("❌ Close", "botset close", "footer")
 
-        msg = f"""<b>Operations Settings</b>
+        msg = f"""<b>🔄 Operations Settings</b> | State: {state}
 
 <b>Bulk Operations:</b> {bulk_enabled}
 <b>Multi-Link Operations:</b> {multi_link_enabled}
@@ -1767,11 +2577,12 @@ Select a tool category to configure its settings."""
 <b>Hyper Download:</b> {hyperdl_enabled}
 <b>Media Search:</b> {media_search_enabled}
 <b>Rclone Operations:</b> {rclone_enabled}
+<b>Streamrip Downloads:</b> {streamrip_enabled}
 <b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
 <b>VirusTotal Scan:</b> {virustotal_enabled}
 <b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
 
-<b>Description:</b>
+<blockquote expandable><b>📋 Operations Description:</b>
 • <b>Bulk Operations:</b> Controls whether users can use the -b flag for bulk operations
 • <b>Multi-Link Operations:</b> Controls whether users can process multiple links with the -i flag
 • <b>Same Directory Operations:</b> Controls whether users can use the -m flag to save files in the same directory
@@ -1786,9 +2597,10 @@ Select a tool category to configure its settings."""
 • <b>Hyper Download:</b> Controls whether users can use Hyper Download for faster Telegram downloads
 • <b>Media Search:</b> Controls whether users can search for media in configured channels
 • <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations
+• <b>Streamrip Downloads:</b> Controls whether users can download music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud)
 • <b>Command Warnings:</b> Controls whether warnings are shown for wrong command suffixes
 • <b>VirusTotal Scan:</b> Controls whether users can scan files and URLs for viruses using VirusTotal
-• <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users"""
+• <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users</blockquote>"""
 
     elif key == "taskmonitor":
         # Group task monitoring settings by category
@@ -5353,6 +6165,96 @@ async def edit_variable(_, message, pre_message, key):
                     pass
     elif key == "MEDIA_TOOLS_PRIORITY":
         return_menu = "mediatools"
+    elif key.startswith("STREAMRIP_"):
+        # For streamrip settings, determine which submenu to return to based on the key
+        if key in [
+            "STREAMRIP_ENABLED",
+            "STREAMRIP_CONCURRENT_DOWNLOADS",
+            "STREAMRIP_MAX_SEARCH_RESULTS",
+            "STREAMRIP_ENABLE_DATABASE",
+            "STREAMRIP_AUTO_CONVERT",
+            "STREAMRIP_LIMIT",
+        ]:
+            return_menu = "streamrip_general"
+        elif key in [
+            "STREAMRIP_DEFAULT_QUALITY",
+            "STREAMRIP_FALLBACK_QUALITY",
+            "STREAMRIP_DEFAULT_CODEC",
+            "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+        ]:
+            return_menu = "streamrip_quality"
+        elif (
+            key.endswith("_ENABLED")
+            and any(
+                platform in key
+                for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+            )
+        ) or key.endswith(
+            (
+                "_EMAIL",
+                "_PASSWORD",
+                "_ARL",
+                "_CLIENT_ID",
+                "_ACCESS_TOKEN",
+                "_REFRESH_TOKEN",
+                "_USER_ID",
+                "_COUNTRY_CODE",
+            )
+        ):
+            return_menu = "streamrip_credentials"
+        elif key in ["STREAMRIP_MAX_CONNECTIONS", "STREAMRIP_REQUESTS_PER_MINUTE"]:
+            return_menu = "streamrip_download"
+        elif key in [
+            "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+            "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+            "STREAMRIP_TIDAL_TOKEN_EXPIRY",
+            "STREAMRIP_DEEZER_USE_DEEZLOADER",
+            "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+            "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+            "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+            "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+            "STREAMRIP_LASTFM_SOURCE",
+            "STREAMRIP_LASTFM_FALLBACK_SOURCE",
+        ]:
+            return_menu = "streamrip_platforms"
+        elif key in [
+            "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+            "STREAMRIP_DATABASE_DOWNLOADS_PATH",
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+        ]:
+            return_menu = "streamrip_database"
+        elif key in [
+            "STREAMRIP_CONVERSION_ENABLED",
+            "STREAMRIP_CONVERSION_CODEC",
+            "STREAMRIP_CONVERSION_SAMPLING_RATE",
+            "STREAMRIP_CONVERSION_BIT_DEPTH",
+            "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+        ]:
+            return_menu = "streamrip_conversion"
+        elif key in [
+            "STREAMRIP_CLI_TEXT_OUTPUT",
+            "STREAMRIP_CLI_PROGRESS_BARS",
+            "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
+            "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+        ]:
+            return_menu = "streamrip_cli"
+        elif key in [
+            "STREAMRIP_FILENAME_TEMPLATE",
+            "STREAMRIP_FOLDER_TEMPLATE",
+            "STREAMRIP_EMBED_COVER_ART",
+            "STREAMRIP_SAVE_COVER_ART",
+            "STREAMRIP_COVER_ART_SIZE",
+            "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+            "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+            "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+            "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+            "STREAMRIP_FILEPATHS_TRUNCATE_TO",
+        ]:
+            return_menu = "streamrip_advanced"
+        else:
+            # For any other streamrip settings, default to main streamrip menu
+            return_menu = "streamrip"
     else:
         return_menu = "var"
 
@@ -5894,6 +6796,26 @@ async def update_private_file(_, message, pre_message):
             await (
                 await create_subprocess_exec("cp", ".netrc", "/root/.netrc")
             ).wait()
+        elif file_name == "streamrip_config.toml":
+            # Handle streamrip config deletion
+            try:
+                from bot.helper.streamrip_utils.streamrip_config import (
+                    streamrip_config,
+                )
+
+                success = await streamrip_config.delete_custom_config_from_db()
+
+                if success:
+                    # Reinitialize streamrip config to use default settings
+                    await streamrip_config.initialize()
+                    LOGGER.info(
+                        "Streamrip custom config deleted, reverted to default"
+                    )
+                else:
+                    LOGGER.error("Failed to delete streamrip config from database")
+
+            except Exception as e:
+                LOGGER.error(f"Error handling streamrip config deletion: {e}")
         await delete_message(message)
     elif doc := message.document:
         file_name = doc.file_name
@@ -5947,6 +6869,39 @@ async def update_private_file(_, message, pre_message):
             ).wait()
         elif file_name == "config.py":
             await load_config()
+        elif file_name == "streamrip_config.toml":
+            # Handle streamrip config upload
+            try:
+                # Read the uploaded config file
+                async with aiopen(file_name) as f:
+                    config_content = await f.read()
+
+                # Save to database using streamrip config helper
+                from bot.helper.streamrip_utils.streamrip_config import (
+                    streamrip_config,
+                )
+
+                success = await streamrip_config.save_custom_config_to_db(
+                    config_content
+                )
+
+                if success:
+                    # Reinitialize streamrip config to use the new custom config
+                    await streamrip_config.initialize()
+                    LOGGER.info(
+                        "Streamrip custom config uploaded and applied successfully"
+                    )
+                else:
+                    LOGGER.error("Failed to save streamrip config to database")
+
+                # Clean up the temporary file
+                if await aiopath.exists(file_name):
+                    await remove(file_name)
+
+            except Exception as e:
+                LOGGER.error(f"Error handling streamrip config upload: {e}")
+                if await aiopath.exists(file_name):
+                    await remove(file_name)
         await delete_message(message)
     if file_name == "rclone.conf":
         await rclone_serve_booter()
@@ -6025,7 +6980,7 @@ async def edit_bot_settings(client, query):
         # Determine which menu to return to based on the current message content
         return_menu = None
 
-        # Check if we're in a main menu (Config Variables, Task Monitor, Private Files, qBittorrent, Aria2c, Sabnzbd, Media Tools, AI Settings)
+        # Check if we're in a main menu (Config Variables, Task Monitor, Private Files, qBittorrent, Aria2c, Sabnzbd, Media Tools, AI Settings, Streamrip Settings)
         if message.text:
             if any(
                 x in message.text
@@ -6039,6 +6994,7 @@ async def edit_bot_settings(client, query):
                     "Media Tools Settings",
                     "AI Settings",
                     "Bot Settings",
+                    "Streamrip Settings",
                 ]
             ):
                 # If we're in a main menu, return to the main settings menu
@@ -6049,6 +7005,23 @@ async def edit_bot_settings(client, query):
                 and "TASK_MONITOR_" in message.text
             ):
                 return_menu = "taskmonitor"
+            # Check for Streamrip submenu detection
+            elif any(
+                x in message.text
+                for x in [
+                    "Streamrip General Settings",
+                    "Streamrip Quality & Codec Settings",
+                    "Streamrip Platform Credentials",
+                    "Streamrip Download Settings",
+                    "Streamrip Platform Settings",
+                    "Streamrip Database Settings",
+                    "Streamrip Conversion Settings",
+                    "Streamrip CLI Settings",
+                    "Streamrip Advanced Settings",
+                    "Streamrip Config File Management",
+                ]
+            ):
+                return_menu = "streamrip"
             # Otherwise check the message title for submenu detection
             elif "Watermark" in message.text:
                 return_menu = "mediatools_watermark"
@@ -6109,6 +7082,58 @@ async def edit_bot_settings(client, query):
 
         # Return to the main settings menu
         await update_buttons(message, None)
+    elif data[1] == "streamrip":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await query.answer(
+                "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip")
+
+    elif data[1] in [
+        "streamrip_general",
+        "streamrip_quality",
+        "streamrip_credentials",
+        "streamrip_download",
+        "streamrip_platforms",
+        "streamrip_database",
+        "streamrip_conversion",
+        "streamrip_cli",
+        "streamrip_advanced",
+        "streamrip_config",
+    ]:
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await query.answer(
+                "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, data[1])
+
+    elif data[1] == "operations":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "operations")
+
     elif data[1] == "mediatools":
         await query.answer()
         # No need to track state for media tools
@@ -7416,6 +8441,350 @@ async def edit_bot_settings(client, query):
         # Set the state back to what it was
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_metadata")
+
+    elif data[1] == "default_streamrip_general":
+        await query.answer("Resetting streamrip general settings to default...")
+        # Reset streamrip general settings to default
+        Config.STREAMRIP_ENABLED = DEFAULT_VALUES.get("STREAMRIP_ENABLED", True)
+        Config.STREAMRIP_CONCURRENT_DOWNLOADS = DEFAULT_VALUES.get(
+            "STREAMRIP_CONCURRENT_DOWNLOADS", 4
+        )
+        Config.STREAMRIP_MAX_SEARCH_RESULTS = DEFAULT_VALUES.get(
+            "STREAMRIP_MAX_SEARCH_RESULTS", 20
+        )
+        Config.STREAMRIP_ENABLE_DATABASE = DEFAULT_VALUES.get(
+            "STREAMRIP_ENABLE_DATABASE", False
+        )
+        Config.STREAMRIP_AUTO_CONVERT = DEFAULT_VALUES.get(
+            "STREAMRIP_AUTO_CONVERT", False
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_ENABLED": Config.STREAMRIP_ENABLED,
+                "STREAMRIP_CONCURRENT_DOWNLOADS": Config.STREAMRIP_CONCURRENT_DOWNLOADS,
+                "STREAMRIP_MAX_SEARCH_RESULTS": Config.STREAMRIP_MAX_SEARCH_RESULTS,
+                "STREAMRIP_ENABLE_DATABASE": Config.STREAMRIP_ENABLE_DATABASE,
+                "STREAMRIP_AUTO_CONVERT": Config.STREAMRIP_AUTO_CONVERT,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_general")
+
+    elif data[1] == "default_streamrip_quality":
+        await query.answer("Resetting streamrip quality settings to default...")
+        # Reset streamrip quality settings to default
+        Config.STREAMRIP_DEFAULT_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_DEFAULT_QUALITY", 3
+        )
+        Config.STREAMRIP_FALLBACK_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_FALLBACK_QUALITY", 2
+        )
+        Config.STREAMRIP_DEFAULT_CODEC = DEFAULT_VALUES.get(
+            "STREAMRIP_DEFAULT_CODEC", "flac"
+        )
+        Config.STREAMRIP_QUALITY_FALLBACK_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_QUALITY_FALLBACK_ENABLED", False
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_DEFAULT_QUALITY": Config.STREAMRIP_DEFAULT_QUALITY,
+                "STREAMRIP_FALLBACK_QUALITY": Config.STREAMRIP_FALLBACK_QUALITY,
+                "STREAMRIP_DEFAULT_CODEC": Config.STREAMRIP_DEFAULT_CODEC,
+                "STREAMRIP_QUALITY_FALLBACK_ENABLED": Config.STREAMRIP_QUALITY_FALLBACK_ENABLED,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_quality")
+
+    elif data[1] == "default_streamrip_credentials":
+        await query.answer("Resetting streamrip credentials to default...")
+        # Reset streamrip credentials to default
+        Config.STREAMRIP_QOBUZ_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_ENABLED", False
+        )
+        Config.STREAMRIP_QOBUZ_EMAIL = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_EMAIL", ""
+        )
+        Config.STREAMRIP_QOBUZ_PASSWORD = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_PASSWORD", ""
+        )
+        Config.STREAMRIP_TIDAL_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_ENABLED", False
+        )
+        Config.STREAMRIP_TIDAL_EMAIL = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_EMAIL", ""
+        )
+        Config.STREAMRIP_TIDAL_PASSWORD = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_PASSWORD", ""
+        )
+        Config.STREAMRIP_TIDAL_ACCESS_TOKEN = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_ACCESS_TOKEN", ""
+        )
+        Config.STREAMRIP_TIDAL_REFRESH_TOKEN = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_REFRESH_TOKEN", ""
+        )
+        Config.STREAMRIP_TIDAL_USER_ID = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_USER_ID", ""
+        )
+        Config.STREAMRIP_TIDAL_COUNTRY_CODE = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_COUNTRY_CODE", ""
+        )
+        Config.STREAMRIP_DEEZER_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_DEEZER_ENABLED", False
+        )
+        Config.STREAMRIP_DEEZER_ARL = DEFAULT_VALUES.get("STREAMRIP_DEEZER_ARL", "")
+        Config.STREAMRIP_SOUNDCLOUD_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_SOUNDCLOUD_ENABLED", False
+        )
+        Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID = DEFAULT_VALUES.get(
+            "STREAMRIP_SOUNDCLOUD_CLIENT_ID", ""
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_QOBUZ_ENABLED": Config.STREAMRIP_QOBUZ_ENABLED,
+                "STREAMRIP_QOBUZ_EMAIL": Config.STREAMRIP_QOBUZ_EMAIL,
+                "STREAMRIP_QOBUZ_PASSWORD": Config.STREAMRIP_QOBUZ_PASSWORD,
+                "STREAMRIP_TIDAL_ENABLED": Config.STREAMRIP_TIDAL_ENABLED,
+                "STREAMRIP_TIDAL_EMAIL": Config.STREAMRIP_TIDAL_EMAIL,
+                "STREAMRIP_TIDAL_PASSWORD": Config.STREAMRIP_TIDAL_PASSWORD,
+                "STREAMRIP_TIDAL_ACCESS_TOKEN": Config.STREAMRIP_TIDAL_ACCESS_TOKEN,
+                "STREAMRIP_TIDAL_REFRESH_TOKEN": Config.STREAMRIP_TIDAL_REFRESH_TOKEN,
+                "STREAMRIP_TIDAL_USER_ID": Config.STREAMRIP_TIDAL_USER_ID,
+                "STREAMRIP_TIDAL_COUNTRY_CODE": Config.STREAMRIP_TIDAL_COUNTRY_CODE,
+                "STREAMRIP_DEEZER_ENABLED": Config.STREAMRIP_DEEZER_ENABLED,
+                "STREAMRIP_DEEZER_ARL": Config.STREAMRIP_DEEZER_ARL,
+                "STREAMRIP_SOUNDCLOUD_ENABLED": Config.STREAMRIP_SOUNDCLOUD_ENABLED,
+                "STREAMRIP_SOUNDCLOUD_CLIENT_ID": Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_credentials")
+
+    elif data[1] == "default_streamrip_download":
+        await query.answer("Resetting streamrip download settings to default...")
+        # Reset streamrip download settings to default
+        Config.STREAMRIP_CONCURRENT_DOWNLOADS = DEFAULT_VALUES.get(
+            "STREAMRIP_CONCURRENT_DOWNLOADS", 4
+        )
+        Config.STREAMRIP_MAX_SEARCH_RESULTS = DEFAULT_VALUES.get(
+            "STREAMRIP_MAX_SEARCH_RESULTS", 20
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_CONCURRENT_DOWNLOADS": Config.STREAMRIP_CONCURRENT_DOWNLOADS,
+                "STREAMRIP_MAX_SEARCH_RESULTS": Config.STREAMRIP_MAX_SEARCH_RESULTS,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_download")
+
+    elif data[1] == "default_streamrip_platforms":
+        await query.answer("Resetting streamrip platform settings to default...")
+        # Reset streamrip platform settings to default
+        Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", False
+        )
+        Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", False
+        )
+        Config.STREAMRIP_TIDAL_TOKEN_EXPIRY = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_TOKEN_EXPIRY", ""
+        )
+        Config.STREAMRIP_DEEZER_USE_DEEZLOADER = DEFAULT_VALUES.get(
+            "STREAMRIP_DEEZER_USE_DEEZLOADER", False
+        )
+        Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS = DEFAULT_VALUES.get(
+            "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True
+        )
+        Config.STREAMRIP_SOUNDCLOUD_APP_VERSION = DEFAULT_VALUES.get(
+            "STREAMRIP_SOUNDCLOUD_APP_VERSION", ""
+        )
+        Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS = DEFAULT_VALUES.get(
+            "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False
+        )
+        Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER = DEFAULT_VALUES.get(
+            "STREAMRIP_YOUTUBE_VIDEO_FOLDER", ""
+        )
+        Config.STREAMRIP_LASTFM_SOURCE = DEFAULT_VALUES.get(
+            "STREAMRIP_LASTFM_SOURCE", "qobuz"
+        )
+        Config.STREAMRIP_LASTFM_FALLBACK_SOURCE = DEFAULT_VALUES.get(
+            "STREAMRIP_LASTFM_FALLBACK_SOURCE", ""
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS": Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS,
+                "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS": Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS,
+                "STREAMRIP_TIDAL_TOKEN_EXPIRY": Config.STREAMRIP_TIDAL_TOKEN_EXPIRY,
+                "STREAMRIP_DEEZER_USE_DEEZLOADER": Config.STREAMRIP_DEEZER_USE_DEEZLOADER,
+                "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS": Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS,
+                "STREAMRIP_SOUNDCLOUD_APP_VERSION": Config.STREAMRIP_SOUNDCLOUD_APP_VERSION,
+                "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS": Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS,
+                "STREAMRIP_YOUTUBE_VIDEO_FOLDER": Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER,
+                "STREAMRIP_LASTFM_SOURCE": Config.STREAMRIP_LASTFM_SOURCE,
+                "STREAMRIP_LASTFM_FALLBACK_SOURCE": Config.STREAMRIP_LASTFM_FALLBACK_SOURCE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_platforms")
+
+    elif data[1] == "default_streamrip_database":
+        await query.answer("Resetting streamrip database settings to default...")
+        # Reset streamrip database settings to default
+        Config.STREAMRIP_DATABASE_DOWNLOADS_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True
+        )
+        Config.STREAMRIP_DATABASE_DOWNLOADS_PATH = DEFAULT_VALUES.get(
+            "STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db"
+        )
+        Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True
+        )
+        Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH = DEFAULT_VALUES.get(
+            "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH", "./failed_downloads.db"
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_DATABASE_DOWNLOADS_ENABLED": Config.STREAMRIP_DATABASE_DOWNLOADS_ENABLED,
+                "STREAMRIP_DATABASE_DOWNLOADS_PATH": Config.STREAMRIP_DATABASE_DOWNLOADS_PATH,
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED": Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED,
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH": Config.STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_database")
+
+    elif data[1] == "default_streamrip_conversion":
+        await query.answer("Resetting streamrip conversion settings to default...")
+        # Reset streamrip conversion settings to default
+        Config.STREAMRIP_CONVERSION_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_CONVERSION_ENABLED", False
+        )
+        Config.STREAMRIP_CONVERSION_CODEC = DEFAULT_VALUES.get(
+            "STREAMRIP_CONVERSION_CODEC", "ALAC"
+        )
+        Config.STREAMRIP_CONVERSION_SAMPLING_RATE = DEFAULT_VALUES.get(
+            "STREAMRIP_CONVERSION_SAMPLING_RATE", 48000
+        )
+        Config.STREAMRIP_CONVERSION_BIT_DEPTH = DEFAULT_VALUES.get(
+            "STREAMRIP_CONVERSION_BIT_DEPTH", 24
+        )
+        Config.STREAMRIP_CONVERSION_LOSSY_BITRATE = DEFAULT_VALUES.get(
+            "STREAMRIP_CONVERSION_LOSSY_BITRATE", 320
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_CONVERSION_ENABLED": Config.STREAMRIP_CONVERSION_ENABLED,
+                "STREAMRIP_CONVERSION_CODEC": Config.STREAMRIP_CONVERSION_CODEC,
+                "STREAMRIP_CONVERSION_SAMPLING_RATE": Config.STREAMRIP_CONVERSION_SAMPLING_RATE,
+                "STREAMRIP_CONVERSION_BIT_DEPTH": Config.STREAMRIP_CONVERSION_BIT_DEPTH,
+                "STREAMRIP_CONVERSION_LOSSY_BITRATE": Config.STREAMRIP_CONVERSION_LOSSY_BITRATE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_conversion")
+
+    elif data[1] == "default_streamrip_cli":
+        await query.answer("Resetting streamrip CLI settings to default...")
+        # Reset streamrip CLI settings to default
+        Config.STREAMRIP_CLI_TEXT_OUTPUT = DEFAULT_VALUES.get(
+            "STREAMRIP_CLI_TEXT_OUTPUT", True
+        )
+        Config.STREAMRIP_CLI_PROGRESS_BARS = DEFAULT_VALUES.get(
+            "STREAMRIP_CLI_PROGRESS_BARS", True
+        )
+        Config.STREAMRIP_CLI_MAX_SEARCH_RESULTS = DEFAULT_VALUES.get(
+            "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100
+        )
+        Config.STREAMRIP_MISC_CHECK_FOR_UPDATES = DEFAULT_VALUES.get(
+            "STREAMRIP_MISC_CHECK_FOR_UPDATES", True
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_CLI_TEXT_OUTPUT": Config.STREAMRIP_CLI_TEXT_OUTPUT,
+                "STREAMRIP_CLI_PROGRESS_BARS": Config.STREAMRIP_CLI_PROGRESS_BARS,
+                "STREAMRIP_CLI_MAX_SEARCH_RESULTS": Config.STREAMRIP_CLI_MAX_SEARCH_RESULTS,
+                "STREAMRIP_MISC_CHECK_FOR_UPDATES": Config.STREAMRIP_MISC_CHECK_FOR_UPDATES,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_cli")
+
+    elif data[1] == "default_streamrip_advanced":
+        await query.answer("Resetting streamrip advanced settings to default...")
+        # Reset streamrip advanced settings to default
+        Config.STREAMRIP_FILENAME_TEMPLATE = DEFAULT_VALUES.get(
+            "STREAMRIP_FILENAME_TEMPLATE", ""
+        )
+        Config.STREAMRIP_FOLDER_TEMPLATE = DEFAULT_VALUES.get(
+            "STREAMRIP_FOLDER_TEMPLATE", ""
+        )
+        Config.STREAMRIP_EMBED_COVER_ART = DEFAULT_VALUES.get(
+            "STREAMRIP_EMBED_COVER_ART", False
+        )
+        Config.STREAMRIP_SAVE_COVER_ART = DEFAULT_VALUES.get(
+            "STREAMRIP_SAVE_COVER_ART", False
+        )
+        Config.STREAMRIP_COVER_ART_SIZE = DEFAULT_VALUES.get(
+            "STREAMRIP_COVER_ART_SIZE", "large"
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_FILENAME_TEMPLATE": Config.STREAMRIP_FILENAME_TEMPLATE,
+                "STREAMRIP_FOLDER_TEMPLATE": Config.STREAMRIP_FOLDER_TEMPLATE,
+                "STREAMRIP_EMBED_COVER_ART": Config.STREAMRIP_EMBED_COVER_ART,
+                "STREAMRIP_SAVE_COVER_ART": Config.STREAMRIP_SAVE_COVER_ART,
+                "STREAMRIP_COVER_ART_SIZE": Config.STREAMRIP_COVER_ART_SIZE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_advanced")
+
     elif data[1] == "default_ai":
         await query.answer("Resetting all AI settings to default...")
         # Reset all AI settings to default
@@ -7703,20 +9072,25 @@ async def edit_bot_settings(client, query):
         # This section is now handled above
     elif data[1] == "editvar":
         # Handle view mode for all other settings
-        if state == "view" and data[2] not in [
-            "TASK_MONITOR_ENABLED",
-            "TASK_MONITOR_INTERVAL",
-            "TASK_MONITOR_CONSECUTIVE_CHECKS",
-            "TASK_MONITOR_SPEED_THRESHOLD",
-            "TASK_MONITOR_ELAPSED_THRESHOLD",
-            "TASK_MONITOR_ETA_THRESHOLD",
-            "TASK_MONITOR_COMPLETION_THRESHOLD",
-            "TASK_MONITOR_WAIT_TIME",
-            "TASK_MONITOR_CPU_HIGH",
-            "TASK_MONITOR_CPU_LOW",
-            "TASK_MONITOR_MEMORY_HIGH",
-            "TASK_MONITOR_MEMORY_LOW",
-        ]:
+        if (
+            state == "view"
+            and data[2]
+            not in [
+                "TASK_MONITOR_ENABLED",
+                "TASK_MONITOR_INTERVAL",
+                "TASK_MONITOR_CONSECUTIVE_CHECKS",
+                "TASK_MONITOR_SPEED_THRESHOLD",
+                "TASK_MONITOR_ELAPSED_THRESHOLD",
+                "TASK_MONITOR_ETA_THRESHOLD",
+                "TASK_MONITOR_COMPLETION_THRESHOLD",
+                "TASK_MONITOR_WAIT_TIME",
+                "TASK_MONITOR_CPU_HIGH",
+                "TASK_MONITOR_CPU_LOW",
+                "TASK_MONITOR_MEMORY_HIGH",
+                "TASK_MONITOR_MEMORY_LOW",
+            ]
+            and not data[2].startswith("STREAMRIP_")
+        ):
             # In view mode, show the current value in a popup
             value = f"{Config.get(data[2])}"
             if len(value) > 200:
@@ -7740,31 +9114,73 @@ async def edit_bot_settings(client, query):
 
         # For regular Config variables in the var section, directly set up the edit flow
         # This ensures the correct edit flow is used for Config variables in edit state
-        if not data[2].startswith(
-            (
-                "WATERMARK_",
-                "AUDIO_WATERMARK_",
-                "SUBTITLE_WATERMARK_",
-                "IMAGE_WATERMARK_",
-                "MERGE_",
-                "METADATA_",
-                "TASK_MONITOR_",
-                "CONVERT_",
-                "COMPRESSION_",
-                "TRIM_",
-                "EXTRACT_",
-                "MISTRAL_",
-                "DEEPSEEK_",
-                "DEFAULT_AI_",
+        if (
+            not data[2].startswith(
+                (
+                    "WATERMARK_",
+                    "AUDIO_WATERMARK_",
+                    "SUBTITLE_WATERMARK_",
+                    "IMAGE_WATERMARK_",
+                    "MERGE_",
+                    "METADATA_",
+                    "TASK_MONITOR_",
+                    "CONVERT_",
+                    "COMPRESSION_",
+                    "TRIM_",
+                    "EXTRACT_",
+                    "MISTRAL_",
+                    "DEEPSEEK_",
+                    "DEFAULT_AI_",
+                )
             )
-        ) and data[2] not in ["CONCAT_DEMUXER_ENABLED", "FILTER_COMPLEX_ENABLED"]:
+            and data[2] not in ["CONCAT_DEMUXER_ENABLED", "FILTER_COMPLEX_ENABLED"]
+        ) or data[2].startswith("STREAMRIP_"):
             # Get the current state before making changes
             current_state = globals()["state"]
 
             # Show the edit message with the current value
             msg = f"Send a valid value for <code>{data[2]}</code>.\n\n<b>Current value:</b> <code>{Config.get(data[2])}</code>\n\n<i>Timeout: 60 seconds</i>"
             buttons = ButtonMaker()
-            buttons.data_button("⬅️ Back", "botset var", "footer")
+
+            # Determine the correct back button based on the variable type
+            back_menu = "var"  # Default
+            if data[2].startswith("STREAMRIP_"):
+                # For streamrip settings, determine which submenu to return to
+                if data[2] in [
+                    "STREAMRIP_ENABLED",
+                    "STREAMRIP_CONCURRENT_DOWNLOADS",
+                    "STREAMRIP_MAX_SEARCH_RESULTS",
+                    "STREAMRIP_ENABLE_DATABASE",
+                    "STREAMRIP_AUTO_CONVERT",
+                ]:
+                    back_menu = "streamrip_general"
+                elif data[2] in [
+                    "STREAMRIP_DEFAULT_QUALITY",
+                    "STREAMRIP_FALLBACK_QUALITY",
+                    "STREAMRIP_DEFAULT_CODEC",
+                    "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+                ]:
+                    back_menu = "streamrip_quality"
+                elif (
+                    data[2].endswith("_ENABLED")
+                    and any(
+                        platform in data[2]
+                        for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                    )
+                ) or data[2].endswith(("_EMAIL", "_PASSWORD", "_ARL", "_CLIENT_ID")):
+                    back_menu = "streamrip_credentials"
+                elif data[2] in [
+                    "STREAMRIP_FILENAME_TEMPLATE",
+                    "STREAMRIP_FOLDER_TEMPLATE",
+                    "STREAMRIP_EMBED_COVER_ART",
+                    "STREAMRIP_SAVE_COVER_ART",
+                    "STREAMRIP_COVER_ART_SIZE",
+                ]:
+                    back_menu = "streamrip_advanced"
+                else:
+                    back_menu = "streamrip"
+
+            buttons.data_button("⬅️ Back", f"botset {back_menu}", "footer")
             if data[2] not in [
                 "TELEGRAM_HASH",
                 "TELEGRAM_API",
@@ -7956,6 +9372,99 @@ async def edit_bot_settings(client, query):
             ("MISTRAL_", "DEEPSEEK_", "DEFAULT_AI_")
         ):
             return_menu = "ai"
+        elif data[2].startswith("STREAMRIP_"):
+            # For streamrip settings, determine which submenu to return to based on the key
+            if data[2] in [
+                "STREAMRIP_ENABLED",
+                "STREAMRIP_CONCURRENT_DOWNLOADS",
+                "STREAMRIP_MAX_SEARCH_RESULTS",
+                "STREAMRIP_ENABLE_DATABASE",
+                "STREAMRIP_AUTO_CONVERT",
+                "STREAMRIP_LIMIT",
+            ]:
+                return_menu = "streamrip_general"
+            elif data[2] in [
+                "STREAMRIP_DEFAULT_QUALITY",
+                "STREAMRIP_FALLBACK_QUALITY",
+                "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+            ]:
+                return_menu = "streamrip_quality"
+            elif (
+                data[2].endswith("_ENABLED")
+                and any(
+                    platform in data[2]
+                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                )
+            ) or data[2].endswith(
+                (
+                    "_EMAIL",
+                    "_PASSWORD",
+                    "_ARL",
+                    "_CLIENT_ID",
+                    "_ACCESS_TOKEN",
+                    "_REFRESH_TOKEN",
+                    "_USER_ID",
+                    "_COUNTRY_CODE",
+                )
+            ):
+                return_menu = "streamrip_credentials"
+            elif data[2] in [
+                "STREAMRIP_MAX_CONNECTIONS",
+                "STREAMRIP_REQUESTS_PER_MINUTE",
+            ]:
+                return_menu = "streamrip_download"
+            elif data[2] in [
+                "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                "STREAMRIP_TIDAL_TOKEN_EXPIRY",
+                "STREAMRIP_DEEZER_USE_DEEZLOADER",
+                "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+                "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                "STREAMRIP_LASTFM_SOURCE",
+                "STREAMRIP_LASTFM_FALLBACK_SOURCE",
+            ]:
+                return_menu = "streamrip_platforms"
+            elif data[2] in [
+                "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_DOWNLOADS_PATH",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+            ]:
+                return_menu = "streamrip_database"
+            elif data[2] in [
+                "STREAMRIP_CONVERSION_ENABLED",
+                "STREAMRIP_CONVERSION_CODEC",
+                "STREAMRIP_CONVERSION_SAMPLING_RATE",
+                "STREAMRIP_CONVERSION_BIT_DEPTH",
+                "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+            ]:
+                return_menu = "streamrip_conversion"
+            elif data[2] in [
+                "STREAMRIP_CLI_TEXT_OUTPUT",
+                "STREAMRIP_CLI_PROGRESS_BARS",
+                "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
+                "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            ]:
+                return_menu = "streamrip_cli"
+            elif data[2] in [
+                "STREAMRIP_FILENAME_TEMPLATE",
+                "STREAMRIP_FOLDER_TEMPLATE",
+                "STREAMRIP_EMBED_COVER_ART",
+                "STREAMRIP_SAVE_COVER_ART",
+                "STREAMRIP_COVER_ART_SIZE",
+                "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+                "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+                "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+                "STREAMRIP_FILEPATHS_TRUNCATE_TO",
+            ]:
+                return_menu = "streamrip_advanced"
+            else:
+                # For any other streamrip settings, default to main streamrip menu
+                return_menu = "streamrip"
         elif data[2].startswith("MERGE_") or data[2] in [
             "CONCAT_DEMUXER_ENABLED",
             "FILTER_COMPLEX_ENABLED",
@@ -8232,6 +9741,17 @@ async def edit_bot_settings(client, query):
         "ai",
         "taskmonitor",
         "operations",
+        "streamrip",
+        "streamrip_general",
+        "streamrip_quality",
+        "streamrip_credentials",
+        "streamrip_download",
+        "streamrip_platforms",
+        "streamrip_database",
+        "streamrip_conversion",
+        "streamrip_cli",
+        "streamrip_advanced",
+        "streamrip_config",
     ] or data[1].startswith(
         "nzbser",
     ):
@@ -8371,6 +9891,99 @@ async def edit_bot_settings(client, query):
             ("MISTRAL_", "DEEPSEEK_", "DEFAULT_AI_")
         ):
             previous_menu = "ai"
+        elif data[2].startswith("STREAMRIP_"):
+            # For streamrip settings, determine which submenu to return to based on the key
+            if data[2] in [
+                "STREAMRIP_ENABLED",
+                "STREAMRIP_CONCURRENT_DOWNLOADS",
+                "STREAMRIP_MAX_SEARCH_RESULTS",
+                "STREAMRIP_ENABLE_DATABASE",
+                "STREAMRIP_AUTO_CONVERT",
+                "STREAMRIP_LIMIT",
+            ]:
+                previous_menu = "streamrip_general"
+            elif data[2] in [
+                "STREAMRIP_DEFAULT_QUALITY",
+                "STREAMRIP_FALLBACK_QUALITY",
+                "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+            ]:
+                previous_menu = "streamrip_quality"
+            elif (
+                data[2].endswith("_ENABLED")
+                and any(
+                    platform in data[2]
+                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                )
+            ) or data[2].endswith(
+                (
+                    "_EMAIL",
+                    "_PASSWORD",
+                    "_ARL",
+                    "_CLIENT_ID",
+                    "_ACCESS_TOKEN",
+                    "_REFRESH_TOKEN",
+                    "_USER_ID",
+                    "_COUNTRY_CODE",
+                )
+            ):
+                previous_menu = "streamrip_credentials"
+            elif data[2] in [
+                "STREAMRIP_MAX_CONNECTIONS",
+                "STREAMRIP_REQUESTS_PER_MINUTE",
+            ]:
+                previous_menu = "streamrip_download"
+            elif data[2] in [
+                "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                "STREAMRIP_TIDAL_TOKEN_EXPIRY",
+                "STREAMRIP_DEEZER_USE_DEEZLOADER",
+                "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+                "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                "STREAMRIP_LASTFM_SOURCE",
+                "STREAMRIP_LASTFM_FALLBACK_SOURCE",
+            ]:
+                previous_menu = "streamrip_platforms"
+            elif data[2] in [
+                "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_DOWNLOADS_PATH",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+            ]:
+                previous_menu = "streamrip_database"
+            elif data[2] in [
+                "STREAMRIP_CONVERSION_ENABLED",
+                "STREAMRIP_CONVERSION_CODEC",
+                "STREAMRIP_CONVERSION_SAMPLING_RATE",
+                "STREAMRIP_CONVERSION_BIT_DEPTH",
+                "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+            ]:
+                previous_menu = "streamrip_conversion"
+            elif data[2] in [
+                "STREAMRIP_CLI_TEXT_OUTPUT",
+                "STREAMRIP_CLI_PROGRESS_BARS",
+                "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
+                "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            ]:
+                previous_menu = "streamrip_cli"
+            elif data[2] in [
+                "STREAMRIP_FILENAME_TEMPLATE",
+                "STREAMRIP_FOLDER_TEMPLATE",
+                "STREAMRIP_EMBED_COVER_ART",
+                "STREAMRIP_SAVE_COVER_ART",
+                "STREAMRIP_COVER_ART_SIZE",
+                "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+                "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+                "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+                "STREAMRIP_FILEPATHS_TRUNCATE_TO",
+            ]:
+                previous_menu = "streamrip_advanced"
+            else:
+                # For any other streamrip settings, default to main streamrip menu
+                previous_menu = "streamrip"
         elif data[2].startswith("MERGE_") or data[2] in [
             "CONCAT_DEMUXER_ENABLED",
             "FILTER_COMPLEX_ENABLED",
@@ -9885,6 +11498,22 @@ async def edit_bot_settings(client, query):
                 # Same-dir operations enabled without logging
                 pass
 
+        # Special handling for STREAMRIP_ENABLED
+        elif key == "STREAMRIP_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Streamrip is being disabled, reset all streamrip-related configs
+                from bot.helper.ext_utils.config_utils import reset_streamrip_configs
+
+                await reset_streamrip_configs(database)
+            else:
+                # Streamrip operations enabled without logging
+                pass
+
         # Special handling for TORRENT_SEARCH_ENABLED
         elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
             "HYPERDL_ENABLED",
@@ -9969,6 +11598,74 @@ async def edit_bot_settings(client, query):
             return_menu = "taskmonitor"
         elif key == "ARCHIVE_FLAGS_ENABLED":
             return_menu = "archiveflags"
+        elif key.startswith("STREAMRIP_") and key != "STREAMRIP_ENABLED":
+            # For streamrip settings (except STREAMRIP_ENABLED which is handled in operations), determine which submenu to return to
+            if key in ["STREAMRIP_AUTO_CONVERT", "STREAMRIP_LIMIT"]:
+                return_menu = "streamrip_general"
+            elif key in [
+                "STREAMRIP_DEFAULT_QUALITY",
+                "STREAMRIP_FALLBACK_QUALITY",
+                "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+            ]:
+                return_menu = "streamrip_quality"
+            elif (
+                key.endswith("_ENABLED")
+                and any(
+                    platform in key
+                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                )
+            ) or key.endswith(
+                (
+                    "_EMAIL",
+                    "_PASSWORD",
+                    "_ARL",
+                    "_CLIENT_ID",
+                    "_ACCESS_TOKEN",
+                    "_REFRESH_TOKEN",
+                    "_USER_ID",
+                    "_COUNTRY_CODE",
+                )
+            ):
+                return_menu = "streamrip_credentials"
+            elif key in [
+                "STREAMRIP_CONCURRENT_DOWNLOADS",
+                "STREAMRIP_MAX_SEARCH_RESULTS",
+                "STREAMRIP_MAX_CONNECTIONS",
+                "STREAMRIP_REQUESTS_PER_MINUTE",
+            ]:
+                return_menu = "streamrip_download"
+            elif key in [
+                "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                "STREAMRIP_DEEZER_USE_DEEZLOADER",
+                "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+            ]:
+                return_menu = "streamrip_platforms"
+            elif key in [
+                "STREAMRIP_ENABLE_DATABASE",
+                "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+            ]:
+                return_menu = "streamrip_database"
+            elif key in ["STREAMRIP_CONVERSION_ENABLED"]:
+                return_menu = "streamrip_conversion"
+            elif key in [
+                "STREAMRIP_CLI_TEXT_OUTPUT",
+                "STREAMRIP_CLI_PROGRESS_BARS",
+                "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            ]:
+                return_menu = "streamrip_cli"
+            elif key in [
+                "STREAMRIP_EMBED_COVER_ART",
+                "STREAMRIP_SAVE_COVER_ART",
+                "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+            ]:
+                return_menu = "streamrip_advanced"
+            else:
+                return_menu = "streamrip"
         elif key in {
             "BULK_ENABLED",
             "MULTI_LINK_ENABLED",
@@ -9984,6 +11681,7 @@ async def edit_bot_settings(client, query):
             "HYPERDL_ENABLED",
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
+            "STREAMRIP_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",

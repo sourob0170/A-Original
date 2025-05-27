@@ -57,3 +57,6 @@ class BotCommands:
     SoxCommand = [f"spectrum{i}", f"sox{i}"]
     PasteCommand = f"paste{i}"
     VirusTotalCommand = f"virustotal{i}"
+    StreamripMirrorCommand = [f"streamripmirror{i}", f"srmirror{i}"]
+    StreamripLeechCommand = [f"streamripleech{i}", f"srleech{i}"]
+    StreamripSearchCommand = [f"streamripsearch{i}", f"srsearch{i}"]

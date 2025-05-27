@@ -1,8 +1,7 @@
-from aiofiles.os import path as aiopath
-from aiofiles.os import remove as aioremove
-
 from bot import user_data
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
+from bot.helper.ext_utils.aiofiles_compat import remove as aioremove
 
 
 async def reset_mirror_configs(database):
@@ -314,6 +313,115 @@ async def reset_same_dir_configs(database):
             await database.update_user_data(user_id)
 
     # Same-dir operations disabled without logging
+
+
+async def reset_streamrip_configs(database):
+    """Reset all streamrip-related configurations to their default values when streamrip is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific streamrip configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Streamrip-related keys to reset
+        streamrip_keys = [
+            "STREAMRIP_DEFAULT_QUALITY",
+            "STREAMRIP_FALLBACK_QUALITY",
+            "STREAMRIP_DEFAULT_CODEC",
+            "STREAMRIP_QUALITY_FALLBACK_ENABLED",
+            "STREAMRIP_QOBUZ_EMAIL",
+            "STREAMRIP_QOBUZ_PASSWORD",
+            "STREAMRIP_TIDAL_EMAIL",
+            "STREAMRIP_TIDAL_PASSWORD",
+            "STREAMRIP_TIDAL_ACCESS_TOKEN",
+            "STREAMRIP_TIDAL_REFRESH_TOKEN",
+            "STREAMRIP_TIDAL_USER_ID",
+            "STREAMRIP_TIDAL_COUNTRY_CODE",
+            "STREAMRIP_DEEZER_ARL",
+            "STREAMRIP_SOUNDCLOUD_CLIENT_ID",
+            "STREAMRIP_FILENAME_TEMPLATE",
+            "STREAMRIP_FOLDER_TEMPLATE",
+            "STREAMRIP_EMBED_COVER_ART",
+            "STREAMRIP_SAVE_COVER_ART",
+            "STREAMRIP_COVER_ART_SIZE",
+        ]
+
+        # Reset each streamrip-related key
+        for key in streamrip_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Reset global streamrip configurations to defaults
+    streamrip_global_configs = {
+        "STREAMRIP_ENABLED": False,
+        "STREAMRIP_CONCURRENT_DOWNLOADS": 4,
+        "STREAMRIP_MAX_SEARCH_RESULTS": 20,
+        "STREAMRIP_ENABLE_DATABASE": True,
+        "STREAMRIP_AUTO_CONVERT": True,
+        "STREAMRIP_DEFAULT_QUALITY": 3,
+        "STREAMRIP_FALLBACK_QUALITY": 2,
+        "STREAMRIP_DEFAULT_CODEC": "flac",
+        "STREAMRIP_QUALITY_FALLBACK_ENABLED": True,
+        "STREAMRIP_QOBUZ_ENABLED": True,
+        "STREAMRIP_TIDAL_ENABLED": True,
+        "STREAMRIP_DEEZER_ENABLED": True,
+        "STREAMRIP_SOUNDCLOUD_ENABLED": True,
+        "STREAMRIP_LASTFM_ENABLED": True,
+        "STREAMRIP_QOBUZ_EMAIL": "",
+        "STREAMRIP_QOBUZ_PASSWORD": "",
+        "STREAMRIP_TIDAL_EMAIL": "",
+        "STREAMRIP_TIDAL_PASSWORD": "",
+        "STREAMRIP_TIDAL_ACCESS_TOKEN": "",
+        "STREAMRIP_TIDAL_REFRESH_TOKEN": "",
+        "STREAMRIP_TIDAL_USER_ID": "",
+        "STREAMRIP_TIDAL_COUNTRY_CODE": "",
+        "STREAMRIP_DEEZER_ARL": "",
+        "STREAMRIP_SOUNDCLOUD_CLIENT_ID": "",
+        "STREAMRIP_FILENAME_TEMPLATE": "",
+        "STREAMRIP_FOLDER_TEMPLATE": "",
+        "STREAMRIP_EMBED_COVER_ART": True,
+        "STREAMRIP_SAVE_COVER_ART": True,
+        "STREAMRIP_COVER_ART_SIZE": "large",
+        "STREAMRIP_LIMIT": 0.0,
+    }
+
+    # Update global configurations
+    for key, default_value in streamrip_global_configs.items():
+        Config.set(key, default_value)
+
+    # Update the database with global configurations
+    await database.update_config(streamrip_global_configs)
+
+    # Remove streamrip config files if they exist
+    from bot import LOGGER
+
+    # Remove global streamrip config
+    streamrip_config_path = "streamrip_config.toml"
+    if await aiopath.exists(streamrip_config_path):
+        try:
+            await aioremove(streamrip_config_path)
+            LOGGER.info("Removed global streamrip config file")
+        except Exception as e:
+            LOGGER.error(f"Error removing streamrip config file: {e}")
+
+    # Remove user-specific streamrip configs
+    for user_id in user_data:
+        user_config_path = f"streamrip_configs/{user_id}.toml"
+        if await aiopath.exists(user_config_path):
+            try:
+                await aioremove(user_config_path)
+                LOGGER.info(f"Removed streamrip config for user {user_id}")
+            except Exception as e:
+                LOGGER.error(
+                    f"Error removing streamrip config for user {user_id}: {e}"
+                )
 
 
 async def reset_tool_configs(tool_name, database):

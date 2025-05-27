@@ -2,8 +2,6 @@ import contextlib
 from asyncio import create_task, sleep
 from time import time
 
-from aiofiles.os import makedirs, remove
-from aiofiles.os import path as aiopath
 from aiohttp.client_exceptions import ClientError
 from aioqbt.exc import AQError
 
@@ -17,6 +15,7 @@ from bot import (
 )
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.files_utils import clean_unwanted
 from bot.helper.ext_utils.status_utils import get_readable_time, get_task_by_gid

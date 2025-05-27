@@ -139,12 +139,11 @@ def get_template_variables_page():
     msg += "   Examples: <code>{{filename}bold}</code>, <code>{{size}code}</code>, <code>{{quality}italic}</code>\n\n"
 
     msg += "<b>Google Font Styling:</b>\n"
-    msg += (
-        "• <code>{{variable}FontName}</code> - Apply a Google Font to a variable\n"
-    )
-    msg += "   Examples: <code>{{filename}Roboto}</code>, <code>{{size}Open Sans}</code>\n"
+    msg += "• <code>{{variable}FontName}</code> - Apply a Google Font to a variable (converts to appropriate Telegram styling)\n"
+    msg += "   Examples: <code>{{filename}Roboto}</code> (no styling), <code>{{size}Open Sans}</code> (no styling)\n"
     msg += "• <code>{{variable}FontName:weight}</code> - Apply a Google Font with specific weight\n"
-    msg += "   Examples: <code>{{filename}Roboto:700}</code>, <code>{{size}Open Sans:300}</code>\n\n"
+    msg += "   Examples: <code>{{filename}Roboto:700}</code> (bold), <code>{{size}Open Sans:300}</code> (italic)\n"
+    msg += "   Note: Font weights 700+ become bold, 300- become italic, 400-600 remain regular\n\n"
 
     msg += "<b>Emoji Decoration:</b>\n"
     msg += "• <code>{{variable}emoji}</code> - Decorate a variable with emoji\n"
@@ -253,14 +252,30 @@ def get_google_fonts_page():
     msg += "• <code>Roboto:900</code> - Black\n\n"
 
     msg += "<b>Examples:</b>\n"
-    msg += "• <code>{{filename}Roboto}</code> - Regular Roboto\n"
-    msg += "• <code>{{filename}Roboto:700}</code> - Bold Roboto\n"
-    msg += "• <code>{{filename}Open Sans:300}</code> - Light Open Sans\n\n"
+    msg += (
+        "• <code>{{filename}Roboto}</code> - Regular Roboto (no styling applied)\n"
+    )
+    msg += "• <code>{{filename}Roboto:700}</code> - Bold Roboto (applies <b>bold</b> styling)\n"
+    msg += "• <code>{{filename}Open Sans:300}</code> - Light Open Sans (applies <i>italic</i> styling)\n"
+    msg += "• <code>{{filename}Roboto Mono}</code> - Roboto Mono (applies <code>monospace</code> styling)\n"
+    msg += "• <code>{{filename}Dancing Script}</code> - Dancing Script (applies <i>italic</i> styling)\n"
+    msg += "• <code>{{filename}Playfair Display}</code> - Playfair Display (applies <b>bold</b> styling)\n\n"
+
+    msg += "<b>How Google Fonts Work:</b>\n"
+    msg += "Since Telegram doesn't support custom fonts, Google Fonts are converted to appropriate Telegram styling:\n"
+    msg += "• <b>Weight 700+</b>: Converted to <b>bold</b> formatting\n"
+    msg += "• <b>Weight 300-</b>: Converted to <i>italic</i> formatting\n"
+    msg += "• <b>Weight 400-600</b>: No special formatting (regular text)\n"
+    msg += (
+        "• <b>Monospace fonts</b>: Converted to <code>monospace</code> formatting\n"
+    )
+    msg += "• <b>Script fonts</b>: Converted to <i>italic</i> formatting\n"
+    msg += "• <b>Display fonts</b>: Converted to <b>bold</b> formatting\n\n"
 
     # Important notes
     msg += "<b>Important Notes:</b>\n"
     msg += "• Unicode font styles only work with basic Latin characters (A-Z, a-z)\n"
-    msg += "• Google Fonts are indicated in captions but actual rendering depends on the device\n"
+    msg += "• Google Fonts apply appropriate Telegram-compatible styling instead of showing font names\n"
     msg += "• HTML formatting is the most compatible across all devices\n"
     msg += "• Font styles are applied after template variables are processed\n"
     msg += "• User settings take priority over owner settings\n"

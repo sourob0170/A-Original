@@ -4,6 +4,10 @@ OWNER_ID = 0  # Your Telegram User ID (not username) as an integer
 TELEGRAM_API = 0  # Get this from my.telegram.org
 TELEGRAM_HASH = ""  # Get this from my.telegram.org
 
+# Branding Settings
+CREDIT = "Powered by @aimmirror"  # Credit text shown in status messages and RSS feeds (default: "Powered by @aimmirror")
+OWNER_THUMB = "https://graph.org/file/80b7fb095063a18f9e232.jpg"  # Default thumbnail URL for owner (accepts Telegram file links)
+
 # SEMI-REQUIRED, WE SUGGEST TO FILL IT FROM MONGODB
 DATABASE_URL = ""  # MongoDB URI for storing user data and preferences
 
@@ -71,6 +75,58 @@ ARCHIVE_FLAGS_ENABLED = True  # Enable/disable archive operation flags
 MULTI_LINK_ENABLED = True  # Enable/disable multi-link feature
 SAME_DIR_ENABLED = True  # Enable/disable same directory feature
 BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
+
+# Streamrip Settings
+STREAMRIP_ENABLED = True  # Enable/disable streamrip feature
+STREAMRIP_CONCURRENT_DOWNLOADS = 4  # Concurrent downloads per platform
+STREAMRIP_MAX_SEARCH_RESULTS = 20  # Search results limit
+STREAMRIP_ENABLE_DATABASE = True  # Enable download history tracking
+STREAMRIP_AUTO_CONVERT = True  # Enable automatic format conversion
+
+# Streamrip Quality and Format Settings
+STREAMRIP_DEFAULT_QUALITY = (
+    3  # Default quality (0-4: 0=128kbps, 1=320kbps, 2=CD, 3=Hi-Res, 4=Hi-Res+)
+)
+STREAMRIP_FALLBACK_QUALITY = 2  # Fallback if preferred quality unavailable
+STREAMRIP_DEFAULT_CODEC = "flac"  # Default output format
+STREAMRIP_SUPPORTED_CODECS = [
+    "flac",
+    "mp3",
+    "m4a",
+    "ogg",
+    "opus",
+]  # Available formats
+STREAMRIP_QUALITY_FALLBACK_ENABLED = True  # Auto-fallback to lower quality
+
+# Streamrip Platform Settings
+STREAMRIP_QOBUZ_ENABLED = True  # Enable Qobuz downloads
+STREAMRIP_TIDAL_ENABLED = True  # Enable Tidal downloads
+STREAMRIP_DEEZER_ENABLED = True  # Enable Deezer downloads
+STREAMRIP_SOUNDCLOUD_ENABLED = True  # Enable SoundCloud downloads
+STREAMRIP_LASTFM_ENABLED = True  # Enable Last.fm playlist conversion
+
+# Streamrip Authentication (stored securely in database)
+STREAMRIP_QOBUZ_EMAIL = ""  # Qobuz account email
+STREAMRIP_QOBUZ_PASSWORD = ""  # Qobuz account password
+STREAMRIP_TIDAL_ACCESS_TOKEN = (
+    ""  # Tidal access token (get via 'rip config --tidal')
+)
+STREAMRIP_TIDAL_REFRESH_TOKEN = ""  # Tidal refresh token
+STREAMRIP_TIDAL_USER_ID = ""  # Tidal user ID
+STREAMRIP_TIDAL_COUNTRY_CODE = ""  # Tidal country code (e.g., 'US')
+STREAMRIP_DEEZER_ARL = ""  # Deezer ARL cookie
+STREAMRIP_SOUNDCLOUD_CLIENT_ID = ""  # SoundCloud client ID (optional)
+
+# Streamrip Advanced Features
+STREAMRIP_METADATA_EXCLUDE = []  # Metadata tags to exclude (e.g., ["genre", "albumartist"])
+STREAMRIP_FILENAME_TEMPLATE = ""  # Custom filename template
+STREAMRIP_FOLDER_TEMPLATE = ""  # Custom folder structure template
+STREAMRIP_EMBED_COVER_ART = True  # Embed album artwork in files
+STREAMRIP_SAVE_COVER_ART = True  # Save separate cover art files
+STREAMRIP_COVER_ART_SIZE = "large"  # Cover art size preference
+
+# Streamrip Limits
+STREAMRIP_LIMIT = 0  # GB (0 = no limit)
 
 # GDrive Tools
 GDRIVE_ID = ""  # Google Drive folder/TeamDrive ID where files will be uploaded
@@ -709,7 +765,3 @@ METADATA_SUBTITLE_AUTHOR = (
 METADATA_SUBTITLE_COMMENT = (
     ""  # Default comment metadata specifically for subtitle files
 )
-
-# Branding Settings
-CREDIT = "Powered by @aimmirror"  # Credit text shown in status messages and RSS feeds (default: "Powered by @aimmirror")
-OWNER_THUMB = "https://graph.org/file/80b7fb095063a18f9e232.jpg"  # Default thumbnail URL for owner (accepts Telegram file links)

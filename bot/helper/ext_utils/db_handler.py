@@ -5,7 +5,6 @@ from importlib import import_module
 from time import time as get_time
 
 from aiofiles import open as aiopen
-from aiofiles.os import path as aiopath
 from pymongo import AsyncMongoClient
 from pymongo.errors import (
     ConnectionFailure,
@@ -17,6 +16,7 @@ from pymongo.server_api import ServerApi
 from bot import LOGGER, qbit_options, rss_dict, user_data
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 
 try:
     from bot.helper.ext_utils.gc_utils import smart_garbage_collection

@@ -2,10 +2,9 @@ from asyncio import gather
 from json import loads
 from secrets import token_hex
 
-from aiofiles.os import remove
-
 from bot import LOGGER, task_dict, task_dict_lock
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.aiofiles_compat import remove
 from bot.helper.ext_utils.bot_utils import cmd_exec
 from bot.helper.ext_utils.limit_checker import limit_checker
 from bot.helper.ext_utils.task_manager import (

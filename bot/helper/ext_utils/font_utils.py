@@ -582,18 +582,8 @@ async def apply_font_style(text, style):
             LOGGER.error(f"Error applying custom style {style}: {e}")
             return text
 
-    # Check if it's a Google Font
-    try:
-        # Try to apply Google Font style
-        google_font_text = await apply_google_font_style(text, style)
-        if google_font_text != f"<code>{text}</code>":
-            # If the Google Font was successfully applied
-            return google_font_text
-    except Exception as e:
-        LOGGER.error(f"Error checking Google Font {style}: {e}")
-
-    # If all else fails, return the original text with a code tag
-    return f"<code>{text}</code>"
+    # If all else fails, return the original text
+    return text
 
 
 async def download_google_font(font_name):
@@ -715,8 +705,8 @@ async def is_google_font(font_name):
 async def apply_google_font_style(text, font_name):
     """
     Apply a Google Font style to the given text.
-    Since Telegram doesn't support custom fonts or the span tag,
-    this function uses code tags with a prefix to indicate the font.
+    Since Telegram doesn't support custom fonts, we apply appropriate fallback styling
+    based on the font characteristics without showing the font name.
 
     Args:
         text (str): The text to style
@@ -733,16 +723,52 @@ async def apply_google_font_style(text, font_name):
     # Check if the font exists
     font_exists = await is_google_font(font_name)
     if not font_exists:
+        # If not a valid Google font, treat as regular text
+        return text
+
+    # Since Telegram doesn't support custom fonts, we apply appropriate fallback styling
+    # based on font characteristics and weight
+
+    # Determine styling based on font weight
+    if font_weight:
+        try:
+            weight_num = int(font_weight)
+            # Bold weights (700+)
+            if weight_num >= 700:
+                return f"<b>{text}</b>"
+            # Light weights (300 and below) - use italic for distinction
+            if weight_num <= 300:
+                return f"<i>{text}</i>"
+            # Normal weights (400-600) - no special styling
+            return text
+        except ValueError:
+            # Invalid weight, just return text
+            return text
+
+    # For fonts without weight specification, apply subtle styling based on font type
+    font_lower = font_name.lower()
+
+    # Monospace fonts
+    if any(mono in font_lower for mono in ["mono", "code", "courier", "console"]):
         return f"<code>{text}</code>"
 
-    # Since Telegram doesn't support custom fonts, we'll use code tags
-    # and add a prefix to indicate the font that would be applied
-    font_indicator = f"{font_name}"
-    if font_weight:
-        font_indicator += f":{font_weight}"
+    # Script/decorative fonts - use italic
+    if any(
+        script in font_lower
+        for script in ["script", "handwriting", "cursive", "dancing"]
+    ):
+        return f"<i>{text}</i>"
 
-    # Use monospace formatting with a font indicator
-    return f"<code>[{font_indicator}] {text}</code>"
+    # Display/heading fonts - use bold
+    if any(
+        display in font_lower
+        for display in ["display", "heading", "title", "playfair"]
+    ):
+        return f"<b>{text}</b>"
+
+    # For most other fonts (like Roboto, Open Sans, etc.), return plain text
+    # This maintains readability while acknowledging the font choice
+    return text
 
 
 def get_available_fonts():

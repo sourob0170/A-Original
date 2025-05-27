@@ -1,14 +1,13 @@
-import contextlib
 import gc
 import json
 import os
 import re
 from hashlib import md5
 
-from aiofiles.os import path as aiopath
 from langcodes import Language
 
 from bot import LOGGER
+from bot.helper.ext_utils.aiofiles_compat import aiopath
 from bot.helper.ext_utils.bot_utils import cmd_exec
 from bot.helper.ext_utils.status_utils import (
     get_readable_file_size,
@@ -113,6 +112,11 @@ async def generate_caption(filename, directory, caption_template):
     try:
         if not await aiopath.exists(file_path):
             LOGGER.error(f"File does not exist for caption generation: {file_path}")
+            # Try to check directory for debugging
+            try:
+                LOGGER.debug(f"Directory exists: {await aiopath.exists(directory)}")
+            except Exception as e:
+                LOGGER.debug(f"Error checking directory: {e}")
             return f"<code>{filename}</code>"  # Return a simple caption with just the filename
 
         # Also check if file has content
@@ -126,10 +130,8 @@ async def generate_caption(filename, directory, caption_template):
         LOGGER.error(f"Error checking file existence: {e}")
         return f"<code>{filename}</code>"  # Return a simple caption with just the filename
 
-    # Initialize variables to track temporary resources
-    temp_file_created = False
+    # Use the original file path directly
     file_path_to_use = file_path
-    temp_dir = None
 
     try:
         # Check if file still exists before proceeding further
@@ -160,93 +162,16 @@ async def generate_caption(filename, directory, caption_template):
             LOGGER.error(f"Error accessing file during caption generation: {e}")
             return f"<code>{filename}</code>"  # Return a simple caption with just the filename
 
-        # Check if filename contains special characters that might cause issues with shell commands
-        if any(
-            c in file_path
-            for c in [
-                "(",
-                ")",
-                "[",
-                "]",
-                "'",
-                '"',
-                ";",
-                "&",
-                "|",
-                "<",
-                ">",
-                "$",
-                "`",
-                "\\",
-            ]
-        ) and os.path.exists(file_path):  # Create a temporary file with a safe name
-            import tempfile
-            from time import time
+        # cmd_exec with shell=False handles special characters properly, so we can use the original file path
 
-            # Try to create a temp directory in the same filesystem as the original file
-            # This helps avoid cross-device link errors
-            parent_dir = os.path.dirname(file_path)
-            try:
-                temp_dir = tempfile.mkdtemp(dir=parent_dir)
-                same_filesystem = True
-            except Exception:
-                # Fall back to system temp directory if we can't create in the parent dir
-                temp_dir = tempfile.mkdtemp()
-                same_filesystem = False
-
-            safe_name = (
-                f"temp_mediainfo_{int(time())}{os.path.splitext(filename)[1]}"
-            )
-            safe_path = os.path.join(temp_dir, safe_name)
-            # We'll use the temp_dir variable for cleanup later
-
-            if same_filesystem:
-                try:
-                    # If on same filesystem, try a hard link for better performance
-                    os.link(file_path, safe_path)
-                    file_path_to_use = safe_path
-                    temp_file_created = True
-                except Exception:  # Fall back to copying a portion of the file
-                    try:
-                        # Only copy a small portion of the file for MediaInfo analysis
-                        # This is much faster than copying the entire file
-                        with (
-                            open(file_path, "rb") as src,
-                            open(safe_path, "wb") as dst,
-                        ):
-                            # Copy first 10MB which should be enough for MediaInfo
-                            dst.write(src.read(10 * 1024 * 1024))
-                        file_path_to_use = safe_path
-                        temp_file_created = True
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Failed to create temporary copy for file with special characters: {e}"
-                        )
-                        # Continue with original path as a fallback
-                        file_path_to_use = file_path
-            else:
-                try:
-                    # If on different filesystem, copy a portion of the file
-                    with open(file_path, "rb") as src, open(safe_path, "wb") as dst:
-                        # Copy first 10MB which should be enough for MediaInfo
-                        dst.write(src.read(10 * 1024 * 1024))
-                    file_path_to_use = safe_path
-                    temp_file_created = True
-                except Exception as e:
-                    LOGGER.error(
-                        f"Failed to create temporary copy for file with special characters: {e}"
-                    )
-                    # Continue with original path as a fallback
-                    file_path_to_use = file_path
-
-        # Get media info using mediainfo command
+        # Get media info using ffprobe command
         try:
-            # Double-check file existence right before running mediainfo
+            # Double-check file existence right before running ffprobe
             if not await aiopath.exists(file_path_to_use):
                 LOGGER.error(
-                    f"File does not exist before running mediainfo: {file_path_to_use}"
+                    f"File does not exist before running ffprobe: {file_path_to_use}"
                 )
-                return filename
+                return f"<code>{filename}</code>"
 
             # Check if file is accessible and has size > 0
             try:
@@ -255,61 +180,80 @@ async def generate_caption(filename, directory, caption_template):
                     LOGGER.error(
                         f"File exists but has zero size: {file_path_to_use}"
                     )
-                    return filename
+                    return f"<code>{filename}</code>"
             except Exception as e:
-                LOGGER.error(f"Error checking file size before mediainfo: {e}")
-                return filename
+                LOGGER.error(f"Error checking file size before ffprobe: {e}")
+                return f"<code>{filename}</code>"
 
-            # Run mediainfo command with absolute path
+            # Run ffprobe command with absolute path
             abs_path = os.path.abspath(file_path_to_use)
-            LOGGER.info(f"Running mediainfo on: {abs_path}")
-            result = await cmd_exec(["mediainfo", "--Output=JSON", abs_path])
+
+            # Use ffprobe instead of mediainfo since it's more reliably available
+            result = await cmd_exec(
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    "-show_streams",
+                    abs_path,
+                ]
+            )
 
             if result[1]:
-                LOGGER.info(f"MediaInfo command output: {result[1]}")
+                LOGGER.info(f"ffprobe command output: {result[1]}")
 
             if not result[0]:
-                LOGGER.error(f"MediaInfo returned empty output for: {abs_path}")
-                return filename
+                LOGGER.error(f"ffprobe returned empty output for: {abs_path}")
+                return f"<code>{filename}</code>"
 
             # Parse JSON output
             try:
-                mediainfo_data = json.loads(result[0])
+                ffprobe_data = json.loads(result[0])
             except json.JSONDecodeError as e:
-                LOGGER.error(f"Failed to parse MediaInfo JSON output: {e}")
-                return filename
+                LOGGER.error(f"Failed to parse ffprobe JSON output: {e}")
+                return f"<code>{filename}</code>"
 
         except FileNotFoundError as error:
-            LOGGER.error(f"File not found when running mediainfo: {error}")
-            return filename
+            LOGGER.error(f"File not found when running ffprobe: {error}")
+            # Return a basic caption with just the filename
+            return f"<code>{filename}</code>"
         except PermissionError as error:
-            LOGGER.error(f"Permission denied when running mediainfo: {error}")
-            return filename
+            LOGGER.error(f"Permission denied when running ffprobe: {error}")
+            # Return a basic caption with just the filename
+            return f"<code>{filename}</code>"
         except Exception as error:
             LOGGER.error(f"Failed to retrieve media info: {error}")
-            return filename
+            # Return a basic caption with just the filename
+            return f"<code>{filename}</code>"
 
-        # Extract media information
-        media_data = mediainfo_data.get("media", {})
-        track_data = media_data.get("track", [])
+        # Extract media information from ffprobe format
+        format_data = ffprobe_data.get("format", {})
+        streams_data = ffprobe_data.get("streams", [])
 
-        # Get general track info
-        general_track = next(
-            (track for track in track_data if track["@type"] == "General"),
+        # Get video stream info
+        video_stream = next(
+            (
+                stream
+                for stream in streams_data
+                if stream.get("codec_type") == "video"
+            ),
             {},
         )
 
-        # Get video track info
-        video_track = next(
-            (track for track in track_data if track["@type"] == "Video"),
-            {},
-        )
+        # Get audio streams info
+        audio_streams = [
+            stream for stream in streams_data if stream.get("codec_type") == "audio"
+        ]
 
-        # Get audio tracks info
-        audio_tracks = [track for track in track_data if track["@type"] == "Audio"]
-
-        # Get subtitle tracks info
-        subtitle_tracks = [track for track in track_data if track["@type"] == "Text"]
+        # Get subtitle streams info
+        subtitle_streams = [
+            stream
+            for stream in streams_data
+            if stream.get("codec_type") == "subtitle"
+        ]
 
         # Extract video metadata
         video_duration = 0
@@ -325,15 +269,15 @@ async def generate_caption(filename, directory, caption_template):
         # Extract subtitle metadata
         subtitle_languages = []
 
-        # Process general track
-        if general_track:
+        # Process format data (equivalent to general track in ffprobe)
+        if format_data:
             # Get file format
-            video_format = general_track.get("Format", "")
+            video_format = format_data.get("format_name", "")
 
             # Get duration
-            if "Duration" in general_track:
+            if "duration" in format_data:
                 try:
-                    duration_str = general_track["Duration"]
+                    duration_str = format_data["duration"]
                     # Check if duration is in HH:MM:SS format
                     if ":" in duration_str:
                         # Split by colon and handle different formats
@@ -358,48 +302,14 @@ async def generate_caption(filename, directory, caption_template):
                 except Exception as e:
                     LOGGER.error(f"Error parsing duration: {e}")
 
-            # Alternative duration field
-            elif "Duration/String" in general_track:
-                try:
-                    duration_str = general_track["Duration/String"]
-                    # Parse duration string (e.g., "1h 30mn")
-                    hours = minutes = seconds = 0
-                    if "h" in duration_str:
-                        hours_part = duration_str.split("h")[0].strip()
-                        hours = float(hours_part)
-                    if "mn" in duration_str:
-                        minutes_part = (
-                            duration_str.split("h")[-1].split("mn")[0].strip()
-                        )
-                        minutes = float(minutes_part)
-                    if "s" in duration_str and "ms" not in duration_str:
-                        seconds_part = (
-                            duration_str.split("mn")[-1].split("s")[0].strip()
-                        )
-                        seconds = float(seconds_part)
-                    video_duration = int(hours * 3600 + minutes * 60 + seconds)
-                except Exception as e:
-                    LOGGER.error(f"Error parsing duration string: {e}")
-
-            # Get file size
-            file_size = general_track.get("FileSize", "")
-            if not file_size:
-                try:
-                    file_size = await aiopath.getsize(file_path)
-                except Exception as e:
-                    LOGGER.error(f"Error getting file size: {e}")
-                    file_size = 0
-
-        # Process video track
-        if video_track:
+        # Process video stream
+        if video_stream:
             # Get video codec
-            video_codec = video_track.get("Format", "")
-            if "CodecID" in video_track:
-                video_codec = f"{video_codec} ({video_track['CodecID']})"
+            video_codec = video_stream.get("codec_name", "")
 
             # Get video quality
-            if "Height" in video_track:
-                height = video_track["Height"]
+            if "height" in video_stream:
+                height = video_stream["height"]
                 if isinstance(height, str) and " " in height:
                     height = height.split(" ")[0]
                 try:
@@ -423,48 +333,47 @@ async def generate_caption(filename, directory, caption_template):
                     video_quality = "Unknown"
 
             # Get framerate
-            if "FrameRate" in video_track:
+            if "r_frame_rate" in video_stream:
                 try:
-                    framerate = float(video_track["FrameRate"])
+                    framerate_str = video_stream["r_frame_rate"]
+                    if "/" in framerate_str:
+                        num, den = framerate_str.split("/")
+                        framerate = float(num) / float(den)
+                    else:
+                        framerate = float(framerate_str)
                     video_framerate = f"{framerate:.2f} fps"
                 except Exception as e:
                     LOGGER.error(f"Error parsing framerate: {e}")
-                    video_framerate = video_track["FrameRate"]
+                    video_framerate = video_stream.get("r_frame_rate", "")
 
-        # Process audio tracks
-        for audio_track in audio_tracks:
+        # Process audio streams
+        for audio_stream in audio_streams:
             # Get audio language
             language = "Unknown"
-            if "Language" in audio_track:
+            if "tags" in audio_stream and "language" in audio_stream["tags"]:
                 try:
-                    lang_code = audio_track["Language"]
+                    lang_code = audio_stream["tags"]["language"]
                     language = Language.get(lang_code).display_name()
                 except Exception:
-                    language = audio_track["Language"]
-            elif "Language/String" in audio_track:
-                language = audio_track["Language/String"]
+                    language = audio_stream["tags"]["language"]
 
             # Get audio codec
-            audio_codec = audio_track.get("Format", "")
-            if "CodecID" in audio_track:
-                audio_codec = f"{audio_codec} ({audio_track['CodecID']})"
+            audio_codec = audio_stream.get("codec_name", "")
 
             # Add to lists
             audio_languages.append(language)
             audio_codecs.append(audio_codec)
 
-        # Process subtitle tracks
-        for subtitle_track in subtitle_tracks:
+        # Process subtitle streams
+        for subtitle_stream in subtitle_streams:
             # Get subtitle language
             language = "Unknown"
-            if "Language" in subtitle_track:
+            if "tags" in subtitle_stream and "language" in subtitle_stream["tags"]:
                 try:
-                    lang_code = subtitle_track["Language"]
+                    lang_code = subtitle_stream["tags"]["language"]
                     language = Language.get(lang_code).display_name()
                 except Exception:
-                    language = subtitle_track["Language"]
-            elif "Language/String" in subtitle_track:
-                language = subtitle_track["Language/String"]
+                    language = subtitle_stream["tags"]["language"]
 
             # Add to list
             subtitle_languages.append(language)
@@ -502,12 +411,10 @@ async def generate_caption(filename, directory, caption_template):
             os.path.splitext(filename)[0]
         )
 
-        # Count number of tracks
-        num_videos = len(
-            [track for track in track_data if track["@type"] == "Video"]
-        )
-        num_audios = len(audio_tracks)
-        num_subtitles = len(subtitle_tracks)
+        # Count number of streams
+        num_videos = 1 if video_stream else 0
+        num_audios = len(audio_streams)
+        num_subtitles = len(subtitle_streams)
 
         # Format track counts with leading zeros for single digits
         num_videos_str = f"{num_videos:02d}" if num_videos < 10 else str(num_videos)
@@ -571,18 +478,6 @@ async def generate_caption(filename, directory, caption_template):
                 LOGGER.info(
                     f"Successfully applied leech caption template for: {filename}"
                 )
-            # Clean up temporary resources
-            if temp_file_created and os.path.exists(file_path_to_use):
-                with contextlib.suppress(Exception):
-                    os.remove(file_path_to_use)
-            # Clean up temporary directory if created
-            if temp_dir and os.path.exists(temp_dir):
-                try:
-                    import shutil
-
-                    shutil.rmtree(temp_dir)
-                except Exception:
-                    pass
             # Force garbage collection after processing media info
             # This can create large objects in memory
             if smart_garbage_collection:
@@ -642,3 +537,6 @@ async def generate_caption(filename, directory, caption_template):
         LOGGER.error(f"Error generating caption: {e}")
         # Return a basic formatted caption instead of just the filename
         return f"<code>{filename}</code>"
+    finally:
+        # No cleanup needed since we're using the original file directly
+        pass
