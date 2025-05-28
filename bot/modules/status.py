@@ -186,7 +186,7 @@ async def status_pages(_, query):
 <b>EX:</b> {tasks["Extract"]} | <b>SP:</b> {tasks["Split"]} | <b>QD:</b> {tasks["QueueDl"]} | <b>QU:</b> {tasks["QueueUp"]}
 <b>CL:</b> {tasks["Clone"]} | <b>CK:</b> {tasks["CheckUp"]} | <b>PA:</b> {tasks["Pause"]} | <b>SV:</b> {tasks["SamVid"]}
 <b>CM:</b> {tasks["ConvertMedia"]} | <b>FF:</b> {tasks["FFmpeg"]} | <b>MD:</b> {tasks["Metadata"]} | <b>WM:</b> {tasks["Watermark"]}
-<b>ET:</b> {tasks["EmbedThumb"]} 
+<b>ET:</b> {tasks["EmbedThumb"]}
 
 <b>ODLS:</b> {get_readable_file_size(dl_speed)}/s
 <b>OULS:</b> {get_readable_file_size(up_speed)}/s
