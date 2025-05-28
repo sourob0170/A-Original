@@ -450,12 +450,19 @@ class StreamripDownloadHelper:
                         "🎵 No codec specified - streamrip will download in native format"
                     )
 
-            # Add --no-db flag only if database is disabled in bot settings
+            # Add --no-db flag if database is disabled in bot settings OR if force download is enabled
             from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+            force_download = getattr(self.listener, "force_download", False)
 
             if not streamrip_config.is_database_enabled():
                 cmd.extend(["--no-db"])
                 LOGGER.debug("Added --no-db flag (database disabled in settings)")
+            elif force_download:
+                cmd.extend(["--no-db"])
+                LOGGER.info(
+                    "Added --no-db flag (force download enabled - bypassing database)"
+                )
             else:
                 LOGGER.debug(
                     "Database enabled in settings, allowing streamrip to use database"
@@ -2715,7 +2722,11 @@ except Exception as e:
 
 
 async def add_streamrip_download(
-    listener, url: str, quality: int | None = None, codec: str | None = None
+    listener,
+    url: str,
+    quality: int | None = None,
+    codec: str | None = None,
+    force: bool = False,
 ):
     """Add streamrip download to queue"""
     if not STREAMRIP_AVAILABLE:
@@ -2754,6 +2765,12 @@ async def add_streamrip_download(
     # Create download helper
     download_helper = StreamripDownloadHelper(listener)
 
+    # Set download info in listener so it has access to URL for error handling
+    listener.set_download_info(url, quality, codec)
+
+    # Set force flag in listener for CLI command generation
+    listener.force_download = force
+
     # Add to task dict
     async with task_dict_lock:
         task_dict[listener.mid] = StreamripDownloadStatus(
@@ -2768,7 +2785,7 @@ async def add_streamrip_download(
 
         if dl_count >= Config.QUEUE_DOWNLOAD:
             LOGGER.info(f"Added streamrip download to queue: {url}")
-            task_dict[listener.mid] = QueueStatus(listener, "dl")
+            task_dict[listener.mid] = QueueStatus(listener, listener.mid, "dl")
             await send_status_message(
                 listener.message, "⏳ Added to download queue!"
             )

@@ -269,11 +269,6 @@ def add_handlers():
             BotCommands.UsersCommand,
             CustomFilters.sudo,
         ),
-        "send_user_settings": (
-            send_user_settings,
-            BotCommands.UserSetCommand,
-            CustomFilters.authorized & filters.group,
-        ),
         "ytdl": (
             ytdl,
             BotCommands.YtdlCommand,
@@ -488,7 +483,7 @@ def add_handlers():
         MessageHandler(
             handle_no_suffix_commands,
             filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|streamripleech|srleech|streamripsearch|srsearch|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|settings|usettings|us|speedtest|broadcast|broadcastall|sel|rss|fontstyles|fonts|check_deletions|cd|imdb|login|mediasearch|mds|mediatools|mt|mthelp|mth|gensession|gs|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
+                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|streamripleech|srleech|streamripsearch|srsearch|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
             )
             & CustomFilters.pm_or_authorized,
         ),

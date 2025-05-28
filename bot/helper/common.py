@@ -3958,6 +3958,11 @@ class TaskConfig:
                     code = 0
             if self.is_cancelled:
                 return code
+            # Ensure code is an integer for comparison
+            try:
+                code = int(code) if code is not None else 0
+            except (ValueError, TypeError):
+                code = 1  # Set to non-zero to indicate failure
             if code == 0:
                 for file_ in files:
                     if is_archive_split(file_) or is_archive(file_):
@@ -3968,6 +3973,11 @@ class TaskConfig:
                             self.is_cancelled = True
         if self.proceed_count == 0:
             LOGGER.info("No files able to extract!")
+        # Ensure code is an integer for final comparison
+        try:
+            code = int(code) if code is not None else 1
+        except (ValueError, TypeError):
+            code = 1  # Set to non-zero to indicate failure
         return t_path if self.is_file and code == 0 else dl_path
 
     async def proceed_ffmpeg(

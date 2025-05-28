@@ -84,18 +84,10 @@ STREAMRIP_ENABLE_DATABASE = True  # Enable download history tracking
 STREAMRIP_AUTO_CONVERT = True  # Enable automatic format conversion
 
 # Streamrip Quality and Format Settings
-STREAMRIP_DEFAULT_QUALITY = (
-    3  # Default quality (0-4: 0=128kbps, 1=320kbps, 2=CD, 3=Hi-Res, 4=Hi-Res+)
-)
+STREAMRIP_DEFAULT_QUALITY = 3  # Default quality (0-4: 0=128kbps, 1=320kbps, 2=CD, 3=Hi-Res, 4=Hi-Res+)
 STREAMRIP_FALLBACK_QUALITY = 2  # Fallback if preferred quality unavailable
 STREAMRIP_DEFAULT_CODEC = "flac"  # Default output format
-STREAMRIP_SUPPORTED_CODECS = [
-    "flac",
-    "mp3",
-    "m4a",
-    "ogg",
-    "opus",
-]  # Available formats
+STREAMRIP_SUPPORTED_CODECS = ["flac", "mp3", "m4a", "ogg", "opus"]  # Available formats
 STREAMRIP_QUALITY_FALLBACK_ENABLED = True  # Auto-fallback to lower quality
 
 # Streamrip Platform Settings
@@ -108,9 +100,7 @@ STREAMRIP_LASTFM_ENABLED = True  # Enable Last.fm playlist conversion
 # Streamrip Authentication (stored securely in database)
 STREAMRIP_QOBUZ_EMAIL = ""  # Qobuz account email
 STREAMRIP_QOBUZ_PASSWORD = ""  # Qobuz account password
-STREAMRIP_TIDAL_ACCESS_TOKEN = (
-    ""  # Tidal access token (get via 'rip config --tidal')
-)
+STREAMRIP_TIDAL_ACCESS_TOKEN = ""  # Tidal access token (get via 'rip config --tidal')
 STREAMRIP_TIDAL_REFRESH_TOKEN = ""  # Tidal refresh token
 STREAMRIP_TIDAL_USER_ID = ""  # Tidal user ID
 STREAMRIP_TIDAL_COUNTRY_CODE = ""  # Tidal country code (e.g., 'US')
@@ -765,3 +755,4 @@ METADATA_SUBTITLE_AUTHOR = (
 METADATA_SUBTITLE_COMMENT = (
     ""  # Default comment metadata specifically for subtitle files
 )
+

@@ -760,7 +760,9 @@ class Mirror(TaskListener):
                 and not is_gdrive_id(self.link)
                 and not is_gdrive_link(self.link)
                 and not is_mega_link(self.link)
-                and not (Config.STREAMRIP_ENABLED and is_streamrip_url(self.link))
+                and not (
+                    Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link)
+                )
             )
         ):
             x = await send_message(
@@ -905,7 +907,7 @@ class Mirror(TaskListener):
             create_task(add_rclone_download(self, f"{path}/"))
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             create_task(add_gd_download(self, path))
-        elif Config.STREAMRIP_ENABLED and is_streamrip_url(self.link):
+        elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
             # Handle streamrip downloads
             create_task(add_streamrip_download(self, self.link))
         else:

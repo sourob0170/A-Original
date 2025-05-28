@@ -1,5 +1,4 @@
 from bot.core.config_manager import Config
-from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     send_message,
@@ -60,7 +59,7 @@ async def handle_no_suffix_commands(client, message):
     # Get the command suffix from config
     cmd_suffix = Config.CMD_SUFFIX
 
-    # Define standard commands
+    # Define standard commands (excluding those handled by direct handlers)
     standard_commands = [
         "mirror",
         "m",
@@ -107,28 +106,17 @@ async def handle_no_suffix_commands(client, message):
         "exec",
         "clearlocals",
         "botsettings",
-        "settings",
-        "usettings",
-        "us",
         "speedtest",
         "broadcast",
         "broadcastall",
         "sel",
         "rss",
-        "fontstyles",
-        "fonts",
         "check_deletions",
         "cd",
         "imdb",
         "login",
         "mediasearch",
         "mds",
-        "mediatools",
-        "mt",
-        "mthelp",
-        "mth",
-        "gensession",
-        "gs",
         "truecaller",
         "ask",
         "mediainfo",
@@ -144,132 +132,6 @@ async def handle_no_suffix_commands(client, message):
         "srsearch",
         "virustotal",
     ]
-
-    # Special handling for commands - forward to the appropriate handler
-
-    # For settings commands
-    if base_command in ["settings", "usettings", "us"]:
-        # Get the correct command with suffix
-        cmd = (
-            BotCommands.UserSetCommand[0]
-            if isinstance(BotCommands.UserSetCommand, list)
-            else BotCommands.UserSetCommand
-        )
-
-        # Create a new message with the correct command
-        new_text = f"/{cmd}"
-        if len(message.text.split()) > 1:
-            new_text += " " + " ".join(message.text.split()[1:])
-
-        # Update the message text
-        message.text = new_text
-
-        # Forward to the handler
-        from bot.modules.users_settings import send_user_settings
-
-        await send_user_settings(client, message)
-        return
-
-    # For mediatools commands
-    if base_command in ["mediatools", "mt"]:
-        # Get the correct command with suffix
-        cmd = (
-            BotCommands.MediaToolsCommand[0]
-            if isinstance(BotCommands.MediaToolsCommand, list)
-            else BotCommands.MediaToolsCommand
-        )
-
-        # Create a new message with the correct command
-        new_text = f"/{cmd}"
-        if len(message.text.split()) > 1:
-            new_text += " " + " ".join(message.text.split()[1:])
-
-        # Update the message text
-        message.text = new_text
-
-        # Forward to the handler
-        from bot.modules.media_tools import media_tools_settings
-
-        await media_tools_settings(client, message)
-        return
-
-    # For mthelp commands
-    if base_command in ["mthelp", "mth"]:
-        # Get the correct command with suffix
-        cmd = (
-            BotCommands.MediaToolsHelpCommand[0]
-            if isinstance(BotCommands.MediaToolsHelpCommand, list)
-            else BotCommands.MediaToolsHelpCommand
-        )
-
-        # Create a new message with the correct command
-        new_text = f"/{cmd}"
-        if len(message.text.split()) > 1:
-            new_text += " " + " ".join(message.text.split()[1:])
-
-        # Update the message text
-        message.text = new_text
-
-        # Forward to the handler
-        from bot.modules.media_tools_help import media_tools_help_cmd
-
-        await media_tools_help_cmd(client, message)
-        return
-
-    # For fontstyles commands
-    if base_command in ["fontstyles", "fonts"]:
-        # Get the correct command with suffix
-        cmd = (
-            BotCommands.FontStylesCommand[0]
-            if isinstance(BotCommands.FontStylesCommand, list)
-            else BotCommands.FontStylesCommand
-        )
-
-        # Create a new message with the correct command
-        new_text = f"/{cmd}"
-        if len(message.text.split()) > 1:
-            new_text += " " + " ".join(message.text.split()[1:])
-
-        # Update the message text
-        message.text = new_text
-
-        # Forward to the handler
-        from bot.modules.font_styles import font_styles_cmd
-
-        await font_styles_cmd(client, message)
-        return
-
-    # For gensession commands
-    if base_command in ["gensession", "gs"]:
-        # For gensession, we still need to check if we're in a private chat
-        # because session generation contains sensitive information
-        if message.chat.type == "private":
-            # Get the correct command with suffix
-            cmd = (
-                BotCommands.GenSessionCommand[0]
-                if isinstance(BotCommands.GenSessionCommand, list)
-                else BotCommands.GenSessionCommand
-            )
-
-            # Create a new message with the correct command
-            new_text = f"/{cmd}"
-            if len(message.text.split()) > 1:
-                new_text += " " + " ".join(message.text.split()[1:])
-
-            # Update the message text
-            message.text = new_text
-
-            # Forward to the handler
-            from bot.modules.gen_session import handle_command
-
-            await handle_command(client, message)
-            return
-
-        # In group chats, show a message suggesting to use the command in PM
-        warning_msg = "⚠️ <b>Session generation is available in private chat with the bot.</b>\nPlease message the bot directly to generate a session for security reasons."
-        reply = await send_message(message, warning_msg)
-        await auto_delete_message(reply, message, time=300)
-        return
 
     # Check if this is a standard command with a non-standard suffix
     found_standard_cmd = None

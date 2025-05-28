@@ -384,11 +384,11 @@ class StreamripListener(TaskListener):
                 )
                 codec_name = self.codec.upper() if self.codec else "Default"
 
-                msg = f"{self.tag} 🎵 **Streamrip Download Started**\n\n"
-                msg += f"🎯 **Platform:** {platform.title()}\n"
-                msg += f"📁 **Type:** {media_type.title()}\n"
-                msg += f"📊 **Quality:** {quality_name}\n"
-                msg += f"🎵 **Format:** {codec_name}\n\n"
+                msg = f"{self.tag} 🎵 <b>Streamrip Download Started</b>\n\n"
+                msg += f"🎯 <b>Platform:</b> <code>{platform.title()}</code>\n"
+                msg += f"📁 <b>Type:</b> <code>{media_type.title()}</code>\n"
+                msg += f"📊 <b>Quality:</b> <code>{quality_name}</code>\n"
+                msg += f"🎵 <b>Format:</b> <code>{codec_name}</code>\n\n"
                 msg += "⏳ Initializing download..."
 
                 start_msg = await send_message(self.message, msg)
@@ -607,38 +607,69 @@ class StreamripListener(TaskListener):
             from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
 
             platform_name = "Unknown"
-            parsed = await parse_streamrip_url(self.url)
-            if parsed:
-                platform, media_type, media_id = parsed
-                platform_name = platform.title()
+            media_type_name = "Unknown"
 
-            # Send error message
-            msg = f"{self.tag} ❌ **Streamrip Download Failed**\n\n"
-            msg += f"🎯 **Platform:** {platform_name}\n"
-            msg += f"⚠️ **Error:** {error}\n\n"
+            # Try to get URL from listener first, then from task dict if needed
+            url_to_parse = self.url
+            if not url_to_parse:
+                # Fallback: try to get URL from task dict status object
+                # Use the already imported task_dict from module level (line 5)
+                if self.mid in task_dict:
+                    status_obj = task_dict[self.mid]
+                    if hasattr(status_obj, "url"):
+                        url_to_parse = status_obj.url
 
-            # Add troubleshooting tips
-            if "authentication" in error.lower() or "login" in error.lower():
-                msg += "💡 **Tip:** Check your platform credentials in bot configuration"
-            elif "quality" in error.lower():
-                msg += "💡 **Tip:** Try a lower quality setting or check your subscription"
-            elif "not found" in error.lower():
+            if url_to_parse:
+                parsed = await parse_streamrip_url(url_to_parse)
+                if parsed:
+                    platform, media_type, media_id = parsed
+                    platform_name = platform.title()
+                    media_type_name = media_type.title()
+
+            # Check if this is a "already downloaded" error and provide specific guidance
+            if (
+                "marked as downloaded" in error.lower()
+                or "skipping" in error.lower()
+            ):
+                msg = f"{self.tag} ⚠️ <b>Streamrip Download Skipped</b>\n\n"
+                msg += f"🎯 <b>Platform:</b> <code>{platform_name}</code>\n"
+                msg += f"📁 <b>Type:</b> <code>{media_type_name}</code>\n"
                 msg += (
-                    "💡 **Tip:** The content might not be available on this platform"
+                    "ℹ️ <b>Reason:</b> <pre>Already downloaded in database</pre>\n\n"
                 )
-            elif "rate limit" in error.lower():
-                msg += (
-                    "💡 **Tip:** Too many requests, please wait and try again later"
-                )
+                msg += "💡 <b>Solutions:</b>\n"
+                msg += "• Use <code>/srmirror -f</code> to force re-download\n"
+                msg += "• Clear streamrip database in bot settings\n"
+                msg += "• Try a different quality/codec combination"
             else:
-                msg += "💡 **Tip:** Check the URL and try again"
+                # Send beautified error message with proper HTML formatting
+                msg = f"{self.tag} ❌ <b>Streamrip Download Failed</b>\n\n"
+                msg += f"🎯 <b>Platform:</b> <code>{platform_name}</code>\n"
+                msg += f"📁 <b>Type:</b> <code>{media_type_name}</code>\n"
+                msg += f"⚠️ <b>Error:</b> <pre>{error}</pre>\n\n"
+
+                # Add troubleshooting tips with proper formatting
+                if "authentication" in error.lower() or "login" in error.lower():
+                    msg += "💡 <b>Tip:</b> Check your platform credentials in bot configuration"
+                elif "quality" in error.lower():
+                    msg += "💡 <b>Tip:</b> Try a lower quality setting or check your subscription"
+                elif "not found" in error.lower():
+                    msg += "💡 <b>Tip:</b> The content might not be available on this platform"
+                elif "rate limit" in error.lower():
+                    msg += "💡 <b>Tip:</b> Too many requests, please wait and try again later"
+                elif "config" in error.lower() or "configuration" in error.lower():
+                    msg += "💡 <b>Tip:</b> Check streamrip configuration in bot settings"
+                elif "ffmpeg" in error.lower():
+                    msg += "💡 <b>Tip:</b> FFmpeg conversion issue - check codec settings"
+                else:
+                    msg += "💡 <b>Tip:</b> Check the URL and try again"
 
             error_msg = await send_message(self.message, msg)
 
             # Auto-delete error message after 5 minutes
             asyncio.create_task(auto_delete_message(error_msg, time=300))
 
-            # Remove from task dict
+            # Remove from task dict using the module-level imported task_dict
             async with task_dict_lock:
                 if self.mid in task_dict:
                     del task_dict[self.mid]
@@ -648,6 +679,24 @@ class StreamripListener(TaskListener):
 
         except Exception as e:
             LOGGER.error(f"Error in streamrip error handler: {e}")
+            # Fallback error handling to prevent complete failure
+            try:
+                fallback_msg = f"{self.tag} ❌ <b>Streamrip Download Failed</b>\n\n"
+                fallback_msg += f"⚠️ <b>Error:</b> <pre>{error}</pre>\n\n"
+                fallback_msg += "💡 <b>Tip:</b> Check the URL and try again"
+
+                fallback_error_msg = await send_message(self.message, fallback_msg)
+                asyncio.create_task(
+                    auto_delete_message(fallback_error_msg, time=300)
+                )
+
+                # Clean up task dict in fallback
+                async with task_dict_lock:
+                    if self.mid in task_dict:
+                        del task_dict[self.mid]
+
+            except Exception as fallback_e:
+                LOGGER.error(f"Fallback error handler also failed: {fallback_e}")
 
     # Remove custom completion message logic - use standard TaskListener approach
 

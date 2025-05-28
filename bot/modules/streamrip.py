@@ -368,8 +368,13 @@ class StreamripCommands:
                     if codec is None:
                         codec = selection["codec"]
 
+                # Check for force download flag
+                force_download = args.get("f", False) or args.get("fd", False)
+
                 # Start download
-                await add_streamrip_download(listener, url, quality, codec)
+                await add_streamrip_download(
+                    listener, url, quality, codec, force_download
+                )
 
             except Exception as e:
                 LOGGER.error(f"Error processing URL {url}: {e}")
@@ -687,8 +692,13 @@ class StreamripCommands:
                     if codec is None:
                         codec = selection["codec"]
 
+                # Check for force download flag
+                force_download = args.get("f", False) or args.get("fd", False)
+
                 # Start download
-                await add_streamrip_download(listener, url, quality, codec)
+                await add_streamrip_download(
+                    listener, url, quality, codec, force_download
+                )
 
             except Exception as e:
                 LOGGER.error(f"Error processing URL {url}: {e}")
@@ -829,8 +839,8 @@ class StreamripCommands:
         except Exception as e:
             LOGGER.debug(f"Failed to delete command messages: {e}")
 
-        # Start download
-        await add_streamrip_download(listener, url, quality, codec)
+        # Start download (search results don't support force flag currently)
+        await add_streamrip_download(listener, url, quality, codec, False)
 
 
 # Export command functions for handlers.py

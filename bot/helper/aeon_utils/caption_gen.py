@@ -77,21 +77,19 @@ async def calculate_md5(file_path, block_size=8192):
 
 
 def clean_caption(caption):
-    """Clean up the caption by removing empty lines and extra whitespace."""
+    """Clean up the caption while preserving user-intended formatting and whitespace."""
     if not caption:
         return ""
 
-    # Remove empty lines
-    lines = [line.strip() for line in caption.split("\n") if line.strip()]
+    # Preserve all user formatting - only remove trailing whitespace from the entire caption
+    # and ensure it doesn't end with excessive newlines
+    cleaned = caption.rstrip()
 
-    # Remove duplicate lines
-    unique_lines = []
-    for line in lines:
-        if line not in unique_lines:
-            unique_lines.append(line)
+    # Only remove excessive trailing newlines (more than 2)
+    while cleaned.endswith("\n\n\n"):
+        cleaned = cleaned[:-1]
 
-    # Join lines with a newline
-    return "\n".join(unique_lines)
+    return cleaned
 
 
 async def generate_caption(filename, directory, caption_template):
