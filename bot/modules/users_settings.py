@@ -143,7 +143,7 @@ Leech Type is <b>{ltype}</b>
 Media Group is <b>{media_group}</b>
 Leech Prefix is <code>{escape(lprefix)}</code>
 Leech Caption is <code>{escape(lcap)}</code>
-User session id {usess}
+User session is {usess}
 User dump <code>{udump}</code>
 Thumbnail Layout is <b>{thumb_layout}</b>
 """
