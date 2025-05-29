@@ -95,7 +95,7 @@ async def get_user_settings(from_user, stype="main"):
             "User Session",
             f"userset {user_id} menu USER_SESSION",
         )
-        usess = "added" if user_dict.get("USER_DUMP", False) else "None"
+        usess = "added" if user_dict.get("USER_SESSION", False) else "None"
         if user_dict.get("AS_DOCUMENT", False) or (
             "AS_DOCUMENT" not in user_dict and Config.AS_DOCUMENT
         ):
