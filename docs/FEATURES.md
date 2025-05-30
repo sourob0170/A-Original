@@ -113,9 +113,136 @@
 - Sudo controls for user feeds.
 - Fully button-based command execution.
 
+## Streamrip Integration
+
+- Download high-quality music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud).
+- Support for Hi-Res FLAC up to 24-bit/192kHz (Qobuz) and MQA/Hi-Res (Tidal).
+- Comprehensive search functionality across all supported platforms.
+- Batch download support for albums, playlists, and individual tracks.
+- Quality selection with platform-specific options.
+- Media tools integration for post-processing.
+- Inline search with real-time results and download buttons.
+- Service-specific authentication and credential management.
+- Custom naming and metadata handling.
+- Support for zip compression and custom upload destinations.
+
+## Media Tools
+
+- Comprehensive media processing pipeline with multiple tools.
+- Video/audio compression with quality presets (low, medium, high, ultra).
+- Format conversion between various audio/video formats.
+- Watermark addition (text and image) with positioning options.
+- Media merging (video, audio, subtitle, attachment, image, PDF).
+- Content extraction (video, audio, subtitle, attachment streams).
+- Metadata editing and automatic metadata application.
+- Sample video and screenshot generation.
+- Archive creation and extraction with password support.
+- Trim and cut operations with precise timing.
+- Custom FFmpeg command execution.
+- Batch processing support for multiple files.
+
+## Font Styles
+
+- Comprehensive text styling system for leech captions.
+- Support for HTML formatting (bold, italic, code, underline, strikethrough).
+- Unicode font styles with mathematical symbols and special characters.
+- Google Fonts integration with weight-based styling conversion.
+- Nested styling support with unlimited depth.
+- Custom font style templates for different content types.
+- User-specific and global font style settings.
+- Template variable integration with font styling.
+- Blockquote support with expandable attributes.
+- Monospace and script font handling.
+
+## Spectrum Generation
+
+- Audio spectrum visualization using FFmpeg and SoX.
+- High-quality spectrogram generation with customizable parameters.
+- Support for various audio and video formats.
+- Automatic format conversion for compatibility.
+- Optimized processing for long audio files.
+- Rainbow color schemes and logarithmic scaling.
+- Batch processing for multiple files.
+- Memory-efficient processing for large files.
+
+## AI Integration
+
+- Chat with AI assistants (Mistral, DeepSeek, or custom providers).
+- Natural language processing for user queries.
+- Configurable AI providers and API endpoints.
+- Context-aware responses with conversation history.
+- Support for both text and reply-based interactions.
+- Rate limiting and usage tracking.
+- Error handling and fallback mechanisms.
+
+## Security Tools
+
+- **VirusTotal Integration**: Scan files and URLs for malware detection.
+- **Truecaller Lookup**: Phone number information and spam detection.
+- Comprehensive threat analysis and reporting.
+- Support for multiple file types and URL schemes.
+- Detailed scan results with threat classifications.
+- API key management and rate limiting.
+
+## Media Search
+
+- Inline media search across multiple platforms.
+- Real-time search results with preview thumbnails.
+- Support for movies, TV shows, music, and other media.
+- Direct download integration from search results.
+- Platform-specific search filters and options.
+- Batch selection and download capabilities.
+- Search history and favorites management.
+
+## Session Management
+
+- Secure Pyrogram session string generation.
+- Support for both bot and user sessions.
+- Two-factor authentication handling.
+- Session validation and testing.
+- Secure credential storage and management.
+- Multi-session support for different accounts.
+
+## Broadcast System
+
+- Message broadcasting to all bot users.
+- Support for text, media, and document broadcasting.
+- Progress tracking with real-time statistics.
+- User management with blocked user removal.
+- Flood control and rate limiting.
+- Broadcast scheduling and automation.
+- Target audience filtering and segmentation.
+
+## Paste Service
+
+- Text pasting to external services (katb.in).
+- Support for various file formats (txt, log, json, xml, csv, md, py, js, html, css).
+- Large file handling with content truncation.
+- Automatic content size detection and optimization.
+- URL generation with expiration tracking.
+- Binary file detection and error handling.
+
+## IMDB Integration
+
+- Movie and TV show information lookup.
+- Detailed cast, crew, and production information.
+- Rating and review aggregation.
+- Plot summaries and genre classification.
+- Release date and runtime information.
+- Poster and backdrop image retrieval.
+
+## Login System
+
+- Password-based authentication for permanent access.
+- Session management with timeout controls.
+- User privilege escalation and access control.
+- Secure password hashing and validation.
+- Multi-user support with individual permissions.
+- Login attempt tracking and security monitoring.
+
 ## Overall
 
-- Docker support for `amd64`, `arm64/v8`, `arm/v7`.
+- Docker support for `amd64`, `arm64/v8`.
 - Runtime variable editing and private file overwrite (bot/user).
 - Auto-update on startup and restart via `UPSTREAM_REPO`.
 - Telegraph integration ([loaderX-bot](https://github.com/SVR666)).

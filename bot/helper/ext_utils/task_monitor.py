@@ -315,9 +315,6 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
         if hasattr(task.listener, "mid"):
             mid = task.listener.mid
             if await is_task_in_global_queue(mid):
-                LOGGER.debug(
-                    f"Task {mid} is queued by global queue system, skipping cancellation check"
-                )
                 return False, ""
     except Exception:
         return False, ""
@@ -522,9 +519,6 @@ async def queue_task(mid: int, reason: str):
 
             # Check if task is already queued by global queue system
             if await is_task_in_global_queue(mid):
-                LOGGER.debug(
-                    f"Task {mid} is already queued by global queue system, not queuing again"
-                )
                 queued_by_monitor.discard(mid)
                 return
 
@@ -791,9 +785,6 @@ async def monitor_tasks():
 
                 # Skip tasks that are queued by the global queue system
                 if await is_task_in_global_queue(task.listener.mid):
-                    LOGGER.debug(
-                        f"Task {task.listener.mid} is queued by global queue system, skipping monitoring"
-                    )
                     continue
 
                 # Skip tasks that are already being cancelled

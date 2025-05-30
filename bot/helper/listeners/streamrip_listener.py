@@ -359,45 +359,9 @@ class StreamripListener(TaskListener):
         self.codec = codec
 
     async def on_download_start(self):
-        """Called when download starts"""
-        try:
-            # Parse URL to get platform info
-            from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
-
-            parsed = await parse_streamrip_url(self.url)
-            if parsed:
-                platform, media_type, media_id = parsed
-
-                # Send start message
-                quality_names = {
-                    0: "128 kbps",
-                    1: "320 kbps",
-                    2: "CD Quality",
-                    3: "Hi-Res",
-                    4: "Hi-Res+",
-                }
-
-                quality_name = (
-                    quality_names.get(self.quality, f"Quality {self.quality}")
-                    if self.quality is not None
-                    else "Default"
-                )
-                codec_name = self.codec.upper() if self.codec else "Default"
-
-                msg = f"{self.tag} 🎵 <b>Streamrip Download Started</b>\n\n"
-                msg += f"🎯 <b>Platform:</b> <code>{platform.title()}</code>\n"
-                msg += f"📁 <b>Type:</b> <code>{media_type.title()}</code>\n"
-                msg += f"📊 <b>Quality:</b> <code>{quality_name}</code>\n"
-                msg += f"🎵 <b>Format:</b> <code>{codec_name}</code>\n\n"
-                msg += "⏳ Initializing download..."
-
-                start_msg = await send_message(self.message, msg)
-
-                # Auto-delete start message after 30 seconds
-                asyncio.create_task(auto_delete_message(start_msg, time=30))
-
-        except Exception as e:
-            LOGGER.error(f"Error in streamrip download start: {e}")
+        """Called when download starts - now unused since we send status message directly"""
+        # This method is no longer called since we send the status message directly
+        # instead of the initial download start message
 
     async def on_download_progress(self, current: int, total: int):
         """Called during download progress"""
@@ -476,8 +440,6 @@ class StreamripListener(TaskListener):
                         # Directory - use directory name
                         self.name = first_item.name
 
-                    LOGGER.info(f"Set streamrip task name: {self.name}")
-
             # Set up size and other attributes like TaskListener does - crucial for proper completion message for BOTH leech and mirror
             from bot.helper.ext_utils.files_utils import get_path_size
 
@@ -485,9 +447,6 @@ class StreamripListener(TaskListener):
 
             # Set up_path for mirror operations (TaskListener sets this for proper completion messaging)
             self.up_path = self.dir
-
-            LOGGER.info(f"Set streamrip task size: {self.size} bytes")
-            LOGGER.info(f"Set streamrip up_path: {self.up_path}")
 
             # Import required classes for upload operations
             from asyncio import gather
@@ -518,8 +477,6 @@ class StreamripListener(TaskListener):
 
             # For leech operations, use standard TelegramUploader like TaskListener does
             if self.isLeech:
-                LOGGER.info(f"Streamrip Leech Name: {self.name}")
-
                 # Create standard TelegramUploader (same as TaskListener)
                 tg = TelegramUploader(self, self.dir)
 
@@ -537,10 +494,11 @@ class StreamripListener(TaskListener):
                 )
 
                 # Keep reference for cancellation (same as TaskListener)
-                if hasattr(tg, "dump_chat_msgs") and tg.dump_chat_msgs:
+                if (hasattr(tg, "dump_chat_msgs") and tg.dump_chat_msgs) or (
+                    hasattr(tg, "log_msg") and tg.log_msg
+                ):
                     pass
-                elif hasattr(tg, "log_msg") and tg.log_msg:
-                    LOGGER.info(f"Keeping log message in chat: {tg.log_msg.chat.id}")
+
             elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
                 LOGGER.info(f"Streamrip Gdrive Upload Name: {self.name}")
 

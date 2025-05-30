@@ -77,7 +77,7 @@ class Config:
     # Streamrip Settings
     STREAMRIP_ENABLED: bool = True
     STREAMRIP_CONCURRENT_DOWNLOADS: int = 4
-    STREAMRIP_MAX_SEARCH_RESULTS: int = 20
+    STREAMRIP_MAX_SEARCH_RESULTS: int = 200
     STREAMRIP_ENABLE_DATABASE: bool = True
     STREAMRIP_AUTO_CONVERT: bool = True
 
@@ -96,10 +96,15 @@ class Config:
 
     # Streamrip Platform Settings
     STREAMRIP_QOBUZ_ENABLED: bool = True
+    STREAMRIP_QOBUZ_QUALITY: int = 3
     STREAMRIP_TIDAL_ENABLED: bool = True
+    STREAMRIP_TIDAL_QUALITY: int = 3
     STREAMRIP_DEEZER_ENABLED: bool = True
+    STREAMRIP_DEEZER_QUALITY: int = 2
     STREAMRIP_SOUNDCLOUD_ENABLED: bool = True
+    STREAMRIP_SOUNDCLOUD_QUALITY: int = 0
     STREAMRIP_LASTFM_ENABLED: bool = True
+    STREAMRIP_YOUTUBE_QUALITY: int = 0
 
     # Streamrip Authentication
     STREAMRIP_QOBUZ_EMAIL: str = ""
@@ -112,9 +117,9 @@ class Config:
     STREAMRIP_TIDAL_COUNTRY_CODE: str = ""
     STREAMRIP_DEEZER_ARL: str = ""
     STREAMRIP_SOUNDCLOUD_CLIENT_ID: str = ""
+    STREAMRIP_SOUNDCLOUD_APP_VERSION: str = ""
 
     # Streamrip Advanced Features
-    STREAMRIP_METADATA_EXCLUDE: ClassVar[list[str]] = []
     STREAMRIP_FILENAME_TEMPLATE: str = ""
     STREAMRIP_FOLDER_TEMPLATE: str = ""
     STREAMRIP_EMBED_COVER_ART: bool = True
@@ -127,24 +132,32 @@ class Config:
     # Streamrip Downloads Configuration
     STREAMRIP_MAX_CONNECTIONS: int = 6
     STREAMRIP_REQUESTS_PER_MINUTE: int = 60
+    STREAMRIP_SOURCE_SUBDIRECTORIES: bool = False
+    STREAMRIP_DISC_SUBDIRECTORIES: bool = True
+    STREAMRIP_CONCURRENCY: bool = True
+    STREAMRIP_VERIFY_SSL: bool = True
 
     # Streamrip Qobuz Configuration
     STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS: bool = True
+    STREAMRIP_QOBUZ_USE_AUTH_TOKEN: bool = False
+    STREAMRIP_QOBUZ_APP_ID: str = ""
+    STREAMRIP_QOBUZ_SECRETS: ClassVar[list[str]] = []
 
     # Streamrip Tidal Configuration
     STREAMRIP_TIDAL_DOWNLOAD_VIDEOS: bool = True
-    STREAMRIP_TIDAL_TOKEN_EXPIRY: str = ""
+    STREAMRIP_TIDAL_TOKEN_EXPIRY: str = "0"
 
     # Streamrip Deezer Configuration
     STREAMRIP_DEEZER_USE_DEEZLOADER: bool = True
     STREAMRIP_DEEZER_DEEZLOADER_WARNINGS: bool = True
 
     # Streamrip SoundCloud Configuration
-    STREAMRIP_SOUNDCLOUD_APP_VERSION: str = ""
+    # STREAMRIP_SOUNDCLOUD_APP_VERSION already defined above
 
     # Streamrip YouTube Configuration
     STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS: bool = False
     STREAMRIP_YOUTUBE_VIDEO_FOLDER: str = ""
+    STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER: str = ""
 
     # Streamrip Database Configuration
     STREAMRIP_DATABASE_DOWNLOADS_ENABLED: bool = True
@@ -168,15 +181,13 @@ class Config:
     STREAMRIP_QOBUZ_FILTERS_NON_REMASTER: bool = False
 
     # Streamrip Artwork Configuration
-    STREAMRIP_ARTWORK_EMBED: bool = True
-    STREAMRIP_ARTWORK_EMBED_SIZE: str = "large"
     STREAMRIP_ARTWORK_EMBED_MAX_WIDTH: int = -1
-    STREAMRIP_ARTWORK_SAVE_ARTWORK: bool = True
     STREAMRIP_ARTWORK_SAVED_MAX_WIDTH: int = -1
 
     # Streamrip Metadata Configuration
     STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM: bool = True
     STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS: bool = True
+    STREAMRIP_METADATA_EXCLUDE: ClassVar[list[str]] = []
 
     # Streamrip Filepaths Configuration
     STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER: bool = False
@@ -194,10 +205,11 @@ class Config:
     # Streamrip CLI Configuration
     STREAMRIP_CLI_TEXT_OUTPUT: bool = True
     STREAMRIP_CLI_PROGRESS_BARS: bool = True
-    STREAMRIP_CLI_MAX_SEARCH_RESULTS: int = 100
+    STREAMRIP_CLI_MAX_SEARCH_RESULTS: int = 200
 
     # Streamrip Misc Configuration
     STREAMRIP_MISC_CHECK_FOR_UPDATES: bool = True
+    STREAMRIP_MISC_VERSION: str = "2.0.6"
 
     # INKYPINKY
     # Global metadata settings

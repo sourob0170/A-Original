@@ -16,7 +16,7 @@ TG_PROXY = {}  # Proxy for Telegram connection, format: {'addr': 'ip:port', 'use
 USER_SESSION_STRING = (
     ""  # Pyrogram user session string for mirror/leech authentication
 )
-DOWNLOAD_DIR = "/usr/src/app/downloads/"  # Directory where downloads will be stored
+
 CMD_SUFFIX = ""  # Command suffix to distinguish commands, e.g. "1" would make commands like /mirror1
 CORRECT_CMD_SUFFIX = ""  # Comma-separated list of command suffixes that won't trigger warnings, e.g. "1,2,3"
 WRONG_CMD_WARNINGS_ENABLED = (
@@ -38,7 +38,7 @@ EXCLUDED_EXTENSIONS = (
 )
 INCOMPLETE_TASK_NOTIFIER = False  # Notify about incomplete tasks on bot restart
 YT_DLP_OPTIONS = {}  # Additional yt-dlp options as a JSON string
-USER_COOKIES = ""  # Path to cookies file for yt-dlp and other downloaders
+
 NAME_SUBSTITUTE = r""  # Regex pattern to substitute in filenames
 FFMPEG_CMDS = {}  # Custom FFmpeg commands for different file types
 UPLOAD_PATHS = {}  # Custom upload paths for different file types
@@ -47,10 +47,10 @@ MEDIA_SEARCH_ENABLED = True  # Enable/disable media search feature
 MEDIA_SEARCH_CHATS = []  # List of chat IDs where media search is enabled
 DELETE_LINKS = False  # Delete links after download
 FSUB_IDS = ""  # Force subscribe channel IDs, separated by space
-AD_KEYWORDS = ""  # Custom keywords/phrases for ad detection, separated by comma (e.g., "#ad,#ad bangla,#sponsored,InsideAds")
 AD_BROADCASTER_ENABLED = (
     False  # Enable/disable automatic ad broadcasting from FSUB channels to users
 )
+AD_KEYWORDS = ""  # Custom keywords/phrases for ad detection, separated by comma (e.g., "#ad,#ad bangla,#sponsored,InsideAds")
 TOKEN_TIMEOUT = 0  # Token timeout in seconds (0 = no timeout)
 LOGIN_PASS = ""  # Password for web login
 PAID_CHANNEL_ID = 0  # Paid channel ID for premium features
@@ -76,48 +76,6 @@ MULTI_LINK_ENABLED = True  # Enable/disable multi-link feature
 SAME_DIR_ENABLED = True  # Enable/disable same directory feature
 BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
 
-# Streamrip Settings
-STREAMRIP_ENABLED = True  # Enable/disable streamrip feature
-STREAMRIP_CONCURRENT_DOWNLOADS = 4  # Concurrent downloads per platform
-STREAMRIP_MAX_SEARCH_RESULTS = 20  # Search results limit
-STREAMRIP_ENABLE_DATABASE = True  # Enable download history tracking
-STREAMRIP_AUTO_CONVERT = True  # Enable automatic format conversion
-
-# Streamrip Quality and Format Settings
-STREAMRIP_DEFAULT_QUALITY = 3  # Default quality (0-4: 0=128kbps, 1=320kbps, 2=CD, 3=Hi-Res, 4=Hi-Res+)
-STREAMRIP_FALLBACK_QUALITY = 2  # Fallback if preferred quality unavailable
-STREAMRIP_DEFAULT_CODEC = "flac"  # Default output format
-STREAMRIP_SUPPORTED_CODECS = ["flac", "mp3", "m4a", "ogg", "opus"]  # Available formats
-STREAMRIP_QUALITY_FALLBACK_ENABLED = True  # Auto-fallback to lower quality
-
-# Streamrip Platform Settings
-STREAMRIP_QOBUZ_ENABLED = True  # Enable Qobuz downloads
-STREAMRIP_TIDAL_ENABLED = True  # Enable Tidal downloads
-STREAMRIP_DEEZER_ENABLED = True  # Enable Deezer downloads
-STREAMRIP_SOUNDCLOUD_ENABLED = True  # Enable SoundCloud downloads
-STREAMRIP_LASTFM_ENABLED = True  # Enable Last.fm playlist conversion
-
-# Streamrip Authentication (stored securely in database)
-STREAMRIP_QOBUZ_EMAIL = ""  # Qobuz account email
-STREAMRIP_QOBUZ_PASSWORD = ""  # Qobuz account password
-STREAMRIP_TIDAL_ACCESS_TOKEN = ""  # Tidal access token (get via 'rip config --tidal')
-STREAMRIP_TIDAL_REFRESH_TOKEN = ""  # Tidal refresh token
-STREAMRIP_TIDAL_USER_ID = ""  # Tidal user ID
-STREAMRIP_TIDAL_COUNTRY_CODE = ""  # Tidal country code (e.g., 'US')
-STREAMRIP_DEEZER_ARL = ""  # Deezer ARL cookie
-STREAMRIP_SOUNDCLOUD_CLIENT_ID = ""  # SoundCloud client ID (optional)
-
-# Streamrip Advanced Features
-STREAMRIP_METADATA_EXCLUDE = []  # Metadata tags to exclude (e.g., ["genre", "albumartist"])
-STREAMRIP_FILENAME_TEMPLATE = ""  # Custom filename template
-STREAMRIP_FOLDER_TEMPLATE = ""  # Custom folder structure template
-STREAMRIP_EMBED_COVER_ART = True  # Embed album artwork in files
-STREAMRIP_SAVE_COVER_ART = True  # Save separate cover art files
-STREAMRIP_COVER_ART_SIZE = "large"  # Cover art size preference
-
-# Streamrip Limits
-STREAMRIP_LIMIT = 0  # GB (0 = no limit)
-
 # GDrive Tools
 GDRIVE_ID = ""  # Google Drive folder/TeamDrive ID where files will be uploaded
 IS_TEAM_DRIVE = False  # Whether the GDRIVE_ID is a TeamDrive
@@ -130,18 +88,12 @@ SHOW_CLOUD_LINK = True  # Show cloud links in upload completion message
 RCLONE_PATH = ""  # Path to rclone.conf file
 RCLONE_FLAGS = ""  # Additional rclone flags
 RCLONE_SERVE_URL = ""  # URL for rclone serve
-RCLONE_SERVE_PORT = 0  # Port for rclone serve (0 to disable)
+RCLONE_SERVE_PORT = 8080  # Port for rclone serve
 RCLONE_SERVE_USER = ""  # Username for rclone serve
 RCLONE_SERVE_PASS = ""  # Password for rclone serve
-RCLONE_CONFIG = ""  # Rclone config as a string (alternative to RCLONE_PATH)
-
 # JDownloader
 JD_EMAIL = ""  # JDownloader email/username
 JD_PASS = ""  # JDownloader password
-
-# Mega credentials
-MEGA_EMAIL = ""  # Mega.nz account email
-MEGA_PASSWORD = ""  # Mega.nz account password
 
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
@@ -235,6 +187,7 @@ LEECH_LIMIT = 0  # Maximum size for leech operations in GB (0 = unlimited)
 JD_LIMIT = 0  # Maximum size for JDownloader downloads in GB (0 = unlimited)
 NZB_LIMIT = 0  # Maximum size for NZB downloads in GB (0 = unlimited)
 PLAYLIST_LIMIT = 0  # Maximum number of videos in a playlist (0 = unlimited)
+STREAMRIP_LIMIT = 0  # GB (0 = no limit)
 DAILY_TASK_LIMIT = 0  # Maximum number of tasks per day per user (0 = unlimited)
 DAILY_MIRROR_LIMIT = 0  # Maximum mirror size in GB per day per user (0 = unlimited)
 DAILY_LEECH_LIMIT = 0  # Maximum leech size in GB per day per user (0 = unlimited)
@@ -267,7 +220,13 @@ TASK_MONITOR_MEMORY_LOW = 60  # Low memory usage threshold percentage
 # Extra Modules Settings
 ENABLE_EXTRA_MODULES = True  # Enable additional modules and features
 
-# Truecaller API Settings
+# Security Tools Settings
+VT_API_KEY = ""  # VirusTotal API key for malware scanning
+VT_API_TIMEOUT = 500  # VirusTotal API timeout in seconds
+VT_ENABLED = False  # Enable/disable VirusTotal functionality
+VT_MAX_FILE_SIZE = (
+    33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
+)
 TRUECALLER_API_URL = ""  # Truecaller API URL for phone number lookup
 
 # Custom template for IMDB results formatting.
@@ -300,6 +259,147 @@ DEFAULT_AI_PROVIDER = (
 )
 MISTRAL_API_URL = ""  # Custom Mistral AI API URL
 DEEPSEEK_API_URL = ""  # Custom DeepSeek AI API URL
+
+# Streamrip Settings
+STREAMRIP_ENABLED = True  # Enable/disable streamrip feature
+STREAMRIP_CONCURRENT_DOWNLOADS = 4  # Concurrent downloads per platform
+STREAMRIP_MAX_SEARCH_RESULTS = 20  # Search results limit
+STREAMRIP_ENABLE_DATABASE = True  # Enable download history tracking
+STREAMRIP_AUTO_CONVERT = True  # Enable automatic format conversion
+
+# Streamrip Quality and Format Settings
+STREAMRIP_DEFAULT_QUALITY = (
+    3  # Default quality (0-4: 0=128kbps, 1=320kbps, 2=CD, 3=Hi-Res, 4=Hi-Res+)
+)
+STREAMRIP_FALLBACK_QUALITY = 2  # Fallback if preferred quality unavailable
+STREAMRIP_DEFAULT_CODEC = "flac"  # Default output format
+STREAMRIP_SUPPORTED_CODECS = [
+    "flac",
+    "mp3",
+    "m4a",
+    "ogg",
+    "opus",
+]  # Available formats
+STREAMRIP_QUALITY_FALLBACK_ENABLED = True  # Auto-fallback to lower quality
+
+# Streamrip Platform Settings
+STREAMRIP_QOBUZ_ENABLED = True  # Enable Qobuz downloads
+STREAMRIP_QOBUZ_QUALITY = 3  # Qobuz quality level (0-3)
+STREAMRIP_TIDAL_ENABLED = True  # Enable Tidal downloads
+STREAMRIP_TIDAL_QUALITY = 3  # Tidal quality level (0-3)
+STREAMRIP_DEEZER_ENABLED = True  # Enable Deezer downloads
+STREAMRIP_DEEZER_QUALITY = 2  # Deezer quality level (0-2)
+STREAMRIP_SOUNDCLOUD_ENABLED = True  # Enable SoundCloud downloads
+STREAMRIP_SOUNDCLOUD_QUALITY = 0  # SoundCloud quality level
+STREAMRIP_LASTFM_ENABLED = True  # Enable Last.fm playlist conversion
+STREAMRIP_YOUTUBE_QUALITY = 0  # YouTube quality level
+
+# Streamrip Authentication (stored securely in database)
+# Qobuz - Highest quality platform (up to 24-bit/192kHz)
+STREAMRIP_QOBUZ_EMAIL = ""  # Qobuz account email
+STREAMRIP_QOBUZ_PASSWORD = ""  # Qobuz account password
+STREAMRIP_QOBUZ_APP_ID = ""  # Qobuz app ID (get via 'python dev/get_qobuz_keys.py')
+STREAMRIP_QOBUZ_SECRETS = []  # Qobuz secrets array (get via 'python dev/get_qobuz_keys.py')
+
+# Tidal - Hi-Res/MQA platform (OAuth tokens preferred)
+STREAMRIP_TIDAL_ACCESS_TOKEN = (
+    ""  # Tidal access token (get via 'python dev/tidal_tokens.py')
+)
+STREAMRIP_TIDAL_REFRESH_TOKEN = (
+    ""  # Tidal refresh token (get via 'python dev/tidal_tokens.py')
+)
+STREAMRIP_TIDAL_USER_ID = ""  # Tidal user ID (get via 'python dev/tidal_tokens.py')
+STREAMRIP_TIDAL_COUNTRY_CODE = ""  # Tidal country code (e.g., 'US')
+STREAMRIP_TIDAL_TOKEN_EXPIRY = ""  # Tidal token expiry timestamp (optional)
+# Fallback authentication (limited functionality)
+STREAMRIP_TIDAL_EMAIL = ""  # Tidal email (fallback method)
+STREAMRIP_TIDAL_PASSWORD = ""  # Tidal password (fallback method)
+
+# Deezer - CD quality platform
+STREAMRIP_DEEZER_ARL = ""  # Deezer ARL cookie (get from browser cookies)
+
+# SoundCloud - Free platform (optional authentication)
+STREAMRIP_SOUNDCLOUD_CLIENT_ID = ""  # SoundCloud client ID (optional)
+STREAMRIP_SOUNDCLOUD_APP_VERSION = ""  # SoundCloud app version (optional)
+
+# Streamrip Advanced Features
+STREAMRIP_METADATA_EXCLUDE = []  # Metadata tags to exclude (e.g., ["genre", "albumartist"])
+STREAMRIP_FILENAME_TEMPLATE = ""  # Custom filename template
+STREAMRIP_FOLDER_TEMPLATE = ""  # Custom folder structure template
+STREAMRIP_EMBED_COVER_ART = True  # Embed album artwork in files
+STREAMRIP_SAVE_COVER_ART = True  # Save separate cover art files
+STREAMRIP_COVER_ART_SIZE = "large"  # Cover art size preference
+
+# Streamrip Download Configuration
+STREAMRIP_MAX_CONNECTIONS = 6  # Maximum connections per download
+STREAMRIP_REQUESTS_PER_MINUTE = 60  # API requests per minute limit
+STREAMRIP_SOURCE_SUBDIRECTORIES = False  # Create source subdirectories
+STREAMRIP_DISC_SUBDIRECTORIES = True  # Create disc subdirectories
+STREAMRIP_CONCURRENCY = True  # Enable concurrent downloads
+STREAMRIP_VERIFY_SSL = True  # Verify SSL certificates
+
+# Streamrip Platform-Specific Configuration
+STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS = True  # Download PDF booklets from Qobuz
+STREAMRIP_QOBUZ_USE_AUTH_TOKEN = False  # Use authentication token for Qobuz
+STREAMRIP_TIDAL_DOWNLOAD_VIDEOS = True  # Download videos from Tidal
+STREAMRIP_DEEZER_USE_DEEZLOADER = True  # Use Deezloader for Deezer
+STREAMRIP_DEEZER_DEEZLOADER_WARNINGS = True  # Show Deezloader warnings
+STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS = False  # Download videos from YouTube
+STREAMRIP_YOUTUBE_VIDEO_FOLDER = ""  # YouTube video download folder
+STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER = ""  # YouTube video downloads folder
+
+# Streamrip Database Configuration
+STREAMRIP_DATABASE_DOWNLOADS_ENABLED = True  # Enable downloads database
+STREAMRIP_DATABASE_DOWNLOADS_PATH = "./downloads.db"  # Downloads database path
+STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED = (
+    True  # Enable failed downloads database
+)
+STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH = (
+    "./failed_downloads.db"  # Failed downloads database path
+)
+
+# Streamrip Conversion Configuration
+STREAMRIP_CONVERSION_ENABLED = False  # Enable format conversion
+STREAMRIP_CONVERSION_CODEC = "ALAC"  # Conversion codec
+STREAMRIP_CONVERSION_SAMPLING_RATE = 48000  # Conversion sampling rate
+STREAMRIP_CONVERSION_BIT_DEPTH = 24  # Conversion bit depth
+STREAMRIP_CONVERSION_LOSSY_BITRATE = 320  # Lossy conversion bitrate
+
+# Streamrip Filters and Metadata
+STREAMRIP_QOBUZ_FILTERS_EXTRAS = False  # Filter extra content from Qobuz
+STREAMRIP_QOBUZ_FILTERS_REPEATS = False  # Filter repeat content
+STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS = False  # Filter non-album content
+STREAMRIP_QOBUZ_FILTERS_FEATURES = False  # Filter featured content
+STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS = False  # Filter non-studio albums
+STREAMRIP_QOBUZ_FILTERS_NON_REMASTER = False  # Filter non-remaster content
+STREAMRIP_ARTWORK_EMBED_MAX_WIDTH = (
+    -1
+)  # Max width for embedded artwork (-1 = no limit)
+STREAMRIP_ARTWORK_SAVED_MAX_WIDTH = -1  # Max width for saved artwork (-1 = no limit)
+STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM = True  # Set playlist as album in metadata
+STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS = True  # Renumber playlist tracks
+
+# Streamrip File Paths and Naming
+STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER = False  # Add singles to folder
+STREAMRIP_FILEPATHS_FOLDER_FORMAT = "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]"  # Folder naming format template
+STREAMRIP_FILEPATHS_TRACK_FORMAT = (
+    "{tracknumber:02}. {artist} - {title}{explicit}"  # Track naming format template
+)
+STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS = (
+    False  # Restrict special characters in filenames
+)
+STREAMRIP_FILEPATHS_TRUNCATE_TO = 120  # Truncate filenames to length
+
+# Streamrip Last.fm and CLI Configuration
+STREAMRIP_LASTFM_SOURCE = "qobuz"  # Last.fm source platform
+STREAMRIP_LASTFM_FALLBACK_SOURCE = ""  # Last.fm fallback source platform
+STREAMRIP_CLI_TEXT_OUTPUT = True  # Enable CLI text output
+STREAMRIP_CLI_PROGRESS_BARS = True  # Show CLI progress bars
+STREAMRIP_CLI_MAX_SEARCH_RESULTS = 200  # Max CLI search results
+
+# Streamrip Miscellaneous
+STREAMRIP_MISC_CHECK_FOR_UPDATES = True  # Check for streamrip updates
+STREAMRIP_MISC_VERSION = "2.0.6"  # Streamrip version
 
 # Media Tools Settings
 MEDIA_TOOLS_ENABLED = (
@@ -345,7 +445,7 @@ SUBTITLE_WATERMARK_INTERVAL = (
 
 # Image Watermark Settings
 IMAGE_WATERMARK_ENABLED = False  # Enable/disable image watermark feature
-IMAGE_WATERMARK_PATH = "None"  # Path to the watermark image file
+IMAGE_WATERMARK_PATH = ""  # Path to the watermark image file
 IMAGE_WATERMARK_SCALE = 10  # Scale of watermark as percentage of video width (1-100)
 IMAGE_WATERMARK_OPACITY = (
     1.0  # Opacity of watermark image: 0.0 (transparent) to 1.0 (opaque)
@@ -405,7 +505,7 @@ MERGE_AUDIO_VOLUME = "none"  # Volume adjustment: none, 1.0, 1.5, 0.5, etc.
 # Merge Image Settings
 MERGE_IMAGE_MODE = "none"  # Image merge mode: none, horizontal, vertical, grid, etc.
 MERGE_IMAGE_COLUMNS = "none"  # Number of columns for grid mode: none, 2, 3, 4, etc.
-MERGE_IMAGE_QUALITY = 90  # JPEG quality (0-100)
+MERGE_IMAGE_QUALITY = 0  # JPEG quality (0-100)
 MERGE_IMAGE_DPI = "none"  # Image DPI: none, 72, 96, 300, etc.
 MERGE_IMAGE_RESIZE = "none"  # Image resize dimensions: none, 1920x1080, 50%, etc.
 MERGE_IMAGE_BACKGROUND = (
@@ -530,7 +630,7 @@ TRIM_ENABLED = False  # Master switch to enable/disable trim feature
 TRIM_PRIORITY = 5  # Processing priority in pipeline (lower numbers run earlier)
 TRIM_START_TIME = "00:00:00"  # Start time for trimming in HH:MM:SS format
 TRIM_END_TIME = ""  # End time for trimming in HH:MM:SS format (empty = end of file)
-TRIM_DELETE_ORIGINAL = True  # Delete original files after successful trimming
+TRIM_DELETE_ORIGINAL = False  # Delete original files after successful trimming
 
 # Video Trim Settings
 TRIM_VIDEO_ENABLED = False  # Enable/disable video trimming
@@ -550,12 +650,12 @@ TRIM_AUDIO_FORMAT = "none"  # Output format: none, mp3, m4a, flac, etc.
 
 # Image Trim Settings
 TRIM_IMAGE_ENABLED = False  # Enable/disable image trimming (crop)
-TRIM_IMAGE_QUALITY = "none"  # Image quality: none (use original quality), 0-100 (higher is better quality)
+TRIM_IMAGE_QUALITY = 90  # Image quality: 0-100 (higher is better quality)
 TRIM_IMAGE_FORMAT = "none"  # Output format: none, jpg, png, webp, etc.
 
 # Document Trim Settings
 TRIM_DOCUMENT_ENABLED = False  # Enable/disable document trimming (page range)
-TRIM_DOCUMENT_QUALITY = "none"  # Document quality: none (use original quality), 0-100 (higher is better quality)
+TRIM_DOCUMENT_QUALITY = 90  # Document quality: 0-100 (higher is better quality)
 TRIM_DOCUMENT_FORMAT = "none"  # Output format: none, pdf, docx, etc.
 
 # Subtitle Trim Settings
@@ -689,9 +789,6 @@ CONVERT_VIDEO_RESOLUTION = (
     "none"  # Target resolution: none, 1920x1080, 1280x720, etc.
 )
 CONVERT_VIDEO_FPS = "none"  # Target frame rate: none, 30, 60, etc.
-CONVERT_VIDEO_DELETE_ORIGINAL = (
-    True  # Delete original files after successful video conversion
-)
 
 # Audio Convert Settings
 CONVERT_AUDIO_ENABLED = False  # Enable/disable audio conversion
@@ -703,36 +800,24 @@ CONVERT_AUDIO_CHANNELS = (
 )
 CONVERT_AUDIO_SAMPLING = 0  # Target sampling rate: 0 (original), 44100, 48000, etc.
 CONVERT_AUDIO_VOLUME = 0.0  # Volume adjustment: 0.0 (original), 1.0, 1.5, 0.5, etc.
-CONVERT_AUDIO_DELETE_ORIGINAL = (
-    True  # Delete original files after successful audio conversion
-)
 
 # Subtitle Convert Settings
 CONVERT_SUBTITLE_ENABLED = False  # Enable/disable subtitle conversion
 CONVERT_SUBTITLE_FORMAT = "none"  # Target format: none, srt, ass, vtt, etc.
 CONVERT_SUBTITLE_ENCODING = "none"  # Target encoding: none, utf-8, utf-16, etc.
 CONVERT_SUBTITLE_LANGUAGE = "none"  # Target language code: none, eng, spa, etc.
-CONVERT_SUBTITLE_DELETE_ORIGINAL = (
-    True  # Delete original files after successful subtitle conversion
-)
 
 # Document Convert Settings
 CONVERT_DOCUMENT_ENABLED = False  # Enable/disable document conversion
 CONVERT_DOCUMENT_FORMAT = "none"  # Target format: none, pdf, docx, txt, etc.
 CONVERT_DOCUMENT_QUALITY = 0  # Document quality (0-100, higher is better)
 CONVERT_DOCUMENT_DPI = 0  # Document DPI: 0 (original), 72, 96, 300, etc.
-CONVERT_DOCUMENT_DELETE_ORIGINAL = (
-    True  # Delete original files after successful document conversion
-)
 
 # Archive Convert Settings
 CONVERT_ARCHIVE_ENABLED = False  # Enable/disable archive conversion
 CONVERT_ARCHIVE_FORMAT = "none"  # Target format: none, zip, 7z, tar.gz, etc.
 CONVERT_ARCHIVE_LEVEL = 0  # Compression level (0-9, higher is more compression)
 CONVERT_ARCHIVE_METHOD = "none"  # Compression method: none, deflate, lzma, etc.
-CONVERT_ARCHIVE_DELETE_ORIGINAL = (
-    True  # Delete original files after successful archive conversion
-)
 
 # Metadata Settings
 METADATA_KEY = ""  # Legacy metadata key
@@ -755,4 +840,3 @@ METADATA_SUBTITLE_AUTHOR = (
 METADATA_SUBTITLE_COMMENT = (
     ""  # Default comment metadata specifically for subtitle files
 )
-

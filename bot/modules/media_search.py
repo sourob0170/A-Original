@@ -2756,7 +2756,6 @@ def init_media_search(bot):
     from pyrogram.handlers import (
         CallbackQueryHandler,
         ChosenInlineResultHandler,
-        InlineQueryHandler,
         MessageHandler,
     )
 
@@ -2794,8 +2793,8 @@ def init_media_search(bot):
         )
     )
 
-    # Register the inline query handler
-    bot.add_handler(InlineQueryHandler(inline_media_search))
+    # Note: Inline query handler is now registered by unified inline search router
+    # bot.add_handler(InlineQueryHandler(inline_media_search))
 
     # Register the chosen inline result handler
     bot.add_handler(ChosenInlineResultHandler(chosen_inline_result_handler))

@@ -886,8 +886,6 @@ def is_media_tool_enabled(tool_name):
 
                 # If we couldn't find any valid tools, try the original value again
                 if not enabled_tools and single_tool:
-                    # Log for debugging
-                    LOGGER.debug(f"Checking if '{single_tool}' is a valid tool")
                     # Check if it's a valid tool name (might be misspelled or have extra characters)
                     for tool in all_tools:
                         if tool in single_tool:
@@ -920,27 +918,17 @@ def is_media_tool_enabled(tool_name):
             except Exception as e:
                 LOGGER.error(f"Error parsing MEDIA_TOOLS_ENABLED value: {e}")
 
-    # Debug log the enabled tools and the raw MEDIA_TOOLS_ENABLED value
-    LOGGER.debug(f"Raw MEDIA_TOOLS_ENABLED value: {Config.MEDIA_TOOLS_ENABLED}")
-    LOGGER.debug(f"Parsed enabled tools: {enabled_tools}")
-    LOGGER.debug(f"Checking if tool '{tool_name}' is enabled")
-
     # If checking for 'mediatools' (general media tools status), return True if any tool is enabled
     if tool_name.lower() == "mediatools":
-        result = len(enabled_tools) > 0
-        LOGGER.debug(f"'mediatools' check result: {result}")
-        return result
+        return len(enabled_tools) > 0
 
     # Check if the specific tool is in the enabled list
     # If MEDIA_TOOLS_ENABLED is False or empty, no tools are enabled
     if not enabled_tools:
-        LOGGER.debug(f"No tools enabled, '{tool_name}' is disabled")
         return False
 
     # Otherwise, check if the specific tool is in the enabled list
-    result = tool_name.lower() in enabled_tools
-    LOGGER.debug(f"Tool '{tool_name}' enabled: {result}")
-    return result
+    return tool_name.lower() in enabled_tools
 
 
 def is_flag_enabled(flag_name):

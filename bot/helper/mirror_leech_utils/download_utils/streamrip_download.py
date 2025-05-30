@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,9 @@ from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_leech_utils.status_utils.streamrip_status import (
     StreamripDownloadStatus,
 )
-from bot.helper.telegram_helper.message_utils import send_status_message
+from bot.helper.telegram_helper.message_utils import (
+    send_status_message,
+)
 
 try:
     from streamrip.client import (
@@ -31,11 +34,70 @@ try:
     STREAMRIP_AVAILABLE = True
 except ImportError:
     STREAMRIP_AVAILABLE = False
-    LOGGER.warning("Streamrip not installed. Streamrip features will be disabled.")
 
 
 class StreamripDownloadHelper:
-    """Helper class for streamrip downloads"""
+    """Optimized helper class for streamrip downloads"""
+
+    # Class-level constants to reduce memory allocation
+    AUDIO_EXTENSIONS = frozenset([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"])
+    CODEC_MAPPING = {
+        "ogg": "OGG",
+        "flac": "FLAC",
+        "mp3": "MP3",
+        "opus": "OGG",
+        "alac": "ALAC",
+        "vorbis": "OGG",
+        "m4a": "AAC",
+        "aac": "AAC",
+    }
+    TRACK_ESTIMATES = {"track": 1, "album": 12, "playlist": 25}
+
+    # Pre-compiled regex patterns for better performance
+    PLATFORM_PATTERNS = {
+        "qobuz": re.compile(r"qobuz\.com", re.IGNORECASE),
+        "tidal": re.compile(r"tidal\.com|listen\.tidal\.com", re.IGNORECASE),
+        "deezer": re.compile(r"deezer\.com|dzr\.page\.link", re.IGNORECASE),
+        "soundcloud": re.compile(r"soundcloud\.com", re.IGNORECASE),
+    }
+
+    # Common ffmpeg locations for faster lookup
+    FFMPEG_LOCATIONS = (
+        "/usr/bin/xtra",
+        "/usr/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/bin/ffmpeg",
+    )
+
+    # Pre-compiled regex for URL validation (avoid recompilation)
+    URL_VALIDATION_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
+
+    # Common search paths for downloaded files (avoid recreation)
+    SEARCH_PATH_TEMPLATES = ("downloads", ".config/streamrip/downloads", "downloads")
+
+    __slots__ = (
+        "_cached_config",
+        "_cached_ffmpeg_path",
+        "_cached_search_paths",
+        "_client",
+        "_codec",
+        "_completed_tracks",
+        "_current_track",
+        "_download_path",
+        "_download_url",
+        "_eta",
+        "_is_cancelled",
+        "_is_downloading",
+        "_last_downloaded",
+        "_media",
+        "_quality",
+        "_size",
+        "_speed",
+        "_start_time",
+        "_temp_files",
+        "_total_tracks",
+        "listener",
+    )
 
     def __init__(self, listener):
         self.listener = listener
@@ -43,8 +105,6 @@ class StreamripDownloadHelper:
         self._size = 0
         self._start_time = time.time()
         self._is_cancelled = False
-        self._client = None
-        self._media = None
         self._download_path = None
         self._current_track = ""
         self._total_tracks = 0
@@ -52,6 +112,14 @@ class StreamripDownloadHelper:
         self._speed = 0
         self._eta = 0
         self._is_downloading = False
+        # Cache frequently accessed values for O(1) access
+        self._cached_config = None
+        self._cached_ffmpeg_path = None
+        self._temp_files = []
+        self._cached_search_paths = None  # Cache search paths to avoid recreation
+        # Initialize media and client attributes to None
+        self._media = None
+        self._client = None
 
     @property
     def speed(self):
@@ -100,15 +168,12 @@ class StreamripDownloadHelper:
             self._download_url = url
 
             # Parse URL to get platform and media info
-            LOGGER.debug(f"About to parse URL: {url}")
             from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
 
             try:
                 parsed = await parse_streamrip_url(url)
-                LOGGER.debug(f"URL parsing completed, result: {parsed}")
             except Exception as parse_error:
                 LOGGER.error(f"Error during URL parsing: {parse_error}")
-                LOGGER.debug(f"Parse error type: {type(parse_error)}")
                 raise
 
             if not parsed:
@@ -116,56 +181,35 @@ class StreamripDownloadHelper:
                 return False
 
             platform, media_type, media_id = parsed
-            LOGGER.info(f"Parsed {platform} {media_type}: {media_id}")
 
             # Set download path using existing DOWNLOAD_DIR pattern
             # Ensure all path components are strings to avoid path division errors
             try:
                 base_dir = str(DOWNLOAD_DIR)
                 listener_id = str(self.listener.mid)
-                LOGGER.debug(f"Creating download path: {base_dir} + {listener_id}")
 
                 download_dir = Path(base_dir) / listener_id
                 download_dir.mkdir(parents=True, exist_ok=True)
                 self._download_path = download_dir
 
-                LOGGER.debug(
-                    f"Download path created successfully: {self._download_path}"
-                )
             except Exception as path_error:
                 LOGGER.error(f"Failed to create download path: {path_error}")
-                LOGGER.debug(
-                    f"DOWNLOAD_DIR type: {type(DOWNLOAD_DIR)}, value: {DOWNLOAD_DIR}"
-                )
-                LOGGER.debug(
-                    f"listener.mid type: {type(self.listener.mid)}, value: {self.listener.mid}"
-                )
                 raise
 
             # Skip client initialization and media object creation for CLI method
             # This avoids the streamrip 2.1.0 path division bug
-            LOGGER.debug("Using CLI method - skipping client initialization")
 
             # Initialize progress tracking
             self._is_downloading = True
             self._current_track = f"Downloading from {platform.title()}"
 
-            # Estimate total tracks for progress
-            if media_type == "track":
-                self._total_tracks = 1
-            elif media_type == "album":
-                self._total_tracks = 12  # Estimate
-            elif media_type == "playlist":
-                self._total_tracks = 25  # Estimate
-            else:
-                self._total_tracks = 1
+            # Use cached track estimates
+            self._total_tracks = self.TRACK_ESTIMATES.get(media_type, 1)
 
             # Start download
-            LOGGER.info(f"Starting streamrip download: {url}")
             success = await self._perform_download()
 
             if success:
-                LOGGER.info(f"Streamrip download completed: {url}")
                 return True
             LOGGER.error(f"Streamrip download failed: {url}")
             return False
@@ -207,26 +251,20 @@ class StreamripDownloadHelper:
             try:
                 if hasattr(self._client, "login"):
                     await self._client.login()
-                    LOGGER.info(f"✅ {platform.title()} authentication successful")
             except Exception as auth_error:
                 if platform == "tidal":
                     LOGGER.warning(f"⚠️ Tidal authentication failed: {auth_error}")
-                    LOGGER.info(
-                        "💡 Tidal requires interactive token setup. Use 'rip config --tidal' to authenticate."
-                    )
                     return
                 LOGGER.error(
                     f"❌ {platform.title()} authentication failed: {auth_error}"
                 )
                 return
 
-            LOGGER.info(f"Initialized {platform} client successfully")
-
         except Exception as e:
             LOGGER.error(f"Failed to initialize {platform} client: {e}")
 
     async def _create_media_object(
-        self, platform: str, media_type: str, media_id: str, url: str
+        self, platform: str, media_type: str, media_id: str
     ):
         """Create the appropriate media object"""
         try:
@@ -280,17 +318,8 @@ class StreamripDownloadHelper:
             else:
                 self._total_tracks = 1
 
-            LOGGER.info(
-                f"✅ Created {media_type} object from {platform.title()} with {self._total_tracks} tracks"
-            )
-
         except Exception as e:
             LOGGER.error(f"❌ Failed to create media object: {e}")
-            # Log more specific error information
-            if "get_track" in str(e) or "get_album" in str(e):
-                LOGGER.info(
-                    f"💡 Platform {platform} may use different API methods. Check streamrip documentation."
-                )
             return
 
     async def _set_quality(self, quality: int):
@@ -300,9 +329,6 @@ class StreamripDownloadHelper:
                 await self._media.set_quality(quality)
             elif hasattr(self._client, "set_quality"):
                 await self._client.set_quality(quality)
-
-            LOGGER.info(f"Set quality to {quality}")
-
         except Exception as e:
             LOGGER.error(f"Failed to set quality: {e}")
 
@@ -313,9 +339,6 @@ class StreamripDownloadHelper:
                 await self._media.set_codec(codec)
             elif hasattr(self._client, "set_codec"):
                 await self._client.set_codec(codec)
-
-            LOGGER.info(f"Set codec to {codec}")
-
         except Exception as e:
             LOGGER.error(f"Failed to set codec: {e}")
 
@@ -332,38 +355,22 @@ class StreamripDownloadHelper:
             ):
                 # Set the download folder to our specific path
                 config.session.downloads.folder = str(self._download_path)
-                LOGGER.debug(
-                    f"Updated streamrip download folder to: {self._download_path}"
-                )
         except Exception as e:
             LOGGER.warning(f"Failed to update streamrip download path: {e}")
 
     async def _perform_download(self) -> bool:
         """Perform the actual download with enhanced error handling"""
         try:
-            LOGGER.info(f"Starting download to: {self._download_path}")
-
             # Due to a bug in streamrip 2.1.0 with PosixPath division operations,
             # we'll use CLI method exclusively to avoid the internal API issues
-            LOGGER.debug("Using streamrip CLI method to avoid path division bug")
             download_success = await self._download_with_cli()
 
             if download_success:
                 # Validate downloaded files
                 downloaded_files = await self._find_downloaded_files()
                 if downloaded_files:
-                    LOGGER.info(
-                        f"Download completed. Found {len(downloaded_files)} files."
-                    )
-
                     # Update final progress
                     self._completed_tracks = self._total_tracks
-
-                    # Don't call on_download_complete here - it will be called by the task management system
-                    # Just return True to indicate successful download
-                    LOGGER.info(
-                        "Download completed successfully, files ready for upload"
-                    )
                     return True
                 LOGGER.error("No files were downloaded")
                 return False
@@ -375,48 +382,22 @@ class StreamripDownloadHelper:
             return False
 
     def _map_codec_for_streamrip(self, codec: str) -> str:
-        """Map user-friendly codec names to streamrip-compatible ones with FFmpeg encoder compatibility"""
-        # Convert to lowercase for case-insensitive matching
+        """Map user-friendly codec names to streamrip-compatible ones with optimized lookup"""
         codec_lower = codec.lower()
 
-        # Handle AAC/M4A codecs with FFmpeg wrapper approach
-        if codec_lower in ["m4a", "aac"]:
-            # Use FFmpeg wrapper to replace libfdk_aac with built-in aac encoder
-            LOGGER.info(
-                "🎵 AAC/M4A codec requested - using FFmpeg wrapper for encoder compatibility"
-            )
-            LOGGER.info(
-                "🔧 Will replace libfdk_aac with built-in aac encoder automatically"
-            )
-            # Return AAC - the wrapper will handle the encoder replacement
-            mapped_codec = "AAC"
-            LOGGER.info(
-                f"Codec mapping: {codec} → {mapped_codec} (with encoder wrapper)"
-            )
-            return mapped_codec
+        # Handle AAC/M4A codecs with FFmpeg wrapper approach (O(1) lookup)
+        if codec_lower in ("m4a", "aac"):
+            return "AAC"
 
-        # Standard codec mapping for supported formats
-        # Note: Streamrip only accepts: "ALAC", "FLAC", "OGG", "MP3", "AAC"
-        codec_mapping = {
-            "ogg": "OGG",  # OGG Vorbis
-            "flac": "FLAC",  # FLAC lossless
-            "mp3": "MP3",  # MP3 lossy
-            "opus": "OGG",  # OPUS maps to OGG in streamrip
-            "alac": "ALAC",  # Apple Lossless
-            "vorbis": "OGG",  # Vorbis maps to OGG in streamrip
-        }
-
-        mapped_codec = codec_mapping.get(codec_lower)
+        # Use class-level mapping for O(1) efficiency
+        mapped_codec = self.CODEC_MAPPING.get(codec_lower)
 
         if mapped_codec is None:
-            # Unknown codec - don't specify codec, let streamrip use default
             LOGGER.warning(
                 f"⚠️ Unknown codec '{codec}' - downloading in default format"
             )
-            LOGGER.info(f"💡 Supported codecs: {', '.join(codec_mapping.keys())}")
             return None
 
-        LOGGER.info(f"Codec mapping: {codec} → {mapped_codec}")
         return mapped_codec
 
     async def _download_with_cli(self) -> bool:
@@ -445,28 +426,13 @@ class StreamripDownloadHelper:
                     cmd.extend(
                         ["--codec", mapped_codec]
                     )  # Use --codec instead of -c
-                else:
-                    LOGGER.info(
-                        "🎵 No codec specified - streamrip will download in native format"
-                    )
-
             # Add --no-db flag if database is disabled in bot settings OR if force download is enabled
             from bot.helper.streamrip_utils.streamrip_config import streamrip_config
 
             force_download = getattr(self.listener, "force_download", False)
 
-            if not streamrip_config.is_database_enabled():
+            if not streamrip_config.is_database_enabled() or force_download:
                 cmd.extend(["--no-db"])
-                LOGGER.debug("Added --no-db flag (database disabled in settings)")
-            elif force_download:
-                cmd.extend(["--no-db"])
-                LOGGER.info(
-                    "Added --no-db flag (force download enabled - bypassing database)"
-                )
-            else:
-                LOGGER.debug(
-                    "Database enabled in settings, allowing streamrip to use database"
-                )
 
             # Add --verbose flag for better debugging (v2.1.0 feature)
             cmd.extend(["--verbose"])
@@ -487,7 +453,7 @@ class StreamripDownloadHelper:
             ffmpeg_path = self._get_ffmpeg_path()
 
             # Create FFmpeg wrapper for AAC encoder compatibility
-            wrapper_path = await self._setup_ffmpeg_wrapper_for_aac(ffmpeg_path, env)
+            wrapper_path = await self._setup_ffmpeg_wrapper_for_aac(ffmpeg_path)
 
             # Set multiple environment variables that streamrip might check
             env["FFMPEG_EXECUTABLE"] = wrapper_path
@@ -499,27 +465,8 @@ class StreamripDownloadHelper:
             wrapper_dir = os.path.dirname(wrapper_path)
             env["PATH"] = f"{wrapper_dir}:{env.get('PATH', '')}"
 
-            LOGGER.info(
-                f"✅ Set FFmpeg environment variables to use wrapper: {wrapper_path}"
-            )
-
-            LOGGER.debug(f"Using FFMPEG path: {ffmpeg_path}")
-            LOGGER.debug(f"Environment PATH: {env['PATH']}")
-
-            LOGGER.info(f"Executing streamrip CLI: {' '.join(cmd)}")
-            LOGGER.debug(f"Download directory: {self._download_path}")
-            LOGGER.debug(f"Download URL: {download_url}")
-            LOGGER.debug(f"Working directory: {Path.home()}")
-            LOGGER.debug(
-                f"Environment variables: STREAMRIP_DOWNLOAD_DIR={env.get('STREAMRIP_DOWNLOAD_DIR')}"
-            )
-            LOGGER.info(
-                "Note: Streamrip will download to its default folder, files will be moved after download"
-            )
-
             # Check if streamrip is available
             try:
-                LOGGER.info("Checking streamrip availability...")
                 check_process = await asyncio.create_subprocess_exec(
                     "which",
                     "rip",
@@ -533,8 +480,7 @@ class StreamripDownloadHelper:
                         f"which rip stderr: {stderr_check.decode() if stderr_check else 'None'}"
                     )
                     return False
-                rip_path = stdout_check.decode().strip()
-                LOGGER.info(f"Found streamrip at: {rip_path}")
+                stdout_check.decode().strip()
             except Exception as check_error:
                 LOGGER.error(f"Error checking streamrip availability: {check_error}")
                 return False
@@ -565,82 +511,11 @@ class StreamripDownloadHelper:
                     pass
                 return False
 
-            # Enhanced credential testing for all services (like Deezer)
-            if "qobuz.com" in download_url.lower():
-                LOGGER.info("Testing Qobuz credentials before main download...")
-                credential_test_result = await self._test_qobuz_credentials()
-                if (
-                    credential_test_result is False
-                ):  # Only abort if test explicitly failed
-                    LOGGER.error("Qobuz credential test failed - aborting download")
-                    return False
-                if credential_test_result is True:
-                    LOGGER.info(
-                        "✅ Qobuz credential test passed - proceeding with download"
-                    )
-                else:
-                    LOGGER.info(
-                        "⚠️ Qobuz credential test skipped - proceeding with download"
-                    )
-
-            elif "tidal.com" in download_url.lower():
-                LOGGER.info("Testing Tidal credentials before main download...")
-                credential_test_result = await self._test_tidal_credentials()
-                if credential_test_result is False:
-                    LOGGER.error("Tidal credential test failed - aborting download")
-                    return False
-                if credential_test_result is True:
-                    LOGGER.info(
-                        "✅ Tidal credential test passed - proceeding with download"
-                    )
-                else:
-                    LOGGER.info(
-                        "⚠️ Tidal credential test skipped - proceeding with download"
-                    )
-
-            elif "soundcloud.com" in download_url.lower():
-                LOGGER.info("Testing SoundCloud configuration...")
-                credential_test_result = await self._test_soundcloud_credentials()
-                if credential_test_result is False:
-                    LOGGER.error(
-                        "SoundCloud configuration test failed - aborting download"
-                    )
-                    return False
-                if credential_test_result is True:
-                    LOGGER.info(
-                        "✅ SoundCloud configuration test passed - proceeding with download"
-                    )
-                else:
-                    LOGGER.info(
-                        "⚠️ SoundCloud configuration test skipped - proceeding with download"
-                    )
-
-            elif (
-                "deezer.com" in download_url.lower()
-                or "dzr.page.link" in download_url.lower()
-            ):
-                LOGGER.info("Testing Deezer credentials before main download...")
-                credential_test_result = await self._test_deezer_credentials()
-                if credential_test_result is False:
-                    LOGGER.error("Deezer credential test failed - aborting download")
-                    return False
-                if credential_test_result is True:
-                    LOGGER.info(
-                        "✅ Deezer credential test passed - proceeding with download"
-                    )
-                else:
-                    LOGGER.info(
-                        "⚠️ Deezer credential test skipped - proceeding with download"
-                    )
-
             # Execute with timeout
             # Use home directory as working directory since streamrip uses its own config
             try:
-                LOGGER.info("Creating subprocess...")
-
                 # For Heroku compatibility, ensure we have proper environment
                 working_dir = str(Path.home())
-                LOGGER.debug(f"Working directory: {working_dir}")
 
                 # Add additional environment variables for Heroku and asyncio stability
                 env["PYTHONUNBUFFERED"] = "1"  # Ensure output is not buffered
@@ -667,83 +542,25 @@ class StreamripDownloadHelper:
                     # Limit subprocess resources to prevent memory issues
                     limit=1024 * 1024 * 10,  # 10MB buffer limit
                 )
-                LOGGER.info(f"Subprocess created with PID: {process.pid}")
+
             except Exception as proc_error:
                 LOGGER.error(f"Failed to create subprocess: {proc_error}")
                 return False
-
-            LOGGER.info("Waiting for streamrip process to complete (no timeout)")
 
             # Start progress monitoring in background
             progress_task = asyncio.create_task(self._start_progress_monitoring())
 
             try:
                 # Remove timeout restrictions for streamrip downloads (like Deezer)
-                LOGGER.info(
-                    "Starting streamrip process communication (no timeout)..."
-                )
-
-                # Enhanced error detection for all services (like Deezer)
-                is_qobuz = "qobuz.com" in download_url.lower()
-                is_tidal = "tidal.com" in download_url.lower()
-                is_soundcloud = "soundcloud.com" in download_url.lower()
-                is_deezer = (
-                    "deezer.com" in download_url.lower()
-                    or "dzr.page.link" in download_url.lower()
-                )
-                is_lastfm = (
-                    "last.fm" in download_url.lower()
-                    or "lastfm" in download_url.lower()
-                )
-                is_spotify = (
-                    "spotify.com" in download_url.lower()
-                    or "open.spotify.com" in download_url.lower()
-                )
-                is_apple_music = "music.apple.com" in download_url.lower()
-
-                if is_qobuz:
-                    LOGGER.info(
-                        "Detected Qobuz URL - using enhanced error detection"
-                    )
-                elif is_tidal:
-                    LOGGER.info(
-                        "Detected Tidal URL - using enhanced error detection"
-                    )
-                elif is_soundcloud:
-                    LOGGER.info(
-                        "Detected SoundCloud URL - using enhanced error detection"
-                    )
-                elif is_deezer:
-                    LOGGER.info(
-                        "Detected Deezer URL - using enhanced error detection"
-                    )
-                elif is_lastfm:
-                    LOGGER.info(
-                        "Detected Last.fm URL - using enhanced error detection"
-                    )
-                elif is_spotify:
-                    LOGGER.info(
-                        "Detected Spotify URL - using enhanced error detection"
-                    )
-                elif is_apple_music:
-                    LOGGER.info(
-                        "Detected Apple Music URL - using enhanced error detection"
-                    )
 
                 # Send empty input to stdin to prevent hanging on prompts
                 # For Deezer ARL prompts, send newline to skip
                 stdin_input = b"\n"
                 stdout, stderr = await process.communicate(input=stdin_input)
-                LOGGER.info("Streamrip process completed successfully")
 
                 # Log detailed output for debugging
                 stdout_text = stdout.decode() if stdout else ""
-                stderr_text = stderr.decode() if stderr else ""
 
-                if stdout_text:
-                    LOGGER.debug(f"Streamrip stdout: {stdout_text}")
-                if stderr_text:
-                    LOGGER.debug(f"Streamrip stderr: {stderr_text}")
                 self._is_downloading = False
                 # Cancel progress monitoring
                 progress_task.cancel()
@@ -761,22 +578,14 @@ class StreamripDownloadHelper:
 
             # Check result
             if process.returncode == 0:
-                LOGGER.info("Streamrip CLI download completed successfully")
                 stdout_text = stdout.decode() if stdout else ""
-                if stdout_text:
-                    LOGGER.info(f"Streamrip output: {stdout_text}")
 
-                    # Check if tracks were skipped due to being already downloaded
-                    if (
-                        "Skipping track" in stdout_text
-                        and "Marked as downloaded" in stdout_text
-                    ):
-                        LOGGER.warning(
-                            "Streamrip skipped tracks that were already downloaded"
-                        )
-                        LOGGER.info(
-                            "This is normal behavior - streamrip avoids re-downloading existing tracks"
-                        )
+                # Check if tracks were skipped due to being already downloaded
+                if (
+                    "Skipping track" in stdout_text
+                    and "Marked as downloaded" in stdout_text
+                ):
+                    pass  # Normal behavior - tracks already downloaded
 
                 return True
 
@@ -794,14 +603,7 @@ class StreamripDownloadHelper:
             # Enhanced debugging for "Unknown error" cases
             if error_output == "Unknown error" or not error_output.strip():
                 LOGGER.error(
-                    "⚠️ Streamrip returned no error details - investigating..."
-                )
-                LOGGER.error(f"🔍 Return code: {process.returncode}")
-                LOGGER.error(
-                    f"🔍 Stdout length: {len(stdout_text) if stdout_text else 0}"
-                )
-                LOGGER.error(
-                    f"🔍 Stderr length: {len(stderr.decode() if stderr else '')}"
+                    f"⚠️ Streamrip returned no error details - return code: {process.returncode}"
                 )
 
                 # Check if this might be a credential issue
@@ -873,17 +675,22 @@ class StreamripDownloadHelper:
             elif (
                 "enter your arl" in error_output.lower()
                 or "enter your arl" in stdout_text.lower()
+                or "authenticationerror" in stdout_text.lower()
+                or "authentication" in error_output.lower()
             ):
-                LOGGER.error("Deezer ARL prompt detected. This might be due to:")
                 LOGGER.error(
-                    "  1. Deezer ARL not properly configured in streamrip config"
+                    "🔐 Deezer authentication failed. This might be due to:"
+                )
+                LOGGER.error("  1. Deezer ARL expired or invalid")
+                LOGGER.error(
+                    "  2. Deezer ARL not properly configured in streamrip config"
                 )
                 LOGGER.error(
-                    "  2. Streamrip config file corruption or version mismatch"
+                    "  3. Streamrip config file corruption or version mismatch"
                 )
-                LOGGER.error("  3. Deezer ARL format issue or invalid characters")
+                LOGGER.error("  4. Deezer ARL format issue or invalid characters")
                 LOGGER.error(
-                    "  4. Config regeneration failed to include ARL properly"
+                    "  5. Config regeneration failed to include ARL properly"
                 )
                 LOGGER.error(
                     "💡 Check /botsettings → Streamrip → Credential settings → Deezer arl"
@@ -891,6 +698,27 @@ class StreamripDownloadHelper:
                 LOGGER.error(
                     "💡 Ensure ARL is a long string (192+ characters) without quotes"
                 )
+                LOGGER.error("💡 Get a fresh ARL from your Deezer account cookies")
+
+                # Check if ARL is configured
+                from bot.core.config_manager import Config
+
+                deezer_arl = getattr(Config, "STREAMRIP_DEEZER_ARL", "")
+                if not deezer_arl:
+                    LOGGER.error("❌ No Deezer ARL configured in bot settings!")
+                    LOGGER.error(
+                        "💡 Configure Deezer ARL in /botsettings → Streamrip → Deezer ARL"
+                    )
+                else:
+                    LOGGER.error(f"Current ARL length: {len(deezer_arl)} characters")
+                    if len(deezer_arl) < 192:
+                        LOGGER.error(
+                            "❌ ARL appears too short - should be 192+ characters"
+                        )
+                    else:
+                        LOGGER.error(
+                            "⚠️ ARL length looks correct but authentication failed - ARL may be expired"
+                        )
             elif (
                 "enter your qobuz email" in error_output.lower()
                 or "enter your qobuz email" in stdout_text.lower()
@@ -962,12 +790,63 @@ class StreamripDownloadHelper:
             elif "deezer" in error_output.lower() and (
                 "error" in error_output.lower() or "failed" in error_output.lower()
             ):
-                LOGGER.error("Deezer-specific error detected. This might be due to:")
+                LOGGER.error(
+                    "🎵 Deezer-specific error detected. This might be due to:"
+                )
                 LOGGER.error("  1. Invalid Deezer ARL token")
                 LOGGER.error("  2. Deezer ARL token expired")
                 LOGGER.error("  3. Deezer account region restrictions")
                 LOGGER.error("  4. Album/track not available in your region")
                 LOGGER.error("  5. Deezer subscription limitations")
+                LOGGER.error(
+                    "💡 Try updating your Deezer ARL from fresh browser cookies"
+                )
+
+                # Check if we have a fresh ARL available in bot config
+                from bot.core.config_manager import Config
+
+                current_arl = getattr(Config, "STREAMRIP_DEEZER_ARL", "")
+
+                if current_arl:
+                    LOGGER.error(
+                        f"💡 Current ARL in config: ***{current_arl[-10:]} (length: {len(current_arl)})"
+                    )
+
+                    # Validate ARL format
+                    if len(current_arl) < 150:
+                        LOGGER.error(
+                            "⚠️ ARL appears too short - should be 150+ characters"
+                        )
+                        LOGGER.error(
+                            "💡 Get a fresh ARL from your Deezer account browser cookies"
+                        )
+                    else:
+                        # Try to regenerate config with current ARL
+                        LOGGER.error(
+                            "🔄 Attempting to regenerate config with current ARL..."
+                        )
+                        try:
+                            # Clear cached config to force regeneration
+                            self._cached_config = None
+                            await self._regenerate_streamrip_config()
+                            LOGGER.info(
+                                "✅ Config regenerated - you may retry the download"
+                            )
+                        except Exception as config_error:
+                            LOGGER.error(
+                                f"Failed to regenerate config: {config_error}"
+                            )
+                            LOGGER.error(
+                                "💡 Please check your Deezer ARL in /botsettings"
+                            )
+                else:
+                    LOGGER.error("❌ No Deezer ARL found in bot configuration!")
+                    LOGGER.error(
+                        "💡 Please configure Deezer ARL in /botsettings → Streamrip → Deezer ARL"
+                    )
+                    LOGGER.error(
+                        "💡 Get ARL from your Deezer account browser cookies"
+                    )
             elif "soundcloud" in error_output.lower() and (
                 "error" in error_output.lower() or "failed" in error_output.lower()
             ):
@@ -1097,82 +976,75 @@ class StreamripDownloadHelper:
                 LOGGER.error("  1. Config file may be corrupted or incompatible")
                 LOGGER.error("  2. Try running 'rip config reset' manually")
                 LOGGER.error("  3. The bot will attempt to regenerate the config")
-                LOGGER.info("🔄 Attempting to regenerate streamrip config...")
 
             return False
 
         except Exception as e:
             LOGGER.error(f"CLI download failed: {e}")
-            import traceback
-
-            LOGGER.debug(f"CLI download traceback: {traceback.format_exc()}")
             return False
 
     async def _find_downloaded_files(self) -> list:
-        """Find downloaded files in the download directory"""
+        """Find downloaded files in the download directory with optimized caching"""
         try:
-            # Find audio files
-            audio_extensions = {".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"}
             downloaded_files = []
 
-            # Search in multiple possible locations
-            search_paths = []
+            # Use cached search paths for O(1) access on subsequent calls
+            if self._cached_search_paths is None:
+                search_paths = []
+                if self._download_path and self._download_path.exists():
+                    search_paths.append(self._download_path)
+                    parent_dir = self._download_path.parent
+                    if parent_dir.exists():
+                        search_paths.append(parent_dir)
 
-            # 1. Our specified download path
-            if self._download_path and self._download_path.exists():
-                search_paths.append(self._download_path)
-                LOGGER.debug(f"Searching in specified path: {self._download_path}")
+                # Add common paths only if they exist (avoid unnecessary checks)
+                from pathlib import Path
 
-            # 2. Parent directory (in case streamrip created its own structure)
-            if self._download_path:
-                parent_dir = self._download_path.parent
-                if parent_dir.exists() and parent_dir not in search_paths:
-                    search_paths.append(parent_dir)
-                    LOGGER.debug(f"Searching in parent directory: {parent_dir}")
+                common_paths = [
+                    Path.home() / "StreamripDownloads",
+                    Path.home() / "Downloads",
+                    Path("/tmp"),
+                    Path("/usr/src/app/downloads"),
+                ]
 
-            # 3. Common streamrip download locations
-            from pathlib import Path
+                search_paths.extend(
+                    p for p in common_paths if p.exists() and p not in search_paths
+                )
+                self._cached_search_paths = search_paths
+            else:
+                search_paths = self._cached_search_paths
 
-            common_paths = [
-                Path.home() / "StreamripDownloads",  # Default streamrip folder
-                Path.home() / "Downloads",
-                Path("/tmp"),
-                Path("/usr/src/app/downloads"),  # Docker container path
-            ]
-
-            for common_path in common_paths:
-                if common_path.exists() and common_path not in search_paths:
-                    search_paths.append(common_path)
-                    LOGGER.debug(f"Searching in common path: {common_path}")
-
-            # Search all paths for recent audio files
+            # Optimized file search with list comprehension and early filtering
             for search_path in search_paths:
-                LOGGER.debug(f"Searching for files in: {search_path}")
                 try:
-                    for file_path in search_path.rglob("*"):
+                    # Use list comprehension for better performance
+                    new_files = [
+                        file_path
+                        for file_path in search_path.rglob("*")
                         if (
                             file_path.is_file()
-                            and file_path.suffix.lower() in audio_extensions
+                            and file_path.suffix.lower() in self.AUDIO_EXTENSIONS
                             and file_path.stat().st_mtime > self._start_time
-                        ):  # Only recent files
-                            downloaded_files.append(file_path)
-                            LOGGER.debug(f"Found audio file: {file_path}")
+                        )
+                    ]
+                    downloaded_files.extend(new_files)
+
+                    # Early termination if we found files in primary location
+                    if new_files and search_path == self._download_path:
+                        break
                 except Exception as search_error:
-                    LOGGER.debug(f"Error searching {search_path}: {search_error}")
+                    LOGGER.error(f"Error searching {search_path}: {search_error}")
 
-            # Remove duplicates and sort by modification time
-            unique_files = list(set(downloaded_files))
-            sorted_files = sorted(unique_files, key=lambda x: x.stat().st_mtime)
+            # Use set for deduplication (more efficient than list conversion)
+            unique_files = list({f.resolve(): f for f in downloaded_files}.values())
+            unique_files.sort(key=lambda x: x.stat().st_mtime)
 
-            LOGGER.info(f"Found {len(sorted_files)} downloaded audio files")
-            for file_path in sorted_files:
-                LOGGER.debug(f"  - {file_path}")
+            LOGGER.info(f"Found {len(unique_files)} downloaded audio files")
 
-            # Move files from default streamrip folder to our target folder if needed
-            if sorted_files:
-                return await self._move_files_to_target_folder(sorted_files)
-
-            return sorted_files
+            # Move files if needed
+            if unique_files:
+                return await self._move_files_to_target_folder(unique_files)
+            return unique_files
 
         except Exception as e:
             LOGGER.error(f"Failed to find downloaded files: {e}")
@@ -1202,7 +1074,7 @@ class StreamripDownloadHelper:
                         # Move the file
                         shutil.move(str(file_path), str(target_file))
                         moved_files.append(target_file)
-                        LOGGER.info(f"Moved file: {file_path} -> {target_file}")
+
                     else:
                         # File is already in the right location
                         moved_files.append(file_path)
@@ -1224,8 +1096,6 @@ class StreamripDownloadHelper:
             config_dir = Path.home() / ".config" / "streamrip"
             config_file = config_dir / "config.toml"
 
-            LOGGER.debug(f"Checking streamrip config at: {config_file}")
-
             if not config_file.exists():
                 LOGGER.info("Streamrip config not found, creating default config...")
 
@@ -1242,36 +1112,30 @@ class StreamripDownloadHelper:
                     await f.write(config_content)
 
                 LOGGER.info(f"Created streamrip config at: {config_file}")
-            else:
-                LOGGER.debug("Streamrip config already exists")
 
         except Exception as e:
             LOGGER.error(f"Failed to ensure streamrip config: {e}")
             # Don't fail the download if config creation fails
 
     def _get_ffmpeg_path(self) -> str:
-        """Get the path to FFMPEG executable"""
-        try:
-            import os
+        """Get the path to FFMPEG executable with caching"""
+        if self._cached_ffmpeg_path:
+            return self._cached_ffmpeg_path
 
-            # Check common ffmpeg locations
-            ffmpeg_locations = [
-                "/usr/bin/xtra",
-                "/usr/bin/ffmpeg",
-                "/usr/local/bin/ffmpeg",
-                "/bin/ffmpeg",
-            ]
-            for location in ffmpeg_locations:
+        try:
+            # Use class-level constants for better performance
+            for location in self.FFMPEG_LOCATIONS:
                 if os.path.exists(location):
+                    self._cached_ffmpeg_path = location
                     return location
             # If not found, return default
-            return "/usr/bin/xtra"
+            self._cached_ffmpeg_path = "/usr/bin/xtra"
+            return self._cached_ffmpeg_path
         except Exception:
-            return "/usr/bin/xtra"
+            self._cached_ffmpeg_path = "/usr/bin/xtra"
+            return self._cached_ffmpeg_path
 
-    async def _setup_ffmpeg_wrapper_for_aac(
-        self, ffmpeg_path: str, env: dict
-    ) -> str:
+    async def _setup_ffmpeg_wrapper_for_aac(self, ffmpeg_path: str) -> str:
         """Setup FFmpeg wrapper that replaces libfdk_aac with built-in aac encoder"""
         try:
             import stat
@@ -1335,11 +1199,6 @@ exec "{ffmpeg_path}" "${{args[@]}}"
             # Make it executable
             os.chmod(wrapper_script, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
 
-            LOGGER.info(
-                f"✅ Created FFmpeg wrapper for AAC compatibility: {wrapper_script}"
-            )
-            LOGGER.info("🔧 Wrapper will replace libfdk_aac → aac automatically")
-
             # Store wrapper path for cleanup later
             if not hasattr(self, "_temp_files"):
                 self._temp_files = []
@@ -1358,27 +1217,15 @@ exec "{ffmpeg_path}" "${{args[@]}}"
             ffmpeg_path = self._get_ffmpeg_path()
             import os
 
-            if os.path.exists(ffmpeg_path):
-                LOGGER.info(f"✅ FFMPEG found at: {ffmpeg_path}")
-                LOGGER.info(
-                    "📋 Streamrip will use xtra via FFmpeg wrapper for AAC compatibility"
-                )
-                LOGGER.info(
-                    "💡 Wrapper enables AAC/M4A downloads with built-in aac encoder"
-                )
-            else:
+            if not os.path.exists(ffmpeg_path):
                 LOGGER.warning(f"⚠️ FFMPEG not found at expected path: {ffmpeg_path}")
                 LOGGER.warning("Audio conversion may fail if FFMPEG is required")
-                LOGGER.info("💡 Install FFMPEG or ensure 'xtra' binary is available")
         except Exception as e:
             LOGGER.error(f"Error checking FFMPEG availability: {e}")
 
     async def _create_compatible_config(self):
         """Create a streamrip config compatible with the current version"""
         try:
-            LOGGER.info(
-                "Creating compatible streamrip config without problematic fields..."
-            )
             # Use the fallback config which doesn't include ffmpeg_executable
             config_content = self._create_fallback_config()
 
@@ -1391,7 +1238,6 @@ exec "{ffmpeg_path}" "${{args[@]}}"
             async with aiofiles.open(config_file, "w") as f:
                 await f.write(config_content)
 
-            LOGGER.info(f"✅ Compatible config created at: {config_file}")
             return True
         except Exception as e:
             LOGGER.error(f"Failed to create compatible config: {e}")
@@ -1400,92 +1246,14 @@ exec "{ffmpeg_path}" "${{args[@]}}"
     def _create_default_config(self) -> str:
         """Create a comprehensive streamrip config with all bot settings"""
         try:
+            # Return cached config if available
+            if self._cached_config:
+                return self._cached_config
+
             # Get all streamrip settings from bot config
             from bot.core.config_manager import Config
 
-            # Authentication settings
-            deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
-            qobuz_email = Config.STREAMRIP_QOBUZ_EMAIL or ""
-            qobuz_password = Config.STREAMRIP_QOBUZ_PASSWORD or ""
-            tidal_access_token = Config.STREAMRIP_TIDAL_ACCESS_TOKEN or ""
-            tidal_refresh_token = Config.STREAMRIP_TIDAL_REFRESH_TOKEN or ""
-            tidal_user_id = Config.STREAMRIP_TIDAL_USER_ID or ""
-            tidal_country_code = Config.STREAMRIP_TIDAL_COUNTRY_CODE or ""
-
-            # Handle token_expiry properly - must be a valid float or default
-            # Use getattr to safely access the attribute in case it doesn't exist
-            tidal_token_expiry = (
-                getattr(Config, "STREAMRIP_TIDAL_TOKEN_EXPIRY", "") or ""
-            )
-            if not tidal_token_expiry or not tidal_token_expiry.strip():
-                # Set to a future timestamp (1 year from now) if empty
-                import time
-
-                tidal_token_expiry = str(int(time.time()) + (365 * 24 * 60 * 60))
-            else:
-                # Validate existing token_expiry
-                try:
-                    float(tidal_token_expiry)
-                except (ValueError, TypeError):
-                    # Invalid format, use default future timestamp
-                    import time
-
-                    tidal_token_expiry = str(int(time.time()) + (365 * 24 * 60 * 60))
-
-            # Quality settings based on platform enablement and defaults
-            default_quality = Config.STREAMRIP_DEFAULT_QUALITY or 2
-
-            # Platform-specific quality settings
-            qobuz_quality = default_quality if Config.STREAMRIP_QOBUZ_ENABLED else 0
-            tidal_quality = default_quality if Config.STREAMRIP_TIDAL_ENABLED else 0
-            deezer_quality = (
-                default_quality if Config.STREAMRIP_DEEZER_ENABLED else 0
-            )
-
-            # Download settings
-            downloads_folder = Path.home() / "StreamripDownloads"
-            source_subdirectories = (
-                False  # Keep flat structure for easier bot processing
-            )
-            concurrent_downloads = Config.STREAMRIP_CONCURRENT_DOWNLOADS or 4
-
-            # Database and conversion settings
-            default_codec = Config.STREAMRIP_DEFAULT_CODEC or "flac"
-
-            # Advanced settings
-
-            # Filename and folder templates
-
-            # Quality fallback settings
-
-            # File path formatting settings
-            folder_fmt = getattr(
-                Config,
-                "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
-                "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]",
-            )
-            track_fmt = getattr(
-                Config,
-                "STREAMRIP_FILEPATHS_TRACK_FORMAT",
-                "{tracknumber:02}. {artist} - {title}{explicit}",
-            )
-
-            LOGGER.info("Creating comprehensive streamrip config with:")
-            LOGGER.info(
-                f"  - Deezer ARL: {'***' + deezer_arl[-10:] if deezer_arl else 'Not set'}"
-            )
-            LOGGER.info(
-                f"  - Qobuz: {'Enabled' if Config.STREAMRIP_QOBUZ_ENABLED else 'Disabled'}"
-            )
-            LOGGER.info(
-                f"  - Tidal: {'Enabled' if Config.STREAMRIP_TIDAL_ENABLED else 'Disabled'}"
-            )
-            LOGGER.info(
-                f"  - SoundCloud: {'Enabled' if Config.STREAMRIP_SOUNDCLOUD_ENABLED else 'Disabled'}"
-            )
-            LOGGER.info(f"  - Default Quality: {default_quality}")
-            LOGGER.info(f"  - Default Codec: {default_codec}")
-            LOGGER.info(f"  - Concurrent Downloads: {concurrent_downloads}")
+            # Creating comprehensive streamrip config
 
             config_template = """[downloads]
 # Folder where tracks are downloaded to
@@ -1493,11 +1261,11 @@ folder = "{downloads_folder}"
 # Put Qobuz albums in a 'Qobuz' folder, Tidal albums in 'Tidal' etc.
 source_subdirectories = {source_subdirectories}
 # Put tracks in an album with 2 or more discs into a subfolder named `Disc N`
-disc_subdirectories = true
+disc_subdirectories = {disc_subdirectories}
 # Download (and convert) tracks all at once, instead of sequentially.
 # If you are converting the tracks, or have fast internet, this will
 # substantially improve processing speed.
-concurrency = true
+concurrency = {concurrency}
 # The maximum number of tracks to download at once
 # If you have very fast internet, you will benefit from a higher value,
 # A value that is too high for your bandwidth may cause slowdowns
@@ -1508,29 +1276,29 @@ max_connections = {max_connections}
 requests_per_minute = {requests_per_minute}
 # Verify SSL certificates for API connections
 # Set to false if you encounter SSL certificate verification errors (not recommended)
-verify_ssl = true
+verify_ssl = {verify_ssl}
 
 [qobuz]
 # 1: 320kbps MP3, 2: 16/44.1, 3: 24/<=96, 4: 24/>=96
 quality = {qobuz_quality}
 # This will download booklet pdfs that are included with some albums
-download_booklets = true
+download_booklets = {qobuz_download_booklets}
 # Authenticate to Qobuz using auth token? Value can be true/false only
-use_auth_token = false
+use_auth_token = {qobuz_use_auth_token}
 # Enter your userid if the above use_auth_token is set to true, else enter your email
 email_or_userid = "{qobuz_email}"
 # Enter your auth token if the above use_auth_token is set to true, else enter the md5 hash of your plaintext password
 password_or_token = "{qobuz_password}"
 # Do not change
-app_id = ""
+app_id = "{qobuz_app_id}"
 # Do not change
-secrets = []
+secrets = {qobuz_secrets}
 
 [tidal]
 # 0: 256kbps AAC, 1: 320kbps AAC, 2: 16/44.1 "HiFi" FLAC, 3: 24/44.1 "MQA" FLAC
 quality = {tidal_quality}
 # This will download videos included in Video Albums.
-download_videos = true
+download_videos = {tidal_download_videos}
 # Do not change any of the fields below
 user_id = "{tidal_user_id}"
 country_code = "{tidal_country_code}"
@@ -1552,100 +1320,100 @@ quality = {deezer_quality}
 arl = "{deezer_arl}"
 # This allows for free 320kbps MP3 downloads from Deezer
 # If an arl is provided, deezloader is never used
-use_deezloader = true
+use_deezloader = {deezer_use_deezloader}
 # This warns you when the paid deezer account is not logged in and rip falls
 # back to deezloader, which is unreliable
-deezloader_warnings = true
+deezloader_warnings = {deezer_deezloader_warnings}
 
 [soundcloud]
 # Only 0 is available for now
-quality = 0
+quality = {soundcloud_quality}
 # This changes periodically, so it needs to be updated
-client_id = ""
-app_version = ""
+client_id = "{soundcloud_client_id}"
+app_version = "{soundcloud_app_version}"
 
 [youtube]
 # Only 0 is available for now
-quality = 0
+quality = {youtube_quality}
 # Download the video along with the audio
-download_videos = false
+download_videos = {youtube_download_videos}
 # The path to download the videos to
-video_downloads_folder = "{downloads_folder}/youtube"
+video_downloads_folder = "{youtube_video_downloads_folder}"
 
 [database]
 # Create a database that contains all the track IDs downloaded so far
 # Any time a track logged in the database is requested, it is skipped
 # This can be disabled temporarily with the --no-db flag
-downloads_enabled = true
+downloads_enabled = {database_downloads_enabled}
 # Path to the downloads database
-downloads_path = "./downloads.db"
+downloads_path = "{database_downloads_path}"
 # If a download fails, the item ID is stored here. Then, `rip repair` can be
 # called to retry the downloads
-failed_downloads_enabled = true
-failed_downloads_path = "./failed_downloads.db"
+failed_downloads_enabled = {database_failed_downloads_enabled}
+failed_downloads_path = "{database_failed_downloads_path}"
 
 # Convert tracks to a codec after downloading them.
 [conversion]
-enabled = false
+enabled = {conversion_enabled}
 # FLAC, ALAC, OPUS, MP3, VORBIS, or AAC
-codec = "ALAC"
+codec = "{conversion_codec}"
 # In Hz. Tracks are downsampled if their sampling rate is greater than this.
 # Value of 48000 is recommended to maximize quality and minimize space
-sampling_rate = 48000
+sampling_rate = {conversion_sampling_rate}
 # Only 16 and 24 are available. It is only applied when the bit depth is higher
 # than this value.
-bit_depth = 24
+bit_depth = {conversion_bit_depth}
 # Only applicable for lossy codecs
-lossy_bitrate = 320
+lossy_bitrate = {conversion_lossy_bitrate}
 
 # Filter a Qobuz artist's discography. Set to 'true' to turn on a filter.
 # This will also be applied to other sources, but is not guaranteed to work correctly
 [qobuz_filters]
 # Remove Collectors Editions, live recordings, etc.
-extras = false
+extras = {qobuz_filters_extras}
 # Picks the highest quality out of albums with identical titles.
-repeats = false
+repeats = {qobuz_filters_repeats}
 # Remove EPs and Singles
-non_albums = false
+non_albums = {qobuz_filters_non_albums}
 # Remove albums whose artist is not the one requested
-features = false
+features = {qobuz_filters_features}
 # Skip non studio albums
-non_studio_albums = false
+non_studio_albums = {qobuz_filters_non_studio_albums}
 # Only download remastered albums
-non_remaster = false
+non_remaster = {qobuz_filters_non_remaster}
 
 [artwork]
 # Write the image to the audio file
-embed = true
+embed = {artwork_embed}
 # The size of the artwork to embed. Options: thumbnail, small, large, original.
 # "original" images can be up to 30MB, and may fail embedding.
 # Using "large" is recommended.
-embed_size = "large"
+embed_size = "{artwork_embed_size}"
 # If this is set to a value > 0, max(width, height) of the embedded art will be set to this value in pixels
 # Proportions of the image will remain the same
-embed_max_width = -1
+embed_max_width = {artwork_embed_max_width}
 # Save the cover image at the highest quality as a seperate jpg file
-save_artwork = true
+save_artwork = {artwork_save_artwork}
 # If this is set to a value > 0, max(width, height) of the saved art will be set to this value in pixels
 # Proportions of the image will remain the same
-saved_max_width = -1
+saved_max_width = {artwork_saved_max_width}
 
 [metadata]
 # Sets the value of the 'ALBUM' field in the metadata to the playlist's name.
 # This is useful if your music library software organizes tracks based on album name.
-set_playlist_to_album = true
+set_playlist_to_album = {metadata_set_playlist_to_album}
 # If part of a playlist, sets the `tracknumber` field in the metadata to the track's
 # position in the playlist instead of its position in its album
-renumber_playlist_tracks = true
+renumber_playlist_tracks = {metadata_renumber_playlist_tracks}
 # The following metadata tags won't be applied
 # See https://github.com/nathom/streamrip/wiki/Metadata-Tag-Names for more info
-exclude = []
+exclude = {metadata_exclude}
 
 # Changes the folder and file names generated by streamrip.
 [filepaths]
 # Create folders for single tracks within the downloads directory using the folder_format
 # template
-add_singles_to_folder = false
+add_singles_to_folder = {filepaths_add_singles_to_folder}
 # Available keys: "albumartist", "title", "year", "bit_depth", "sampling_rate",
 # "id", and "albumcomposer"
 folder_format = "{folder_fmt}"
@@ -1653,137 +1421,331 @@ folder_format = "{folder_fmt}"
 # and "albumcomposer", "explicit"
 track_format = "{track_fmt}"
 # Only allow printable ASCII characters in filenames.
-restrict_characters = false
+restrict_characters = {filepaths_restrict_characters}
 # Truncate the filename if it is greater than this number of characters
 # Setting this to false may cause downloads to fail on some systems
-truncate_to = 120
+truncate_to = {filepaths_truncate_to}
 
 # Last.fm playlists are downloaded by searching for the titles of the tracks
 [lastfm]
 # The source on which to search for the tracks.
-source = "qobuz"
+source = "{lastfm_source}"
 # If no results were found with the primary source, the item is searched for
 # on this one.
-fallback_source = ""
+fallback_source = "{lastfm_fallback_source}"
 
 [cli]
 # Print "Downloading Album name" etc. to screen
-text_output = true
+text_output = {cli_text_output}
 # Show resolve, download progress bars
-progress_bars = true
+progress_bars = {cli_progress_bars}
 # The maximum number of search results to show in the interactive menu
-max_search_results = 100
+max_search_results = {cli_max_search_results}
 
 [misc]
 # Metadata to identify this config file. Do not change.
-version = "2.0.6"
+version = "{misc_version}"
 # Print a message if a new version of streamrip is available
-check_for_updates = true
+check_for_updates = {misc_check_for_updates}
 """
 
             # Format the config template with all the variables
             config = config_template.format(
-                downloads_folder=downloads_folder,
-                source_subdirectories=str(source_subdirectories).lower(),
+                downloads_folder=getattr(
+                    Config, "DOWNLOAD_DIR", str(Path.home() / "StreamripDownloads")
+                ),
+                source_subdirectories=str(
+                    getattr(Config, "STREAMRIP_SOURCE_SUBDIRECTORIES", False)
+                ).lower(),
+                disc_subdirectories=str(
+                    getattr(Config, "STREAMRIP_DISC_SUBDIRECTORIES", True)
+                ).lower(),
+                concurrency=str(
+                    getattr(Config, "STREAMRIP_CONCURRENCY", True)
+                ).lower(),
                 max_connections=getattr(Config, "STREAMRIP_MAX_CONNECTIONS", 6),
                 requests_per_minute=getattr(
                     Config, "STREAMRIP_REQUESTS_PER_MINUTE", 60
                 ),
-                qobuz_quality=qobuz_quality,
-                qobuz_email=qobuz_email,
-                qobuz_password=qobuz_password,
-                tidal_quality=tidal_quality,
-                tidal_user_id=tidal_user_id,
-                tidal_country_code=tidal_country_code,
-                tidal_access_token=tidal_access_token,
-                tidal_refresh_token=tidal_refresh_token,
-                tidal_token_expiry=tidal_token_expiry,
-                deezer_quality=deezer_quality,
-                deezer_arl=deezer_arl,
-                folder_fmt=folder_fmt,
-                track_fmt=track_fmt,
+                verify_ssl=str(
+                    getattr(Config, "STREAMRIP_VERIFY_SSL", True)
+                ).lower(),
+                qobuz_quality=getattr(Config, "STREAMRIP_QOBUZ_QUALITY", 3),
+                qobuz_email=getattr(Config, "STREAMRIP_QOBUZ_EMAIL", ""),
+                qobuz_password=getattr(Config, "STREAMRIP_QOBUZ_PASSWORD", ""),
+                qobuz_download_booklets=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", True)
+                ).lower(),
+                qobuz_use_auth_token=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_USE_AUTH_TOKEN", False)
+                ).lower(),
+                qobuz_app_id=getattr(Config, "STREAMRIP_QOBUZ_APP_ID", ""),
+                qobuz_secrets=str(getattr(Config, "STREAMRIP_QOBUZ_SECRETS", [])),
+                qobuz_filters_extras=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_FILTERS_EXTRAS", False)
+                ).lower(),
+                qobuz_filters_repeats=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_FILTERS_REPEATS", False)
+                ).lower(),
+                qobuz_filters_non_albums=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", False)
+                ).lower(),
+                qobuz_filters_features=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_FILTERS_FEATURES", False)
+                ).lower(),
+                qobuz_filters_non_studio_albums=str(
+                    getattr(
+                        Config, "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", False
+                    )
+                ).lower(),
+                qobuz_filters_non_remaster=str(
+                    getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", False)
+                ).lower(),
+                tidal_quality=getattr(Config, "STREAMRIP_TIDAL_QUALITY", 3),
+                tidal_user_id=getattr(Config, "STREAMRIP_TIDAL_USER_ID", ""),
+                tidal_country_code=getattr(
+                    Config, "STREAMRIP_TIDAL_COUNTRY_CODE", ""
+                ),
+                tidal_access_token=getattr(
+                    Config, "STREAMRIP_TIDAL_ACCESS_TOKEN", ""
+                ),
+                tidal_refresh_token=getattr(
+                    Config, "STREAMRIP_TIDAL_REFRESH_TOKEN", ""
+                ),
+                tidal_token_expiry=getattr(
+                    Config, "STREAMRIP_TIDAL_TOKEN_EXPIRY", "0"
+                )
+                or "0",
+                tidal_download_videos=str(
+                    getattr(Config, "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", True)
+                ).lower(),
+                deezer_quality=getattr(Config, "STREAMRIP_DEEZER_QUALITY", 2),
+                deezer_arl=getattr(Config, "STREAMRIP_DEEZER_ARL", ""),
+                deezer_use_deezloader=str(
+                    getattr(Config, "STREAMRIP_DEEZER_USE_DEEZLOADER", True)
+                ).lower(),
+                deezer_deezloader_warnings=str(
+                    getattr(Config, "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True)
+                ).lower(),
+                soundcloud_quality=getattr(
+                    Config, "STREAMRIP_SOUNDCLOUD_QUALITY", 0
+                ),
+                soundcloud_client_id=getattr(
+                    Config, "STREAMRIP_SOUNDCLOUD_CLIENT_ID", ""
+                ),
+                soundcloud_app_version=getattr(
+                    Config, "STREAMRIP_SOUNDCLOUD_APP_VERSION", ""
+                ),
+                youtube_quality=getattr(Config, "STREAMRIP_YOUTUBE_QUALITY", 0),
+                youtube_download_videos=str(
+                    getattr(Config, "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False)
+                ).lower(),
+                youtube_video_downloads_folder=getattr(
+                    Config,
+                    "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+                    f"{getattr(Config, 'DOWNLOAD_DIR', str(Path.home() / 'StreamripDownloads'))}/youtube",
+                ),
+                database_downloads_enabled=str(
+                    getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True)
+                ).lower(),
+                database_downloads_path=getattr(
+                    Config, "STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db"
+                ),
+                database_failed_downloads_enabled=str(
+                    getattr(
+                        Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True
+                    )
+                ).lower(),
+                database_failed_downloads_path=getattr(
+                    Config,
+                    "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+                    "./failed_downloads.db",
+                ),
+                conversion_enabled=str(
+                    getattr(Config, "STREAMRIP_CONVERSION_ENABLED", False)
+                ).lower(),
+                conversion_codec=getattr(
+                    Config, "STREAMRIP_CONVERSION_CODEC", "ALAC"
+                ),
+                conversion_sampling_rate=getattr(
+                    Config, "STREAMRIP_CONVERSION_SAMPLING_RATE", 48000
+                ),
+                conversion_bit_depth=getattr(
+                    Config, "STREAMRIP_CONVERSION_BIT_DEPTH", 24
+                ),
+                conversion_lossy_bitrate=getattr(
+                    Config, "STREAMRIP_CONVERSION_LOSSY_BITRATE", 320
+                ),
+                artwork_embed=str(
+                    getattr(Config, "STREAMRIP_EMBED_COVER_ART", True)
+                ).lower(),
+                artwork_embed_size=getattr(
+                    Config, "STREAMRIP_COVER_ART_SIZE", "large"
+                ),
+                artwork_embed_max_width=getattr(
+                    Config, "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", -1
+                ),
+                artwork_save_artwork=str(
+                    getattr(Config, "STREAMRIP_SAVE_COVER_ART", True)
+                ).lower(),
+                artwork_saved_max_width=getattr(
+                    Config, "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", -1
+                ),
+                lastfm_source=getattr(Config, "STREAMRIP_LASTFM_SOURCE", "qobuz"),
+                lastfm_fallback_source=getattr(
+                    Config, "STREAMRIP_LASTFM_FALLBACK_SOURCE", ""
+                ),
+                metadata_set_playlist_to_album=str(
+                    getattr(Config, "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True)
+                ).lower(),
+                metadata_renumber_playlist_tracks=str(
+                    getattr(
+                        Config, "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True
+                    )
+                ).lower(),
+                metadata_exclude=str(
+                    getattr(Config, "STREAMRIP_METADATA_EXCLUDE", [])
+                ),
+                filepaths_add_singles_to_folder=str(
+                    getattr(
+                        Config, "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False
+                    )
+                ).lower(),
+                filepaths_restrict_characters=str(
+                    getattr(Config, "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False)
+                ).lower(),
+                filepaths_truncate_to=getattr(
+                    Config, "STREAMRIP_FILEPATHS_TRUNCATE_TO", 120
+                ),
+                cli_text_output=str(
+                    getattr(Config, "STREAMRIP_CLI_TEXT_OUTPUT", True)
+                ).lower(),
+                cli_progress_bars=str(
+                    getattr(Config, "STREAMRIP_CLI_PROGRESS_BARS", True)
+                ).lower(),
+                cli_max_search_results=getattr(
+                    Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100
+                ),
+                misc_version=getattr(Config, "STREAMRIP_MISC_VERSION", "2.0.6"),
+                misc_check_for_updates=str(
+                    getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", True)
+                ).lower(),
+                folder_fmt=getattr(
+                    Config,
+                    "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+                    "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]",
+                ),
+                track_fmt=getattr(
+                    Config,
+                    "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+                    "{tracknumber:02}. {artist} - {title}{explicit}",
+                ),
             )
 
-            return config.strip()
+            # Cache the config for future use
+            self._cached_config = config.strip()
+            return self._cached_config
 
         except Exception as e:
             LOGGER.error(f"Error creating comprehensive config: {e}")
-            # Return comprehensive fallback config without hardcoded credentials
+            # Return comprehensive fallback config with dynamic values
+            fallback_downloads_folder = Path.home() / "StreamripDownloads"
+
             return f"""[downloads]
-folder = "{Path.home() / "StreamripDownloads"}"
-source_subdirectories = false
-disc_subdirectories = true
-concurrency = 4
-max_connections = 6
-requests_per_minute = 60
-verify_ssl = true
+folder = "{fallback_downloads_folder}"
+source_subdirectories = {str(getattr(Config, "STREAMRIP_SOURCE_SUBDIRECTORIES", False)).lower()}
+disc_subdirectories = {str(getattr(Config, "STREAMRIP_DISC_SUBDIRECTORIES", True)).lower()}
+concurrency = {str(getattr(Config, "STREAMRIP_CONCURRENCY", True)).lower()}
+max_connections = {getattr(Config, "STREAMRIP_MAX_CONNECTIONS", 6)}
+requests_per_minute = {getattr(Config, "STREAMRIP_REQUESTS_PER_MINUTE", 60)}
+verify_ssl = {str(getattr(Config, "STREAMRIP_VERIFY_SSL", True)).lower()}
 
 [qobuz]
-email_or_userid = ""
-password_or_token = ""
-quality = 3
-use_auth_token = false
-app_id = ""
-download_booklets = false
-secrets = []
+email_or_userid = "{getattr(Config, "STREAMRIP_QOBUZ_EMAIL", "")}"
+password_or_token = "{getattr(Config, "STREAMRIP_QOBUZ_PASSWORD", "")}"
+quality = {getattr(Config, "STREAMRIP_QOBUZ_QUALITY", 3)}
+use_auth_token = {str(getattr(Config, "STREAMRIP_QOBUZ_USE_AUTH_TOKEN", False)).lower()}
+app_id = "{getattr(Config, "STREAMRIP_QOBUZ_APP_ID", "")}"
+download_booklets = {str(getattr(Config, "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", True)).lower()}
+secrets = {getattr(Config, "STREAMRIP_QOBUZ_SECRETS", [])!s}
+
+[qobuz_filters]
+extras = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_EXTRAS", False)).lower()}
+repeats = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_REPEATS", False)).lower()}
+non_albums = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", False)).lower()}
+features = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_FEATURES", False)).lower()}
+non_studio_albums = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", False)).lower()}
+non_remaster = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", False)).lower()}
 
 [tidal]
-quality = 3
-download_videos = true
-user_id = ""
-country_code = ""
-access_token = ""
-refresh_token = ""
-token_expiry = "0"
+quality = {getattr(Config, "STREAMRIP_TIDAL_QUALITY", 3)}
+download_videos = {str(getattr(Config, "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", True)).lower()}
+user_id = "{getattr(Config, "STREAMRIP_TIDAL_USER_ID", "")}"
+country_code = "{getattr(Config, "STREAMRIP_TIDAL_COUNTRY_CODE", "")}"
+access_token = "{getattr(Config, "STREAMRIP_TIDAL_ACCESS_TOKEN", "")}"
+refresh_token = "{getattr(Config, "STREAMRIP_TIDAL_REFRESH_TOKEN", "")}"
+token_expiry = "{getattr(Config, "STREAMRIP_TIDAL_TOKEN_EXPIRY", "0") or "0"}"
 
 [deezer]
-arl = ""
-quality = 2
-use_deezloader = false
-deezloader_warnings = true
+arl = "{getattr(Config, "STREAMRIP_DEEZER_ARL", "")}"
+quality = {getattr(Config, "STREAMRIP_DEEZER_QUALITY", 2)}
+use_deezloader = {str(getattr(Config, "STREAMRIP_DEEZER_USE_DEEZLOADER", True)).lower()}
+deezloader_warnings = {str(getattr(Config, "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True)).lower()}
 
 [soundcloud]
-client_id = ""
-app_version = ""
+quality = {getattr(Config, "STREAMRIP_SOUNDCLOUD_QUALITY", 0)}
+client_id = "{getattr(Config, "STREAMRIP_SOUNDCLOUD_CLIENT_ID", "")}"
+app_version = "{getattr(Config, "STREAMRIP_SOUNDCLOUD_APP_VERSION", "")}"
 
 [youtube]
-video_downloads_folder = "{Path.home() / "StreamripDownloads"}/youtube"
-quality = "best"
+quality = {getattr(Config, "STREAMRIP_YOUTUBE_QUALITY", 0)}
+download_videos = {str(getattr(Config, "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False)).lower()}
+video_downloads_folder = "{getattr(Config, "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER", f"{fallback_downloads_folder}/youtube")}"
 
 [database]
-downloads_enabled = true
-downloads_path = "./downloads.db"
-failed_downloads_enabled = true
-failed_downloads_path = "./failed_downloads.db"
+downloads_enabled = {str(getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True)).lower()}
+downloads_path = "{getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db")}"
+failed_downloads_enabled = {str(getattr(Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True)).lower()}
+failed_downloads_path = "{getattr(Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH", "./failed_downloads.db")}"
 
 [artwork]
-embed = true
-embed_size = 1400
-embed_max_width = -1
-save_artwork = true
-saved_max_width = -1
+embed = {str(getattr(Config, "STREAMRIP_EMBED_COVER_ART", True)).lower()}
+embed_size = "{getattr(Config, "STREAMRIP_COVER_ART_SIZE", "large")}"
+embed_max_width = {getattr(Config, "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", -1)}
+save_artwork = {str(getattr(Config, "STREAMRIP_SAVE_COVER_ART", True)).lower()}
+saved_max_width = {getattr(Config, "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", -1)}
 
 [metadata]
-set_playlist_to_album = true
-new_playlist_tracknumbers = true
-exclude = []
+set_playlist_to_album = {str(getattr(Config, "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True)).lower()}
+renumber_playlist_tracks = {str(getattr(Config, "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True)).lower()}
+exclude = {getattr(Config, "STREAMRIP_METADATA_EXCLUDE", [])!s}
 
 [filepaths]
-folder_format = "{{albumartist}}/{{title}}"
-track_format = "{{tracknumber}}. {{artist}} - {{title}}"
-restrict_characters = false
-truncate_to = 120
+add_singles_to_folder = {str(getattr(Config, "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False)).lower()}
+folder_format = "{getattr(Config, "STREAMRIP_FILEPATHS_FOLDER_FORMAT", "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]")}"
+track_format = "{getattr(Config, "STREAMRIP_FILEPATHS_TRACK_FORMAT", "{tracknumber:02}. {artist} - {title}{explicit}")}"
+restrict_characters = {str(getattr(Config, "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False)).lower()}
+truncate_to = {getattr(Config, "STREAMRIP_FILEPATHS_TRUNCATE_TO", 120)}
 
 [conversion]
-enabled = false
-codec = "FLAC"
-sampling_rate = 48000
-bit_depth = 24
-lossy_bitrate = 320
+enabled = {str(getattr(Config, "STREAMRIP_CONVERSION_ENABLED", False)).lower()}
+codec = "{getattr(Config, "STREAMRIP_CONVERSION_CODEC", "ALAC")}"
+sampling_rate = {getattr(Config, "STREAMRIP_CONVERSION_SAMPLING_RATE", 48000)}
+bit_depth = {getattr(Config, "STREAMRIP_CONVERSION_BIT_DEPTH", 24)}
+lossy_bitrate = {getattr(Config, "STREAMRIP_CONVERSION_LOSSY_BITRATE", 320)}
+
+[lastfm]
+source = "{getattr(Config, "STREAMRIP_LASTFM_SOURCE", "qobuz")}"
+fallback_source = "{getattr(Config, "STREAMRIP_LASTFM_FALLBACK_SOURCE", "")}"
+
+[cli]
+text_output = {str(getattr(Config, "STREAMRIP_CLI_TEXT_OUTPUT", True)).lower()}
+progress_bars = {str(getattr(Config, "STREAMRIP_CLI_PROGRESS_BARS", True)).lower()}
+max_search_results = {getattr(Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100)}
 
 [misc]
-version = "2.0.6"
-check_for_updates = false
+version = "{getattr(Config, "STREAMRIP_MISC_VERSION", "2.0.6")}"
+check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", True)).lower()}
 """
 
     async def _regenerate_streamrip_config(self):
@@ -1809,12 +1771,9 @@ check_for_updates = false
             LOGGER.info(
                 f"Streamrip config regenerated successfully at: {config_file}"
             )
-            LOGGER.info(f"Config size: {len(config_content)} bytes")
 
             # Validate that credentials are actually in the config
             await self._validate_config_credentials(config_file)
-
-            LOGGER.debug("Config will reflect all current bot settings dynamically")
 
         except Exception as e:
             LOGGER.error(f"Failed to regenerate streamrip config: {e}")
@@ -1837,44 +1796,105 @@ check_for_updates = false
             qobuz_email = Config.STREAMRIP_QOBUZ_EMAIL or ""
             qobuz_password = Config.STREAMRIP_QOBUZ_PASSWORD or ""
 
+            # Only log warnings for missing credentials
             if qobuz_email and qobuz_password:
-                if (
+                if not (
                     qobuz_email in config_content
                     and qobuz_password in config_content
                 ):
-                    LOGGER.info("✅ Qobuz credentials verified in config file")
-                else:
                     LOGGER.warning("⚠️ Qobuz credentials not found in config file")
-                    LOGGER.warning(
-                        f"Email in config: {qobuz_email in config_content}"
-                    )
-                    LOGGER.warning(
-                        f"Password in config: {qobuz_password in config_content}"
-                    )
 
             # Check for Deezer ARL
             deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
-            if deezer_arl:
-                if deezer_arl in config_content:
-                    LOGGER.info("✅ Deezer ARL verified in config file")
-                else:
-                    LOGGER.warning("⚠️ Deezer ARL not found in config file")
+            if deezer_arl and deezer_arl not in config_content:
+                LOGGER.warning("⚠️ Deezer ARL not found in config file")
 
             # Check for Tidal credentials
             tidal_email = Config.STREAMRIP_TIDAL_EMAIL or ""
             tidal_password = Config.STREAMRIP_TIDAL_PASSWORD or ""
 
             if tidal_email and tidal_password:
-                if (
+                if not (
                     tidal_email in config_content
                     and tidal_password in config_content
                 ):
-                    LOGGER.info("✅ Tidal credentials verified in config file")
-                else:
                     LOGGER.warning("⚠️ Tidal credentials not found in config file")
 
         except Exception as e:
             LOGGER.error(f"Error validating config credentials: {e}")
+
+    async def _update_deezer_arl(self, new_arl: str):
+        """Update Deezer ARL in the streamrip config"""
+        try:
+            config_dir = Path.home() / ".config" / "streamrip"
+            config_file = config_dir / "config.toml"
+
+            if not config_file.exists():
+                LOGGER.error("Streamrip config file not found")
+                return False
+
+            # Read current config
+            import aiofiles
+
+            async with aiofiles.open(config_file) as f:
+                config_content = await f.read()
+
+            # Update ARL in config content
+            import re
+
+            # Pattern to match arl = "..." line
+            arl_pattern = r'arl\s*=\s*"[^"]*"'
+            new_arl_line = f'arl = "{new_arl}"'
+
+            if re.search(arl_pattern, config_content):
+                # Replace existing ARL
+                updated_content = re.sub(arl_pattern, new_arl_line, config_content)
+            # Add ARL to deezer section
+            elif re.search(r"\[deezer\]", config_content):
+                updated_content = re.sub(
+                    r"(\[deezer\])", f"[deezer]\n{new_arl_line}", config_content
+                )
+            else:
+                # Add entire deezer section
+                updated_content = config_content + f"\n\n[deezer]\n{new_arl_line}\n"
+
+            # Write updated config
+            async with aiofiles.open(config_file, "w") as f:
+                await f.write(updated_content)
+
+            # Clear cached config to force regeneration
+            self._cached_config = None
+
+            LOGGER.info("✅ Successfully updated Deezer ARL in streamrip config")
+            return True
+
+        except Exception as e:
+            LOGGER.error(f"Failed to update Deezer ARL: {e}")
+            return False
+
+    async def _regenerate_streamrip_config(self):
+        """Regenerate streamrip config with current bot settings"""
+        try:
+            config_dir = Path.home() / ".config" / "streamrip"
+            config_file = config_dir / "config.toml"
+
+            # Create config directory if it doesn't exist
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate fresh config content
+            config_content = self._create_default_config()
+
+            # Write new config file
+            import aiofiles
+
+            async with aiofiles.open(config_file, "w") as f:
+                await f.write(config_content)
+
+            return True
+
+        except Exception as e:
+            LOGGER.error(f"Failed to regenerate streamrip config: {e}")
+            return False
 
     async def _validate_authentication_for_url(self, url: str) -> bool:
         """Validate that we have proper authentication for the given URL"""
@@ -2129,172 +2149,6 @@ check_for_updates = false
             # Don't block download on validation errors
             return True
 
-    async def _test_qobuz_credentials(self) -> bool:
-        """Test Qobuz credentials using config validation (no test command in v2.1.0)"""
-        try:
-            from bot.core.config_manager import Config
-
-            qobuz_email = Config.STREAMRIP_QOBUZ_EMAIL or ""
-            qobuz_password = Config.STREAMRIP_QOBUZ_PASSWORD or ""
-
-            if not qobuz_email or not qobuz_password:
-                LOGGER.error("Qobuz credentials not configured")
-                return False
-
-            # Since 'rip test' doesn't exist in v2.1.0, just validate config format
-            LOGGER.info("Validating Qobuz credentials format...")
-
-            # Basic validation
-            if "@" not in qobuz_email or len(qobuz_password) < 6:
-                LOGGER.error("❌ Invalid Qobuz credentials format")
-                LOGGER.error(
-                    "Email must contain @ symbol and password must be at least 6 characters"
-                )
-                return False
-
-            # Check for temporary email providers (common issue)
-            temp_email_domains = [
-                "temp-mail.me",
-                "10minutemail.com",
-                "guerrillamail.com",
-                "mailinator.com",
-            ]
-            email_domain = qobuz_email.split("@")[-1].lower()
-
-            if email_domain in temp_email_domains:
-                LOGGER.warning(
-                    "⚠️ Temporary email provider detected - may cause authentication issues"
-                )
-                LOGGER.warning(
-                    "Consider using a permanent email address for better reliability"
-                )
-
-            LOGGER.info("✅ Qobuz credentials format validation passed")
-            LOGGER.info("Note: Actual authentication will be tested during download")
-            return None  # Skip test, allow download to proceed with actual streamrip validation
-
-        except Exception as e:
-            LOGGER.error(f"Error validating Qobuz credentials: {e}")
-            return None  # Don't block download on validation errors
-
-    async def _test_tidal_credentials(self) -> bool:
-        """Test Tidal credentials using config validation (same logic as Qobuz)"""
-        try:
-            from bot.core.config_manager import Config
-
-            tidal_email = Config.STREAMRIP_TIDAL_EMAIL or ""
-            tidal_password = Config.STREAMRIP_TIDAL_PASSWORD or ""
-
-            if not tidal_email or not tidal_password:
-                LOGGER.error("Tidal credentials not configured")
-                return False
-
-            # Since 'rip test' doesn't exist in v2.1.0, just validate config format
-            LOGGER.info("Validating Tidal credentials format...")
-
-            # Basic validation (same as Qobuz)
-            if "@" not in tidal_email or len(tidal_password) < 6:
-                LOGGER.error("❌ Invalid Tidal credentials format")
-                LOGGER.error(
-                    "Email must contain @ symbol and password must be at least 6 characters"
-                )
-                return False
-
-            # Check for temporary email providers (same as Qobuz)
-            temp_email_domains = [
-                "temp-mail.me",
-                "10minutemail.com",
-                "guerrillamail.com",
-                "mailinator.com",
-            ]
-            email_domain = tidal_email.split("@")[-1].lower()
-
-            if email_domain in temp_email_domains:
-                LOGGER.warning(
-                    "⚠️ Temporary email provider detected - may cause authentication issues"
-                )
-                LOGGER.warning(
-                    "Consider using a permanent email address for better reliability"
-                )
-
-            LOGGER.info("✅ Tidal credentials format validation passed")
-            LOGGER.info("Note: Actual authentication will be tested during download")
-            return None  # Skip test, allow download to proceed with actual streamrip validation
-
-        except Exception as e:
-            LOGGER.error(f"Error validating Tidal credentials: {e}")
-            return None  # Don't block download on validation errors
-
-    async def _test_soundcloud_credentials(self) -> bool:
-        """Test SoundCloud configuration (same logic as Deezer)"""
-        try:
-            from bot.core.config_manager import Config
-
-            soundcloud_client_id = Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID or ""
-
-            # SoundCloud client ID is optional (like Deezer ARL can be missing)
-            if not soundcloud_client_id.strip():
-                LOGGER.warning("⚠️ SoundCloud client ID not configured")
-                LOGGER.warning(
-                    "SoundCloud may work without client ID for some tracks"
-                )
-                LOGGER.info(
-                    "💡 For better reliability, configure SoundCloud client ID"
-                )
-                return None  # Allow download without client ID
-
-            # Basic validation
-            if len(soundcloud_client_id) < 10:
-                LOGGER.warning("⚠️ SoundCloud client ID appears to be too short")
-                LOGGER.warning("Please verify your SoundCloud client ID")
-                return None  # Allow download attempt anyway
-
-            LOGGER.info("✅ SoundCloud configuration validation passed")
-            LOGGER.info("Note: Actual functionality will be tested during download")
-            return None  # Skip test, allow download to proceed with actual streamrip validation
-
-        except Exception as e:
-            LOGGER.error(f"Error validating SoundCloud configuration: {e}")
-            return None  # Don't block download on validation errors
-
-    async def _test_deezer_credentials(self) -> bool:
-        """Test Deezer credentials using config validation (same logic as Qobuz)"""
-        try:
-            from bot.core.config_manager import Config
-
-            deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
-
-            if not deezer_arl.strip():
-                LOGGER.error("Deezer ARL not configured")
-                return False
-
-            # Since 'rip test' doesn't exist in v2.1.0, just validate config format
-            LOGGER.info("Validating Deezer ARL format...")
-
-            # Basic validation for Deezer ARL
-            if len(deezer_arl) < 50:
-                LOGGER.error("❌ Invalid Deezer ARL format")
-                LOGGER.error(
-                    "Deezer ARL should be a long string (typically 192+ characters)"
-                )
-                return False
-
-            # Check for common ARL issues
-            if deezer_arl.startswith("http"):
-                LOGGER.error(
-                    "❌ Invalid Deezer ARL - appears to be a URL instead of ARL token"
-                )
-                LOGGER.error("Please provide the ARL token, not the URL")
-                return False
-
-            LOGGER.info("✅ Deezer ARL format validation passed")
-            LOGGER.info("Note: Actual authentication will be tested during download")
-            return None  # Skip test, allow download to proceed with actual streamrip validation
-
-        except Exception as e:
-            LOGGER.error(f"Error validating Deezer ARL: {e}")
-            return None  # Don't block download on validation errors
-
     async def _convert_url_for_streamrip(self, url: str) -> str:
         """Convert URL to streamrip-compatible format if needed"""
         try:
@@ -2513,8 +2367,6 @@ except Exception as e:
     async def _reset_streamrip_config_if_needed(self):
         """Reset streamrip config if it's invalid"""
         try:
-            LOGGER.debug("Checking if streamrip config reset is needed...")
-
             # First, try to create a proper config using streamrip's built-in method
             config_dir = Path.home() / ".config" / "streamrip"
             config_file = config_dir / "config.toml"
@@ -2539,17 +2391,14 @@ except Exception as e:
                     from bot.core.config_manager import Config
 
                     deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
-                    LOGGER.debug(
-                        f"Using Deezer ARL from config: {'***' + deezer_arl[-10:] if deezer_arl else 'Not set'}"
-                    )
                 except Exception:
-                    LOGGER.debug("Could not get Deezer ARL from bot config")
+                    pass
 
                 # Provide ARL input
                 create_input = deezer_arl.encode() + b"\n" if deezer_arl else b"\n"
 
                 try:
-                    create_stdout, create_stderr = await asyncio.wait_for(
+                    _, create_stderr = await asyncio.wait_for(
                         create_process.communicate(input=create_input), timeout=15
                     )
 
@@ -2567,11 +2416,9 @@ except Exception as e:
                     create_process.kill()
                     await create_process.wait()
                     await self._create_manual_config()
-            else:
-                LOGGER.debug("Streamrip config file exists")
 
         except Exception as e:
-            LOGGER.debug(f"Error checking/creating streamrip config: {e}")
+            LOGGER.error(f"Error checking/creating streamrip config: {e}")
             # Fallback to manual config creation
             await self._create_manual_config()
 
@@ -2596,7 +2443,6 @@ except Exception as e:
                 await f.write(config_content)
 
             LOGGER.info(f"Manual streamrip config created at: {config_file}")
-            LOGGER.info(f"Config size: {len(config_content)} bytes")
 
         except Exception as e:
             LOGGER.error(f"Failed to create manual config: {e}")
@@ -2653,7 +2499,7 @@ except Exception as e:
                 await asyncio.sleep(2)
 
         except Exception as e:
-            LOGGER.debug(f"Progress monitoring error: {e}")
+            LOGGER.error(f"Progress monitoring error: {e}")
 
     async def _progress_callback(self, track_info: dict[str, Any]):
         """Progress callback for download updates"""
@@ -2713,12 +2559,11 @@ except Exception as e:
                                 shutil.rmtree(temp_path)
                             else:
                                 os.unlink(temp_path)
-                            LOGGER.debug(f"Cleaned up temp file: {temp_path}")
                     except Exception as e:
-                        LOGGER.debug(f"Error cleaning temp file {temp_path}: {e}")
+                        LOGGER.error(f"Error cleaning temp file {temp_path}: {e}")
                 self._temp_files.clear()
         except Exception as e:
-            LOGGER.debug(f"Error during temp file cleanup: {e}")
+            LOGGER.error(f"Error during temp file cleanup: {e}")
 
 
 async def add_streamrip_download(
@@ -2740,12 +2585,33 @@ async def add_streamrip_download(
         )
         return
 
-    # Parse URL to validate
-    from bot.helper.streamrip_utils.url_parser import is_streamrip_url
+    # Parse URL to validate and get platform/media_type info
+    from bot.helper.streamrip_utils.url_parser import (
+        is_streamrip_url,
+        parse_streamrip_url,
+    )
 
     if not await is_streamrip_url(url):
         await send_status_message(listener.message, "❌ Invalid streamrip URL!")
         return
+
+    # Set platform and media_type attributes if not already set
+    if not hasattr(listener, "platform") or not hasattr(listener, "media_type"):
+        try:
+            parsed = await parse_streamrip_url(url)
+            if parsed:
+                platform, media_type, _ = parsed
+                listener.platform = platform
+                listener.media_type = media_type
+            else:
+                # Fallback values if parsing fails
+                listener.platform = "Unknown"
+                listener.media_type = "Unknown"
+        except Exception as e:
+            LOGGER.error(f"Failed to parse URL for platform info: {e}")
+            # Set fallback values
+            listener.platform = "Unknown"
+            listener.media_type = "Unknown"
 
     # Check streamrip limits
     if Config.STREAMRIP_LIMIT > 0:
@@ -2793,15 +2659,32 @@ async def add_streamrip_download(
 
     # Start download immediately
     LOGGER.info(f"Starting streamrip download: {url}")
-    download_success = await download_helper.download(url, quality, codec)
 
-    # If download was successful, trigger the upload process
-    if download_success:
-        LOGGER.info("Streamrip download completed, triggering upload process...")
-        await listener.on_download_complete()
-    else:
-        LOGGER.error("Streamrip download failed")
-        await listener.on_download_error("Download failed")
+    # Add to task dict with StreamripDownloadStatus for status tracking
+    async with task_dict_lock:
+        task_dict[listener.mid] = StreamripDownloadStatus(
+            listener, download_helper, url, quality, codec
+        )
+
+    # Send status message automatically when download starts (instead of initial download start message)
+    await send_status_message(listener.message)
+
+    try:
+        download_success = await download_helper.download(url, quality, codec)
+
+        # If download was successful, trigger the upload process
+        if download_success:
+            LOGGER.info("Streamrip download completed, triggering upload process...")
+            await listener.on_download_complete()
+        else:
+            LOGGER.error("Streamrip download failed")
+            await listener.on_download_error("Download failed")
+    except Exception as e:
+        LOGGER.error(f"Exception in streamrip download: {e}")
+        import traceback
+
+        LOGGER.error(f"Traceback: {traceback.format_exc()}")
+        await listener.on_download_error(f"Download error: {e}")
 
 
 async def _estimate_streamrip_size(url: str, quality: int) -> int:
@@ -2813,7 +2696,7 @@ async def _estimate_streamrip_size(url: str, quality: int) -> int:
         if not parsed:
             return 0
 
-        platform, media_type, media_id = parsed
+        _, media_type, _ = parsed
 
         # Size estimates in MB per track based on quality
         size_estimates = {
@@ -2826,17 +2709,10 @@ async def _estimate_streamrip_size(url: str, quality: int) -> int:
 
         track_size_mb = size_estimates.get(quality, 35)
 
-        # Estimate track count based on media type
-        if media_type == "track":
-            track_count = 1
-        elif media_type == "album":
-            track_count = 12  # Average album
-        elif media_type == "playlist":
-            track_count = 25  # Average playlist
-        elif media_type == "artist":
-            track_count = 50  # Conservative estimate
-        else:
-            track_count = 10  # Default
+        # Use class constants for track count estimation
+        track_count = StreamripDownloadHelper.TRACK_ESTIMATES.get(media_type, 10)
+        if media_type == "artist":
+            track_count = 50  # Conservative estimate for artists
 
         return track_count * track_size_mb * 1024 * 1024
 

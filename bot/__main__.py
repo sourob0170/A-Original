@@ -180,6 +180,16 @@ async def cleanup():
     """Clean up resources before shutdown"""
     LOGGER.info("Performing cleanup before shutdown...")
 
+    # Cleanup streamrip sessions to prevent unclosed session warnings
+    try:
+        from .helper.streamrip_utils.search_handler import (
+            cleanup_all_streamrip_sessions,
+        )
+
+        await cleanup_all_streamrip_sessions()
+    except Exception as e:
+        LOGGER.error(f"Error during streamrip cleanup: {e}")
+
     # Stop database heartbeat task
     await database.stop_heartbeat()
 

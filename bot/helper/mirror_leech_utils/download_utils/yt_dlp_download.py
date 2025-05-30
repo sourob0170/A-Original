@@ -68,9 +68,6 @@ class MyLogger:
             or "Requested format is not available" in msg
         ):
             LOGGER.warning(f"YT-DLP Warning: {msg}")
-        else:
-            # Log other warnings at debug level to reduce noise
-            LOGGER.debug(f"YT-DLP Warning: {msg}")
 
     @staticmethod
     def error(msg):

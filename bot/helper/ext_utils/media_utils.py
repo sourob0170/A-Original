@@ -83,10 +83,8 @@ async def get_streams(file):
 
         # Check if we have this in cache
         if cache_key in MEDIA_STREAMS_CACHE:
-            LOGGER.debug(f"Using cached stream info for {file}")
             return MEDIA_STREAMS_CACHE[cache_key]
-    except Exception as e:
-        LOGGER.debug(f"Error getting file modification time: {e}")
+    except Exception:
         cache_key = None
 
     # If not in cache or couldn't get mtime, run ffprobe
@@ -189,10 +187,8 @@ async def get_media_info(path):
 
         # Check if we have this in cache
         if cache_key in MEDIA_INFO_CACHE:
-            LOGGER.debug(f"Using cached media info for {path}")
             return MEDIA_INFO_CACHE[cache_key]
-    except Exception as e:
-        LOGGER.debug(f"Error getting file modification time: {e}")
+    except Exception:
         cache_key = None
 
     # If not in cache or couldn't get mtime, run ffprobe
@@ -387,10 +383,8 @@ async def get_media_type(file_path):
 
         # Check if we have this in cache
         if cache_key in MEDIA_TYPE_CACHE:
-            LOGGER.debug(f"Using cached media type for {file_path}")
             return MEDIA_TYPE_CACHE[cache_key]
-    except Exception as e:
-        LOGGER.debug(f"Error getting file modification time: {e}")
+    except Exception:
         cache_key = None
 
     # First try to determine by extension
@@ -552,7 +546,7 @@ async def get_media_type(file_path):
                     MEDIA_TYPE_CACHE[cache_key] = media_type
                 return media_type
     except Exception as e:
-        LOGGER.debug(f"Error getting mime type: {e}")
+        LOGGER.error(f"Error getting mime type: {e}")
 
     # If cache is too large, remove oldest entries
     if cache_key and len(MEDIA_TYPE_CACHE) >= MAX_CACHE_SIZE:
@@ -3715,7 +3709,6 @@ async def get_media_type_for_watermark(file):
     # Force None for tar files regardless of content
     # This is a critical override to prevent misidentification
     if file.lower().endswith(".tar"):
-        LOGGER.debug(f"Forcing None for tar file: {file}")
         # We don't have cache_key yet at this point, so we can't cache the result
         return None
 
@@ -3726,10 +3719,8 @@ async def get_media_type_for_watermark(file):
 
         # Check if we have this in cache
         if cache_key in MEDIA_TYPE_CACHE:
-            LOGGER.debug(f"Using cached watermark media type for {file}")
             return MEDIA_TYPE_CACHE[cache_key]
-    except Exception as e:
-        LOGGER.debug(f"Error getting file modification time: {e}")
+    except Exception:
         cache_key = None
 
     # Video formats (expanded list for better compatibility)
@@ -3970,7 +3961,7 @@ async def get_media_type_for_watermark(file):
                         MEDIA_TYPE_CACHE[cache_key] = media_type
                     return media_type
     except Exception as e:
-        LOGGER.debug(f"Error determining media type with ffprobe: {e}")
+        LOGGER.error(f"Error determining media type with ffprobe: {e}")
 
     # If all else fails, try to determine by mime type
     try:
@@ -4075,7 +4066,7 @@ async def get_media_type_for_watermark(file):
                             MEDIA_TYPE_CACHE[cache_key] = media_type
                         return media_type
     except Exception as e:
-        LOGGER.debug(f"Error determining media type with mime type: {e}")
+        LOGGER.error(f"Error determining media type with mime type: {e}")
 
     # If cache is too large, remove oldest entries
     if cache_key and len(MEDIA_TYPE_CACHE) >= MAX_CACHE_SIZE:
@@ -4163,8 +4154,7 @@ class FFMpeg:
                             # Convert to readable format (e.g., "5.2Mbps")
                             bitrate_value = float(value) / 1000000
                             self.bitrate = f"{bitrate_value:.1f}Mbps"
-                        except (ValueError, TypeError) as e:
-                            LOGGER.debug(f"Error converting bitrate value: {e}")
+                        except (ValueError, TypeError):
                             self.bitrate = value
 
                         # If this is a trim operation and we have a valid total_time,

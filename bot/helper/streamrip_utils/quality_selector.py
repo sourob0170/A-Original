@@ -1,10 +1,6 @@
 import asyncio
-from functools import partial
 from time import time
 from typing import Any
-
-from pyrogram.filters import regex, user
-from pyrogram.handlers import CallbackQueryHandler
 
 from bot import LOGGER
 from bot.core.config_manager import Config
@@ -16,6 +12,24 @@ from bot.helper.telegram_helper.message_utils import (
     edit_message,
     send_message,
 )
+
+# Global registry for active quality selectors
+_active_quality_selectors = {}
+
+
+def get_active_quality_selector(user_id):
+    """Get active quality selector for a user"""
+    return _active_quality_selectors.get(user_id)
+
+
+def register_quality_selector(user_id, selector):
+    """Register a quality selector for a user"""
+    _active_quality_selectors[user_id] = selector
+
+
+def unregister_quality_selector(user_id):
+    """Unregister a quality selector for a user"""
+    _active_quality_selectors.pop(user_id, None)
 
 
 class StreamripQualitySelector:
@@ -95,44 +109,73 @@ class StreamripQualitySelector:
         self.selected_codec = None
         self._main_buttons = None
 
-    async def _event_handler(self):
-        """Handle callback query events"""
-        pfunc = partial(self._handle_callback, obj=self)
-        handler = self.listener.client.add_handler(
-            CallbackQueryHandler(
-                pfunc,
-                filters=regex("^srq") & user(self.listener.user_id),
-            ),
-            group=-1,
-        )
+    async def _register_handler_and_wait(self):
+        """Use global callback interception instead of registering new handlers"""
+        from bot import LOGGER
+
+        # Register this quality selector instance globally for callback interception
+        register_quality_selector(self.listener.user_id, self)
+
         try:
             await asyncio.wait_for(self.event.wait(), timeout=self._timeout)
         except TimeoutError:
+            LOGGER.warning(
+                f"Quality selection timed out after {self._timeout} seconds"
+            )
             # Send beautified timeout message
             timeout_msg = await send_message(
                 self.listener.message,
                 f"{self.listener.tag} <b>⏰ Quality selection timed out.</b>\n<i>Using default quality...</i>",
             )
 
-            # Delete the selection menu
-            if self._reply_to:
+            # Delete the selection menu (check if it's a valid message object)
+            if self._reply_to and hasattr(self._reply_to, "delete"):
                 await delete_message(self._reply_to)
 
-            # Auto-delete timeout message
-            asyncio.create_task(auto_delete_message(timeout_msg, time=300))
+            # Auto-delete timeout message (check if it's a valid message object)
+            if timeout_msg and hasattr(timeout_msg, "delete"):
+                asyncio.create_task(auto_delete_message(timeout_msg, time=300))
 
             # Use default quality
             self.selected_quality = Config.STREAMRIP_DEFAULT_QUALITY
             self.selected_codec = Config.STREAMRIP_DEFAULT_CODEC
             self.event.set()
+        except Exception as e:
+            LOGGER.error(f"Unexpected error during quality selection wait: {e}")
+            raise
         finally:
-            self.listener.client.remove_handler(*handler)
+            try:
+                # Remove from global registry
+                unregister_quality_selector(self.listener.user_id)
+            except Exception as e:
+                LOGGER.error(f"Error cleaning up quality selector: {e}")
 
     @staticmethod
     async def _handle_callback(_, query, obj):
         """Handle callback query"""
+
+        # Validate user ID (important if using catch-all handler)
+        if query.from_user.id != obj.listener.user_id:
+            LOGGER.warning("User ID mismatch, ignoring callback")
+            return
+
+        # Validate callback data format
+        if not query.data.startswith("srq"):
+            LOGGER.warning("Invalid callback data format, ignoring")
+            return
+
         data = query.data.split()
-        await query.answer()
+
+        if len(data) < 2:
+            LOGGER.warning("Invalid callback data length, ignoring")
+            return
+
+        # Answer callback query with error handling
+        try:
+            await query.answer()
+        except Exception as e:
+            LOGGER.warning(f"Failed to answer callback query: {e}")
+            # Continue processing even if answer fails
 
         if data[1] == "quality":
             quality = int(data[2])
@@ -151,26 +194,29 @@ class StreamripQualitySelector:
                 f"{obj.listener.tag} <b>❌ Quality selection cancelled!</b>",
             )
 
-            # Delete the selection menu
-            if obj._reply_to:
+            # Delete the selection menu (check if it's a valid message object)
+            if obj._reply_to and hasattr(obj._reply_to, "delete"):
                 await delete_message(obj._reply_to)
 
-            # Auto-delete cancellation message
-            asyncio.create_task(auto_delete_message(cancel_msg, time=300))
+            # Auto-delete cancellation message (check if it's a valid message object)
+            if cancel_msg and hasattr(cancel_msg, "delete"):
+                asyncio.create_task(auto_delete_message(cancel_msg, time=300))
 
             obj.listener.is_cancelled = True
             obj.event.set()
+        else:
+            LOGGER.warning(f"Unknown callback action: {data[1]}")
 
     async def get_quality_selection(self) -> dict[str, Any] | None:
         """Show quality selection interface and get user choice"""
+        from bot import LOGGER
+
         try:
+            # Show quality selection menu first
             await self._show_quality_selection()
 
-            # Start event handler
-            asyncio.create_task(self._event_handler())
-
-            # Wait for selection
-            await self.event.wait()
+            # Register handler and wait for selection (this replaces _event_handler)
+            await self._register_handler_and_wait()
 
             if self.listener.is_cancelled:
                 return None
@@ -178,11 +224,16 @@ class StreamripQualitySelector:
             return {"quality": self.selected_quality, "codec": self.selected_codec}
 
         except Exception as e:
-            LOGGER.error(f"Error in quality selection: {e}")
+            LOGGER.error(f"Exception in get_quality_selection: {e}")
+            import traceback
+
+            LOGGER.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _show_quality_selection(self):
         """Show quality selection buttons"""
+        from bot import LOGGER
+
         buttons = ButtonMaker()
 
         # Get available qualities for this platform
@@ -211,19 +262,22 @@ class StreamripQualitySelector:
                 elif quality >= 3:
                     button_text += " 🔒👑"
 
-            buttons.data_button(button_text, f"srq quality {quality}")
+            callback_data = f"srq quality {quality}"
+            buttons.data_button(button_text, callback_data)
 
         # Add default and cancel buttons
         default_quality = Config.STREAMRIP_DEFAULT_QUALITY
         if default_quality in available_qualities:
             default_info = self.QUALITY_INFO[default_quality]
+            default_callback = f"srq quality {default_quality}"
             buttons.data_button(
                 f"⚡ Use Default ({default_info['name']})",
-                f"srq quality {default_quality}",
+                default_callback,
                 "footer",
             )
 
-        buttons.data_button("❌ Cancel", "srq cancel", "footer")
+        cancel_callback = "srq cancel"
+        buttons.data_button("❌ Cancel", cancel_callback, "footer")
 
         # Add subscription requirements info with HTML formatting
         msg += "<i>🔒 = Requires subscription</i>\n"
@@ -231,12 +285,16 @@ class StreamripQualitySelector:
         msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time() - self._time))}</code>"
 
         # Send or edit message
-        if self._reply_to:
-            await edit_message(self._reply_to, msg, buttons.build_menu(1))
-        else:
-            self._reply_to = await send_message(
-                self.listener.message, msg, buttons.build_menu(1)
-            )
+        try:
+            if self._reply_to and hasattr(self._reply_to, "edit"):
+                await edit_message(self._reply_to, msg, buttons.build_menu(1))
+            else:
+                self._reply_to = await send_message(
+                    self.listener.message, msg, buttons.build_menu(1)
+                )
+        except Exception as e:
+            LOGGER.error(f"Error sending/editing message: {e}")
+            raise
 
     async def _show_codec_selection(self):
         """Show codec selection buttons"""
@@ -263,10 +321,13 @@ class StreamripQualitySelector:
 
         msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time() - self._time))}</code>"
 
-        await edit_message(self._reply_to, msg, buttons.build_menu(1))
+        # Only edit if it's a valid message object
+        if self._reply_to and hasattr(self._reply_to, "edit"):
+            await edit_message(self._reply_to, msg, buttons.build_menu(1))
 
     async def _finalize_selection(self):
         """Finalize the selection and close interface"""
+
         quality_info = self.QUALITY_INFO[self.selected_quality]
         codec_info = self.CODEC_INFO[self.selected_codec]
 
@@ -278,20 +339,12 @@ class StreamripQualitySelector:
         msg += f"<b>📁 Type:</b> <code>{self.media_type.title()}</code>\n\n"
         msg += "<b>🚀 Starting download...</b>"
 
-        await edit_message(self._reply_to, msg)
-
-        # Auto-delete after 10 seconds
-        asyncio.create_task(auto_delete_message(self._reply_to, time=10))
-
-        # Trigger status message immediately after selection
-        from bot.helper.telegram_helper.message_utils import send_status_message
-
-        try:
-            await send_status_message(self.listener.message)
-        except Exception as e:
-            LOGGER.error(
-                f"Error sending status message after streamrip selection: {e}"
-            )
+        # Only edit if it's a valid message object
+        if self._reply_to and hasattr(self._reply_to, "edit"):
+            await edit_message(self._reply_to, msg)
+            # Auto-delete after 10 seconds (check if it's a valid message object)
+            if hasattr(self._reply_to, "delete"):
+                asyncio.create_task(auto_delete_message(self._reply_to, time=10))
 
         self.event.set()
 

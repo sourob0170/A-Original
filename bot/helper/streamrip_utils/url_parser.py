@@ -20,6 +20,13 @@ class StreamripURLParser:
             r"https?://(?:www\.)?qobuz\.com/(?:[a-z]{2}-[a-z]{2}/)?label/([^/]+)/([^/?]+)",
             r"https?://open\.qobuz\.com/album/([^/?]+)",
             r"https?://open\.qobuz\.com/track/([^/?]+)",
+            # Simple ID-only formats (common from search results)
+            r"https?://(?:www\.)?qobuz\.com/album/([^/?]+)",
+            r"https?://(?:www\.)?qobuz\.com/track/([^/?]+)",
+            r"https?://(?:www\.)?qobuz\.com/playlist/([^/?]+)",
+            r"https?://(?:www\.)?qobuz\.com/artist/([^/?]+)",
+            r"https?://(?:www\.)?qobuz\.com/interpreter/([^/?]+)",
+            r"https?://(?:www\.)?qobuz\.com/label/([^/?]+)",
         ],
         "tidal": [
             r"https?://(?:www\.)?tidal\.com/browse/album/(\d+)",
@@ -98,7 +105,6 @@ class StreamripURLParser:
             resolved_url = await cls._resolve_short_url(url)
             if resolved_url:
                 url = resolved_url
-                LOGGER.info(f"Resolved short URL to: {url}")
 
         # Check if it's an ID-based input (format: platform:type:id)
         id_match = cls._parse_id_format(url)
@@ -114,9 +120,6 @@ class StreamripURLParser:
                     media_id = cls._extract_media_id(match, platform)
 
                     if media_type and media_id:
-                        LOGGER.info(
-                            f"Parsed {platform} URL: {media_type} - {media_id}"
-                        )
                         return platform, media_type, media_id
 
         return None
@@ -158,7 +161,6 @@ class StreamripURLParser:
             return None
 
         if media_id:
-            LOGGER.info(f"Parsed ID format: {platform} {media_type} - {media_id}")
             return platform, media_type, media_id
 
         return None

@@ -213,7 +213,7 @@ async def delete_pending_messages(_, callback_query):
                         f"Error removing scheduled deletion for forbidden message: {e}"
                     )
             elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
-                LOGGER.debug(
+                LOGGER.error(
                     f"Message {msg_id} in chat {chat_id} no longer exists: {error_str}"
                 )
                 # Remove from database since message doesn't exist

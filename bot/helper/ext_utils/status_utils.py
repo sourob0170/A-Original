@@ -352,7 +352,17 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         for label, status_value in list(STATUSES.items()):
             if status_value != status:
                 buttons.data_button(label, f"status {sid} st {status_value}")
-    button = buttons.build_menu(8)
+
+    # Ensure we have at least one button to prevent "No valid buttons to display" warning
+    # Check if ButtonMaker has any buttons before building
+    has_buttons = (
+        len(buttons._button) > 0
+        or len(buttons._header_button) > 0
+        or len(buttons._footer_button) > 0
+        or len(buttons._page_button) > 0
+    )
+
+    button = buttons.build_menu(8) if has_buttons else None
     msg += f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
     msg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
 

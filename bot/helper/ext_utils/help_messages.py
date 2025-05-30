@@ -1024,9 +1024,9 @@ streamrip_main = """<b>🎵 Streamrip Downloads</b>
 Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, and SoundCloud.
 
 <b>Commands:</b>
-• <code>/srmirror</code> or <code>/streamripmirror</code> - Mirror music to cloud storage
-• <code>/srleech</code> or <code>/streamripleech</code> - Leech music to Telegram
-• <code>/srsearch</code> or <code>/streamripsearch</code> - Search for music across platforms
+• <code>/srm</code>, <code>/srmirror</code> or <code>/streamripmirror</code> - Mirror music to cloud storage
+• <code>/srl</code>, <code>/srleech</code> or <code>/streamripleech</code> - Leech music to Telegram
+• <code>/srs</code>, <code>/srsearch</code> or <code>/streamripsearch</code> - Search for music across platforms
 
 <b>Supported Platforms:</b>
 • <b>Qobuz</b> - Up to Hi-Res+ quality (24-bit/192kHz)
@@ -1070,9 +1070,9 @@ Control the quality and format of your music downloads.
   - <code>-c opus</code> - Modern codec, excellent quality
 
 <b>Examples:</b>
-• <code>/srmirror https://qobuz.com/album/... -q 3 -c flac</code>
-• <code>/srleech qobuz:album:123456 -q 2</code>
-• <code>/srmirror -q 4 -c flac</code> (reply to URL)
+• <code>/srm https://qobuz.com/album/... -q 3 -c flac</code>
+• <code>/srl qobuz:album:123456 -q 2</code>
+• <code>/srm -q 4 -c flac</code> (reply to URL)
 
 <b>Platform Compatibility:</b>
 • <b>Qobuz:</b> All quality levels (0-4)
@@ -1112,8 +1112,8 @@ Customize how your music downloads are handled.
 • <code>-h &lt;headers&gt;</code> - Custom headers (key:value|key1:value1)
 
 <b>Examples:</b>
-• <code>/srmirror url -n "Jazz Collection" -up "Music/Jazz"</code>
-• <code>/srleech url -sp 2GB -doc -cap "High Quality Music"</code>"""
+• <code>/srm url -n "Jazz Collection" -up "Music/Jazz"</code>
+• <code>/srl url -sp 2GB -doc -cap "High Quality Music"</code>"""
 
 streamrip_media_tools = """<b>🎬 Media Tools Integration</b>
 
@@ -1149,9 +1149,9 @@ Enhance your music downloads with powerful media processing tools.
 • <code>-replace</code> - Replace existing tracks
 
 <b>Examples:</b>
-• <code>/srmirror url -mt -compress -audio-medium</code>
-• <code>/srleech url -mt -add-attachment -preserve</code>
-• <code>/srmirror url -mt -comp-audio -extract-attachment</code>
+• <code>/srm url -mt -compress -audio-medium</code>
+• <code>/srl url -mt -add-attachment -preserve</code>
+• <code>/srm url -mt -comp-audio -extract-attachment</code>
 
 <b>Note:</b> Media tools require additional processing time but provide enhanced output quality."""
 
@@ -1185,9 +1185,9 @@ Fine-tune your streamrip downloads with advanced options.
 • <code>-med</code> - Upload as media (Telegram compression)
 
 <b>Examples:</b>
-• <code>/srmirror url -z "secure123" -sync -f</code>
-• <code>/srleech url -s -j -doc -e "log,cue"</code>
-• <code>/srmirror url -rcf "--transfers:8" -fd</code>
+• <code>/srm url -z "secure123" -sync -f</code>
+• <code>/srl url -s -j -doc -e "log,cue"</code>
+• <code>/srm url -rcf "--transfers:8" -fd</code>
 
 <b>Tips:</b>
 • Use <code>-doc</code> for lossless audio preservation
@@ -1199,40 +1199,40 @@ streamrip_examples = """<b>📋 Usage Examples</b>
 Real-world examples of streamrip commands for different scenarios.
 
 <b>🎵 Basic Downloads:</b>
-• <code>/srmirror https://qobuz.com/album/xyz</code>
-• <code>/srleech https://tidal.com/browse/track/123</code>
-• <code>/srsearch Daft Punk Random Access Memories</code>
+• <code>/srm https://qobuz.com/album/xyz</code>
+• <code>/srl https://tidal.com/browse/track/123</code>
+• <code>/srs Daft Punk Random Access Memories</code>
 
 <b>🎯 Quality-Focused Downloads:</b>
-• <code>/srmirror qobuz:album:123456 -q 4 -c flac</code>
-• <code>/srleech tidal:album:789012 -q 3 -doc</code>
-• <code>/srmirror url -q 2 -c flac -n "Lossless Collection"</code>
+• <code>/srm qobuz:album:123456 -q 4 -c flac</code>
+• <code>/srl tidal:album:789012 -q 3 -doc</code>
+• <code>/srm url -q 2 -c flac -n "Lossless Collection"</code>
 
 <b>📁 Organized Downloads:</b>
-• <code>/srmirror url -n "Artist - Album (2023)" -up "Music/2023"</code>
-• <code>/srleech url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
+• <code>/srm url -n "Artist - Album (2023)" -up "Music/2023"</code>
+• <code>/srl url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
 
 <b>🎬 Media Tools Enhanced:</b>
-• <code>/srmirror url -mt -compress -audio-medium</code>
-• <code>/srleech url -mt -add-attachment -preserve</code>
-• <code>/srmirror url -mt -comp-audio -extract-attachment</code>
+• <code>/srm url -mt -compress -audio-medium</code>
+• <code>/srl url -mt -add-attachment -preserve</code>
+• <code>/srm url -mt -comp-audio -extract-attachment</code>
 
 <b>🔒 Secure Downloads:</b>
-• <code>/srmirror url -z "mypassword" -compress</code>
-• <code>/srleech url -doc -z "secure123"</code>
+• <code>/srm url -z "mypassword" -compress</code>
+• <code>/srl url -doc -z "secure123"</code>
 
 <b>📦 Batch Processing:</b>
 • Upload a text file with multiple URLs and use:
-• <code>/srmirror -q 3 -c flac -mt</code> (reply to file)
-• <code>/srleech -doc -sp 2GB</code> (reply to file)
+• <code>/srm -q 3 -c flac -mt</code> (reply to file)
+• <code>/srl -doc -sp 2GB</code> (reply to file)
 
 <b>🔍 Advanced Selection:</b>
-• <code>/srmirror url -s -e "log,cue" -j</code>
-• <code>/srleech url -s -doc -thumb "https://image.url"</code>
+• <code>/srm url -s -e "log,cue" -j</code>
+• <code>/srl url -s -doc -thumb "https://image.url"</code>
 
 <b>☁️ Cloud Integration:</b>
-• <code>/srmirror url -sync -rcf "--transfers:8"</code>
-• <code>/srmirror url -up "Music/Streamrip" -sync</code>
+• <code>/srm url -sync -rcf "--transfers:8"</code>
+• <code>/srm url -up "Music/Streamrip" -sync</code>
 
 <b>💡 Pro Tips:</b>
 • Combine quality and media tools for best results

@@ -335,9 +335,6 @@ async def delete_message(*args):
             # Check if this is a service message that cannot be deleted
             is_service_msg = hasattr(msg, "service") and msg.service is not None
             if is_service_msg:
-                LOGGER.debug(
-                    f"Skipping deletion of service message {msg.id} in chat {msg.chat.id}"
-                )
                 # Remove from database if it exists since we can't delete it
                 if hasattr(msg, "id") and hasattr(msg, "chat"):
                     try:
@@ -375,7 +372,7 @@ async def delete_message(*args):
                             f"Error removing scheduled deletion for forbidden message: {e}"
                         )
             elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
-                LOGGER.debug(
+                LOGGER.error(
                     f"Message {msg.id} in chat {msg.chat.id} no longer exists: {error_str}"
                 )
                 # Remove from database since message doesn't exist

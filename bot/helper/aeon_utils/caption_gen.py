@@ -110,11 +110,6 @@ async def generate_caption(filename, directory, caption_template):
     try:
         if not await aiopath.exists(file_path):
             LOGGER.error(f"File does not exist for caption generation: {file_path}")
-            # Try to check directory for debugging
-            try:
-                LOGGER.debug(f"Directory exists: {await aiopath.exists(directory)}")
-            except Exception as e:
-                LOGGER.debug(f"Error checking directory: {e}")
             return f"<code>{filename}</code>"  # Return a simple caption with just the filename
 
         # Also check if file has content
@@ -142,8 +137,7 @@ async def generate_caption(filename, directory, caption_template):
                 return f"<code>{filename}</code>"  # Return a simple caption with just the filename
 
             # Also check if we can access the file's modification time
-            mod_time = await aiopath.getmtime(file_path)
-            LOGGER.debug(f"File last modified at: {mod_time}")
+            await aiopath.getmtime(file_path)
 
             # Check file size again
             file_size = await aiopath.getsize(file_path)

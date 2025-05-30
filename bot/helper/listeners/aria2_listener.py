@@ -65,9 +65,6 @@ async def _on_download_complete(api, data):
         if not task:
             # If no task is found for this GID, it might have been already processed
             # or removed, so we can safely ignore this notification
-            LOGGER.debug(
-                f"No task found for GID {gid}, ignoring download complete notification"
-            )
             return
 
         # Try to get download info with error handling
@@ -77,9 +74,6 @@ async def _on_download_complete(api, data):
         except Exception as e:
             # If we can't get download info but have a task, we can still proceed with completion
             if "is not found" in str(e):
-                LOGGER.debug(
-                    f"GID {gid} not found in aria2, but task exists. Proceeding with completion."
-                )
                 # Since we can't get download info, we'll just complete the task
                 await task.listener.on_download_complete()
                 return
@@ -144,7 +138,7 @@ async def _on_download_complete(api, data):
                 try:
                     await TorrentManager.aria2_remove(download)
                 except Exception as e:
-                    LOGGER.debug(f"Error removing download {gid} from aria2: {e}")
+                    LOGGER.error(f"Error removing download {gid} from aria2: {e}")
     except Exception as e:
         LOGGER.error(f"Error in onDownloadComplete handler: {e}")
         # Try to get task and complete it even if there was an error
@@ -165,9 +159,6 @@ async def _on_bt_download_complete(api, data):
         if not task:
             # If no task is found for this GID, it might have been already processed
             # or removed, so we can safely ignore this notification
-            LOGGER.debug(
-                f"No task found for GID {gid}, ignoring BT download complete notification"
-            )
             return
 
         # Try to get download info with error handling
@@ -176,9 +167,6 @@ async def _on_bt_download_complete(api, data):
         except Exception as e:
             # If we can't get download info but have a task, we can still proceed with completion
             if "is not found" in str(e):
-                LOGGER.debug(
-                    f"GID {gid} not found in aria2, but task exists. Proceeding with BT completion."
-                )
                 # Since we can't get download info, we'll just complete the task
                 task.listener.is_torrent = True
                 await task.listener.on_download_complete()
@@ -228,7 +216,6 @@ async def _on_bt_download_complete(api, data):
             download = await api.tellStatus(gid)
         except Exception as e:
             if "is not found" in str(e):
-                LOGGER.debug(f"GID {gid} not found in aria2 after completion")
                 return
             LOGGER.error(f"Error getting download status after completion: {e}")
             return
@@ -243,7 +230,7 @@ async def _on_bt_download_complete(api, data):
             try:
                 await TorrentManager.aria2_remove(download)
             except Exception as e:
-                LOGGER.debug(f"Error removing download {gid} from aria2: {e}")
+                LOGGER.error(f"Error removing download {gid} from aria2: {e}")
             await task.listener.on_upload_error(
                 f"Seeding stopped with Ratio: {task.ratio()} and Time: {task.seeding_time()}",
             )
@@ -259,7 +246,7 @@ async def _on_bt_download_complete(api, data):
                     try:
                         await TorrentManager.aria2_remove(download)
                     except Exception as e:
-                        LOGGER.debug(
+                        LOGGER.error(
                             f"Error removing download {gid} from aria2: {e}"
                         )
                     return
@@ -271,7 +258,7 @@ async def _on_bt_download_complete(api, data):
             try:
                 await TorrentManager.aria2_remove(download)
             except Exception as e:
-                LOGGER.debug(f"Error removing download {gid} from aria2: {e}")
+                LOGGER.error(f"Error removing download {gid} from aria2: {e}")
     except Exception as e:
         LOGGER.error(f"Error in onBtDownloadComplete handler: {e}")
         # Try to get task and complete it even if there was an error
@@ -293,9 +280,6 @@ async def _on_download_stopped(_, data):
         if not task:
             # If no task is found for this GID, it might have been already processed
             # or removed, so we can safely ignore this notification
-            LOGGER.debug(
-                f"No task found for GID {gid}, ignoring download stopped notification"
-            )
             return
 
         # Handle the stopped download
@@ -315,9 +299,6 @@ async def _on_download_error(api, data):
         if not task:
             # If no task is found for this GID, it might have been already processed
             # or removed, so we can safely ignore this notification
-            LOGGER.debug(
-                f"No task found for GID {gid}, ignoring download error notification"
-            )
             return
 
         # Initialize error message and options
@@ -333,9 +314,6 @@ async def _on_download_error(api, data):
         except Exception as e:
             # If we can't get download info, use a generic error message
             if "is not found" in str(e):
-                LOGGER.debug(
-                    f"GID {gid} not found in aria2, but task exists. Using generic error."
-                )
                 error = "Download failed or was removed"
             else:
                 LOGGER.error(f"Error getting download info: {e}")

@@ -534,9 +534,6 @@ class TelegramUploader:
                             LOGGER.info(
                                 f"Applied leech filename template to media group caption: {display_name}"
                             )
-                            LOGGER.debug(
-                                f"Media group template variables extracted: season='{file_metadata.get('season', '')}', episode='{file_metadata.get('episode', '')}', quality='{file_metadata.get('quality', '')}'"
-                            )
                             actual_filename = display_name
 
                             # Set the group caption to use the modified filename
@@ -1077,7 +1074,7 @@ class TelegramUploader:
                                         )
                                         break
                             except Exception as e:
-                                LOGGER.debug(
+                                LOGGER.error(
                                     f"Could not find cover art for streamrip audio: {e}"
                                 )
                     else:
@@ -1165,7 +1162,7 @@ class TelegramUploader:
                                     if not title:
                                         title = parts[1].strip()
                         except Exception as e:
-                            LOGGER.debug(
+                            LOGGER.error(
                                 f"Could not extract metadata from filename: {e}"
                             )
 

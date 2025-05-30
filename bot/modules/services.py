@@ -51,6 +51,13 @@ async def start(client, message):
         from bot.modules.media_search import handle_media_get_command
 
         await handle_media_get_command(client, message)
+    elif len(message.command) > 1 and message.command[1].startswith("streamrip_"):
+        # Handle streamrip inline search start command
+        from bot.helper.streamrip_utils.search_handler import (
+            handle_streamrip_start_command,
+        )
+
+        await handle_streamrip_start_command(client, message)
     elif len(message.command) > 1 and message.command[1] != "start":
         userid = message.from_user.id
         if len(message.command[1]) == 36:

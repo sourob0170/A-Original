@@ -4047,7 +4047,6 @@ class TaskConfig:
                             if part.strip()
                         ]
                         cmds.append(parts)
-                        LOGGER.debug(f"Parsed FFmpeg command: {parts}")
                     except ValueError as e:
                         # Handle the "No closing quotation" error
                         if "No closing quotation" in str(e):
@@ -4540,7 +4539,6 @@ class TaskConfig:
                         if "/temp/" in inp and await aiopath.exists(inp):
                             try:
                                 await remove(inp)
-                                LOGGER.debug(f"Removed temporary file: {inp}")
                             except Exception as e:
                                 LOGGER.error(
                                     f"Error removing temporary file {inp}: {e}"
@@ -4552,7 +4550,6 @@ class TaskConfig:
         finally:
             if checked:
                 cpu_eater_lock.release()
-                LOGGER.debug("Released CPU eater lock")
         return dl_path
 
     async def substitute(self, dl_path):
@@ -7411,8 +7408,6 @@ class TaskConfig:
 
         file_ext = ospath.splitext(dl_path)[1].lower()
 
-        # Log the paths for debugging
-
         if file_ext == ".pdf":
             # Use specified format if available
             if (
@@ -7473,8 +7468,6 @@ class TaskConfig:
             # Build Ghostscript command
             # Check if we need to use a renamed binary for Ghostscript
             gs_binary = "gs"
-
-            # Log the command for debugging
 
             # Determine PDF settings based on preset
             pdf_settings = "/ebook"  # Default to ebook quality

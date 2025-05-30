@@ -162,6 +162,16 @@ async def confirm_restart(_, query):
             # Clean all downloads
             await clean_all()
 
+            # Cleanup streamrip sessions to prevent unclosed session warnings
+            try:
+                from bot.helper.streamrip_utils.search_handler import (
+                    cleanup_all_streamrip_sessions,
+                )
+
+                await cleanup_all_streamrip_sessions()
+            except Exception as e:
+                LOGGER.error(f"Error during streamrip cleanup: {e}")
+
             # Close torrent managers
             await TorrentManager.close_all()
 

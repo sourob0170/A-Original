@@ -483,7 +483,7 @@ def add_handlers():
         MessageHandler(
             handle_no_suffix_commands,
             filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|streamripleech|srleech|streamripsearch|srsearch|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
+                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|srm|streamripleech|srleech|srl|streamripsearch|srsearch|srs|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
             )
             & CustomFilters.pm_or_authorized,
         ),
@@ -640,8 +640,13 @@ def add_handlers():
     # Import and initialize the media search module
     from bot.modules.media_search import init_media_search
 
-    # Initialize media search module (this will register the inline query handler)
+    # Initialize media search module (this will register handlers except inline query)
     init_media_search(TgClient.bot)
+
+    # Initialize unified inline search handler that supports both media and streamrip
+    from bot.helper.inline_search_router import init_unified_inline_search
+
+    init_unified_inline_search(TgClient.bot)
 
     # Initialize ad broadcaster module
     from bot.modules.ad_broadcaster import init_ad_broadcaster

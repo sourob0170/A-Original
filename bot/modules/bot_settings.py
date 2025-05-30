@@ -124,9 +124,11 @@ DEFAULT_VALUES = {
     "STREAMRIP_DEFAULT_CODEC": "flac",
     "STREAMRIP_QUALITY_FALLBACK_ENABLED": False,
     "STREAMRIP_QOBUZ_ENABLED": False,
+    "STREAMRIP_QOBUZ_QUALITY": 3,
     "STREAMRIP_QOBUZ_EMAIL": "",
     "STREAMRIP_QOBUZ_PASSWORD": "",
     "STREAMRIP_TIDAL_ENABLED": False,
+    "STREAMRIP_TIDAL_QUALITY": 3,
     "STREAMRIP_TIDAL_EMAIL": "",
     "STREAMRIP_TIDAL_PASSWORD": "",
     "STREAMRIP_TIDAL_ACCESS_TOKEN": "",
@@ -134,8 +136,10 @@ DEFAULT_VALUES = {
     "STREAMRIP_TIDAL_USER_ID": "",
     "STREAMRIP_TIDAL_COUNTRY_CODE": "",
     "STREAMRIP_DEEZER_ENABLED": False,
+    "STREAMRIP_DEEZER_QUALITY": 2,
     "STREAMRIP_DEEZER_ARL": "",
     "STREAMRIP_SOUNDCLOUD_ENABLED": False,
+    "STREAMRIP_SOUNDCLOUD_QUALITY": 0,
     "STREAMRIP_SOUNDCLOUD_CLIENT_ID": "",
     "STREAMRIP_FILENAME_TEMPLATE": "",
     "STREAMRIP_FOLDER_TEMPLATE": "",
@@ -146,14 +150,23 @@ DEFAULT_VALUES = {
     "STREAMRIP_LIMIT": 0,
     "STREAMRIP_MAX_CONNECTIONS": 6,
     "STREAMRIP_REQUESTS_PER_MINUTE": 60,
+    "STREAMRIP_SOURCE_SUBDIRECTORIES": False,
+    "STREAMRIP_DISC_SUBDIRECTORIES": True,
+    "STREAMRIP_CONCURRENCY": True,
+    "STREAMRIP_VERIFY_SSL": True,
     "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS": False,
+    "STREAMRIP_QOBUZ_USE_AUTH_TOKEN": False,
+    "STREAMRIP_QOBUZ_APP_ID": "",
+    "STREAMRIP_QOBUZ_SECRETS": [],
     "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS": False,
     "STREAMRIP_TIDAL_TOKEN_EXPIRY": "",
     "STREAMRIP_DEEZER_USE_DEEZLOADER": False,
     "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS": True,
     "STREAMRIP_SOUNDCLOUD_APP_VERSION": "",
+    "STREAMRIP_YOUTUBE_QUALITY": 0,
     "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS": False,
     "STREAMRIP_YOUTUBE_VIDEO_FOLDER": "",
+    "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER": "",
     "STREAMRIP_DATABASE_DOWNLOADS_ENABLED": True,
     "STREAMRIP_DATABASE_DOWNLOADS_PATH": "./downloads.db",
     "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED": True,
@@ -163,6 +176,9 @@ DEFAULT_VALUES = {
     "STREAMRIP_CONVERSION_SAMPLING_RATE": 48000,
     "STREAMRIP_CONVERSION_BIT_DEPTH": 24,
     "STREAMRIP_CONVERSION_LOSSY_BITRATE": 320,
+    "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM": True,
+    "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS": True,
+    "STREAMRIP_METADATA_EXCLUDE": [],
     "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER": False,
     "STREAMRIP_FILEPATHS_FOLDER_FORMAT": "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]",
     "STREAMRIP_FILEPATHS_TRACK_FORMAT": "{tracknumber:02}. {artist} - {title}{explicit}",
@@ -174,6 +190,21 @@ DEFAULT_VALUES = {
     "STREAMRIP_CLI_PROGRESS_BARS": True,
     "STREAMRIP_CLI_MAX_SEARCH_RESULTS": 100,
     "STREAMRIP_MISC_CHECK_FOR_UPDATES": True,
+    "STREAMRIP_MISC_VERSION": "2.0.6",
+    # Missing Streamrip Configurations
+    "STREAMRIP_SUPPORTED_CODECS": ["flac", "mp3", "m4a", "ogg", "opus"],
+    "STREAMRIP_LASTFM_ENABLED": True,
+    "STREAMRIP_QOBUZ_FILTERS_EXTRAS": False,
+    "STREAMRIP_QOBUZ_FILTERS_REPEATS": False,
+    "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS": False,
+    "STREAMRIP_QOBUZ_FILTERS_FEATURES": False,
+    "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS": False,
+    "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER": False,
+    "STREAMRIP_ARTWORK_EMBED": True,
+    "STREAMRIP_ARTWORK_EMBED_SIZE": "large",
+    "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH": -1,
+    "STREAMRIP_ARTWORK_SAVE_ARTWORK": True,
+    "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH": -1,
     # Watermark Settings
     "WATERMARK_ENABLED": False,
     "WATERMARK_KEY": "",
@@ -1681,6 +1712,7 @@ Select a tool category to configure its settings."""
         buttons.data_button("🎛️ Platform Settings", "botset streamrip_platforms")
         buttons.data_button("🗄️ Database Settings", "botset streamrip_database")
         buttons.data_button("🔄 Conversion Settings", "botset streamrip_conversion")
+        buttons.data_button("🏷️ Metadata Settings", "botset streamrip_metadata")
         buttons.data_button("🖥️ CLI Settings", "botset streamrip_cli")
         buttons.data_button("🔧 Advanced Settings", "botset streamrip_advanced")
         buttons.data_button("📄 Config File", "botset streamrip_config")
@@ -1753,6 +1785,7 @@ Other settings like concurrent downloads, search results, and database tracking 
             "STREAMRIP_DEFAULT_QUALITY",
             "STREAMRIP_FALLBACK_QUALITY",
             "STREAMRIP_DEFAULT_CODEC",
+            "STREAMRIP_SUPPORTED_CODECS",
             "STREAMRIP_QUALITY_FALLBACK_ENABLED",
         ]
 
@@ -1818,9 +1851,14 @@ Other settings like concurrent downloads, search results, and database tracking 
         # Platform Credentials Settings
         credential_settings = [
             "STREAMRIP_QOBUZ_ENABLED",
+            "STREAMRIP_QOBUZ_QUALITY",
             "STREAMRIP_QOBUZ_EMAIL",
             "STREAMRIP_QOBUZ_PASSWORD",
+            "STREAMRIP_QOBUZ_USE_AUTH_TOKEN",
+            "STREAMRIP_QOBUZ_APP_ID",
+            "STREAMRIP_QOBUZ_SECRETS",
             "STREAMRIP_TIDAL_ENABLED",
+            "STREAMRIP_TIDAL_QUALITY",
             "STREAMRIP_TIDAL_EMAIL",
             "STREAMRIP_TIDAL_PASSWORD",
             "STREAMRIP_TIDAL_ACCESS_TOKEN",
@@ -1828,8 +1866,10 @@ Other settings like concurrent downloads, search results, and database tracking 
             "STREAMRIP_TIDAL_USER_ID",
             "STREAMRIP_TIDAL_COUNTRY_CODE",
             "STREAMRIP_DEEZER_ENABLED",
+            "STREAMRIP_DEEZER_QUALITY",
             "STREAMRIP_DEEZER_ARL",
             "STREAMRIP_SOUNDCLOUD_ENABLED",
+            "STREAMRIP_SOUNDCLOUD_QUALITY",
             "STREAMRIP_SOUNDCLOUD_CLIENT_ID",
         ]
 
@@ -1839,7 +1879,9 @@ Other settings like concurrent downloads, search results, and database tracking 
             )
 
             # For boolean settings, add toggle buttons with status
-            if setting.endswith("_ENABLED"):
+            if setting.endswith("_ENABLED") or setting in [
+                "STREAMRIP_QOBUZ_USE_AUTH_TOKEN"
+            ]:
                 setting_value = getattr(Config, setting, False)
                 status = "✅ ON" if setting_value else "❌ OFF"
                 display_name = f"{display_name}: {status}"
@@ -1869,29 +1911,49 @@ Other settings like concurrent downloads, search results, and database tracking 
         qobuz_enabled = (
             "✅ Enabled" if Config.STREAMRIP_QOBUZ_ENABLED else "❌ Disabled"
         )
+        qobuz_quality = Config.STREAMRIP_QOBUZ_QUALITY or 3
         tidal_enabled = (
             "✅ Enabled" if Config.STREAMRIP_TIDAL_ENABLED else "❌ Disabled"
         )
+        tidal_quality = Config.STREAMRIP_TIDAL_QUALITY or 3
         deezer_enabled = (
             "✅ Enabled" if Config.STREAMRIP_DEEZER_ENABLED else "❌ Disabled"
         )
+        deezer_quality = Config.STREAMRIP_DEEZER_QUALITY or 2
         soundcloud_enabled = (
             "✅ Enabled" if Config.STREAMRIP_SOUNDCLOUD_ENABLED else "❌ Disabled"
         )
+        soundcloud_quality = Config.STREAMRIP_SOUNDCLOUD_QUALITY or 0
+
+        # Quality descriptions
+        quality_map = {
+            0: "128 kbps MP3/AAC",
+            1: "320 kbps MP3/AAC",
+            2: "16/44.1 kHz FLAC",
+            3: "24/≤96 kHz FLAC",
+            4: "24/≤192 kHz FLAC",
+        }
 
         msg = f"""<b>🎵 Streamrip Platform Credentials</b> | State: {state}
 
-<b>Platform Status:</b>
-• <b>Qobuz:</b> {qobuz_enabled}
-• <b>Tidal:</b> {tidal_enabled}
-• <b>Deezer:</b> {deezer_enabled}
-• <b>SoundCloud:</b> {soundcloud_enabled}
+<b>Platform Status & Quality:</b>
+• <b>Qobuz:</b> {qobuz_enabled} | Quality: {qobuz_quality} ({quality_map.get(qobuz_quality, "Unknown")})
+• <b>Tidal:</b> {tidal_enabled} | Quality: {tidal_quality} ({quality_map.get(tidal_quality, "Unknown")})
+• <b>Deezer:</b> {deezer_enabled} | Quality: {deezer_quality} ({quality_map.get(deezer_quality, "Unknown")})
+• <b>SoundCloud:</b> {soundcloud_enabled} | Quality: {soundcloud_quality} ({quality_map.get(soundcloud_quality, "Unknown")})
 
 <b>Setup Instructions:</b>
 • <b>Qobuz:</b> Enter email and password
 • <b>Tidal:</b> Enter username and password
 • <b>Deezer:</b> Enter ARL token from browser cookies
 • <b>SoundCloud:</b> Enter client ID (optional)
+
+<b>Quality Levels:</b>
+• <b>0:</b> 128 kbps MP3/AAC (Basic)
+• <b>1:</b> 320 kbps MP3/AAC (High)
+• <b>2:</b> 16/44.1 kHz FLAC (CD Quality)
+• <b>3:</b> 24/≤96 kHz FLAC (Hi-Res)
+• <b>4:</b> 24/≤192 kHz FLAC (Ultra Hi-Res)
 
 <b>Security Note:</b>
 All credentials are stored securely in the database and encrypted."""
@@ -1903,13 +1965,33 @@ All credentials are stored securely in the database and encrypted."""
             "STREAMRIP_MAX_SEARCH_RESULTS",
             "STREAMRIP_MAX_CONNECTIONS",
             "STREAMRIP_REQUESTS_PER_MINUTE",
+            "STREAMRIP_SOURCE_SUBDIRECTORIES",
+            "STREAMRIP_DISC_SUBDIRECTORIES",
+            "STREAMRIP_CONCURRENCY",
+            "STREAMRIP_VERIFY_SSL",
         ]
 
         for setting in download_settings:
             display_name = (
                 setting.replace("STREAMRIP_", "").replace("_", " ").title()
             )
-            buttons.data_button(display_name, f"botset editvar {setting}")
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_SOURCE_SUBDIRECTORIES",
+                "STREAMRIP_DISC_SUBDIRECTORIES",
+                "STREAMRIP_CONCURRENCY",
+                "STREAMRIP_VERIFY_SSL",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
 
         if state == "view":
             buttons.data_button("✏️ Edit", "botset edit streamrip_download", "footer")
@@ -1927,24 +2009,36 @@ All credentials are stored securely in the database and encrypted."""
         max_results = Config.STREAMRIP_MAX_SEARCH_RESULTS or "20 (Default)"
         max_connections = Config.STREAMRIP_MAX_CONNECTIONS or "6 (Default)"
         requests_per_minute = Config.STREAMRIP_REQUESTS_PER_MINUTE or "60 (Default)"
+        source_subdirs = (
+            "✅ Enabled" if Config.STREAMRIP_SOURCE_SUBDIRECTORIES else "❌ Disabled"
+        )
+        disc_subdirs = (
+            "✅ Enabled" if Config.STREAMRIP_DISC_SUBDIRECTORIES else "❌ Disabled"
+        )
+        concurrency = "✅ Enabled" if Config.STREAMRIP_CONCURRENCY else "❌ Disabled"
+        verify_ssl = "✅ Enabled" if Config.STREAMRIP_VERIFY_SSL else "❌ Disabled"
 
         msg = f"""<b>🎵 Streamrip Download Settings</b> | State: {state}
 
-<b>Concurrent Downloads:</b> <code>{concurrent}</code>
-<b>Max Search Results:</b> <code>{max_results}</code>
-<b>Max Connections:</b> <code>{max_connections}</code>
-<b>Requests Per Minute:</b> <code>{requests_per_minute}</code>
+<b>Performance Settings:</b>
+• <b>Concurrent Downloads:</b> <code>{concurrent}</code>
+• <b>Max Search Results:</b> <code>{max_results}</code>
+• <b>Max Connections:</b> <code>{max_connections}</code>
+• <b>Requests Per Minute:</b> <code>{requests_per_minute}</code>
+
+<b>Organization Settings:</b>
+• <b>Source Subdirectories:</b> {source_subdirs}
+• <b>Disc Subdirectories:</b> {disc_subdirs}
+
+<b>Technical Settings:</b>
+• <b>Concurrency:</b> {concurrency}
+• <b>Verify SSL:</b> {verify_ssl}
 
 <b>Description:</b>
-• <b>Concurrent Downloads:</b> Number of simultaneous downloads (1-10 recommended)
-• <b>Max Search Results:</b> Maximum results returned from platform searches
-• <b>Max Connections:</b> Maximum HTTP connections per download
-• <b>Requests Per Minute:</b> Rate limiting for API requests
-
-<b>Performance Tips:</b>
-• Higher concurrent downloads = faster but more resource usage
-• Lower values = more stable on slower connections
-• Adjust rate limits to avoid being blocked by streaming services"""
+• <b>Source Subdirectories:</b> Put albums in platform-specific folders (Qobuz, Tidal, etc.)
+• <b>Disc Subdirectories:</b> Put multi-disc albums in separate disc folders
+• <b>Concurrency:</b> Download tracks simultaneously vs sequentially
+• <b>Verify SSL:</b> Verify SSL certificates for secure connections"""
 
     elif key == "streamrip_advanced":
         # Advanced Settings
@@ -1954,6 +2048,8 @@ All credentials are stored securely in the database and encrypted."""
             "STREAMRIP_EMBED_COVER_ART",
             "STREAMRIP_SAVE_COVER_ART",
             "STREAMRIP_COVER_ART_SIZE",
+            "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+            "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
             "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
             "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
             "STREAMRIP_FILEPATHS_TRACK_FORMAT",
@@ -2004,6 +2100,16 @@ All credentials are stored securely in the database and encrypted."""
             "✅ Enabled" if Config.STREAMRIP_SAVE_COVER_ART else "❌ Disabled"
         )
         cover_size = Config.STREAMRIP_COVER_ART_SIZE or "large (Default)"
+        embed_max_width = (
+            Config.STREAMRIP_ARTWORK_EMBED_MAX_WIDTH
+            if Config.STREAMRIP_ARTWORK_EMBED_MAX_WIDTH != -1
+            else "No limit"
+        )
+        saved_max_width = (
+            Config.STREAMRIP_ARTWORK_SAVED_MAX_WIDTH
+            if Config.STREAMRIP_ARTWORK_SAVED_MAX_WIDTH != -1
+            else "No limit"
+        )
 
         msg = f"""<b>🎵 Streamrip Advanced Settings</b> | State: {state}
 
@@ -2012,6 +2118,8 @@ All credentials are stored securely in the database and encrypted."""
 <b>Embed Cover Art:</b> {embed_cover}
 <b>Save Cover Art:</b> {save_cover}
 <b>Cover Art Size:</b> <code>{cover_size}</code>
+<b>Embed Max Width:</b> <code>{embed_max_width}</code>
+<b>Saved Max Width:</b> <code>{saved_max_width}</code>
 
 <b>Template Variables:</b>
 • <code>{{artist}}</code> - Artist name
@@ -2056,13 +2164,22 @@ Custom config files take precedence over bot settings. If you upload a custom co
         # Platform-specific Settings
         platform_settings = [
             "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+            "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+            "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+            "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+            "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+            "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+            "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
             "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
             "STREAMRIP_TIDAL_TOKEN_EXPIRY",
             "STREAMRIP_DEEZER_USE_DEEZLOADER",
             "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
             "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+            "STREAMRIP_YOUTUBE_QUALITY",
             "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
             "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+            "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+            "STREAMRIP_LASTFM_ENABLED",
             "STREAMRIP_LASTFM_SOURCE",
             "STREAMRIP_LASTFM_FALLBACK_SOURCE",
         ]
@@ -2075,10 +2192,17 @@ Custom config files take precedence over bot settings. If you upload a custom co
             # For boolean settings, add toggle buttons with status
             if setting in [
                 "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+                "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+                "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
                 "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
                 "STREAMRIP_DEEZER_USE_DEEZLOADER",
                 "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
                 "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+                "STREAMRIP_LASTFM_ENABLED",
             ]:
                 setting_value = getattr(Config, setting, False)
                 status = "✅ ON" if setting_value else "❌ OFF"
@@ -2126,12 +2250,16 @@ Custom config files take precedence over bot settings. If you upload a custom co
         soundcloud_app_version = (
             Config.STREAMRIP_SOUNDCLOUD_APP_VERSION or "Auto-detect"
         )
+        youtube_quality = Config.STREAMRIP_YOUTUBE_QUALITY or 0
         youtube_videos = (
             "✅ Enabled"
             if Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS
             else "❌ Disabled"
         )
         youtube_folder = Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER or "Default"
+        youtube_downloads_folder = (
+            Config.STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER or "Default"
+        )
         lastfm_source = Config.STREAMRIP_LASTFM_SOURCE or "qobuz (Default)"
         lastfm_fallback = Config.STREAMRIP_LASTFM_FALLBACK_SOURCE or "None"
 
@@ -2152,8 +2280,10 @@ Custom config files take precedence over bot settings. If you upload a custom co
 • <b>App Version:</b> <code>{soundcloud_app_version}</code>
 
 <b>YouTube Settings:</b>
+• <b>Quality:</b> <code>{youtube_quality}</code> (0: Basic quality only)
 • <b>Download Videos:</b> {youtube_videos}
 • <b>Video Folder:</b> <code>{youtube_folder}</code>
+• <b>Video Downloads Folder:</b> <code>{youtube_downloads_folder}</code>
 
 <b>Last.fm Settings:</b>
 • <b>Primary Source:</b> <code>{lastfm_source}</code>
@@ -2331,6 +2461,79 @@ Platform-specific settings for enhanced functionality and compatibility with dif
 <b>Description:</b>
 Convert downloaded audio files to different formats and quality settings. Useful for device compatibility and storage optimization."""
 
+    elif key == "streamrip_metadata":
+        # Metadata Settings
+        metadata_settings = [
+            "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+            "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+            "STREAMRIP_METADATA_EXCLUDE",
+        ]
+
+        for setting in metadata_settings:
+            display_name = (
+                setting.replace("STREAMRIP_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+                "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For list settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit streamrip_metadata", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view streamrip_metadata", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_streamrip_metadata", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset streamrip", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current metadata settings
+        set_playlist_to_album = (
+            "✅ Enabled"
+            if Config.STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM
+            else "❌ Disabled"
+        )
+        renumber_playlist_tracks = (
+            "✅ Enabled"
+            if Config.STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS
+            else "❌ Disabled"
+        )
+        exclude_list = Config.STREAMRIP_METADATA_EXCLUDE or []
+        exclude_display = ", ".join(exclude_list) if exclude_list else "None"
+
+        msg = f"""<b>🏷️ Streamrip Metadata Settings</b> | State: {state}
+
+<b>Set Playlist to Album:</b> {set_playlist_to_album}
+<b>Renumber Playlist Tracks:</b> {renumber_playlist_tracks}
+<b>Exclude Metadata Fields:</b> <code>{exclude_display}</code>
+
+<b>Description:</b>
+• <b>Set Playlist to Album:</b> When downloading playlists, set the album metadata to the playlist name
+• <b>Renumber Playlist Tracks:</b> Renumber tracks in playlists starting from 1
+• <b>Exclude Metadata Fields:</b> List of metadata fields to exclude from downloaded files
+
+<b>Common Exclude Fields:</b>
+• <b>comment:</b> Remove comment metadata
+• <b>description:</b> Remove description metadata
+• <b>synopsis:</b> Remove synopsis metadata
+• <b>lyrics:</b> Remove embedded lyrics
+
+<b>Note:</b>
+Metadata settings help customize how track information is handled during downloads and can improve compatibility with different music players."""
+
     elif key == "streamrip_cli":
         # CLI Settings
         cli_settings = [
@@ -2338,6 +2541,7 @@ Convert downloaded audio files to different formats and quality settings. Useful
             "STREAMRIP_CLI_PROGRESS_BARS",
             "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
             "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            "STREAMRIP_MISC_VERSION",
         ]
 
         for setting in cli_settings:
@@ -2387,6 +2591,7 @@ Convert downloaded audio files to different formats and quality settings. Useful
             if Config.STREAMRIP_MISC_CHECK_FOR_UPDATES
             else "❌ Disabled"
         )
+        version = Config.STREAMRIP_MISC_VERSION or "2.0.6 (Default)"
 
         msg = f"""<b>🖥️ Streamrip CLI Settings</b> | State: {state}
 
@@ -2394,12 +2599,14 @@ Convert downloaded audio files to different formats and quality settings. Useful
 <b>Progress Bars:</b> {progress_bars}
 <b>Max Search Results:</b> <code>{max_search_results}</code>
 <b>Check for Updates:</b> {check_updates}
+<b>Config Version:</b> <code>{version}</code>
 
 <b>Description:</b>
 • <b>Text Output:</b> Enable detailed text output during downloads
 • <b>Progress Bars:</b> Show progress bars for download operations
 • <b>Max Search Results:</b> Maximum results returned from CLI searches
 • <b>Check for Updates:</b> Automatically check for streamrip updates
+• <b>Config Version:</b> Streamrip configuration file version identifier
 
 <b>Note:</b>
 These settings primarily affect the streamrip CLI behavior and may not directly impact bot functionality."""
@@ -5700,6 +5907,235 @@ async def update_buttons(message, key=None, edit_type=None, page=0):
     await edit_message(message, msg, button)
 
 
+async def _generate_current_config_content() -> str:
+    """Generate current streamrip config content based on bot settings"""
+    try:
+        from datetime import datetime
+
+        from bot import DOWNLOAD_DIR
+
+        # Helper function to safely get config attributes
+        def get_config_attr(attr_name, default_value=""):
+            return getattr(Config, attr_name, default_value)
+
+        # Generate TOML config based on current bot settings
+        return f"""# Streamrip Configuration Generated from Bot Settings
+# Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+[session]
+[session.downloads]
+folder = "{DOWNLOAD_DIR}"
+concurrency = {get_config_attr("STREAMRIP_CONCURRENT_DOWNLOADS", 4)}
+max_connections = {get_config_attr("STREAMRIP_MAX_CONNECTIONS", 6)}
+requests_per_minute = {get_config_attr("STREAMRIP_REQUESTS_PER_MINUTE", 60)}
+source_subdirectories = {str(get_config_attr("STREAMRIP_SOURCE_SUBDIRECTORIES", False)).lower()}
+disc_subdirectories = {str(get_config_attr("STREAMRIP_DISC_SUBDIRECTORIES", True)).lower()}
+verify_ssl = {str(get_config_attr("STREAMRIP_VERIFY_SSL", True)).lower()}
+
+[session.qobuz]
+enabled = {str(get_config_attr("STREAMRIP_QOBUZ_ENABLED", True)).lower()}
+quality = {get_config_attr("STREAMRIP_QOBUZ_QUALITY", 3)}
+email_or_userid = "{get_config_attr("STREAMRIP_QOBUZ_EMAIL", "")}"
+password_or_token = "{get_config_attr("STREAMRIP_QOBUZ_PASSWORD", "")}"
+use_auth_token = {str(get_config_attr("STREAMRIP_QOBUZ_USE_AUTH_TOKEN", False)).lower()}
+app_id = "{get_config_attr("STREAMRIP_QOBUZ_APP_ID", "")}"
+secrets = ["{get_config_attr("STREAMRIP_QOBUZ_SECRETS", "")}"]
+download_booklets = {str(get_config_attr("STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", True)).lower()}
+
+[session.qobuz.filters]
+extras = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_EXTRAS", False)).lower()}
+repeats = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_REPEATS", False)).lower()}
+non_albums = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", False)).lower()}
+features = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_FEATURES", False)).lower()}
+non_studio_albums = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", False)).lower()}
+non_remaster = {str(get_config_attr("STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", False)).lower()}
+
+[session.tidal]
+enabled = {str(get_config_attr("STREAMRIP_TIDAL_ENABLED", True)).lower()}
+quality = {get_config_attr("STREAMRIP_TIDAL_QUALITY", 3)}
+username = "{get_config_attr("STREAMRIP_TIDAL_EMAIL", "")}"
+password = "{get_config_attr("STREAMRIP_TIDAL_PASSWORD", "")}"
+access_token = "{get_config_attr("STREAMRIP_TIDAL_ACCESS_TOKEN", "")}"
+refresh_token = "{get_config_attr("STREAMRIP_TIDAL_REFRESH_TOKEN", "")}"
+user_id = "{get_config_attr("STREAMRIP_TIDAL_USER_ID", "")}"
+country_code = "{get_config_attr("STREAMRIP_TIDAL_COUNTRY_CODE", "")}"
+download_videos = {str(get_config_attr("STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", True)).lower()}
+
+[session.deezer]
+enabled = {str(get_config_attr("STREAMRIP_DEEZER_ENABLED", True)).lower()}
+quality = {get_config_attr("STREAMRIP_DEEZER_QUALITY", 2)}
+arl = "{get_config_attr("STREAMRIP_DEEZER_ARL", "")}"
+use_deezloader = {str(get_config_attr("STREAMRIP_DEEZER_USE_DEEZLOADER", True)).lower()}
+deezloader_warnings = {str(get_config_attr("STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True)).lower()}
+
+[session.soundcloud]
+enabled = {str(get_config_attr("STREAMRIP_SOUNDCLOUD_ENABLED", True)).lower()}
+quality = {get_config_attr("STREAMRIP_SOUNDCLOUD_QUALITY", 0)}
+client_id = "{get_config_attr("STREAMRIP_SOUNDCLOUD_CLIENT_ID", "")}"
+app_version = "{get_config_attr("STREAMRIP_SOUNDCLOUD_APP_VERSION", "")}"
+
+[session.youtube]
+enabled = {str(get_config_attr("STREAMRIP_YOUTUBE_ENABLED", True)).lower()}
+quality = {get_config_attr("STREAMRIP_YOUTUBE_QUALITY", 0)}
+download_videos = {str(get_config_attr("STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False)).lower()}
+video_folder = "{get_config_attr("STREAMRIP_YOUTUBE_VIDEO_FOLDER", "")}"
+video_downloads_folder = "{get_config_attr("STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER", "")}"
+
+[session.lastfm]
+enabled = {str(get_config_attr("STREAMRIP_LASTFM_ENABLED", True)).lower()}
+source = "{get_config_attr("STREAMRIP_LASTFM_SOURCE", "qobuz")}"
+fallback_source = "{get_config_attr("STREAMRIP_LASTFM_FALLBACK_SOURCE", "")}"
+
+[session.conversion]
+enabled = {str(get_config_attr("STREAMRIP_CONVERSION_ENABLED", False)).lower()}
+codec = "{get_config_attr("STREAMRIP_CONVERSION_CODEC", "ALAC")}"
+sampling_rate = {get_config_attr("STREAMRIP_CONVERSION_SAMPLING_RATE", 48000)}
+bit_depth = {get_config_attr("STREAMRIP_CONVERSION_BIT_DEPTH", 24)}
+lossy_bitrate = {get_config_attr("STREAMRIP_CONVERSION_LOSSY_BITRATE", 320)}
+
+[session.database]
+downloads_enabled = {str(get_config_attr("STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True)).lower()}
+downloads_path = "{get_config_attr("STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db")}"
+failed_downloads_enabled = {str(get_config_attr("STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True)).lower()}
+failed_downloads_path = "{get_config_attr("STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH", "./failed_downloads.db")}"
+
+[session.filepaths]
+track_format = "{get_config_attr("STREAMRIP_FILEPATHS_TRACK_FORMAT", get_config_attr("STREAMRIP_FILENAME_TEMPLATE", "{tracknumber:02}. {artist} - {title}{explicit}"))}"
+folder_format = "{get_config_attr("STREAMRIP_FILEPATHS_FOLDER_FORMAT", get_config_attr("STREAMRIP_FOLDER_TEMPLATE", "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]"))}"
+add_singles_to_folder = {str(get_config_attr("STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False)).lower()}
+restrict_characters = {str(get_config_attr("STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False)).lower()}
+truncate_to = {get_config_attr("STREAMRIP_FILEPATHS_TRUNCATE_TO", 120)}
+
+[session.artwork]
+embed = {str(get_config_attr("STREAMRIP_EMBED_COVER_ART", True)).lower()}
+save_artwork = {str(get_config_attr("STREAMRIP_SAVE_COVER_ART", True)).lower()}
+embed_size = {get_config_attr("STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", 1200)}
+saved_max_width = {get_config_attr("STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", 1200)}
+
+[session.metadata]
+set_playlist_to_album = {str(get_config_attr("STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True)).lower()}
+renumber_playlist_tracks = {str(get_config_attr("STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True)).lower()}
+exclude = {get_config_attr("STREAMRIP_METADATA_EXCLUDE", [])}
+
+[session.cli]
+text_output = {str(get_config_attr("STREAMRIP_CLI_TEXT_OUTPUT", True)).lower()}
+progress_bars = {str(get_config_attr("STREAMRIP_CLI_PROGRESS_BARS", True)).lower()}
+max_search_results = {get_config_attr("STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100)}
+
+[session.misc]
+check_for_updates = {str(get_config_attr("STREAMRIP_MISC_CHECK_FOR_UPDATES", True)).lower()}
+version = "{get_config_attr("STREAMRIP_MISC_VERSION", "2.0.6")}"
+"""
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.error(f"Error generating config content: {e}")
+        return ""
+
+
+@new_task
+async def handle_streamrip_config_upload(_, message, pre_message):
+    """Handle the upload of a streamrip config file from bot settings."""
+    user_id = message.from_user.id
+    handler_dict[user_id] = False
+
+    # Check if the message contains a document
+    if not message.document:
+        await send_message(message, "Please send a config file for streamrip.")
+        return
+
+    # Check file extension
+    file_name = message.document.file_name
+    if not file_name or not file_name.lower().endswith(".toml"):
+        await send_message(
+            message,
+            "<b>❌ Invalid File</b>\n\n"
+            "Please send a valid TOML configuration file (must end with .toml).",
+        )
+        return
+
+    # Check file size (5MB limit)
+    if message.document.file_size > 5 * 1024 * 1024:
+        await send_message(
+            message,
+            "<b>❌ File Too Large</b>\n\nConfig file must be smaller than 5MB.",
+        )
+        return
+
+    temp_path = None
+    try:
+        # Download the file
+        temp_path = await message.download()
+
+        # Read the config content using aiofiles
+        from aiofiles import open as aiopen
+
+        async with aiopen(temp_path, encoding="utf-8") as f:
+            config_content = await f.read()
+
+        # Validate TOML format
+        try:
+            import toml
+
+            toml.loads(config_content)
+        except Exception as e:
+            await send_message(
+                message,
+                "<b>❌ Invalid TOML Format</b>\n\n"
+                f"The uploaded file is not a valid TOML configuration:\n<code>{e}</code>",
+            )
+            return
+
+        # Save to database using streamrip config helper
+        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+        success = await streamrip_config.save_custom_config_to_db(config_content)
+
+        if success:
+            # Reinitialize streamrip config to use the new custom config
+            await streamrip_config.initialize()
+
+            await send_message(
+                message,
+                "<b>✅ Config Upload Successful</b>\n\n"
+                "Streamrip configuration has been uploaded and applied successfully.\n\n"
+                "<b>Changes:</b>\n"
+                "• Custom config file saved to database\n"
+                "• Streamrip will now use your custom configuration\n"
+                "• Individual setting menus will show custom values\n\n"
+                "<i>The bot will now use your uploaded configuration for streamrip operations.</i>",
+            )
+        else:
+            await send_message(
+                message,
+                "<b>❌ Upload Failed</b>\n\n"
+                "Failed to save streamrip configuration to database. Please try again.",
+            )
+
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.error(f"Error handling streamrip config upload: {e}")
+        await send_message(
+            message,
+            f"<b>❌ Error</b>\n\nFailed to process streamrip configuration: {e}",
+        )
+    finally:
+        # Clean up temporary file
+        if temp_path:
+            try:
+                from os import remove
+                from os.path import exists
+
+                if exists(temp_path):
+                    remove(temp_path)
+            except Exception:
+                pass
+
+    # Return to streamrip config menu
+    await update_buttons(pre_message, "streamrip_config")
+
+
 @new_task
 async def handle_image_upload(_, message, pre_message):
     """Handle the upload of a watermark image from bot settings.
@@ -6180,39 +6616,68 @@ async def edit_variable(_, message, pre_message, key):
             "STREAMRIP_DEFAULT_QUALITY",
             "STREAMRIP_FALLBACK_QUALITY",
             "STREAMRIP_DEFAULT_CODEC",
+            "STREAMRIP_SUPPORTED_CODECS",
             "STREAMRIP_QUALITY_FALLBACK_ENABLED",
         ]:
             return_menu = "streamrip_quality"
         elif (
-            key.endswith("_ENABLED")
-            and any(
-                platform in key
-                for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
-            )
-        ) or key.endswith(
             (
-                "_EMAIL",
-                "_PASSWORD",
-                "_ARL",
-                "_CLIENT_ID",
-                "_ACCESS_TOKEN",
-                "_REFRESH_TOKEN",
-                "_USER_ID",
-                "_COUNTRY_CODE",
+                key.endswith("_ENABLED")
+                and any(
+                    platform in key
+                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                )
             )
+            or key.endswith(
+                (
+                    "_EMAIL",
+                    "_PASSWORD",
+                    "_ARL",
+                    "_CLIENT_ID",
+                    "_ACCESS_TOKEN",
+                    "_REFRESH_TOKEN",
+                    "_USER_ID",
+                    "_COUNTRY_CODE",
+                )
+            )
+            or key
+            in [
+                "STREAMRIP_QOBUZ_USE_AUTH_TOKEN",
+                "STREAMRIP_QOBUZ_APP_ID",
+                "STREAMRIP_QOBUZ_QUALITY",
+                "STREAMRIP_TIDAL_QUALITY",
+                "STREAMRIP_DEEZER_QUALITY",
+                "STREAMRIP_SOUNDCLOUD_QUALITY",
+            ]
         ):
             return_menu = "streamrip_credentials"
-        elif key in ["STREAMRIP_MAX_CONNECTIONS", "STREAMRIP_REQUESTS_PER_MINUTE"]:
+        elif key in [
+            "STREAMRIP_MAX_CONNECTIONS",
+            "STREAMRIP_REQUESTS_PER_MINUTE",
+            "STREAMRIP_SOURCE_SUBDIRECTORIES",
+            "STREAMRIP_DISC_SUBDIRECTORIES",
+            "STREAMRIP_CONCURRENCY",
+            "STREAMRIP_VERIFY_SSL",
+        ]:
             return_menu = "streamrip_download"
         elif key in [
             "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+            "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+            "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+            "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+            "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+            "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+            "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
             "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
             "STREAMRIP_TIDAL_TOKEN_EXPIRY",
             "STREAMRIP_DEEZER_USE_DEEZLOADER",
             "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
             "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+            "STREAMRIP_YOUTUBE_QUALITY",
             "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
             "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+            "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+            "STREAMRIP_LASTFM_ENABLED",
             "STREAMRIP_LASTFM_SOURCE",
             "STREAMRIP_LASTFM_FALLBACK_SOURCE",
         ]:
@@ -6233,10 +6698,17 @@ async def edit_variable(_, message, pre_message, key):
         ]:
             return_menu = "streamrip_conversion"
         elif key in [
+            "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+            "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+            "STREAMRIP_METADATA_EXCLUDE",
+        ]:
+            return_menu = "streamrip_metadata"
+        elif key in [
             "STREAMRIP_CLI_TEXT_OUTPUT",
             "STREAMRIP_CLI_PROGRESS_BARS",
             "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
             "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+            "STREAMRIP_MISC_VERSION",
         ]:
             return_menu = "streamrip_cli"
         elif key in [
@@ -6245,6 +6717,8 @@ async def edit_variable(_, message, pre_message, key):
             "STREAMRIP_EMBED_COVER_ART",
             "STREAMRIP_SAVE_COVER_ART",
             "STREAMRIP_COVER_ART_SIZE",
+            "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+            "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
             "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
             "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
             "STREAMRIP_FILEPATHS_TRACK_FORMAT",
@@ -7106,6 +7580,7 @@ async def edit_bot_settings(client, query):
         "streamrip_platforms",
         "streamrip_database",
         "streamrip_conversion",
+        "streamrip_metadata",
         "streamrip_cli",
         "streamrip_advanced",
         "streamrip_config",
@@ -7124,6 +7599,194 @@ async def edit_bot_settings(client, query):
         # Set the state back to what it was
         globals()["state"] = current_state
         await update_buttons(message, data[1])
+
+    elif data[1] == "view_streamrip_config":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await query.answer(
+                "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        try:
+            # Import streamrip config helper
+            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+            # Try to get custom config from database first
+            config_content = await streamrip_config.get_custom_config_from_db()
+
+            if not config_content:
+                # If no custom config, generate current config based on bot settings
+                config_content = await _generate_current_config_content()
+
+            if config_content:
+                # Create a temporary file to send
+                import os
+                import tempfile
+
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".toml", delete=False
+                ) as temp_file:
+                    temp_file.write(config_content)
+                    temp_file_path = temp_file.name
+
+                try:
+                    # Send the config file
+                    await send_file(
+                        message, temp_file_path, "current_streamrip_config.toml"
+                    )
+
+                    # Send info message
+                    config_type = (
+                        "custom"
+                        if await streamrip_config.get_custom_config_from_db()
+                        else "generated from bot settings"
+                    )
+                    await send_message(
+                        message,
+                        f"<b>📄 Current Streamrip Configuration</b>\n\n"
+                        f"The current streamrip configuration file has been sent above.\n\n"
+                        f"<b>Config Type:</b> {config_type}\n"
+                        f"<b>Note:</b> This shows the active configuration being used by the bot.",
+                    )
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(temp_file_path):
+                        os.remove(temp_file_path)
+            else:
+                await send_message(
+                    message,
+                    "<b>❌ Error</b>\n\n"
+                    "Could not retrieve the current streamrip configuration.",
+                )
+
+        except Exception as e:
+            from bot import LOGGER
+
+            LOGGER.error(f"Error viewing streamrip config: {e}")
+            await send_message(
+                message,
+                f"<b>❌ Error</b>\n\nFailed to view streamrip configuration: {e!s}",
+            )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+    elif data[1] == "upload_streamrip_config":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await query.answer(
+                "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set up handler for config file upload
+        handler_dict[message.chat.id] = True
+
+        # Send instructions to the user
+        buttons = ButtonMaker()
+        buttons.data_button("❌ Cancel", "botset cancel_streamrip_upload")
+        button_markup = buttons.build_menu(1)
+
+        # Update the current message with upload instructions
+        await edit_message(
+            message,
+            "<b>📤 Upload Streamrip Config</b>\n\n"
+            "Please send a <code>config.toml</code> file for streamrip.\n\n"
+            "<b>Requirements:</b>\n"
+            "• File must be a valid TOML format\n"
+            "• File should contain streamrip configuration sections\n"
+            "• Maximum file size: 5MB\n\n"
+            "<b>Note:</b> The uploaded config will override bot settings and be stored in the database.\n\n"
+            "Click Cancel to abort.",
+            button_markup,
+        )
+
+        # Set up event handler for the config file upload
+        await event_handler(
+            client,
+            query,
+            handle_streamrip_config_upload,
+            lambda: update_buttons(message, "streamrip_config"),
+            document=True,
+        )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+    elif data[1] == "reset_streamrip_config":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await query.answer(
+                "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        try:
+            # Import streamrip config helper
+            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+            # Delete custom config from database
+            success = await streamrip_config.delete_custom_config_from_db()
+
+            if success:
+                # Reinitialize streamrip config to use default settings
+                await streamrip_config.initialize()
+
+                await send_message(
+                    message,
+                    "<b>✅ Config Reset Successful</b>\n\n"
+                    "Streamrip configuration has been reset to default bot settings.\n\n"
+                    "<b>Changes:</b>\n"
+                    "• Custom config file removed from database\n"
+                    "• Reverted to bot's default streamrip settings\n"
+                    "• All platform credentials preserved\n\n"
+                    "<i>The bot will now use the configured settings from the individual menus.</i>",
+                )
+            else:
+                await send_message(
+                    message,
+                    "<b>❌ Reset Failed</b>\n\n"
+                    "Failed to reset streamrip configuration. Please try again.",
+                )
+
+        except Exception as e:
+            from bot import LOGGER
+
+            LOGGER.error(f"Error resetting streamrip config: {e}")
+            await send_message(
+                message,
+                f"<b>❌ Error</b>\n\nFailed to reset streamrip configuration: {e!s}",
+            )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+    elif data[1] == "cancel_streamrip_upload":
+        await query.answer("Upload cancelled.")
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Disable the handler
+        handler_dict[message.chat.id] = False
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+        # Return to streamrip config menu
+        await update_buttons(message, "streamrip_config")
 
     elif data[1] == "operations":
         await query.answer()
@@ -8518,6 +9181,18 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_QOBUZ_PASSWORD = DEFAULT_VALUES.get(
             "STREAMRIP_QOBUZ_PASSWORD", ""
         )
+        Config.STREAMRIP_QOBUZ_USE_AUTH_TOKEN = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_USE_AUTH_TOKEN", False
+        )
+        Config.STREAMRIP_QOBUZ_APP_ID = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_APP_ID", ""
+        )
+        Config.STREAMRIP_QOBUZ_SECRETS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_SECRETS", []
+        )
+        Config.STREAMRIP_QOBUZ_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_QUALITY", 3
+        )
         Config.STREAMRIP_TIDAL_ENABLED = DEFAULT_VALUES.get(
             "STREAMRIP_TIDAL_ENABLED", False
         )
@@ -8539,15 +9214,24 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_TIDAL_COUNTRY_CODE = DEFAULT_VALUES.get(
             "STREAMRIP_TIDAL_COUNTRY_CODE", ""
         )
+        Config.STREAMRIP_TIDAL_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_TIDAL_QUALITY", 3
+        )
         Config.STREAMRIP_DEEZER_ENABLED = DEFAULT_VALUES.get(
             "STREAMRIP_DEEZER_ENABLED", False
         )
         Config.STREAMRIP_DEEZER_ARL = DEFAULT_VALUES.get("STREAMRIP_DEEZER_ARL", "")
+        Config.STREAMRIP_DEEZER_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_DEEZER_QUALITY", 2
+        )
         Config.STREAMRIP_SOUNDCLOUD_ENABLED = DEFAULT_VALUES.get(
             "STREAMRIP_SOUNDCLOUD_ENABLED", False
         )
         Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID = DEFAULT_VALUES.get(
             "STREAMRIP_SOUNDCLOUD_CLIENT_ID", ""
+        )
+        Config.STREAMRIP_SOUNDCLOUD_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_SOUNDCLOUD_QUALITY", 0
         )
 
         # Update the database
@@ -8556,6 +9240,10 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_QOBUZ_ENABLED": Config.STREAMRIP_QOBUZ_ENABLED,
                 "STREAMRIP_QOBUZ_EMAIL": Config.STREAMRIP_QOBUZ_EMAIL,
                 "STREAMRIP_QOBUZ_PASSWORD": Config.STREAMRIP_QOBUZ_PASSWORD,
+                "STREAMRIP_QOBUZ_USE_AUTH_TOKEN": Config.STREAMRIP_QOBUZ_USE_AUTH_TOKEN,
+                "STREAMRIP_QOBUZ_APP_ID": Config.STREAMRIP_QOBUZ_APP_ID,
+                "STREAMRIP_QOBUZ_SECRETS": Config.STREAMRIP_QOBUZ_SECRETS,
+                "STREAMRIP_QOBUZ_QUALITY": Config.STREAMRIP_QOBUZ_QUALITY,
                 "STREAMRIP_TIDAL_ENABLED": Config.STREAMRIP_TIDAL_ENABLED,
                 "STREAMRIP_TIDAL_EMAIL": Config.STREAMRIP_TIDAL_EMAIL,
                 "STREAMRIP_TIDAL_PASSWORD": Config.STREAMRIP_TIDAL_PASSWORD,
@@ -8563,10 +9251,13 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_TIDAL_REFRESH_TOKEN": Config.STREAMRIP_TIDAL_REFRESH_TOKEN,
                 "STREAMRIP_TIDAL_USER_ID": Config.STREAMRIP_TIDAL_USER_ID,
                 "STREAMRIP_TIDAL_COUNTRY_CODE": Config.STREAMRIP_TIDAL_COUNTRY_CODE,
+                "STREAMRIP_TIDAL_QUALITY": Config.STREAMRIP_TIDAL_QUALITY,
                 "STREAMRIP_DEEZER_ENABLED": Config.STREAMRIP_DEEZER_ENABLED,
                 "STREAMRIP_DEEZER_ARL": Config.STREAMRIP_DEEZER_ARL,
+                "STREAMRIP_DEEZER_QUALITY": Config.STREAMRIP_DEEZER_QUALITY,
                 "STREAMRIP_SOUNDCLOUD_ENABLED": Config.STREAMRIP_SOUNDCLOUD_ENABLED,
                 "STREAMRIP_SOUNDCLOUD_CLIENT_ID": Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID,
+                "STREAMRIP_SOUNDCLOUD_QUALITY": Config.STREAMRIP_SOUNDCLOUD_QUALITY,
             }
         )
 
@@ -8584,12 +9275,34 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_MAX_SEARCH_RESULTS = DEFAULT_VALUES.get(
             "STREAMRIP_MAX_SEARCH_RESULTS", 20
         )
+        Config.STREAMRIP_MAX_CONNECTIONS = DEFAULT_VALUES.get(
+            "STREAMRIP_MAX_CONNECTIONS", 6
+        )
+        Config.STREAMRIP_REQUESTS_PER_MINUTE = DEFAULT_VALUES.get(
+            "STREAMRIP_REQUESTS_PER_MINUTE", 60
+        )
+        Config.STREAMRIP_SOURCE_SUBDIRECTORIES = DEFAULT_VALUES.get(
+            "STREAMRIP_SOURCE_SUBDIRECTORIES", False
+        )
+        Config.STREAMRIP_DISC_SUBDIRECTORIES = DEFAULT_VALUES.get(
+            "STREAMRIP_DISC_SUBDIRECTORIES", True
+        )
+        Config.STREAMRIP_CONCURRENCY = DEFAULT_VALUES.get("STREAMRIP_CONCURRENCY", 1)
+        Config.STREAMRIP_VERIFY_SSL = DEFAULT_VALUES.get(
+            "STREAMRIP_VERIFY_SSL", True
+        )
 
         # Update the database
         await database.update_config(
             {
                 "STREAMRIP_CONCURRENT_DOWNLOADS": Config.STREAMRIP_CONCURRENT_DOWNLOADS,
                 "STREAMRIP_MAX_SEARCH_RESULTS": Config.STREAMRIP_MAX_SEARCH_RESULTS,
+                "STREAMRIP_MAX_CONNECTIONS": Config.STREAMRIP_MAX_CONNECTIONS,
+                "STREAMRIP_REQUESTS_PER_MINUTE": Config.STREAMRIP_REQUESTS_PER_MINUTE,
+                "STREAMRIP_SOURCE_SUBDIRECTORIES": Config.STREAMRIP_SOURCE_SUBDIRECTORIES,
+                "STREAMRIP_DISC_SUBDIRECTORIES": Config.STREAMRIP_DISC_SUBDIRECTORIES,
+                "STREAMRIP_CONCURRENCY": Config.STREAMRIP_CONCURRENCY,
+                "STREAMRIP_VERIFY_SSL": Config.STREAMRIP_VERIFY_SSL,
             }
         )
 
@@ -8602,16 +9315,34 @@ async def edit_bot_settings(client, query):
         await query.answer("Resetting streamrip platform settings to default...")
         # Reset streamrip platform settings to default
         Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS = DEFAULT_VALUES.get(
-            "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", False
+            "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_EXTRAS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_EXTRAS", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_REPEATS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_REPEATS", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_FEATURES = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_FEATURES", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", True
+        )
+        Config.STREAMRIP_QOBUZ_FILTERS_NON_REMASTER = DEFAULT_VALUES.get(
+            "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", True
         )
         Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS = DEFAULT_VALUES.get(
-            "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", False
+            "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", True
         )
         Config.STREAMRIP_TIDAL_TOKEN_EXPIRY = DEFAULT_VALUES.get(
             "STREAMRIP_TIDAL_TOKEN_EXPIRY", ""
         )
         Config.STREAMRIP_DEEZER_USE_DEEZLOADER = DEFAULT_VALUES.get(
-            "STREAMRIP_DEEZER_USE_DEEZLOADER", False
+            "STREAMRIP_DEEZER_USE_DEEZLOADER", True
         )
         Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS = DEFAULT_VALUES.get(
             "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True
@@ -8619,11 +9350,20 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_SOUNDCLOUD_APP_VERSION = DEFAULT_VALUES.get(
             "STREAMRIP_SOUNDCLOUD_APP_VERSION", ""
         )
+        Config.STREAMRIP_YOUTUBE_QUALITY = DEFAULT_VALUES.get(
+            "STREAMRIP_YOUTUBE_QUALITY", 0
+        )
         Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS = DEFAULT_VALUES.get(
             "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False
         )
         Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER = DEFAULT_VALUES.get(
             "STREAMRIP_YOUTUBE_VIDEO_FOLDER", ""
+        )
+        Config.STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER = DEFAULT_VALUES.get(
+            "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER", ""
+        )
+        Config.STREAMRIP_LASTFM_ENABLED = DEFAULT_VALUES.get(
+            "STREAMRIP_LASTFM_ENABLED", True
         )
         Config.STREAMRIP_LASTFM_SOURCE = DEFAULT_VALUES.get(
             "STREAMRIP_LASTFM_SOURCE", "qobuz"
@@ -8636,13 +9376,22 @@ async def edit_bot_settings(client, query):
         await database.update_config(
             {
                 "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS": Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS,
+                "STREAMRIP_QOBUZ_FILTERS_EXTRAS": Config.STREAMRIP_QOBUZ_FILTERS_EXTRAS,
+                "STREAMRIP_QOBUZ_FILTERS_REPEATS": Config.STREAMRIP_QOBUZ_FILTERS_REPEATS,
+                "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS": Config.STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS,
+                "STREAMRIP_QOBUZ_FILTERS_FEATURES": Config.STREAMRIP_QOBUZ_FILTERS_FEATURES,
+                "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS": Config.STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS,
+                "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER": Config.STREAMRIP_QOBUZ_FILTERS_NON_REMASTER,
                 "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS": Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS,
                 "STREAMRIP_TIDAL_TOKEN_EXPIRY": Config.STREAMRIP_TIDAL_TOKEN_EXPIRY,
                 "STREAMRIP_DEEZER_USE_DEEZLOADER": Config.STREAMRIP_DEEZER_USE_DEEZLOADER,
                 "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS": Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS,
                 "STREAMRIP_SOUNDCLOUD_APP_VERSION": Config.STREAMRIP_SOUNDCLOUD_APP_VERSION,
+                "STREAMRIP_YOUTUBE_QUALITY": Config.STREAMRIP_YOUTUBE_QUALITY,
                 "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS": Config.STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS,
                 "STREAMRIP_YOUTUBE_VIDEO_FOLDER": Config.STREAMRIP_YOUTUBE_VIDEO_FOLDER,
+                "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER": Config.STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER,
+                "STREAMRIP_LASTFM_ENABLED": Config.STREAMRIP_LASTFM_ENABLED,
                 "STREAMRIP_LASTFM_SOURCE": Config.STREAMRIP_LASTFM_SOURCE,
                 "STREAMRIP_LASTFM_FALLBACK_SOURCE": Config.STREAMRIP_LASTFM_FALLBACK_SOURCE,
             }
@@ -8734,6 +9483,9 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_MISC_CHECK_FOR_UPDATES = DEFAULT_VALUES.get(
             "STREAMRIP_MISC_CHECK_FOR_UPDATES", True
         )
+        Config.STREAMRIP_MISC_VERSION = DEFAULT_VALUES.get(
+            "STREAMRIP_MISC_VERSION", "2.0.6"
+        )
 
         # Update the database
         await database.update_config(
@@ -8742,6 +9494,7 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_CLI_PROGRESS_BARS": Config.STREAMRIP_CLI_PROGRESS_BARS,
                 "STREAMRIP_CLI_MAX_SEARCH_RESULTS": Config.STREAMRIP_CLI_MAX_SEARCH_RESULTS,
                 "STREAMRIP_MISC_CHECK_FOR_UPDATES": Config.STREAMRIP_MISC_CHECK_FOR_UPDATES,
+                "STREAMRIP_MISC_VERSION": Config.STREAMRIP_MISC_VERSION,
             }
         )
 
@@ -8749,6 +9502,33 @@ async def edit_bot_settings(client, query):
         current_state = globals()["state"]
         globals()["state"] = current_state
         await update_buttons(message, "streamrip_cli")
+
+    elif data[1] == "default_streamrip_metadata":
+        await query.answer("Resetting streamrip metadata settings to default...")
+        # Reset streamrip metadata settings to default
+        Config.STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM = DEFAULT_VALUES.get(
+            "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True
+        )
+        Config.STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS = DEFAULT_VALUES.get(
+            "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True
+        )
+        Config.STREAMRIP_METADATA_EXCLUDE = DEFAULT_VALUES.get(
+            "STREAMRIP_METADATA_EXCLUDE", []
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM": Config.STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM,
+                "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS": Config.STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS,
+                "STREAMRIP_METADATA_EXCLUDE": Config.STREAMRIP_METADATA_EXCLUDE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "streamrip_metadata")
 
     elif data[1] == "default_streamrip_advanced":
         await query.answer("Resetting streamrip advanced settings to default...")
@@ -8768,6 +9548,29 @@ async def edit_bot_settings(client, query):
         Config.STREAMRIP_COVER_ART_SIZE = DEFAULT_VALUES.get(
             "STREAMRIP_COVER_ART_SIZE", "large"
         )
+        Config.STREAMRIP_ARTWORK_EMBED_MAX_WIDTH = DEFAULT_VALUES.get(
+            "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", -1
+        )
+        Config.STREAMRIP_ARTWORK_SAVED_MAX_WIDTH = DEFAULT_VALUES.get(
+            "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", -1
+        )
+        Config.STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER = DEFAULT_VALUES.get(
+            "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False
+        )
+        Config.STREAMRIP_FILEPATHS_FOLDER_FORMAT = DEFAULT_VALUES.get(
+            "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+            "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]",
+        )
+        Config.STREAMRIP_FILEPATHS_TRACK_FORMAT = DEFAULT_VALUES.get(
+            "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+            "{tracknumber:02}. {artist} - {title}{explicit}",
+        )
+        Config.STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS = DEFAULT_VALUES.get(
+            "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False
+        )
+        Config.STREAMRIP_FILEPATHS_TRUNCATE_TO = DEFAULT_VALUES.get(
+            "STREAMRIP_FILEPATHS_TRUNCATE_TO", 120
+        )
 
         # Update the database
         await database.update_config(
@@ -8777,6 +9580,13 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_EMBED_COVER_ART": Config.STREAMRIP_EMBED_COVER_ART,
                 "STREAMRIP_SAVE_COVER_ART": Config.STREAMRIP_SAVE_COVER_ART,
                 "STREAMRIP_COVER_ART_SIZE": Config.STREAMRIP_COVER_ART_SIZE,
+                "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH": Config.STREAMRIP_ARTWORK_EMBED_MAX_WIDTH,
+                "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH": Config.STREAMRIP_ARTWORK_SAVED_MAX_WIDTH,
+                "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER": Config.STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER,
+                "STREAMRIP_FILEPATHS_FOLDER_FORMAT": Config.STREAMRIP_FILEPATHS_FOLDER_FORMAT,
+                "STREAMRIP_FILEPATHS_TRACK_FORMAT": Config.STREAMRIP_FILEPATHS_TRACK_FORMAT,
+                "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS": Config.STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS,
+                "STREAMRIP_FILEPATHS_TRUNCATE_TO": Config.STREAMRIP_FILEPATHS_TRUNCATE_TO,
             }
         )
 
@@ -9152,29 +9962,127 @@ async def edit_bot_settings(client, query):
                     "STREAMRIP_MAX_SEARCH_RESULTS",
                     "STREAMRIP_ENABLE_DATABASE",
                     "STREAMRIP_AUTO_CONVERT",
+                    "STREAMRIP_LIMIT",
                 ]:
                     back_menu = "streamrip_general"
                 elif data[2] in [
                     "STREAMRIP_DEFAULT_QUALITY",
                     "STREAMRIP_FALLBACK_QUALITY",
                     "STREAMRIP_DEFAULT_CODEC",
+                    "STREAMRIP_SUPPORTED_CODECS",
                     "STREAMRIP_QUALITY_FALLBACK_ENABLED",
                 ]:
                     back_menu = "streamrip_quality"
                 elif (
-                    data[2].endswith("_ENABLED")
-                    and any(
-                        platform in data[2]
-                        for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                    (
+                        data[2].endswith("_ENABLED")
+                        and any(
+                            platform in data[2]
+                            for platform in [
+                                "QOBUZ",
+                                "TIDAL",
+                                "DEEZER",
+                                "SOUNDCLOUD",
+                            ]
+                        )
                     )
-                ) or data[2].endswith(("_EMAIL", "_PASSWORD", "_ARL", "_CLIENT_ID")):
+                    or data[2].endswith(
+                        (
+                            "_EMAIL",
+                            "_PASSWORD",
+                            "_ARL",
+                            "_CLIENT_ID",
+                            "_ACCESS_TOKEN",
+                            "_REFRESH_TOKEN",
+                            "_USER_ID",
+                            "_COUNTRY_CODE",
+                        )
+                    )
+                    or data[2]
+                    in [
+                        "STREAMRIP_QOBUZ_USE_AUTH_TOKEN",
+                        "STREAMRIP_QOBUZ_APP_ID",
+                        "STREAMRIP_QOBUZ_SECRETS",
+                        "STREAMRIP_QOBUZ_QUALITY",
+                        "STREAMRIP_TIDAL_QUALITY",
+                        "STREAMRIP_DEEZER_QUALITY",
+                        "STREAMRIP_SOUNDCLOUD_QUALITY",
+                    ]
+                ):
                     back_menu = "streamrip_credentials"
+                elif data[2] in [
+                    "STREAMRIP_MAX_CONNECTIONS",
+                    "STREAMRIP_REQUESTS_PER_MINUTE",
+                    "STREAMRIP_SOURCE_SUBDIRECTORIES",
+                    "STREAMRIP_DISC_SUBDIRECTORIES",
+                    "STREAMRIP_CONCURRENCY",
+                    "STREAMRIP_VERIFY_SSL",
+                ]:
+                    back_menu = "streamrip_download"
+                elif data[2] in [
+                    "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                    "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+                    "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+                    "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+                    "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+                    "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+                    "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
+                    "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                    "STREAMRIP_TIDAL_TOKEN_EXPIRY",
+                    "STREAMRIP_DEEZER_USE_DEEZLOADER",
+                    "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                    "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                    "STREAMRIP_YOUTUBE_QUALITY",
+                    "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+                    "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                    "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+                    "STREAMRIP_LASTFM_ENABLED",
+                    "STREAMRIP_LASTFM_SOURCE",
+                    "STREAMRIP_LASTFM_FALLBACK_SOURCE",
+                ]:
+                    back_menu = "streamrip_platforms"
+                elif data[2] in [
+                    "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                    "STREAMRIP_DATABASE_DOWNLOADS_PATH",
+                    "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+                    "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
+                ]:
+                    back_menu = "streamrip_database"
+                elif data[2] in [
+                    "STREAMRIP_CONVERSION_ENABLED",
+                    "STREAMRIP_CONVERSION_CODEC",
+                    "STREAMRIP_CONVERSION_SAMPLING_RATE",
+                    "STREAMRIP_CONVERSION_BIT_DEPTH",
+                    "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+                ]:
+                    back_menu = "streamrip_conversion"
+                elif data[2] in [
+                    "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+                    "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+                    "STREAMRIP_METADATA_EXCLUDE",
+                ]:
+                    back_menu = "streamrip_metadata"
+                elif data[2] in [
+                    "STREAMRIP_CLI_TEXT_OUTPUT",
+                    "STREAMRIP_CLI_PROGRESS_BARS",
+                    "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
+                    "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+                    "STREAMRIP_MISC_VERSION",
+                ]:
+                    back_menu = "streamrip_cli"
                 elif data[2] in [
                     "STREAMRIP_FILENAME_TEMPLATE",
                     "STREAMRIP_FOLDER_TEMPLATE",
                     "STREAMRIP_EMBED_COVER_ART",
                     "STREAMRIP_SAVE_COVER_ART",
                     "STREAMRIP_COVER_ART_SIZE",
+                    "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+                    "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
+                    "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                    "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+                    "STREAMRIP_FILEPATHS_TRACK_FORMAT",
+                    "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+                    "STREAMRIP_FILEPATHS_TRUNCATE_TO",
                 ]:
                     back_menu = "streamrip_advanced"
                 else:
@@ -9387,42 +10295,69 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_DEFAULT_QUALITY",
                 "STREAMRIP_FALLBACK_QUALITY",
                 "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_SUPPORTED_CODECS",
                 "STREAMRIP_QUALITY_FALLBACK_ENABLED",
             ]:
                 return_menu = "streamrip_quality"
             elif (
-                data[2].endswith("_ENABLED")
-                and any(
-                    platform in data[2]
-                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
-                )
-            ) or data[2].endswith(
                 (
-                    "_EMAIL",
-                    "_PASSWORD",
-                    "_ARL",
-                    "_CLIENT_ID",
-                    "_ACCESS_TOKEN",
-                    "_REFRESH_TOKEN",
-                    "_USER_ID",
-                    "_COUNTRY_CODE",
+                    data[2].endswith("_ENABLED")
+                    and any(
+                        platform in data[2]
+                        for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                    )
                 )
+                or data[2].endswith(
+                    (
+                        "_EMAIL",
+                        "_PASSWORD",
+                        "_ARL",
+                        "_CLIENT_ID",
+                        "_ACCESS_TOKEN",
+                        "_REFRESH_TOKEN",
+                        "_USER_ID",
+                        "_COUNTRY_CODE",
+                    )
+                )
+                or data[2]
+                in [
+                    "STREAMRIP_QOBUZ_USE_AUTH_TOKEN",
+                    "STREAMRIP_QOBUZ_APP_ID",
+                    "STREAMRIP_QOBUZ_SECRETS",
+                    "STREAMRIP_QOBUZ_QUALITY",
+                    "STREAMRIP_TIDAL_QUALITY",
+                    "STREAMRIP_DEEZER_QUALITY",
+                    "STREAMRIP_SOUNDCLOUD_QUALITY",
+                ]
             ):
                 return_menu = "streamrip_credentials"
             elif data[2] in [
                 "STREAMRIP_MAX_CONNECTIONS",
                 "STREAMRIP_REQUESTS_PER_MINUTE",
+                "STREAMRIP_SOURCE_SUBDIRECTORIES",
+                "STREAMRIP_DISC_SUBDIRECTORIES",
+                "STREAMRIP_CONCURRENCY",
+                "STREAMRIP_VERIFY_SSL",
             ]:
                 return_menu = "streamrip_download"
             elif data[2] in [
                 "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+                "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+                "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
                 "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
                 "STREAMRIP_TIDAL_TOKEN_EXPIRY",
                 "STREAMRIP_DEEZER_USE_DEEZLOADER",
                 "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
                 "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                "STREAMRIP_YOUTUBE_QUALITY",
                 "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
                 "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+                "STREAMRIP_LASTFM_ENABLED",
                 "STREAMRIP_LASTFM_SOURCE",
                 "STREAMRIP_LASTFM_FALLBACK_SOURCE",
             ]:
@@ -9443,10 +10378,17 @@ async def edit_bot_settings(client, query):
             ]:
                 return_menu = "streamrip_conversion"
             elif data[2] in [
+                "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+                "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+                "STREAMRIP_METADATA_EXCLUDE",
+            ]:
+                return_menu = "streamrip_metadata"
+            elif data[2] in [
                 "STREAMRIP_CLI_TEXT_OUTPUT",
                 "STREAMRIP_CLI_PROGRESS_BARS",
                 "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
                 "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+                "STREAMRIP_MISC_VERSION",
             ]:
                 return_menu = "streamrip_cli"
             elif data[2] in [
@@ -9455,6 +10397,8 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_EMBED_COVER_ART",
                 "STREAMRIP_SAVE_COVER_ART",
                 "STREAMRIP_COVER_ART_SIZE",
+                "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+                "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
                 "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
                 "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
                 "STREAMRIP_FILEPATHS_TRACK_FORMAT",
@@ -9906,42 +10850,69 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_DEFAULT_QUALITY",
                 "STREAMRIP_FALLBACK_QUALITY",
                 "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_SUPPORTED_CODECS",
                 "STREAMRIP_QUALITY_FALLBACK_ENABLED",
             ]:
                 previous_menu = "streamrip_quality"
             elif (
-                data[2].endswith("_ENABLED")
-                and any(
-                    platform in data[2]
-                    for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
-                )
-            ) or data[2].endswith(
                 (
-                    "_EMAIL",
-                    "_PASSWORD",
-                    "_ARL",
-                    "_CLIENT_ID",
-                    "_ACCESS_TOKEN",
-                    "_REFRESH_TOKEN",
-                    "_USER_ID",
-                    "_COUNTRY_CODE",
+                    data[2].endswith("_ENABLED")
+                    and any(
+                        platform in data[2]
+                        for platform in ["QOBUZ", "TIDAL", "DEEZER", "SOUNDCLOUD"]
+                    )
                 )
+                or data[2].endswith(
+                    (
+                        "_EMAIL",
+                        "_PASSWORD",
+                        "_ARL",
+                        "_CLIENT_ID",
+                        "_ACCESS_TOKEN",
+                        "_REFRESH_TOKEN",
+                        "_USER_ID",
+                        "_COUNTRY_CODE",
+                    )
+                )
+                or data[2]
+                in [
+                    "STREAMRIP_QOBUZ_USE_AUTH_TOKEN",
+                    "STREAMRIP_QOBUZ_APP_ID",
+                    "STREAMRIP_QOBUZ_SECRETS",
+                    "STREAMRIP_QOBUZ_QUALITY",
+                    "STREAMRIP_TIDAL_QUALITY",
+                    "STREAMRIP_DEEZER_QUALITY",
+                    "STREAMRIP_SOUNDCLOUD_QUALITY",
+                ]
             ):
                 previous_menu = "streamrip_credentials"
             elif data[2] in [
                 "STREAMRIP_MAX_CONNECTIONS",
                 "STREAMRIP_REQUESTS_PER_MINUTE",
+                "STREAMRIP_SOURCE_SUBDIRECTORIES",
+                "STREAMRIP_DISC_SUBDIRECTORIES",
+                "STREAMRIP_CONCURRENCY",
+                "STREAMRIP_VERIFY_SSL",
             ]:
                 previous_menu = "streamrip_download"
             elif data[2] in [
                 "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+                "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+                "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
                 "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
                 "STREAMRIP_TIDAL_TOKEN_EXPIRY",
                 "STREAMRIP_DEEZER_USE_DEEZLOADER",
                 "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
                 "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                "STREAMRIP_YOUTUBE_QUALITY",
                 "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
                 "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+                "STREAMRIP_LASTFM_ENABLED",
                 "STREAMRIP_LASTFM_SOURCE",
                 "STREAMRIP_LASTFM_FALLBACK_SOURCE",
             ]:
@@ -9962,10 +10933,17 @@ async def edit_bot_settings(client, query):
             ]:
                 previous_menu = "streamrip_conversion"
             elif data[2] in [
+                "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+                "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+                "STREAMRIP_METADATA_EXCLUDE",
+            ]:
+                previous_menu = "streamrip_metadata"
+            elif data[2] in [
                 "STREAMRIP_CLI_TEXT_OUTPUT",
                 "STREAMRIP_CLI_PROGRESS_BARS",
                 "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
                 "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+                "STREAMRIP_MISC_VERSION",
             ]:
                 previous_menu = "streamrip_cli"
             elif data[2] in [
@@ -9974,6 +10952,8 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_EMBED_COVER_ART",
                 "STREAMRIP_SAVE_COVER_ART",
                 "STREAMRIP_COVER_ART_SIZE",
+                "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+                "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
                 "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
                 "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
                 "STREAMRIP_FILEPATHS_TRACK_FORMAT",
@@ -11606,6 +12586,7 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_DEFAULT_QUALITY",
                 "STREAMRIP_FALLBACK_QUALITY",
                 "STREAMRIP_DEFAULT_CODEC",
+                "STREAMRIP_SUPPORTED_CODECS",
                 "STREAMRIP_QUALITY_FALLBACK_ENABLED",
             ]:
                 return_menu = "streamrip_quality"
@@ -11633,35 +12614,77 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_MAX_SEARCH_RESULTS",
                 "STREAMRIP_MAX_CONNECTIONS",
                 "STREAMRIP_REQUESTS_PER_MINUTE",
+                "STREAMRIP_SOURCE_SUBDIRECTORIES",
+                "STREAMRIP_DISC_SUBDIRECTORIES",
+                "STREAMRIP_CONCURRENCY",
+                "STREAMRIP_VERIFY_SSL",
             ]:
                 return_menu = "streamrip_download"
             elif key in [
                 "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS",
+                "STREAMRIP_QOBUZ_FILTERS_EXTRAS",
+                "STREAMRIP_QOBUZ_FILTERS_REPEATS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_FEATURES",
+                "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS",
+                "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER",
                 "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS",
+                "STREAMRIP_TIDAL_TOKEN_EXPIRY",
                 "STREAMRIP_DEEZER_USE_DEEZLOADER",
                 "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS",
+                "STREAMRIP_SOUNDCLOUD_APP_VERSION",
+                "STREAMRIP_YOUTUBE_QUALITY",
                 "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS",
+                "STREAMRIP_YOUTUBE_VIDEO_FOLDER",
+                "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER",
+                "STREAMRIP_LASTFM_ENABLED",
+                "STREAMRIP_LASTFM_SOURCE",
+                "STREAMRIP_LASTFM_FALLBACK_SOURCE",
             ]:
                 return_menu = "streamrip_platforms"
             elif key in [
                 "STREAMRIP_ENABLE_DATABASE",
                 "STREAMRIP_DATABASE_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_DOWNLOADS_PATH",
                 "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED",
+                "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
             ]:
                 return_menu = "streamrip_database"
-            elif key in ["STREAMRIP_CONVERSION_ENABLED"]:
+            elif key in [
+                "STREAMRIP_CONVERSION_ENABLED",
+                "STREAMRIP_CONVERSION_CODEC",
+                "STREAMRIP_CONVERSION_SAMPLING_RATE",
+                "STREAMRIP_CONVERSION_BIT_DEPTH",
+                "STREAMRIP_CONVERSION_LOSSY_BITRATE",
+            ]:
                 return_menu = "streamrip_conversion"
+            elif key in [
+                "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM",
+                "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS",
+                "STREAMRIP_METADATA_EXCLUDE",
+            ]:
+                return_menu = "streamrip_metadata"
             elif key in [
                 "STREAMRIP_CLI_TEXT_OUTPUT",
                 "STREAMRIP_CLI_PROGRESS_BARS",
+                "STREAMRIP_CLI_MAX_SEARCH_RESULTS",
                 "STREAMRIP_MISC_CHECK_FOR_UPDATES",
+                "STREAMRIP_MISC_VERSION",
             ]:
                 return_menu = "streamrip_cli"
             elif key in [
+                "STREAMRIP_FILENAME_TEMPLATE",
+                "STREAMRIP_FOLDER_TEMPLATE",
                 "STREAMRIP_EMBED_COVER_ART",
                 "STREAMRIP_SAVE_COVER_ART",
+                "STREAMRIP_COVER_ART_SIZE",
+                "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH",
+                "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH",
                 "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER",
+                "STREAMRIP_FILEPATHS_FOLDER_FORMAT",
+                "STREAMRIP_FILEPATHS_TRACK_FORMAT",
                 "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS",
+                "STREAMRIP_FILEPATHS_TRUNCATE_TO",
             ]:
                 return_menu = "streamrip_advanced"
             else:
