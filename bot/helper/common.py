@@ -71,6 +71,7 @@ from .telegram_helper.message_utils import (
 
 class TaskConfig:
     """Holds all configuration and state for a single mirror/leech task."""
+
     def __init__(self):
         """Initializes the TaskConfig object based on the incoming message."""
         self.mid = self.message.id
@@ -856,6 +857,7 @@ class TaskConfig:
 
     async def substitute(self, dl_path):
         """Performs name substitution on downloaded files/folders based on task settings."""
+
         def perform_substitution(name, substitutions):
             for substitution in substitutions:
                 sen = False
@@ -908,6 +910,7 @@ class TaskConfig:
 
     async def remove_www_prefix(self, dl_path):
         """Removes 'www.domain.com - ' like prefixes from filenames."""
+
         def clean_filename(name):
             return sub(
                 r"^www\.[^ ]+\s*-\s*|\s*^www\.[^ ]+\s*",
@@ -1333,7 +1336,9 @@ class TaskConfig:
                                 self.progress = False
                                 await cpu_eater_lock.acquire()
                                 self.progress = True
-                            LOGGER.info(f"Running watermark command for: {file_path}")
+                            LOGGER.info(
+                                f"Running watermark command for: {file_path}"
+                            )
                             self.subsize = await aiopath.getsize(file_path)
                             self.subname = file_
                             res = await ffmpeg.metadata_watermark_cmds(

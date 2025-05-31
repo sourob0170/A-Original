@@ -13,6 +13,7 @@ from bot.core.config_manager import Config
 
 class DbManager:
     """A class to manage interactions with the MongoDB database."""
+
     def __init__(self):
         """Initializes the DbManager, setting initial connection state."""
         self._return = True  # Flag to indicate if DB operations should be skipped
@@ -28,7 +29,7 @@ class DbManager:
                 Config.DATABASE_URL,
                 server_api=ServerApi("1"),
             )
-            self.db = self._conn.luna # 'luna' is the database name
+            self.db = self._conn.luna  # 'luna' is the database name
             self._return = False
             LOGGER.info("Successfully connected to the database.")
         except PyMongoError as e:

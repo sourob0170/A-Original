@@ -17,7 +17,7 @@ class Config:
     CMD_SUFFIX: str = ""
     DATABASE_URL: str = ""
     DEFAULT_UPLOAD: str = ""
-    DOWNLOAD_DIR: str = "/usr/src/app/downloads/" # Added
+    DOWNLOAD_DIR: str = "/usr/src/app/downloads/"  # Added
     EXCLUDED_EXTENSIONS: str = ""
     FFMPEG_CMDS: ClassVar[dict[str, list[str]]] = {}
     FILELION_API: str = ""

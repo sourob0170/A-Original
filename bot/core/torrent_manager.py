@@ -48,6 +48,7 @@ class TorrentManager:
     """Manages Aria2c and qBittorrent client instances and provides
     common torrent operations.
     """
+
     aria2 = None
     qbittorrent = None
 

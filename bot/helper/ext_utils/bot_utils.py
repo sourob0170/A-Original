@@ -32,6 +32,7 @@ class SetInterval:
     A class to mimic JavaScript's setInterval functionality, running a
     specified action at regular intervals.
     """
+
     def __init__(self, interval, action, *args, **kwargs):
         """
         Initializes the SetInterval timer.
@@ -118,7 +119,7 @@ async def get_telegraph_list(telegraph_content):
     path = [
         (
             await telegraph.create_page(
-                title="Aeon-MLTB Drive Search", # Consistent with project name
+                title="Aeon-MLTB Drive Search",  # Consistent with project name
                 content=content,
             )
         )["path"]
@@ -311,6 +312,7 @@ async def cmd_exec(cmd, shell=False):
 
 def new_task(func):
     """Decorator to run the wrapped awaitable function as a new task in the bot's event loop."""
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         return bot_loop.create_task(func(*args, **kwargs))
@@ -359,6 +361,7 @@ def loop_thread(func):
     Decorator to run an awaitable function in the bot's event loop
     from a synchronous context, typically another thread.
     """
+
     @wraps(func)
     def wrapper(*args, wait=False, **kwargs):
         future = run_coroutine_threadsafe(func(*args, **kwargs), bot_loop)

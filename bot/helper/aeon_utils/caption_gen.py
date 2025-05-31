@@ -16,6 +16,7 @@ from bot.helper.ext_utils.status_utils import (
 
 class DefaultDict(dict):
     """A dictionary that returns a default value for a missing key."""
+
     def __missing__(self, key):
         return "Unknown"
 
