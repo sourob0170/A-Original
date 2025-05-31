@@ -1,7 +1,9 @@
 #!/bin/bash
+# This script starts an aria2c (or xria) instance with a predefined set of options,
+# including a dynamically fetched list of BitTorrent trackers.
 
-tracker_list=$(curl -Ns https://ngosang.github.io/trackerslist/trackers_all_http.txt | 
-               awk '$0' | tr '\n\n' ',')
+tracker_list=$(curl -Ns https://ngosang.github.io/trackerslist/trackers_all_http.txt |
+               awk '$0' | tr '\n' ',') # Corrected: replace single newlines with commas
 
 xria \
     --allow-overwrite=true \
@@ -9,7 +11,7 @@ xria \
     --bt-enable-lpd=true \
     --bt-detach-seed-only=true \
     --bt-remove-unselected-file=true \
-    --bt-tracker="[$tracker_list]" \
+    --bt-tracker="$tracker_list" \ # Corrected: removed superfluous brackets
     --bt-max-peers=0 \
     --enable-rpc=true \
     --rpc-max-request-size=1024M \

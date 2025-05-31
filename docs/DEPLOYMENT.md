@@ -22,9 +22,9 @@ Follow these steps to deploy Aeon to Heroku:
    - **DATABASE_URL**: MongoDB connection string.
    - **TELEGRAM_API**: Telegram API ID (from [my.telegram.org](https://my.telegram.org/)).
    - **TELEGRAM_HASH**: Telegram API hash (from [my.telegram.org](https://my.telegram.org/)).
-   - **HEROKU_APP_NAME**: Name of your Heroku app.
+   - **HEROKU_APP_NAME**: Name of your Heroku app (you should create this on Heroku beforehand).
    - **HEROKU_EMAIL**: Email address associated with your Heroku account.
-   - **HEROKU_API_KEY**: API key from your Heroku account.
+   - **HEROKU_API_KEY**: API key from your Heroku account (found under Account Settings > API Key).
    - **HEROKU_TEAM_NAME** (Optional): Required only if deploying under a Heroku team account.
 4. Run the workflow and wait for it to complete.
 

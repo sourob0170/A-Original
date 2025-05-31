@@ -16,7 +16,8 @@ class Config:
     BOT_TOKEN: str = ""
     CMD_SUFFIX: str = ""
     DATABASE_URL: str = ""
-    DEFAULT_UPLOAD: str = ""  # Changed default to empty string
+    DEFAULT_UPLOAD: str = ""
+    DOWNLOAD_DIR: str = "/usr/src/app/downloads/" # Added
     EXCLUDED_EXTENSIONS: str = ""
     FFMPEG_CMDS: ClassVar[dict[str, list[str]]] = {}
     FILELION_API: str = ""
@@ -65,7 +66,11 @@ class Config:
     WEB_PINCODE: bool = False
     YT_DLP_OPTIONS: ClassVar[dict[str, Any]] = {}
 
-    # INKYPINKY
+    # Mega.nz
+    MEGA_EMAIL: str = ""
+    MEGA_PASSWORD: str = ""
+
+    # Aeon-MLTB Specific / Custom Features
     METADATA_KEY: str = ""
     WATERMARK_KEY: str = ""
     SET_COMMANDS: bool = True

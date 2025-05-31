@@ -70,7 +70,9 @@ from .telegram_helper.message_utils import (
 
 
 class TaskConfig:
+    """Holds all configuration and state for a single mirror/leech task."""
     def __init__(self):
+        """Initializes the TaskConfig object based on the incoming message."""
         self.mid = self.message.id
         self.user = self.message.from_user or self.message.sender_chat
         self.user_id = self.user.id
@@ -152,12 +154,13 @@ class TaskConfig:
         )
 
     async def is_token_exists(self, path, status):
+        """Checks if Rclone config or GDrive token exists for the given path and operation status."""
         if is_rclone_path(path):
             config_path = self.get_config_path(path)
             if config_path != "rclone.conf" and status == "up":
                 self.private_link = True
             if not await aiopath.exists(config_path):
-                raise ValueError(f"Rclone Config: {config_path} not Exists!")
+                raise ValueError(f"Rclone Config: {config_path} does not exist!")
         elif (status == "dl" and is_gdrive_link(path)) or (
             status == "up" and is_gdrive_id(path)
         ):
@@ -165,9 +168,18 @@ class TaskConfig:
             if token_path.startswith("tokens/") and status == "up":
                 self.private_link = True
             if not await aiopath.exists(token_path):
-                raise ValueError(f"NO TOKEN! {token_path} not Exists!")
+                raise ValueError(f"Token not found! {token_path} does not exist!")
 
     async def before_start(self):
+        """Performs pre-task setup including:
+        - Name substitution, metadata, watermark settings.
+        - Excluded extensions.
+        - Rclone flags.
+        - Path validation and token checks for links and upload destinations.
+        - User transmission and hybrid leech settings.
+        - FFmpeg command processing.
+        - Leech specific settings like split size and document type.
+        """
         self.name_sub = (
             self.name_sub
             or self.user_dict.get("NAME_SUBSTITUTE", False)
@@ -521,7 +533,7 @@ class TaskConfig:
         if self.multi_tag and self.multi_tag not in multi_tags:
             await send_message(
                 self.message,
-                f"{self.tag} Multi Task has been cancelled!",
+                f"{self.tag} Multi-task has been cancelled!",
             )
             await send_status_message(self.message)
             async with task_dict_lock:
@@ -612,10 +624,11 @@ class TaskConfig:
         except Exception as e:
             await send_message(
                 self.message,
-                f"Reply to text file or to telegram message that have links separated by new line! {e}",
+                f"Reply to a text file or a Telegram message with links separated by new lines. Error: {e}",
             )
 
     async def proceed_extract(self, dl_path, gid):
+        """Extracts archives from the downloaded path."""
         pswd = self.extract if isinstance(self.extract, str) else ""
         self.files_to_proceed = []
         if self.is_file and is_archive(dl_path):
@@ -671,10 +684,11 @@ class TaskConfig:
                         except Exception:
                             self.is_cancelled = True
         if self.proceed_count == 0:
-            LOGGER.info("No files able to extract!")
+            LOGGER.info("No extractable files found!")
         return t_path if self.is_file and code == 0 else dl_path
 
     async def proceed_ffmpeg(self, dl_path, gid):
+        """Processes media files using FFmpeg commands defined in the task."""
         checked = False
         inputs = {}
         cmds = [
@@ -749,7 +763,7 @@ class TaskConfig:
                         self.progress = False
                         await cpu_eater_lock.acquire()
                         self.progress = True
-                    LOGGER.info(f"Running ffmpeg cmd for: {file_path}")
+                            LOGGER.info(f"Running FFmpeg command for: {file_path}")
                     for index in input_indexes:
                         if cmd[index + 1].startswith("mltb"):
                             cmd[index + 1] = file_path
@@ -820,7 +834,7 @@ class TaskConfig:
                                 self.progress = False
                                 await cpu_eater_lock.acquire()
                                 self.progress = True
-                            LOGGER.info(f"Running ffmpeg cmd for: {f_path}")
+                            LOGGER.info(f"Running FFmpeg command for: {f_path}")
                             self.subsize = await get_path_size(f_path)
                             self.subname = file_
                             res = await ffmpeg.ffmpeg_cmds(var_cmd, f_path)
@@ -841,6 +855,7 @@ class TaskConfig:
         return dl_path
 
     async def substitute(self, dl_path):
+        """Performs name substitution on downloaded files/folders based on task settings."""
         def perform_substitution(name, substitutions):
             for substitution in substitutions:
                 sen = False
@@ -892,6 +907,7 @@ class TaskConfig:
         return dl_path
 
     async def remove_www_prefix(self, dl_path):
+        """Removes 'www.domain.com - ' like prefixes from filenames."""
         def clean_filename(name):
             return sub(
                 r"^www\.[^ ]+\s*-\s*|\s*^www\.[^ ]+\s*",
@@ -922,6 +938,7 @@ class TaskConfig:
         return dl_path
 
     async def generate_screenshots(self, dl_path):
+        """Generates screenshots for video files."""
         ss_nb = int(self.screen_shots) if isinstance(self.screen_shots, str) else 10
         if self.is_file:
             if (await get_document_type(dl_path))[0]:
@@ -950,6 +967,7 @@ class TaskConfig:
         return dl_path
 
     async def convert_media(self, dl_path, gid):
+        """Converts video/audio files to specified formats based on task settings."""
         fvext = []
         if self.convert_video:
             vdata = self.convert_video.split()
@@ -1069,6 +1087,7 @@ class TaskConfig:
         return dl_path
 
     async def generate_sample_video(self, dl_path, gid):
+        """Generates a sample video from the input file."""
         data = (
             self.sample_video.split(":")
             if isinstance(self.sample_video, str)
@@ -1102,7 +1121,7 @@ class TaskConfig:
             self.progress = False
             async with cpu_eater_lock:
                 self.progress = True
-                LOGGER.info(f"Creating Sample video: {self.name}")
+                LOGGER.info(f"Creating sample video for: {self.name}")
                 for f_path, file_ in self.files_to_proceed.items():
                     self.proceed_count += 1
                     if self.is_file:
@@ -1126,6 +1145,7 @@ class TaskConfig:
         return dl_path
 
     async def proceed_compress(self, dl_path, gid):
+        """Compresses the downloaded file/folder into a zip archive."""
         pswd = self.compress if isinstance(self.compress, str) else ""
         if self.is_leech and self.is_file:
             new_folder = ospath.splitext(dl_path)[0]
@@ -1144,6 +1164,7 @@ class TaskConfig:
         return await sevenz.zip(dl_path, up_path, pswd)
 
     async def proceed_split(self, dl_path, gid):
+        """Splits files larger than the specified split size."""
         self.files_to_proceed = {}
         if self.is_file:
             f_size = await get_path_size(dl_path)
@@ -1191,6 +1212,7 @@ class TaskConfig:
         return None
 
     async def proceed_metadata(self, dl_path, gid):
+        """Adds metadata to MKV files based on the task's metadata key."""
         key = self.metadata
         ffmpeg = FFMpeg(self)
         checked = False
@@ -1243,7 +1265,7 @@ class TaskConfig:
                                 self.progress = False
                                 await cpu_eater_lock.acquire()
                                 self.progress = True
-                            LOGGER.info(f"Running metadata cmd for: {file_path}")
+                            LOGGER.info(f"Running metadata command for: {file_path}")
                             self.subsize = await aiopath.getsize(file_path)
                             self.subname = file_
                             res = await ffmpeg.metadata_watermark_cmds(
@@ -1259,6 +1281,7 @@ class TaskConfig:
         return dl_path
 
     async def proceed_watermark(self, dl_path, gid):
+        """Adds a text watermark to MKV video files."""
         key = self.watermark
         ffmpeg = FFMpeg(self)
         checked = False
@@ -1310,7 +1333,7 @@ class TaskConfig:
                                 self.progress = False
                                 await cpu_eater_lock.acquire()
                                 self.progress = True
-                            LOGGER.info(f"Running cmd for: {file_path}")
+                            LOGGER.info(f"Running watermark command for: {file_path}")
                             self.subsize = await aiopath.getsize(file_path)
                             self.subname = file_
                             res = await ffmpeg.metadata_watermark_cmds(
@@ -1326,6 +1349,7 @@ class TaskConfig:
         return dl_path
 
     async def proceed_embed_thumb(self, dl_path, gid):
+        """Embeds a thumbnail into MKV video files."""
         thumb = self.e_thumb
         ffmpeg = FFMpeg(self)
         checked = False

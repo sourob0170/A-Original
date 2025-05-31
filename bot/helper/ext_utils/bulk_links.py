@@ -3,21 +3,52 @@ from aiofiles.os import remove
 
 
 def filter_links(links_list: list, bulk_start: int, bulk_end: int) -> list:
+    """
+    Filters a list of links based on start and end indices.
+
+    Args:
+        links_list: The list of links to filter.
+        bulk_start: The starting index (1-based). If 0, no start filtering.
+        bulk_end: The ending index. If 0, no end filtering.
+
+    Returns:
+        The filtered list of links.
+    """
     if bulk_start != 0 and bulk_end != 0:
-        links_list = links_list[bulk_start:bulk_end]
+        links_list = links_list[bulk_start -1:bulk_end] # Adjust for 0-based indexing
     elif bulk_start != 0:
-        links_list = links_list[bulk_start:]
+        links_list = links_list[bulk_start -1:] # Adjust for 0-based indexing
     elif bulk_end != 0:
         links_list = links_list[:bulk_end]
     return links_list
 
 
 def get_links_from_message(text: str) -> list:
+    """
+    Extracts links from a string, assuming one link per line.
+    Empty lines are ignored.
+
+    Args:
+        text: The string containing links.
+
+    Returns:
+        A list of extracted links.
+    """
     links_list = text.split("\n")
     return [item.strip() for item in links_list if len(item) != 0]
 
 
 async def get_links_from_file(message) -> list:
+    """
+    Downloads a text file attached to a Pyrogram message and extracts links from it,
+    assuming one link per line. Empty lines are ignored.
+
+    Args:
+        message: The Pyrogram message object with the attached text file.
+
+    Returns:
+        A list of extracted links.
+    """
     links_list = []
     text_file_dir = await message.download()
     async with aiopen(text_file_dir, "r+") as f:
@@ -28,6 +59,19 @@ async def get_links_from_file(message) -> list:
 
 
 async def extract_bulk_links(message, bulk_start: str, bulk_end: str) -> list:
+    """
+    Extracts bulk links from a Pyrogram message.
+    Links can be in the replied-to message's text or an attached text file.
+    The extracted links are then filtered based on start and end indices.
+
+    Args:
+        message: The Pyrogram message object.
+        bulk_start: The starting index for filtering (string, converted to int).
+        bulk_end: The ending index for filtering (string, converted to int).
+
+    Returns:
+        A list of filtered links.
+    """
     bulk_start = int(bulk_start)
     bulk_end = int(bulk_end)
     links_list = []
