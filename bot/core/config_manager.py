@@ -16,7 +16,7 @@ class Config:
     BOT_TOKEN: str = ""
     CMD_SUFFIX: str = ""
     DATABASE_URL: str = ""
-    DEFAULT_UPLOAD: str = "" # Changed default to empty string
+    DEFAULT_UPLOAD: str = ""  # Changed default to empty string
     EXCLUDED_EXTENSIONS: str = ""
     FFMPEG_CMDS: ClassVar[dict[str, list[str]]] = {}
     FILELION_API: str = ""
@@ -140,7 +140,7 @@ class Config:
 
         if key == "DEFAULT_UPLOAD":
             if value.lower() not in ["yt", "gd", "rc"]:
-                return "" # If not yt, gd, or rc, set to empty (no specific default)
+                return ""  # If not yt, gd, or rc, set to empty (no specific default)
             return value.lower()
 
         if key in {"BASE_URL", "RCLONE_SERVE_URL", "INDEX_URL"}:

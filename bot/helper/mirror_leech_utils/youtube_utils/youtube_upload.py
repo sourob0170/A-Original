@@ -1,8 +1,5 @@
-import contextlib
 import os
 from logging import getLogger
-from os import path as ospath
-from os import remove
 
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
@@ -48,30 +45,43 @@ class YouTubeUpload(YouTubeHelper):
                             video_id_or_url = self._upload_video(
                                 item_path, item_name, mime_type
                             )
-                            if video_id_or_url and "youtube.com/watch?v=" in video_id_or_url:
+                            if (
+                                video_id_or_url
+                                and "youtube.com/watch?v=" in video_id_or_url
+                            ):
                                 video_id = video_id_or_url.split("=")[-1]
                                 video_ids.append(video_id)
-                                LOGGER.info(f"Successfully uploaded video: {item_name}, ID: {video_id}")
+                                LOGGER.info(
+                                    f"Successfully uploaded video: {item_name}, ID: {video_id}"
+                                )
                             elif self.listener.is_cancelled:
-                                LOGGER.info("Playlist upload cancelled during video upload.")
-                                return None # Or handle as partial success
+                                LOGGER.info(
+                                    "Playlist upload cancelled during video upload."
+                                )
+                                return None  # Or handle as partial success
                             else:
-                                LOGGER.warning(f"Failed to upload video or extract ID: {item_name}")
+                                LOGGER.warning(
+                                    f"Failed to upload video or extract ID: {item_name}"
+                                )
                         except Exception as e:
                             LOGGER.error(f"Error uploading video {item_name}: {e}")
                             # Optionally, decide if one video failure should stop the whole playlist
                             # For now, we continue and try to upload other videos
                     else:
-                        LOGGER.debug(f"Skipping non-video file: {item_path} (MIME: {mime_type})")
+                        LOGGER.debug(
+                            f"Skipping non-video file: {item_path} (MIME: {mime_type})"
+                        )
                 if self.listener.is_cancelled:
                     LOGGER.info("Playlist upload process cancelled.")
-                    return None # Or handle cleanup for partially uploaded videos
+                    return None  # Or handle cleanup for partially uploaded videos
 
             if not video_ids:
                 LOGGER.info("No videos found or uploaded in the folder.")
-                if video_files_count > 0: # Videos were found but failed to upload
-                    raise ValueError("No videos were successfully uploaded from the folder.")
-                return "No videos to upload in playlist." # Or specific message
+                if video_files_count > 0:  # Videos were found but failed to upload
+                    raise ValueError(
+                        "No videos were successfully uploaded from the folder."
+                    )
+                return "No videos to upload in playlist."  # Or specific message
 
             LOGGER.info(f"Creating playlist: {playlist_name}")
             playlist_request_body = {
@@ -80,7 +90,7 @@ class YouTubeUpload(YouTubeHelper):
                     "description": f"Playlist created from folder: {playlist_name}",
                     "tags": ["mirror-leech-bot", "playlist-upload"],
                 },
-                "status": {"privacyStatus": "private"}, # Or user-defined
+                "status": {"privacyStatus": "private"},  # Or user-defined
             }
             playlist_insert_request = self.service.playlists().insert(
                 part="snippet,status", body=playlist_request_body
@@ -88,12 +98,16 @@ class YouTubeUpload(YouTubeHelper):
             playlist_response = playlist_insert_request.execute()
             playlist_id = playlist_response["id"]
             playlist_url = f"https://www.youtube.com/playlist?list={playlist_id}"
-            LOGGER.info(f"Playlist created: {playlist_name}, ID: {playlist_id}, URL: {playlist_url}")
+            LOGGER.info(
+                f"Playlist created: {playlist_name}, ID: {playlist_id}, URL: {playlist_url}"
+            )
 
             for video_id in video_ids:
                 if self.listener.is_cancelled:
-                    LOGGER.info("Playlist upload cancelled before adding all videos to playlist.")
-                    break # Stop adding more videos
+                    LOGGER.info(
+                        "Playlist upload cancelled before adding all videos to playlist."
+                    )
+                    break  # Stop adding more videos
                 LOGGER.info(f"Adding video ID {video_id} to playlist {playlist_id}")
                 playlist_item_request_body = {
                     "snippet": {
@@ -105,18 +119,22 @@ class YouTubeUpload(YouTubeHelper):
                     part="snippet", body=playlist_item_request_body
                 )
                 playlist_item_insert_request.execute()
-                LOGGER.info(f"Successfully added video ID {video_id} to playlist {playlist_id}")
+                LOGGER.info(
+                    f"Successfully added video ID {video_id} to playlist {playlist_id}"
+                )
 
             # Update total_files for the listener, this might need adjustment based on how listener expects it
-            self.total_files = len(video_ids) # Count of successfully uploaded and added videos
+            self.total_files = len(
+                video_ids
+            )  # Count of successfully uploaded and added videos
             return playlist_url
 
         except HttpError as e:
             LOGGER.error(f"YouTube API error during playlist operation: {e}")
-            raise e # Re-raise to be caught by the main upload method's error handler
+            raise e  # Re-raise to be caught by the main upload method's error handler
         except Exception as e:
             LOGGER.error(f"Error during playlist creation or video addition: {e}")
-            raise e # Re-raise
+            raise e  # Re-raise
 
     def user_setting(self):
         """Handle user-specific YouTube token settings"""
@@ -174,13 +192,15 @@ class YouTubeUpload(YouTubeHelper):
                 LOGGER.info("Upload cancelled by listener.")
                 return
 
-            if upload_result_url is None and not self.listener.is_cancelled :
-                 # Check if it was due to no videos in folder for playlist
-                if upload_type == "Playlist" and self.total_files == 0 :
-                     LOGGER.info("Playlist upload resulted in no videos uploaded.")
-                     # Keep upload_result_url as None or specific message from _upload_playlist
+            if upload_result_url is None and not self.listener.is_cancelled:
+                # Check if it was due to no videos in folder for playlist
+                if upload_type == "Playlist" and self.total_files == 0:
+                    LOGGER.info("Playlist upload resulted in no videos uploaded.")
+                    # Keep upload_result_url as None or specific message from _upload_playlist
                 else:
-                    raise ValueError("Upload result is None but not cancelled by listener and not an empty playlist.")
+                    raise ValueError(
+                        "Upload result is None but not cancelled by listener and not an empty playlist."
+                    )
 
         except Exception as err:
             if isinstance(err, RetryError):
@@ -201,11 +221,18 @@ class YouTubeUpload(YouTubeHelper):
             LOGGER.error("Upload process failed with an error.")
             return
 
-        if upload_result_url is None and upload_type == "Playlist" and files_processed == 0:
+        if (
+            upload_result_url is None
+            and upload_type == "Playlist"
+            and files_processed == 0
+        ):
             # Handle case where playlist was "successful" but no videos were uploaded (e.g. empty folder)
             # The error or specific message should ideally come from _upload_playlist
-             async_to_sync(self.listener.on_upload_error, "No videos found in the folder to upload to playlist.")
-             return
+            async_to_sync(
+                self.listener.on_upload_error,
+                "No videos found in the folder to upload to playlist.",
+            )
+            return
 
         async_to_sync(
             self.listener.on_upload_complete,
@@ -324,9 +351,11 @@ class YouTubeUpload(YouTubeHelper):
         # If listener cancelled during next_chunk loop, response will be None.
         if self.listener.is_cancelled:
             LOGGER.info("Video upload cancelled during chunk upload.")
-            return None # Propagate cancellation
+            return None  # Propagate cancellation
 
-        raise ValueError("Upload completed (or cancelled) but no response received and not handled by cancellation")
+        raise ValueError(
+            "Upload completed (or cancelled) but no response received and not handled by cancellation"
+        )
 
     def get_upload_status(self):
         return {
