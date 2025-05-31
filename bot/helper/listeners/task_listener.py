@@ -20,6 +20,7 @@ from bot import (
     task_dict,
     task_dict_lock,
 )
+# DEFAULT_UPLOAD is part of Config, so no separate import needed here.
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager
 from bot.helper.common import TaskConfig
@@ -335,8 +336,11 @@ class TaskListener(TaskConfig):
 
         self.size = await get_path_size(up_dir)
 
-        if self.is_yt:
-            LOGGER.info(f"Up to yt Name: {self.name}")
+        if not self.uploader: # If -ul was not provided or was empty
+            self.uploader = Config.DEFAULT_UPLOAD # Use the global default from config_manager
+
+        if self.uploader == "yt":
+            LOGGER.info(f"Uploading to YouTube: {self.name} (uploader: yt)")
             yt = YouTubeUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = YtStatus(self, yt, gid)
@@ -345,8 +349,34 @@ class TaskListener(TaskConfig):
                 sync_to_async(yt.upload),
             )
             del yt
-        elif self.is_leech:
-            LOGGER.info(f"Leech Name: {self.name}")
+        elif self.uploader == "gd":
+            if not is_gdrive_id(self.up_dest):
+                await self.on_upload_error(f"Google Drive ID not provided or invalid in -up / UPSTREAM_REPO for -ul gd. Path: {self.up_dest}")
+                return
+            LOGGER.info(f"Uploading to Google Drive: {self.name} (uploader: gd)")
+            drive = GoogleDriveUpload(self, up_path)
+            async with task_dict_lock:
+                task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                sync_to_async(drive.upload),
+            )
+            del drive
+        elif self.uploader == "rc":
+            if not self.up_dest:
+                await self.on_upload_error(f"Rclone destination not provided in -up / UPSTREAM_REPO for -ul rc.")
+                return
+            LOGGER.info(f"Uploading to Rclone: {self.name} (uploader: rc)")
+            RCTransfer = RcloneTransferHelper(self)
+            async with task_dict_lock:
+                task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                RCTransfer.upload(up_path),
+            )
+            del RCTransfer
+        elif self.is_leech: # Leech is primary if -ul is not 'yt', 'gd', or 'rc'
+            LOGGER.info(f"Leeching: {self.name} (no specific uploader or is_leech)")
             tg = TelegramUploader(self, up_dir)
             async with task_dict_lock:
                 task_dict[self.mid] = TelegramStatus(self, tg, gid, "up")
@@ -356,8 +386,8 @@ class TaskListener(TaskConfig):
             )
             await delete_message(tg.log_msg)
             del tg
-        elif is_gdrive_id(self.up_dest):
-            LOGGER.info(f"Gdrive Upload Name: {self.name}")
+        elif is_gdrive_id(self.up_dest): # Fallback to -up if -ul is not used
+            LOGGER.info(f"Uploading to Google Drive: {self.name} based on -up")
             drive = GoogleDriveUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
@@ -366,9 +396,25 @@ class TaskListener(TaskConfig):
                 sync_to_async(drive.upload),
             )
             del drive
-        else:
-            LOGGER.info(f"Rclone Upload Name: {self.name}")
+        elif self.up_dest: # Fallback to -up for Rclone if -ul is not used and not GDrive ID
+            LOGGER.info(f"Uploading to Rclone: {self.name} based on -up")
             RCTransfer = RcloneTransferHelper(self)
+            async with task_dict_lock:
+                task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                RCTransfer.upload(up_path),
+            )
+            del RCTransfer
+        else:
+            # Default action if no uploader specified (-ul) and no destination (-up) and not leech
+            # This could be an error, or a default configured globally,
+            # for now, it implies an rclone upload to a default path if RCLONE_PATH is set,
+            # or an error if no path can be determined.
+            # The original code defaulted to Rclone, let's maintain that if possible.
+            # RcloneTransferHelper will use default remote from config if self.up_dest is empty.
+            LOGGER.info(f"Defaulting to Rclone Upload: {self.name} (uploader: '', up_dest: {self.up_dest or 'not set'})")
+            RCTransfer = RcloneTransferHelper(self) # Assumes RcloneTransferHelper can handle empty self.up_dest by using global config
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
             await gather(
@@ -396,10 +442,10 @@ class TaskListener(TaskConfig):
         msg = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
         done_msg = f"{self.tag}\nYour task is complete\nPlease check your inbox."
         LOGGER.info(f"Task Done: {self.name}")
-        if self.is_yt:
-            msg += "\n<b>Type: </b>Video"
+        if self.uploader == "yt":
+            msg += "\n<b>Type: </b>Video/Playlist" # Updated to reflect it can be a playlist
             if link:
-                msg += f"\n<b>Video Link: </b><a href='{link}'>YouTube</a>"
+                msg += f"\n<b>Link: </b><a href='{link}'>Link</a>" # Generic "Link" as it can be video or playlist
             msg += f"\n\n<b>cc: </b>{self.tag}"
 
             await send_message(self.user_id, msg)
