@@ -763,7 +763,7 @@ class TaskConfig:
                         self.progress = False
                         await cpu_eater_lock.acquire()
                         self.progress = True
-                            LOGGER.info(f"Running FFmpeg command for: {file_path}")
+                        LOGGER.info(f"Running FFmpeg command for: {file_path}")
                     for index in input_indexes:
                         if cmd[index + 1].startswith("mltb"):
                             cmd[index + 1] = file_path
