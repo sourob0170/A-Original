@@ -20,7 +20,6 @@ from bot import (
     task_dict,
     task_dict_lock,
 )
-
 from bot.core.config_manager import Config
 from bot.core.torrent_manager import TorrentManager
 from bot.helper.common import TaskConfig
@@ -337,9 +336,7 @@ class TaskListener(TaskConfig):
         self.size = await get_path_size(up_dir)
 
         if not self.uploader:
-            self.uploader = (
-                Config.DEFAULT_UPLOAD
-            )
+            self.uploader = Config.DEFAULT_UPLOAD
 
         if self.is_leech:
             LOGGER.info(f"Leeching: {self.name} (no specific uploader or is_leech)")
@@ -402,9 +399,7 @@ class TaskListener(TaskConfig):
                 RCTransfer.upload(up_path),
             )
             del RCTransfer
-        elif (
-            self.up_dest
-        ):
+        elif self.up_dest:
             LOGGER.info(f"Uploading to Rclone: {self.name} based on -up")
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
@@ -418,9 +413,7 @@ class TaskListener(TaskConfig):
             LOGGER.info(
                 f"Defaulting to Rclone Upload: {self.name} (uploader: '', up_dest: {self.up_dest or 'not set'})"
             )
-            RCTransfer = RcloneTransferHelper(
-                self
-            )
+            RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
             await gather(
