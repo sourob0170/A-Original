@@ -83,6 +83,7 @@ async def status_pages(_, query):
     data = query.data.split()
     key = int(data[1])
     if not status_dict.get(key):
+        await query.answer()
         await delete_message(query.message)
         return
     await query.answer()
@@ -132,6 +133,7 @@ async def status_pages(_, query):
             "Metadata": 0,
             "Watermark": 0,
             "EmbedThumb": 0,
+            "YtUp": 0,
         }
         dl_speed = ds
         up_speed = 0
@@ -179,6 +181,8 @@ async def status_pages(_, query):
                         tasks["Watermark"] += 1
                     case MirrorStatus.STATUS_ETHUMB:
                         tasks["EmbedThumb"] += 1
+                    case MirrorStatus.STATUS_YT:
+                        tasks["YtUp"] += 1
                     case _:
                         tasks["Download"] += 1
 
@@ -186,7 +190,7 @@ async def status_pages(_, query):
 <b>EX:</b> {tasks["Extract"]} | <b>SP:</b> {tasks["Split"]} | <b>QD:</b> {tasks["QueueDl"]} | <b>QU:</b> {tasks["QueueUp"]}
 <b>CL:</b> {tasks["Clone"]} | <b>CK:</b> {tasks["CheckUp"]} | <b>PA:</b> {tasks["Pause"]} | <b>SV:</b> {tasks["SamVid"]}
 <b>CM:</b> {tasks["ConvertMedia"]} | <b>FF:</b> {tasks["FFmpeg"]} | <b>MD:</b> {tasks["Metadata"]} | <b>WM:</b> {tasks["Watermark"]}
-<b>ET:</b> {tasks["EmbedThumb"]}
+<b>ET:</b> {tasks["EmbedThumb"]} | <b>YT:</b> {tasks["YtUp"]}
 
 <b>ODLS:</b> {get_readable_file_size(dl_speed)}/s
 <b>OULS:</b> {get_readable_file_size(up_speed)}/s
