@@ -49,7 +49,7 @@ class JDownloader(MyJdApi):
             "email": Config.JD_EMAIL,
         }
         remote_data = {
-            "localapiserverheaderaccesscontrolalloworigin": "",
+            "localapiserverheaderaccesscontrollalloworigin": "",
             "deprecatedapiport": 3128,
             "localapiserverheaderxcontenttypeoptions": "nosniff",
             "localapiserverheaderxframeoptions": "DENY",
@@ -60,7 +60,7 @@ class JDownloader(MyJdApi):
             "localapiserverheadercontentsecuritypolicy": "default-src 'self'",
             "jdanywhereapienabled": True,
             "externinterfacelocalhostonly": False,
-            "localapiserverheaderxsssprotection": "1; mode=block",
+            "localapiserverheaderxxssprotection": "1; mode=block",
         }
         await makedirs("/JDownloader/cfg", exist_ok=True)
         with open(  # noqa: ASYNC230

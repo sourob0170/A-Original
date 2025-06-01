@@ -10,7 +10,6 @@ DATABASE_URL = ""
 # OPTIONAL CONFIG
 TG_PROXY = {}  # Example: {"scheme": "socks5", "hostname": "11.22.33.44", "port": 1234, "username": "user", "password": "pass"}
 USER_SESSION_STRING = ""
-DOWNLOAD_DIR = "/usr/src/app/downloads/"  # Default download directory
 CMD_SUFFIX = ""  # Suffix to add to all bot commands
 AUTHORIZED_CHATS = ""  # Space separated chat_id/user_id to authorize
 SUDO_USERS = ""  # Space separated user_id for sudo access
@@ -57,10 +56,6 @@ RCLONE_SERVE_URL = ""  # URL for Rclone serve (e.g., http://myip or http://myip:
 RCLONE_SERVE_PORT = 8080  # Port for Rclone serve (Default: 8080)
 RCLONE_SERVE_USER = ""  # Username for Rclone serve
 RCLONE_SERVE_PASS = ""  # Password for Rclone serve
-
-# Mega.nz Credentials
-MEGA_EMAIL = ""
-MEGA_PASSWORD = ""
 
 # Sabnzbd
 USENET_SERVERS = [  # List of Usenet server configurations

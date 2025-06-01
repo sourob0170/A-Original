@@ -16,10 +16,10 @@ def filter_links(links_list: list, bulk_start: int, bulk_end: int) -> list:
     """
     if bulk_start != 0 and bulk_end != 0:
         links_list = links_list[
-            bulk_start - 1 : bulk_end
-        ]  # Adjust for 0-based indexing
+            bulk_start : bulk_end
+        ]
     elif bulk_start != 0:
-        links_list = links_list[bulk_start - 1 :]  # Adjust for 0-based indexing
+        links_list = links_list[bulk_start:]
     elif bulk_end != 0:
         links_list = links_list[:bulk_end]
     return links_list
