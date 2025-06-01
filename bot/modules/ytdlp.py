@@ -335,6 +335,7 @@ class YtDlp(TaskListener):
             "-ns": "",
             "-md": "",
             "-tl": "",
+            "-ul": "",
             "-ff": set(),
         }
 
@@ -378,6 +379,7 @@ class YtDlp(TaskListener):
         )
         self.bot_trans = args["-bt"]
         self.user_trans = args["-ut"]
+        self.uploader = args["-ul"]
 
         is_bulk = args["-b"]
 
