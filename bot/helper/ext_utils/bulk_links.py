@@ -15,9 +15,7 @@ def filter_links(links_list: list, bulk_start: int, bulk_end: int) -> list:
         The filtered list of links.
     """
     if bulk_start != 0 and bulk_end != 0:
-        links_list = links_list[
-            bulk_start : bulk_end
-        ]
+        links_list = links_list[bulk_start:bulk_end]
     elif bulk_start != 0:
         links_list = links_list[bulk_start:]
     elif bulk_end != 0:
