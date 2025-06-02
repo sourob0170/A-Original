@@ -22,19 +22,6 @@ jobs:
             exit 0
           fi
 
-          escape_markdown() {
-            echo "$1" | sed \
-              -e 's/\\/\\\\/g' \
-              -e 's/\*/\\*/g' \
-              -e 's/_/\\_/g' \
-              -e 's//\/g' \
-              -e 's//\/g' \
-              -e 's/(/\/g' \
-              -e 's/)/\/g' \
-              -e 's/\`/\\`/g' \
-              -e 's/\~/\\~/g'
-          }
-
           CHAT_ID=$DEFAULT_CHAT_ID
           if [[ "$BRANCH_NAME" == "main" ]]; then
             CHAT_ID=$MAIN_CHAT_ID
@@ -43,34 +30,46 @@ jobs:
           REPO_URL="https://github.com/${REPO}"
           BRANCH_URL="${REPO_URL}/commits/${BRANCH_NAME}"
 
-          USER_ESCAPED=$(escape_markdown "$USER")
-          REPO_ESCAPED=$(escape_markdown "$REPO")
-          BRANCH_ESCAPED=$(escape_markdown "$BRANCH_NAME")
+          # Function to escape Markdown special characters
+          escape_markdown() {
+            echo "$1" | sed 's/[_*[\]()~`>#+=|{}.!-]/\\&/g'
+          }
 
           MESSAGE="*New Commit Pushed*\n\n"
-          MESSAGE+="*Commit by:* [${USER_ESCAPED}](${AUTHOR_URL})\n"
-          MESSAGE+="*Repository:* [${REPO_ESCAPED}](${REPO_URL})\n"
-          MESSAGE+="*Branch:* [${BRANCH_ESCAPED}](${BRANCH_URL})\n\n"
+          MESSAGE+="*Commit by:* [${USER}](${AUTHOR_URL})\n"
+          MESSAGE+="*Repository:* [${REPO}](${REPO_URL})\n"
+          MESSAGE+="*Branch:* [${BRANCH_NAME}](${BRANCH_URL})\n\n"
 
           mapfile -t COMMITS < <(echo "$COMMITS_JSON" | jq -c '.[]')
           for commit in "${COMMITS[@]}"; do
             HASH=$(jq -r '.id' <<< "$commit")
             FULL_MSG=$(jq -r '.message' <<< "$commit")
-            MSG_TITLE=$(escape_markdown "$(echo "$FULL_MSG" | head -n 1)")
-            MSG_BODY=$(escape_markdown "$(echo "$FULL_MSG" | tail -n +2)")
+            MSG_TITLE=$(echo "$FULL_MSG" | head -n 1)
+            MSG_BODY=$(echo "$FULL_MSG" | tail -n +2)
             SHORT_HASH=${HASH:0:7}
             COMMIT_URL="${REPO_URL}/commit/${HASH}"
-            MESSAGE+="[${SHORT_HASH}](${COMMIT_URL}): ${MSG_TITLE}\n"
+            
+            # Escape special characters in commit message
+            ESCAPED_TITLE=$(escape_markdown "$MSG_TITLE")
+            MESSAGE+="[${SHORT_HASH}](${COMMIT_URL}): ${ESCAPED_TITLE}\n"
+            
             if [[ -n "$MSG_BODY" ]]; then
-              MESSAGE+="${MSG_BODY}\n"
+              ESCAPED_BODY=$(escape_markdown "$MSG_BODY")
+              MESSAGE+="${ESCAPED_BODY}\n"
             fi
           done
 
+          # Create JSON payload with proper escaping
+          JSON_PAYLOAD=$(jq -n \
+            --arg chat_id "$CHAT_ID" \
+            --arg text "$MESSAGE" \
+            '{
+              chat_id: $chat_id,
+              text: $text,
+              parse_mode: "MarkdownV2",
+              disable_web_page_preview: true
+            }')
+
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "chat_id": "'"${CHAT_ID}"'",
-            "text": "'"${MESSAGE//\"/\\\"}"'",
-            "parse_mode": "Markdown",
-            "disable_web_page_preview": true
-          }'
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"

@@ -3,6 +3,7 @@ name: format code with ruff
 on:
   push:
 
+
 jobs:
   code-format:
     permissions:
@@ -55,31 +56,16 @@ jobs:
           USER: ${{ github.actor }}
           AUTHOR_URL: https://github.com/${{ github.actor }}
         run: |
-          escape_markdown() {
-            echo "$1" | sed \
-              -e 's/\*/\\*/g' \
-              -e 's/_/\\_/g' \
-              -e 's//\/g' \
-              -e 's//\/g' \
-              -e 's/(/\/g' \
-              -e 's/)/\/g' \
-              -e 's/\`/\\`/g' \
-              -e 's/\~/\\~/g'
-          }
-
           COMMIT_HASH=$(git rev-parse HEAD)
           COMMIT_URL="https://github.com/${REPO}/commit/${COMMIT_HASH}"
           FULL_MSG=$(git log -1 --pretty=%B)
-          MSG_TITLE=$(escape_markdown "$(echo "$FULL_MSG" | head -n 1)")
-          MSG_BODY=$(escape_markdown "$(echo "$FULL_MSG" | tail -n +2)")
-          USER_ESCAPED=$(escape_markdown "$USER")
-          REPO_ESCAPED=$(escape_markdown "$REPO")
-          BRANCH_ESCAPED=$(escape_markdown "$BRANCH_NAME")
+          MSG_TITLE=$(echo "$FULL_MSG" | head -n 1)
+          MSG_BODY=$(echo "$FULL_MSG" | tail -n +2)
 
           MESSAGE="*New Commit Pushed*\n\n"
-          MESSAGE+="*Commit by:* [${USER_ESCAPED}](${AUTHOR_URL})\n"
-          MESSAGE+="*Repository:* ${REPO_ESCAPED}\n"
-          MESSAGE+="*Branch:* ${BRANCH_ESCAPED}\n\n"
+          MESSAGE+="*Commit by:* [${USER}](${AUTHOR_URL})\n"
+          MESSAGE+="*Repository:* ${REPO}\n"
+          MESSAGE+="*Branch:* ${BRANCH_NAME}\n\n"
           MESSAGE+="[${COMMIT_HASH:0:7}](${COMMIT_URL}): ${MSG_TITLE}\n"
           if [[ -n "$MSG_BODY" ]]; then
             MESSAGE+="${MSG_BODY}\n"
