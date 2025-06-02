@@ -107,7 +107,6 @@ class Mirror(TaskListener):
             "-hl": False,
             "-bt": False,
             "-ut": False,
-            "-ul": "",  # New uploader argument
             "-i": 0,
             "-sp": 0,
             "link": "",
@@ -133,6 +132,7 @@ class Mirror(TaskListener):
         self.seed = args["-d"]
         self.name = args["-n"]
         self.up_dest = args["-up"]
+        self.raw_up_dest = args["-up"]
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
@@ -158,7 +158,6 @@ class Mirror(TaskListener):
         )
         self.bot_trans = args["-bt"]
         self.user_trans = args["-ut"]
-        self.uploader = args["-ul"]  # New uploader instance variable
         self.ffmpeg_cmds = args["-ff"]
 
         headers = args["-h"]
