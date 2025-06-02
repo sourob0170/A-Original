@@ -383,9 +383,7 @@ class TaskListener(TaskConfig):
             )
             del drive
         else:
-            LOGGER.info(
-                f"Uploading to Rclone"
-            )
+            LOGGER.info("Uploading to Rclone")
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
