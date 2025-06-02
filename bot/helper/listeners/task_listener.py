@@ -335,29 +335,19 @@ class TaskListener(TaskConfig):
 
         self.size = await get_path_size(up_dir)
 
-        # Determine the upload service
         upload_service = ""
-        # self.raw_up_dest stores the original -up argument.
-        # self.up_dest has been processed by before_start() and should be the actual path/ID if -up was 'gd'/'rc' or a path/ID.
 
-        if self.raw_up_dest == "yt" or (
-            self.raw_up_dest and self.raw_up_dest.startswith("yt:")
-        ):
+        if self.raw_up_dest == "yt":
             upload_service = "yt"
-        elif self.raw_up_dest == "gd":  # User explicitly typed -up gd
+        elif self.raw_up_dest == "gd":
             upload_service = "gd"
-            # before_start should have updated self.up_dest to the actual GDrive ID
-        elif self.raw_up_dest == "rc":  # User explicitly typed -up rc
+        elif self.raw_up_dest == "rc":
             upload_service = "rc"
-            # before_start should have updated self.up_dest to the actual Rclone path
 
-        if not upload_service:  # If -up didn't specify a service directly
+        if not upload_service:
             upload_service = self.user_dict.get(
                 "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
             )
-            # If DEFAULT_UPLOAD is 'yt', 'gd', 'rc', upload_service is now set.
-            # self.up_dest at this point holds the actual path/ID for this default service (resolved by before_start),
-            # or the path/ID the user provided if -up was a path/ID.
 
         if self.is_leech:
             LOGGER.info(f"Leeching: {self.name} (no specific uploader or is_leech)")
@@ -372,7 +362,6 @@ class TaskListener(TaskConfig):
             del tg
         elif upload_service == "yt":
             LOGGER.info(f"Uploading to YouTube: {self.name} (Service selected: yt)")
-            # YouTubeUpload will use self.listener.raw_up_dest for token via user_setting()
             yt = YouTubeUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = YtStatus(self, yt, gid)
@@ -381,44 +370,7 @@ class TaskListener(TaskConfig):
                 sync_to_async(yt.upload),
             )
             del yt
-        elif upload_service == "gd":
-            if not is_gdrive_id(
-                self.up_dest
-            ):  # self.up_dest is critical here (resolved path/ID)
-                await self.on_upload_error(
-                    f"Google Drive ID not provided or invalid for 'gd' service. Current up_dest: {self.up_dest}"
-                )
-                return
-            LOGGER.info(
-                f"Uploading to Google Drive: {self.name} (Service: gd, Destination ID: {self.up_dest})"
-            )
-            drive = GoogleDriveUpload(self, up_path)  # self.up_dest is GDrive ID
-            async with task_dict_lock:
-                task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
-            await gather(
-                update_status_message(self.message.chat.id),
-                sync_to_async(drive.upload),
-            )
-            del drive
-        elif upload_service == "rc":
-            # self.up_dest is the rclone path (or empty for default remote)
-            if self.up_dest and not is_rclone_path(self.up_dest):
-                await self.on_upload_error(
-                    f"Rclone path is invalid for 'rc' service. Current up_dest: {self.up_dest}"
-                )
-                return
-            LOGGER.info(
-                f"Uploading to Rclone: {self.name} (Service: rc, Destination: {self.up_dest or 'default remote'})"
-            )
-            RCTransfer = RcloneTransferHelper(self)  # Uses self.up_dest
-            async with task_dict_lock:
-                task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
-            await gather(
-                update_status_message(self.message.chat.id),
-                RCTransfer.upload(up_path),  # up_path is the source file/folder
-            )
-            del RCTransfer
-        elif is_gdrive_id(self.up_dest):  # Fallback for -up <gdrive_id>
+        elif is_gdrive_id(self.up_dest):
             LOGGER.info(
                 f"Uploading to Google Drive (path-detected): {self.name} (Destination ID: {self.up_dest})"
             )
@@ -430,11 +382,9 @@ class TaskListener(TaskConfig):
                 sync_to_async(drive.upload),
             )
             del drive
-        elif (
-            is_rclone_path(self.up_dest) or not self.up_dest
-        ):  # Fallback for -up <rclone_path> or ultimate default
+        else:
             LOGGER.info(
-                f"Uploading to Rclone (path-detected or default): {self.name} (Destination: {self.up_dest or 'default remote'})"
+                f"Uploading to Rclone"
             )
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
@@ -444,11 +394,6 @@ class TaskListener(TaskConfig):
                 RCTransfer.upload(up_path),
             )
             del RCTransfer
-        else:
-            await self.on_upload_error(
-                f"Could not determine a valid upload method. Raw -up: '{self.raw_up_dest}', Resolved up_dest: '{self.up_dest}', Service: '{upload_service}'"
-            )
-            return
 
     async def on_upload_complete(
         self,
