@@ -302,27 +302,18 @@ class TaskConfig:
             ) or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
 
-            # Determine the service that has effectively been chosen
-            # default_upload variable should be available from earlier in the method
             chosen_service = ""
             if self.up_dest == "yt" or (
                 self.up_dest and self.up_dest.startswith("yt:")
             ):
                 chosen_service = "yt"
-            # If self.up_dest was "gd" or "rc" (user typed -up gd/rc), it's now a path/ID.
-            # In this case, we need to infer the service from default_upload if not "yt".
-            # Or if self.up_dest was an actual path/ID, or empty.
             else:
-                # default_upload here refers to the variable calculated at the start of this section:
-                # default_upload = (self.user_dict.get("DEFAULT_UPLOAD", "") or Config.DEFAULT_UPLOAD)
                 chosen_service = default_upload
 
             if chosen_service not in ["yt"] and not self.up_dest:
                 raise ValueError(
                     f"No Upload Destination path/ID for service '{chosen_service}'! Please set an upload path or a default for it."
                 )
-            # If chosen_service is 'yt', self.up_dest can be "yt", "yt:token", or empty (if -up was not used and default is 'yt').
-            # This is fine because the YouTube upload process itself doesn't need self.up_dest as a path.
             if is_gdrive_id(self.up_dest):
                 if not self.up_dest.startswith(
                     ("mtp:", "tp:", "sa:"),
@@ -335,8 +326,6 @@ class TaskConfig:
                 ):
                     self.up_dest = f"mrcc:{self.up_dest}"
                 self.up_dest = self.up_dest.strip("/")
-            else:
-                raise ValueError("Wrong Upload Destination!")
 
             if self.up_dest not in ["rcl", "gdl"]:
                 await self.is_token_exists(self.up_dest, "up")
