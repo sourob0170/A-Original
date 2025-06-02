@@ -24,6 +24,7 @@ jobs:
 
           escape_markdown() {
             echo "$1" | sed \
+              -e 's/\\/\\\\/g' \
               -e 's/\*/\\*/g' \
               -e 's/_/\\_/g' \
               -e 's//\/g' \
