@@ -30,15 +30,18 @@ jobs:
           REPO_URL="https://github.com/${REPO}"
           BRANCH_URL="${REPO_URL}/commits/${BRANCH_NAME}"
 
-          # Function to escape Markdown special characters
-          escape_markdown() {
-            echo "$1" | sed 's/[_*[\]()~`>#+=|{}.!-]/\\&/g'
+          # Function to escape HTML special characters
+          escape_html() {
+            echo "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
           }
 
-          MESSAGE="*New Commit Pushed*\n\n"
-          MESSAGE+="*Commit by:* [${USER}](${AUTHOR_URL})\n"
-          MESSAGE+="*Repository:* [${REPO}](${REPO_URL})\n"
-          MESSAGE+="*Branch:* [${BRANCH_NAME}](${BRANCH_URL})\n\n"
+          MESSAGE="<b>New Commit Pushed</b>\n\n"
+          ESCAPED_USER=$(escape_html "$USER")
+          ESCAPED_REPO=$(escape_html "$REPO")
+          ESCAPED_BRANCH=$(escape_html "$BRANCH_NAME")
+          MESSAGE+="<b>Commit by:</b> <a href=\"${AUTHOR_URL}\">${ESCAPED_USER}</a>\n"
+          MESSAGE+="<b>Repository:</b> <a href=\"${REPO_URL}\">${ESCAPED_REPO}</a>\n"
+          MESSAGE+="<b>Branch:</b> <a href=\"${BRANCH_URL}\">${ESCAPED_BRANCH}</a>\n\n"
 
           mapfile -t COMMITS < <(echo "$COMMITS_JSON" | jq -c '.[]')
           for commit in "${COMMITS[@]}"; do
@@ -49,12 +52,12 @@ jobs:
             SHORT_HASH=${HASH:0:7}
             COMMIT_URL="${REPO_URL}/commit/${HASH}"
             
-            # Escape special characters in commit message
-            ESCAPED_TITLE=$(escape_markdown "$MSG_TITLE")
-            MESSAGE+="[${SHORT_HASH}](${COMMIT_URL}): ${ESCAPED_TITLE}\n"
+            # Escape HTML special characters in commit message
+            ESCAPED_TITLE=$(escape_html "$MSG_TITLE")
+            MESSAGE+="<a href=\"${COMMIT_URL}\">${SHORT_HASH}</a>: ${ESCAPED_TITLE}\n"
             
             if [[ -n "$MSG_BODY" ]]; then
-              ESCAPED_BODY=$(escape_markdown "$MSG_BODY")
+              ESCAPED_BODY=$(escape_html "$MSG_BODY")
               MESSAGE+="${ESCAPED_BODY}\n"
             fi
           done
@@ -66,7 +69,7 @@ jobs:
             '{
               chat_id: $chat_id,
               text: $text,
-              parse_mode: "MarkdownV2",
+              parse_mode: "HTML",
               disable_web_page_preview: true
             }')
 
