@@ -245,7 +245,7 @@ Stop Duplicate is <b>{sd_msg}</b>"""
             du = "YouTube"
 
         buttons.data_button(
-            "Default Upload",
+            f"Default Upload {default_upload}",
             f"userset {user_id} upload_dest",
         )
 
@@ -718,6 +718,9 @@ async def edit_user_settings(client, query):
     elif data[2] == "upload_dest":
         await query.answer()
         await update_user_settings(query, "upload_dest")
+    elif data[2] == "back":
+        await query.answer()
+        await update_user_settings(query)
     else:
         await query.answer()
         await delete_message(message.reply_to_message)
