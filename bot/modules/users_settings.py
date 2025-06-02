@@ -235,7 +235,7 @@ Stop Duplicate is <b>{sd_msg}</b>"""
         if user_dict.get("DEFAULT_UPLOAD", ""):
             default_upload = user_dict["DEFAULT_UPLOAD"]
         elif "DEFAULT_UPLOAD" not in user_dict:
-            default_upload = Config.DEFAULT_UPLOAD or "gd" # Set Gdrive as default
+            default_upload = Config.DEFAULT_UPLOAD or "gd"  # Set Gdrive as default
 
         if default_upload == "gd":
             du = "Gdrive API"
@@ -706,7 +706,10 @@ async def edit_user_settings(client, query):
         update_user_ldata(user_id, "DEFAULT_UPLOAD", data[3])
         await update_user_settings(query)
         await database.update_user_data(user_id)
-    elif data[2] in ["gd", "rc"]: # This block is now obsolete but kept for safety, can be removed later
+    elif data[2] in [
+        "gd",
+        "rc",
+    ]:  # This block is now obsolete but kept for safety, can be removed later
         await query.answer()
         du = "rc" if data[2] == "gd" else "gd"
         update_user_ldata(user_id, "DEFAULT_UPLOAD", du)
