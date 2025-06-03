@@ -109,36 +109,24 @@ class StreamripListener(TaskListener):
         self.force_run = False
         self.force_download = False
         self.force_upload = False
-        self.is_torrent = False
         self.is_qbit = False
         self.is_nzb = False
         self.is_clone = False
         self.is_ytdlp = False
         self.is_jd = False
-        # Set user_transmission based on config and user settings (same as normal leech)
-        # This follows the exact same logic as TaskConfig.before_start() method
-        from bot.core.aeon_client import TgClient
-
-        self.user_transmission = TgClient.IS_PREMIUM_USER and (
-            self.user_dict.get("USER_TRANSMISSION")
-            or (
-                Config.USER_TRANSMISSION
-                and "USER_TRANSMISSION" not in self.user_dict
-            )
-        )
+        # user_transmission related lines removed
         self.hybrid_leech = False
         self.as_med = False
         self.as_doc = False
         self.bot_trans = False
         self.user_trans = False
 
-        # Apply the same user_transmission logic as normal leech (from TaskConfig.before_start)
+        # Apply the same hybrid_leech logic as normal leech (from TaskConfig.before_start)
         # Handle bot_trans and user_trans flags like normal leech does
         if self.bot_trans:
-            self.user_transmission = False
             self.hybrid_leech = False
         if self.user_trans:
-            self.user_transmission = TgClient.IS_PREMIUM_USER
+            self.hybrid_leech = Config.HYBRID_LEECH # Or however it should be determined without user_transmission
 
         self.same_dir = {}  # Required for TaskListener same directory handling
 

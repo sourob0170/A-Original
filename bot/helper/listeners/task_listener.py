@@ -20,7 +20,6 @@ from bot import (
 )
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
-from bot.core.torrent_manager import TorrentManager
 from bot.helper.common import TaskConfig
 from bot.helper.ext_utils.aiofiles_compat import aiopath, listdir, makedirs, remove
 from bot.helper.ext_utils.bot_utils import encode_slink, sync_to_async
@@ -66,7 +65,7 @@ class TaskListener(TaskConfig):
                 for intvl in list(st.values()):
                     intvl.cancel()
             intervals["status"].clear()
-            await gather(TorrentManager.aria2.purgeDownloadResult(), delete_status())
+            await gather(delete_status())
         except Exception as e:
             LOGGER.error(e)
 

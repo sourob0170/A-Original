@@ -63,7 +63,6 @@ class Config:
     TELEGRAM_HASH: str = ""
     TG_PROXY: ClassVar[dict[str, str]] = {}
     THUMBNAIL_LAYOUT: str = ""
-    TORRENT_TIMEOUT: int = 0
     UPLOAD_PATHS: ClassVar[dict[str, str]] = {}
     UPSTREAM_REPO: str = ""
     USENET_SERVERS: ClassVar[list[dict[str, object]]] = []
@@ -72,7 +71,6 @@ class Config:
     USER_TRANSMISSION: bool = False
     USE_SERVICE_ACCOUNTS: bool = False
     WEB_PINCODE: bool = False
-    YT_DLP_OPTIONS: ClassVar[dict[str, Any]] = {}
 
     # Streamrip Settings
     STREAMRIP_ENABLED: bool = True
@@ -254,9 +252,7 @@ class Config:
 
     # Limits Settings
     STORAGE_THRESHOLD: float = 0  # GB
-    TORRENT_LIMIT: float = 0  # GB
     DIRECT_LIMIT: float = 0  # GB
-    YTDLP_LIMIT: float = 0  # GB
     GDRIVE_LIMIT: float = 0  # GB
     CLONE_LIMIT: float = 0  # GB
     MEGA_LIMIT: float = 0  # GB
@@ -295,13 +291,6 @@ class Config:
 
     # Leech Settings
     LEECH_ENABLED: bool = True
-
-    # YT-DLP Settings
-    YTDLP_ENABLED: bool = True
-
-    # Torrent Settings
-    TORRENT_ENABLED: bool = True
-    TORRENT_SEARCH_ENABLED: bool = True
 
     # NZB Settings
     NZB_ENABLED: bool = True

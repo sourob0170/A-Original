@@ -123,7 +123,6 @@ def arg_parser(items, arg_base):
         "-z",
         "-s",
         "-j",
-        "-d",
         "-sv",
         "-ss",
         "-f",

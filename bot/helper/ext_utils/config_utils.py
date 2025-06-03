@@ -153,33 +153,6 @@ async def reset_rclone_configs(database):
     # Rclone disabled without logging
 
 
-async def reset_torrent_configs(database):
-    """Reset all torrent-related configurations to their default values when torrent is disabled.
-
-    Args:
-        database: The database instance to update configurations
-    """
-    # Reset user-specific torrent configurations
-
-    for user_id, user_dict in list(user_data.items()):
-        user_configs_to_reset = False
-
-        # Torrent-related keys to reset
-        torrent_keys = ["TORRENT_TIMEOUT"]
-
-        # Reset each torrent-related key
-        for key in torrent_keys:
-            if key in user_dict:
-                user_dict.pop(key, None)
-                user_configs_to_reset = True
-
-        # Update the database if there are user configurations to reset
-        if user_configs_to_reset:
-            await database.update_user_data(user_id)
-
-    # Torrent operations disabled without logging
-
-
 async def reset_nzb_configs(database):
     """Reset all NZB-related configurations to their default values when NZB is disabled.
 

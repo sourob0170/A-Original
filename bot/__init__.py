@@ -81,10 +81,8 @@ intervals = {
     "nzb": "",
     "stopAll": False,
 }
-qb_torrents = {}
 user_data = {}
 aria2_options = {}
-qbit_options = {}
 nzb_options = {}
 queued_dl = {}
 queued_up = {}
