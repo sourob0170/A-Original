@@ -10,3 +10,4 @@ requests
 uvloop # For pyrogram/core networking
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev
+python-magic
