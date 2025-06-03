@@ -28,7 +28,6 @@ from bot.helper.telegram_helper.message_utils import (
 
 commands = {
     "aria2": (["xria", "--version"], r"aria2 version ([\d.]+)"),
-    "qBittorrent": (["xnox", "--version"], r"qBittorrent v([\d.]+)"),
     "SABnzbd+": (["xnzb", "--version"], r"xnzb-([\d.]+)"),
     "python": (["python3", "--version"], r"Python ([\d.]+)"),
     "rclone": (["xone", "--version"], r"rclone v([\d.]+)"),
@@ -111,7 +110,6 @@ async def bot_stats(_, message):
     versions_stats = f"""
 <b>python:</b> {commands["python"]}
 <b>aria2:</b> {commands["aria2"]}
-<b>qBittorrent:</b> {commands["qBittorrent"]}
 <b>SABnzbd+:</b> {commands["SABnzbd+"]}
 <b>rclone:</b> {commands["rclone"]}
 <b>yt-dlp:</b> {commands["yt-dlp"]}

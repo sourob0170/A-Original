@@ -12,7 +12,6 @@ from aioshutil import rmtree as aiormtree
 from magic import Magic
 
 from bot import DOWNLOAD_DIR, LOGGER
-from bot.core.torrent_manager import TorrentManager
 from bot.helper.ext_utils.aiofiles_compat import listdir, remove, rmdir, symlink
 from bot.helper.ext_utils.aiofiles_compat import makedirs as aiomakedirs
 from bot.helper.ext_utils.aiofiles_compat import path as aiopath
@@ -130,7 +129,6 @@ async def clean_download(path):
 
 
 async def clean_all():
-    await TorrentManager.remove_all()
     try:
         LOGGER.info("Cleaning Download Directory")
         await aiormtree(DOWNLOAD_DIR, ignore_errors=True)

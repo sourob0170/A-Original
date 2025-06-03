@@ -31,7 +31,6 @@ class TgClient:
             bot_token=Config.BOT_TOKEN,
             # workdir="/usr/src/app", # Workdir might not be needed for in-memory
             parse_mode=enums.ParseMode.HTML,
-            max_concurrent_transmissions=10,
             no_updates=False,  # Ensure updates are enabled
         )
         try:

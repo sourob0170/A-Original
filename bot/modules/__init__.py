@@ -58,7 +58,6 @@ from .restart import (
     restart_notification,
 )
 from .rss import get_rss_menu, rss_listener
-from .search import initiate_search_tools, torrent_search, torrent_search_update
 from .services import aeon_callback, log, login, ping, start
 from .shell import run_shell
 from .sox import spectrum_handler
@@ -122,7 +121,6 @@ __all__ = [
     "hydra_search",
     "imdb_callback",
     "imdb_search",
-    "initiate_search_tools",
     "inline_media_search",
     "jd_leech",
     "jd_mirror",
@@ -155,8 +153,6 @@ __all__ = [
     "start",
     "status_pages",
     "task_status",
-    "torrent_search",
-    "torrent_search_update",
     "truecaller_lookup",
     "unauthorize",
     "virustotal_scan",

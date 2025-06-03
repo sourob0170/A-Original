@@ -28,7 +28,6 @@ from bot import (
     intervals,
     jd_listener_lock,
     nzb_options,
-    qbit_options,
     sabnzbd_client,
     sudo_users,
     task_dict,
@@ -40,10 +39,8 @@ from bot.core.jdownloader_booter import jdownloader
 from bot.core.startup import (
     update_aria2_options,
     update_nzb_options,
-    update_qb_options,
     update_variables,
 )
-from bot.core.torrent_manager import TorrentManager
 from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove, rename
 from bot.helper.ext_utils.bot_utils import SetInterval, new_task
 from bot.helper.ext_utils.db_handler import database
@@ -97,11 +94,9 @@ DEFAULT_VALUES = {
     "SAME_DIR_ENABLED": True,
     "MIRROR_ENABLED": True,
     "LEECH_ENABLED": True,
-    "TORRENT_ENABLED": True,
-    "TORRENT_SEARCH_ENABLED": True,
     "YTDLP_ENABLED": True,
     "NZB_ENABLED": True,
-    "NZB_SEARCH_ENABLED": True,
+    "NZB_SEARCH_ENABLED": True, # TORRENT_SEARCH_ENABLED was here
     "JD_ENABLED": True,
     "VT_ENABLED": False,
     "VT_API_TIMEOUT": 500,
@@ -535,7 +530,6 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         buttons.data_button("🔒 Private Files", "botset private")
 
         # Download Clients
-        buttons.data_button("🔄 qBittorrent", "botset qbit")
         buttons.data_button("📥 Aria2c", "botset aria")
         buttons.data_button("📦 Sabnzbd", "botset nzb")
         buttons.data_button("🔄 JD Sync", "botset syncjd")
@@ -709,7 +703,6 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
                 "COMPRESSION_SUBTITLE_ENABLED",
                 "COMPRESSION_ARCHIVE_ENABLED",
                 "TASK_MONITOR_ENABLED",
-                "TORRENT_ENABLED",
             }:
                 help_text = (
                     "Send 'true' to enable or 'false' to disable this feature."
@@ -1435,23 +1428,6 @@ Send only the file name as text message.
                 position="footer",
             )
         msg = f"<b>Aria2c Options</b> | Page: {int(start / 10) + 1}/{(len(aria2_options) + 9) // 10} | State: {state}"
-    elif key == "qbit":
-        for k in list(qbit_options.keys())[start : 10 + start]:
-            buttons.data_button(k, f"botset qbitvar {k}")
-        if state == "view":
-            buttons.data_button("✏️ Edit", "botset edit qbit")
-        else:
-            buttons.data_button("👁️ View", "botset view qbit")
-        buttons.data_button("🔄 Sync qBittorrent", "botset syncqbit")
-        buttons.data_button("⬅️ Back", "botset back", "footer")
-        buttons.data_button("❌ Close", "botset close", "footer")
-        for x in range(0, len(qbit_options), 10):
-            buttons.data_button(
-                f"{int(x / 10) + 1}",
-                f"botset start qbit {x}",
-                position="footer",
-            )
-        msg = f"<b>qBittorrent Options</b> | Page: {int(start / 10) + 1}/{(len(qbit_options) + 9) // 10} | State: {state}"
     elif key == "nzb":
         for k in list(nzb_options.keys())[start : 10 + start]:
             buttons.data_button(k, f"botset nzbvar {k}")
@@ -2621,8 +2597,6 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
             "SAME_DIR_ENABLED",
             "MIRROR_ENABLED",
             "LEECH_ENABLED",
-            "TORRENT_ENABLED",
-            "TORRENT_SEARCH_ENABLED",
             "YTDLP_ENABLED",
             "NZB_ENABLED",
             "NZB_SEARCH_ENABLED",
@@ -2665,10 +2639,6 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
         same_dir_enabled = "✅ Enabled" if Config.SAME_DIR_ENABLED else "❌ Disabled"
         mirror_enabled = "✅ Enabled" if Config.MIRROR_ENABLED else "❌ Disabled"
         leech_enabled = "✅ Enabled" if Config.LEECH_ENABLED else "❌ Disabled"
-        torrent_enabled = "✅ Enabled" if Config.TORRENT_ENABLED else "❌ Disabled"
-        torrent_search_enabled = (
-            "✅ Enabled" if Config.TORRENT_SEARCH_ENABLED else "❌ Disabled"
-        )
         ytdlp_enabled = "✅ Enabled" if Config.YTDLP_ENABLED else "❌ Disabled"
         nzb_enabled = "✅ Enabled" if Config.NZB_ENABLED else "❌ Disabled"
         nzb_search_enabled = (
@@ -2711,14 +2681,6 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
         buttons.data_button(
             f"📥 Leech Operations: {leech_enabled}",
             f"botset toggle LEECH_ENABLED {not Config.LEECH_ENABLED}",
-        )
-        buttons.data_button(
-            f"🧲 Torrent Operations: {torrent_enabled}",
-            f"botset toggle TORRENT_ENABLED {not Config.TORRENT_ENABLED}",
-        )
-        buttons.data_button(
-            f"🔍 Torrent Search: {torrent_search_enabled}",
-            f"botset toggle TORRENT_SEARCH_ENABLED {not Config.TORRENT_SEARCH_ENABLED}",
         )
         buttons.data_button(
             f"📹 YT-DLP Operations: {ytdlp_enabled}",
@@ -2775,8 +2737,6 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
 <b>Same Directory Operations:</b> {same_dir_enabled}
 <b>Mirror Operations:</b> {mirror_enabled}
 <b>Leech Operations:</b> {leech_enabled}
-<b>Torrent Operations:</b> {torrent_enabled}
-<b>Torrent Search:</b> {torrent_search_enabled}
 <b>YT-DLP Operations:</b> {ytdlp_enabled}
 <b>NZB Operations:</b> {nzb_enabled}
 <b>NZB Search:</b> {nzb_search_enabled}
@@ -2795,8 +2755,6 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
 • <b>Same Directory Operations:</b> Controls whether users can use the -m flag to save files in the same directory
 • <b>Mirror Operations:</b> Controls whether users can use mirror commands
 • <b>Leech Operations:</b> Controls whether users can use leech commands
-• <b>Torrent Operations:</b> Controls whether users can process torrent files and magnet links
-• <b>Torrent Search:</b> Controls whether users can search for torrents
 • <b>YT-DLP Operations:</b> Controls whether users can use YT-DLP commands for downloading videos
 • <b>NZB Operations:</b> Controls whether users can use NZB commands for downloading from Usenet
 • <b>NZB Search:</b> Controls whether users can search for NZB files
@@ -6278,9 +6236,6 @@ async def edit_variable(_, message, pre_message, key):
         value = False
         if key == "INCOMPLETE_TASK_NOTIFIER" and Config.DATABASE_URL:
             await database.trunc_table("tasks")
-    elif key == "TORRENT_TIMEOUT":
-        await TorrentManager.change_aria2_option("bt-stop-timeout", value)
-        value = int(value)
     elif key == "LEECH_SPLIT_SIZE":
         # Always use owner's session for max split size calculation
         max_split_size = (
@@ -7462,7 +7417,6 @@ async def edit_bot_settings(client, query):
                     "Config Variables",
                     "Task Monitoring Settings",
                     "Private Files Management",
-                    "qBittorrent Options",
                     "Aria2c Options",
                     "Sabnzbd Options",
                     "Media Tools Settings",
@@ -10729,9 +10683,6 @@ async def edit_bot_settings(client, query):
         elif data[2] == "EXCLUDED_EXTENSIONS":
             excluded_extensions.clear()
             excluded_extensions.extend(["aria2", "!qB"])
-        elif data[2] == "TORRENT_TIMEOUT":
-            await TorrentManager.change_aria2_option("bt-stop-timeout", "0")
-            await database.update_aria2("bt-stop-timeout", "0")
         elif data[2] == "PIL_MEMORY_LIMIT":
             value = 2048  # Default to 2GB
         elif data[2] == "BASE_URL":
@@ -11045,17 +10996,6 @@ async def edit_bot_settings(client, query):
         # Set the state back to what it was
         globals()["state"] = current_state
         await update_buttons(message, "aria")
-    elif data[1] == "syncqbit":
-        await query.answer()
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        qbit_options.clear()
-        await update_qb_options()
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await database.save_qbit_settings()
     elif data[1] == "resetnzb":
         await query.answer()
         # Get the current state before making changes
@@ -11094,28 +11034,7 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "aria")
 
-        await TorrentManager.change_aria2_option(data[2], "")
         await database.update_aria2(data[2], "")
-    elif data[1] == "emptyqbit":
-        await query.answer()
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        value = ""
-        if isinstance(qbit_options[data[2]], bool):
-            value = False
-        elif isinstance(qbit_options[data[2]], int):
-            value = 0
-        elif isinstance(qbit_options[data[2]], float):
-            value = 0.0
-        await TorrentManager.qbittorrent.app.set_preferences({data[2]: value})
-        qbit_options[data[2]] = value
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(message, "qbit")
-
-        await database.update_qbittorrent(data[2], value)
     elif data[1] == "emptynzb":
         await query.answer()
         # Get the current state before making changes
@@ -11440,33 +11359,6 @@ async def edit_bot_settings(client, query):
         await event_handler(client, query, pfunc, rfunc)
     elif data[1] == "ariavar" and state == "view":
         value = f"{aria2_options[data[2]]}"
-        if len(value) > 200:
-            await query.answer()
-            with BytesIO(str.encode(value)) as out_file:
-                out_file.name = f"{data[2]}.txt"
-                await send_file(message, out_file)
-            return
-        if value == "":
-            value = None
-        await query.answer(f"{value}", show_alert=True)
-    elif data[1] == "qbitvar" and state == "edit":
-        await query.answer()
-        # Get the current state before making changes
-        current_state = globals()["state"]
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        await update_buttons(message, data[2], data[1])
-
-        pfunc = partial(edit_qbit, pre_message=message, key=data[2])
-
-        # Set the state back to what it was
-        globals()["state"] = current_state
-        rfunc = partial(update_buttons, message, "qbit")
-
-        await event_handler(client, query, pfunc, rfunc)
-    elif data[1] == "qbitvar" and state == "view":
-        value = f"{qbit_options[data[2]]}"
         if len(value) > 200:
             await query.answer()
             with BytesIO(str.encode(value)) as out_file:

@@ -34,11 +34,9 @@ from bot.helper.ext_utils.db_handler import database
 
 from .aeon_client import TgClient
 from .config_manager import Config
-# from .torrent_manager import TorrentManager # Removed as file is deleted
 
 
 # async def update_qb_options(): # Removed
-#     # ... (qBittorrent specific logic)
 #
 # async def update_aria2_options(): # Removed
 #     # ... (Aria2 specific logic)
@@ -139,9 +137,6 @@ async def load_settings():
                 async with aiopen(file_, "wb+") as f:
                     await f.write(value)
 
-    # Removed loading of aria2c_options, qbit_options, nzb_options from DB
-    # as these features are removed.
-
     if await database.db.users.find_one():
         for p in ["thumbnails", "tokens", "rclone", "cookies"]:
             if not await aiopath.exists(p):
@@ -232,7 +227,6 @@ async def save_settings():
         upsert=True,
     )
     LOGGER.info("Runtime configuration saved to database.")
-    # Removed saving of aria2c, qbittorrent, nzb settings to DB.
 
 
 async def update_variables():

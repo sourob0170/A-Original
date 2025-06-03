@@ -170,8 +170,7 @@ mirror = """<b>Send link along with command line or </b>
 
 /cmd -n new name -e -up upload destination
 
-<b>NOTE:</b>
-1. Commands that start with <b>qb</b> are ONLY for torrents."""
+<b>NOTE:</b>"""
 
 yt = """<b>Send link along with command line</b>:
 
@@ -196,7 +195,7 @@ multi_link = """<b>Multi links only by replying to first link/file</b>: -i
 
 same_dir = """<b>Move file(s)/folder(s) to new folder</b>: -m
 
-You can use this arg also to move multiple links/torrents contents to the same directory, so all links will be uploaded together as one task
+You can use this arg also to move multiple links contents to the same directory, so all links will be uploaded together as one task
 
 /cmd link -m new folder (only one link inside new folder)
 /cmd -i 10(number of links/files) -m folder name (all links contents in one folder)
@@ -341,12 +340,6 @@ Create screenshots for one video or folder of videos.
 /cmd -ss (it will take the default values which is 10 photos).
 You can control this value. Example: /cmd -ss 6."""
 
-seed = """<b>Bittorrent seed</b>: -d
-
-/cmd link -d ratio:seed_time or by replying to file/link
-To specify ratio and seed time add -d ratio:time.
-Example: -d 0.7:10 (ratio and time) or -d 0.7 (only ratio) or -d :10 (only time) where time in minutes"""
-
 zip_arg = """<b>Zip</b>: -z password
 
 /cmd link -z (zip)
@@ -437,12 +430,12 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 - <code>-add-audio-index 0,1,2</code>: Add multiple audio tracks at specified indices
 
 <b>Advanced Usage (Short Format):</b>
-- <code>-avi 0</code>: Add only the first video track from source
+- <code>-avi 0</code>: Add only the first video track
 - <code>-avi 0,1,2</code>: Add video tracks at indices 0, 1, and 2
-- <code>-aai 1</code>: Add only the second audio track from source
+- <code>-aai 1</code>: Add only the second audio track
 - <code>-aai 0,1</code>: Add audio tracks at indices 0 and 1
-- <code>-asi 2</code>: Add only the third subtitle track from source
-- <code>-ati 0</code>: Add only the first attachment from source
+- <code>-asi 2</code>: Add only the third subtitle track
+- <code>-ati 0</code>: Add only the first attachment
 
 <b>Additional Video Settings:</b>
 - <code>-add-video-codec h264</code>: Set video codec (h264, h265, vp9, etc.)
@@ -654,11 +647,6 @@ NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[
 8. \text\ will get replaced by text with sensitive case
 """
 
-transmission = """<b>Tg transmission</b>: -hl -ut -bt
-/cmd link -hl (leech by user and bot session with respect to size) (Hybrid Leech)
-/cmd link -bt (leech by bot session)
-/cmd link -ut (leech by user)"""
-
 thumbnail_layout = """Thumbnail Layout: -tl
 /cmd link -tl 3x3 (widthxheight) 3 photos in row and 3 photos in column"""
 
@@ -756,7 +744,7 @@ Available HTML formats:
 You can combine HTML formats:
 • <b>bold_italic</b>: <b><i>Bold italic text</i></b>
 • <b>bold_underline</b>: <b><u>Bold underlined text</u></b>
-• <b>italic_underline</b>: <i><u>Italic underlined text</u></b>
+• <b>italic_underline</b>: <i><u>Italic underlined text</u></i>
 • <b>bold_italic_underline</b>: <b><i><u>Bold italic underlined text</u></i></b>
 • <b>quote_expandable</b>: <b><i><u>The text will be in expaned formate</u></i></b>
 • <b>bold_quote</b>: <b><i><u>Text will be bold in quote formate</u></i></b>
@@ -938,7 +926,6 @@ YT_HELP_DICT = {
     "Convert-Media": convert_media,
     "Force-Start": force_start,
     "Name-Substitute": name_sub,
-    "TG-Transmission": transmission,
     "Thumb-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
     "FFmpeg-Cmds": ffmpeg_cmds,
@@ -955,8 +942,7 @@ MIRROR_HELP_DICT = {
     "DL-Auth": "<b>Direct link authorization</b>: -au -ap\n\n/cmd link -au username -ap password",
     "Headers": "<b>Direct link custom headers</b>: -h\n\n/cmd link -h key:value|key1:value1",
     "Extract/Zip": extract_zip,
-    "Select-Files": "<b>Bittorrent/JDownloader/Sabnzbd File Selection</b>: -s\n\n/cmd link -s or by replying to file/link",
-    "Torrent-Seed": seed,
+    "Select-Files": "<b>JDownloader/Sabnzbd File Selection</b>: -s\n\n/cmd link -s or by replying to file/link",
     "Multi-Link": multi_link,
     "Same-Directory": same_dir,
     "Thumb": thumb,
@@ -973,7 +959,6 @@ MIRROR_HELP_DICT = {
     "Force-Start": force_start,
     "User-Download": user_download,
     "Name-Substitute": name_sub,
-    "TG-Transmission": transmission,
     "Thumb-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
     "FFmpeg-Cmds": ffmpeg_cmds,
@@ -1765,7 +1750,7 @@ status_commands = f"""
 /{BotCommands.SpeedTest}: Check internet speed of the host machine.
 /{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
 /{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
-/{BotCommands.SelectCommand}: Select files from torrents by gid or reply.
+/{BotCommands.SelectCommand}: Select files by gid or reply.
 /{BotCommands.CheckDeletionsCommand[0]} or /{BotCommands.CheckDeletionsCommand[1]}: Check and manage scheduled message deletions.
 """
 
@@ -1774,7 +1759,6 @@ search_commands = f"""
 <b>🔍 Search Tools</b>
 
 /{BotCommands.ListCommand} [query]: Search in Google Drive(s).
-/{BotCommands.SearchCommand} [query]: Search for torrents with API.
 /{BotCommands.HydraSearchCommamd} [query]: Search for NZB files.
 /{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
 /{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.

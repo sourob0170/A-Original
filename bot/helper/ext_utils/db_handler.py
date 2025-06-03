@@ -13,7 +13,7 @@ from pymongo.errors import (
 )
 from pymongo.server_api import ServerApi
 
-from bot import LOGGER, qbit_options, rss_dict, user_data
+from bot import LOGGER, rss_dict, user_data
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.aiofiles_compat import aiopath
@@ -177,32 +177,6 @@ class DbManager:
             )
         except PyMongoError as e:
             LOGGER.error(f"Error updating aria2 config: {e}")
-            await self.ensure_connection()  # Try to reconnect for next operation
-
-    async def update_qbittorrent(self, key, value):
-        if not await self.ensure_connection():
-            return
-        try:
-            await self.db.settings.qbittorrent.update_one(
-                {"_id": TgClient.ID},
-                {"$set": {key: value}},
-                upsert=True,
-            )
-        except PyMongoError as e:
-            LOGGER.error(f"Error updating qbittorrent config: {e}")
-            await self.ensure_connection()  # Try to reconnect for next operation
-
-    async def save_qbit_settings(self):
-        if not await self.ensure_connection():
-            return
-        try:
-            await self.db.settings.qbittorrent.update_one(
-                {"_id": TgClient.ID},
-                {"$set": qbit_options},
-                upsert=True,
-            )
-        except PyMongoError as e:
-            LOGGER.error(f"Error saving qbittorrent settings: {e}")
             await self.ensure_connection()  # Try to reconnect for next operation
 
     async def update_private_file(self, path):

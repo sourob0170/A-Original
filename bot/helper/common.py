@@ -255,7 +255,6 @@ class TaskConfig:
         self.is_nzb = False
         self.is_clone = False
         self.is_ytdlp = False
-        self.user_transmission = False
         self.hybrid_leech = False
         self.extract = False
         self.compress = False
@@ -272,7 +271,6 @@ class TaskConfig:
         self.force_run = False
         self.force_download = False
         self.force_upload = False
-        self.is_torrent = False
         self.as_med = False
         self.as_doc = False
         self.is_file = False
@@ -3312,14 +3310,6 @@ class TaskConfig:
             if not is_gdrive_id(self.link):
                 raise ValueError(self.link)
 
-        self.user_transmission = TgClient.IS_PREMIUM_USER and (
-            self.user_dict.get("USER_TRANSMISSION")
-            or (
-                Config.USER_TRANSMISSION
-                and "USER_TRANSMISSION" not in self.user_dict
-            )
-        )
-
         if self.user_dict.get("UPLOAD_PATHS", False):
             if self.up_dest in self.user_dict["UPLOAD_PATHS"]:
                 self.up_dest = self.user_dict["UPLOAD_PATHS"][self.up_dest]
@@ -3466,28 +3456,26 @@ class TaskConfig:
                 and Config.LEECH_DUMP_CHAT
                 else ""
             )
-            self.hybrid_leech = TgClient.IS_PREMIUM_USER and (
-                self.user_dict.get("HYBRID_LEECH")
-                or (Config.HYBRID_LEECH and "HYBRID_LEECH" not in self.user_dict)
-            )
+            self.hybrid_leech = False # Keep this as False since user_transmission is removed
             if self.bot_trans:
-                self.user_transmission = False
                 self.hybrid_leech = False
             if self.user_trans:
-                self.user_transmission = TgClient.IS_PREMIUM_USER
+                # This was previously linked to user_transmission, now it's independent or needs re-evaluation
+                # For now, let's assume it enables hybrid_leech if user_trans is true and premium
+                self.hybrid_leech = TgClient.IS_PREMIUM_USER
+
             if self.up_dest:
                 if not isinstance(self.up_dest, int):
                     if self.up_dest.startswith("b:"):
                         self.up_dest = self.up_dest.replace("b:", "", 1)
-                        self.user_transmission = False
                         self.hybrid_leech = False
                     elif self.up_dest.startswith("u:"):
                         self.up_dest = self.up_dest.replace("u:", "", 1)
-                        self.user_transmission = TgClient.IS_PREMIUM_USER
+                        # self.user_transmission = TgClient.IS_PREMIUM_USER # Removed
                     elif self.up_dest.startswith("h:"):
                         self.up_dest = self.up_dest.replace("h:", "", 1)
-                        self.user_transmission = TgClient.IS_PREMIUM_USER
-                        self.hybrid_leech = self.user_transmission
+                        # self.user_transmission = TgClient.IS_PREMIUM_USER # Removed
+                        self.hybrid_leech = TgClient.IS_PREMIUM_USER
                     if "|" in self.up_dest:
                         self.up_dest, self.chat_thread_id = [
                             int(x) if x.lstrip("-").isdigit() else x
@@ -3498,38 +3486,15 @@ class TaskConfig:
                     elif self.up_dest.lower() == "pm":
                         self.up_dest = self.user_id
 
-                if self.user_transmission:
-                    try:
-                        chat = await TgClient.user.get_chat(self.up_dest)
-                    except Exception:
-                        chat = None
-                    if chat is None:
-                        self.user_transmission = False
-                        self.hybrid_leech = False
-                    else:
-                        uploader_id = TgClient.user.me.id
-                        if chat.type.name not in ["SUPERGROUP", "CHANNEL", "GROUP"]:
-                            self.user_transmission = False
-                            self.hybrid_leech = False
-                        else:
-                            member = await chat.get_member(uploader_id)
-                            if (
-                                not member.privileges.can_manage_chat
-                                or not member.privileges.can_delete_messages
-                            ):
-                                self.user_transmission = False
-                                self.hybrid_leech = False
+                # user_transmission checks removed from here
 
-                if not self.user_transmission or self.hybrid_leech:
+                if self.hybrid_leech: # Simplified check
                     try:
                         chat = await self.client.get_chat(self.up_dest)
                     except Exception:
                         chat = None
                     if chat is None:
-                        if self.user_transmission:
-                            self.hybrid_leech = False
-                        else:
-                            raise ValueError("Chat not found!")
+                        self.hybrid_leech = False # Disable if chat not found
                     else:
                         uploader_id = self.client.me.id
                         if chat.type.name in ["SUPERGROUP", "CHANNEL", "GROUP"]:
@@ -3538,11 +3503,7 @@ class TaskConfig:
                                 not member.privileges.can_manage_chat
                                 or not member.privileges.can_delete_messages
                             ):
-                                if not self.user_transmission:
-                                    raise ValueError(
-                                        "You don't have enough privileges in this chat!",
-                                    )
-                                self.hybrid_leech = False
+                                self.hybrid_leech = False # Disable if no perms
                         else:
                             try:
                                 await self.client.send_chat_action(
@@ -3553,10 +3514,7 @@ class TaskConfig:
                                 raise ValueError(
                                     "Start the bot and try again!",
                                 ) from None
-            elif (
-                self.user_transmission or self.hybrid_leech
-            ) and not self.is_super_chat:
-                self.user_transmission = False
+            elif self.hybrid_leech and not self.is_super_chat: # Simplified check
                 self.hybrid_leech = False
             # Calculate max split size based on owner's session only
             # Always use owner's session for max split size calculation, not user's own session
