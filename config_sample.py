@@ -54,14 +54,3 @@ STREAMRIP_DEFAULT_QUALITY = 3  # Default quality (0-4: 0=128k, 1=320k, 2=CD, 3=H
 STREAMRIP_DEFAULT_CODEC = "flac"  # Default output format/codec
 STREAMRIP_SUPPORTED_CODECS = ["flac", "mp3", "m4a", "ogg", "opus"] # Formats user can request via -c flag
 STREAMRIP_LIMIT = 0  # Max download size in GB for streamrip tasks (0 = unlimited)
-
-# YTDLP (Kept as ytdlp.py module is still present)
-YTDLP_ENABLED = True # If you want to use ytdlp module (commands for it are not yet restored in BotCommands/handlers)
-YTDLP_LIMIT = 0      # Max download size in GB for ytdlp tasks (0 = unlimited)
-YT_DLP_OPTIONS = {}  # Default yt-dlp options, e.g., {"format": "bestaudio/best", "noplaylist": True}
-
-# NOTE: Many other configurations related to GDrive, Rclone, specific leech types,
-# torrents, advanced media tools, UI customizations (themes, fonts from original), etc.,
-# have been removed as those features are not part of the streamlined bot.
-# If you need to re-enable any specific feature, you would need to restore its module,
-# command definitions, handlers, and relevant configuration variables.

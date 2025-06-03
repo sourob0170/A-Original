@@ -7,13 +7,10 @@ from bot import (
     DOWNLOAD_DIR,
     bot_start_time,
     intervals,
-    sabnzbd_client,
     status_dict,
     task_dict,
     task_dict_lock,
 )
-from bot.core.jdownloader_booter import jdownloader
-from bot.core.torrent_manager import TorrentManager
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.status_utils import (
     MirrorStatus,
