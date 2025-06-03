@@ -16,16 +16,16 @@ from bot import (
     aria2_options,
     auth_chats,
     drives_ids,
-    drives_names,
-    excluded_extensions,
-    index_urls,
-    nzb_options,
-    qbit_options,
-    rss_dict,
-    sabnzbd_client,
-    shorteners_list,
-    sudo_users,
-    user_data,
+    drives_names, # Related to GDrive, but kept for now if other parts of settings use it
+    excluded_extensions, # Generic
+    index_urls, # Related to GDrive
+    # nzb_options, # Removed
+    # qbit_options, # Removed
+    rss_dict, # RSS was removed, but variable might be checked. Clean if causes issues.
+    # sabnzbd_client, # Removed
+    # shorteners_list, # Removed
+    sudo_users, # Generic
+    user_data, # Generic
 )
 
 # Use compatibility layer for aiofiles
@@ -34,236 +34,205 @@ from bot.helper.ext_utils.db_handler import database
 
 from .aeon_client import TgClient
 from .config_manager import Config
-from .torrent_manager import TorrentManager
+# from .torrent_manager import TorrentManager # Removed as file is deleted
 
 
-async def update_qb_options():
-    if not qbit_options:
-        opt = await TorrentManager.qbittorrent.app.preferences()
-        qbit_options.update(opt)
-        del qbit_options["listen_port"]
-        for k in list(qbit_options.keys()):
-            if k.startswith("rss"):
-                del qbit_options[k]
-        # Set username to 'admin' and password to LOGIN_PASS (or 'admin' if not set)
-        username = "admin"
-        password = Config.LOGIN_PASS or "admin"
-        qbit_options["web_ui_username"] = username
-        qbit_options["web_ui_password"] = password
-        await TorrentManager.qbittorrent.app.set_preferences(
-            {"web_ui_username": username, "web_ui_password": password},
-        )
-    else:
-        await TorrentManager.qbittorrent.app.set_preferences(qbit_options)
-
-
-async def update_aria2_options():
-    if not aria2_options:
-        op = await TorrentManager.aria2.getGlobalOption()
-        aria2_options.update(op)
-    else:
-        await TorrentManager.aria2.changeGlobalOption(aria2_options)
-
-
-async def update_nzb_options():
-    no = (await sabnzbd_client.get_config())["config"]["misc"]
-    nzb_options.update(no)
+# async def update_qb_options(): # Removed
+#     # ... (qBittorrent specific logic)
+#
+# async def update_aria2_options(): # Removed
+#     # ... (Aria2 specific logic)
+#
+# async def update_nzb_options(): # Removed
+#     # ... (SABnzbd specific logic)
 
 
 async def load_settings():
     if not Config.DATABASE_URL:
+        LOGGER.info("DATABASE_URL is not set. Skipping database related setup.")
+        # Initialize user_data with owner if not using DB, to ensure basic auth works
+        if Config.OWNER_ID and not user_data.get(Config.OWNER_ID):
+            user_data[Config.OWNER_ID] = {"AUTH": True}
+            LOGGER.info(f"Owner ID {Config.OWNER_ID} authorized locally (no DB).")
         return
-    for p in ["thumbnails", "tokens", "rclone", "cookies"]:
-        if await aiopath.exists(p):
+
+    # Proceed with database setup only if DATABASE_URL is set
+    LOGGER.info("DATABASE_URL is set. Attempting to connect and load settings from DB.")
+    for p in ["thumbnails", "tokens", "rclone", "cookies"]: # These folders are mostly for cloud drive related features
+        if await aiopath.exists(p): # If they exist from previous runs, clean them.
             await rmtree(p, ignore_errors=True)
+
     await database.connect()
+
+    if database.db is None: # Check if connection failed
+        LOGGER.error("Failed to connect to database. Bot will run with minimal functionality.")
+        # Initialize user_data with owner if DB connection failed
+        if Config.OWNER_ID and not user_data.get(Config.OWNER_ID):
+            user_data[Config.OWNER_ID] = {"AUTH": True}
+            LOGGER.info(f"Owner ID {Config.OWNER_ID} authorized locally (DB connection failed).")
+        return
 
     # Start the database heartbeat task to keep the connection alive
     await database.start_heartbeat()
 
-    if database.db is not None:
-        # Process any pending message deletions
-        await process_pending_deletions()
+    # Process any pending message deletions
+    await process_pending_deletions()
 
-        BOT_ID = Config.BOT_TOKEN.split(":", 1)[0]
-        current_deploy_config = Config.get_all()
-        old_deploy_config = await database.db.settings.deployConfig.find_one(
+    # This block should be at the same indentation level as the lines above,
+    # within the "if database.db is not None:" context (implicitly, as it's after the early return).
+    BOT_ID = Config.BOT_TOKEN.split(":", 1)[0]
+    current_deploy_config = Config.get_all()
+    old_deploy_config = await database.db.settings.deployConfig.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    )
+
+    if old_deploy_config is None:
+        await database.db.settings.deployConfig.replace_one(
             {"_id": BOT_ID},
-            {"_id": 0},
+            current_deploy_config,
+            upsert=True,
+        )
+    elif old_deploy_config != current_deploy_config:
+        runtime_config = (
+            await database.db.settings.config.find_one(
+                {"_id": BOT_ID},
+                {"_id": 0},
+            )
+            or {}
         )
 
-        if old_deploy_config is None:
-            await database.db.settings.deployConfig.replace_one(
+        new_vars = {
+            k: v
+            for k, v in current_deploy_config.items()
+            if k not in runtime_config
+        }
+        if new_vars:
+            runtime_config.update(new_vars)
+            await database.db.settings.config.replace_one(
                 {"_id": BOT_ID},
-                current_deploy_config,
+                runtime_config,
                 upsert=True,
             )
-        elif old_deploy_config != current_deploy_config:
-            runtime_config = (
-                await database.db.settings.config.find_one(
-                    {"_id": BOT_ID},
-                    {"_id": 0},
-                )
-                or {}
-            )
+            LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
 
-            new_vars = {
-                k: v
-                for k, v in current_deploy_config.items()
-                if k not in runtime_config
-            }
-            if new_vars:
-                runtime_config.update(new_vars)
-                await database.db.settings.config.replace_one(
-                    {"_id": BOT_ID},
-                    runtime_config,
-                    upsert=True,
-                )
-                LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
-
-            await database.db.settings.deployConfig.replace_one(
-                {"_id": BOT_ID},
-                current_deploy_config,
-                upsert=True,
-            )
-
-        runtime_config = await database.db.settings.config.find_one(
+        await database.db.settings.deployConfig.replace_one(
             {"_id": BOT_ID},
-            {"_id": 0},
+            current_deploy_config,
+            upsert=True,
         )
-        if runtime_config:
-            Config.load_dict(runtime_config)
 
-        if pf_dict := await database.db.settings.files.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            for key, value in pf_dict.items():
-                if value:
-                    file_ = key.replace("__", ".")
-                    async with aiopen(file_, "wb+") as f:
-                        await f.write(value)
+    runtime_config = await database.db.settings.config.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    )
+    if runtime_config:
+        Config.load_dict(runtime_config)
 
-        if a2c_options := await database.db.settings.aria2c.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            aria2_options.update(a2c_options)
+    if pf_dict := await database.db.settings.files.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    ):
+        for key, value in pf_dict.items():
+            if value:
+                file_ = key.replace("__", ".")
+                async with aiopen(file_, "wb+") as f:
+                    await f.write(value)
 
-        if qbit_opt := await database.db.settings.qbittorrent.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            qbit_options.update(qbit_opt)
+    # Removed loading of aria2c_options, qbit_options, nzb_options from DB
+    # as these features are removed.
 
-        if nzb_opt := await database.db.settings.nzb.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            if await aiopath.exists("sabnzbd/SABnzbd.ini.bak"):
-                await remove("sabnzbd/SABnzbd.ini.bak")
-            ((key, value),) = nzb_opt.items()
-            file_ = key.replace("__", ".")
-            async with aiopen(f"sabnzbd/{file_}", "wb+") as f:
-                await f.write(value)
+    if await database.db.users.find_one():
+        for p in ["thumbnails", "tokens", "rclone", "cookies"]:
+            if not await aiopath.exists(p):
+                await makedirs(p)
 
-        if await database.db.users.find_one():
-            for p in ["thumbnails", "tokens", "rclone", "cookies"]:
-                if not await aiopath.exists(p):
-                    await makedirs(p)
+        # Set secure permissions for cookies directory
+        if await aiopath.exists("cookies"):
+            await create_subprocess_exec("chmod", "700", "cookies")
+        rows = database.db.users.find({})
+        async for row in rows:
+            uid = row["_id"]
+            del row["_id"]
+            thumb_path = f"thumbnails/{uid}.jpg"
+            rclone_config_path = f"rclone/{uid}.conf"
+            token_path = f"tokens/{uid}.pickle"
+            if row.get("THUMBNAIL"):
+                async with aiopen(thumb_path, "wb+") as f:
+                    await f.write(row["THUMBNAIL"])
+                row["THUMBNAIL"] = thumb_path
+            if row.get("RCLONE_CONFIG"):
+                async with aiopen(rclone_config_path, "wb+") as f:
+                    await f.write(row["RCLONE_CONFIG"])
+                row["RCLONE_CONFIG"] = rclone_config_path
+            if row.get("TOKEN_PICKLE"):
+                async with aiopen(token_path, "wb+") as f:
+                    await f.write(row["TOKEN_PICKLE"])
+                row["TOKEN_PICKLE"] = token_path
+            # Load user cookies if available
+            cookies_path = f"cookies/{uid}.txt"
+            if row.get("USER_COOKIES"):
+                async with aiopen(cookies_path, "wb+") as f:
+                    await f.write(row["USER_COOKIES"])
+                row["USER_COOKIES"] = cookies_path
+                # Set secure permissions for individual cookie files
+                await create_subprocess_exec("chmod", "600", cookies_path)
+                # Silently load user cookies without logging
+            user_data[uid] = row
 
-            # Set secure permissions for cookies directory
-            if await aiopath.exists("cookies"):
-                await create_subprocess_exec("chmod", "700", "cookies")
-            rows = database.db.users.find({})
-            async for row in rows:
-                uid = row["_id"]
-                del row["_id"]
-                thumb_path = f"thumbnails/{uid}.jpg"
-                rclone_config_path = f"rclone/{uid}.conf"
-                token_path = f"tokens/{uid}.pickle"
-                if row.get("THUMBNAIL"):
-                    async with aiopen(thumb_path, "wb+") as f:
-                        await f.write(row["THUMBNAIL"])
-                    row["THUMBNAIL"] = thumb_path
-                if row.get("RCLONE_CONFIG"):
-                    async with aiopen(rclone_config_path, "wb+") as f:
-                        await f.write(row["RCLONE_CONFIG"])
-                    row["RCLONE_CONFIG"] = rclone_config_path
-                if row.get("TOKEN_PICKLE"):
-                    async with aiopen(token_path, "wb+") as f:
-                        await f.write(row["TOKEN_PICKLE"])
-                    row["TOKEN_PICKLE"] = token_path
-                # Load user cookies if available
-                cookies_path = f"cookies/{uid}.txt"
-                if row.get("USER_COOKIES"):
-                    async with aiopen(cookies_path, "wb+") as f:
-                        await f.write(row["USER_COOKIES"])
-                    row["USER_COOKIES"] = cookies_path
-                    # Set secure permissions for individual cookie files
-                    await create_subprocess_exec("chmod", "600", cookies_path)
-                    # Silently load user cookies without logging
-                user_data[uid] = row
+        # Ensure owner is authorized after loading all user data
+        if Config.OWNER_ID:
+            owner_id = Config.OWNER_ID
+            if owner_id not in user_data:
+                user_data[owner_id] = {"AUTH": True}
+            else:
+                user_data[owner_id]["AUTH"] = True
+            # Update owner data in database
+            await database.update_user_data(owner_id)
 
-            # Ensure owner is authorized after loading all user data
-            if Config.OWNER_ID:
-                owner_id = Config.OWNER_ID
-                if owner_id not in user_data:
-                    user_data[owner_id] = {"AUTH": True}
-                else:
-                    user_data[owner_id]["AUTH"] = True
-                # Update owner data in database
-                await database.update_user_data(owner_id)
+        LOGGER.info("Users data has been imported from Database")
 
-            LOGGER.info("Users data has been imported from Database")
-
-        if await database.db.rss[BOT_ID].find_one():
-            rows = database.db.rss[BOT_ID].find({})
-            async for row in rows:
-                user_id = row["_id"]
-                del row["_id"]
-                rss_dict[user_id] = row
+    if await database.db.rss[BOT_ID].find_one(): # This check might fail if rss_dict isn't properly imported/available
+        rows = database.db.rss[BOT_ID].find({})
+        async for row in rows:
+            user_id = row["_id"]
+            del row["_id"]
+            if 'rss_dict' in globals() or 'rss_dict' in locals(): # Check if rss_dict is available
+                 rss_dict[user_id] = row
+            else:
+                 LOGGER.warning("rss_dict not found, cannot load RSS data.")
+                 break
+        if 'rss_dict' in globals() or 'rss_dict' in locals() and rss_dict:
             LOGGER.info("Rss data has been imported from Database.")
 
-        # Initialize streamrip configuration
-        if Config.STREAMRIP_ENABLED:
-            try:
-                from bot.helper.streamrip_utils.streamrip_config import (
-                    streamrip_config,
-                )
+    # Initialize streamrip configuration
+    if Config.STREAMRIP_ENABLED:
+        try:
+            from bot.helper.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
-                await streamrip_config.initialize()
-                LOGGER.info("Streamrip configuration initialized successfully")
-            except Exception as e:
-                LOGGER.error(f"Failed to initialize streamrip configuration: {e}")
-                Config.STREAMRIP_ENABLED = False
+            await streamrip_config.initialize()
+            LOGGER.info("Streamrip configuration initialized successfully")
+        except Exception as e:
+            LOGGER.error(f"Failed to initialize streamrip configuration: {e}")
+            Config.STREAMRIP_ENABLED = False
 
 
 async def save_settings():
     if database.db is None:
+        LOGGER.warning("No database connected. Skipping save_settings.")
         return
+
+    LOGGER.info("Saving runtime configuration to database...")
     config_dict = Config.get_all()
     await database.db.settings.config.replace_one(
         {"_id": TgClient.ID},
         config_dict,
         upsert=True,
     )
-    if await database.db.settings.aria2c.find_one({"_id": TgClient.ID}) is None:
-        await database.db.settings.aria2c.update_one(
-            {"_id": TgClient.ID},
-            {"$set": aria2_options},
-            upsert=True,
-        )
-    if await database.db.settings.qbittorrent.find_one({"_id": TgClient.ID}) is None:
-        await database.save_qbit_settings()
-    if await database.db.settings.nzb.find_one({"_id": TgClient.ID}) is None:
-        async with aiopen("sabnzbd/SABnzbd.ini", "rb+") as pf:
-            nzb_conf = await pf.read()
-        await database.db.settings.nzb.update_one(
-            {"_id": TgClient.ID},
-            {"$set": {"SABnzbd__ini": nzb_conf}},
-            upsert=True,
-        )
+    LOGGER.info("Runtime configuration saved to database.")
+    # Removed saving of aria2c, qbittorrent, nzb settings to DB.
 
 
 async def update_variables():
@@ -377,79 +346,23 @@ async def load_configurations():
     if not await aiopath.exists(".netrc"):
         async with aiopen(".netrc", "w"):
             pass
+    # Removed chmod +x aria.sh && ./aria.sh (aria.sh was deleted)
+    # Removed gunicorn start (web server was deleted)
+    # Removed JDownloader cfg.zip logic
+    # Removed shorteners.txt logic
+    # Removed accounts.zip logic (service accounts)
+
+    # Ensure .netrc exists and has correct permissions if needed by anything remaining
+    if not await aiopath.exists(".netrc"):
+        async with aiopen(".netrc", "w"):
+            pass
     await (
-        await create_subprocess_shell(
-            "chmod 600 .netrc && cp .netrc /root/.netrc && chmod +x aria.sh && ./aria.sh",
-        )
+        await create_subprocess_shell("chmod 600 .netrc && cp .netrc /root/.netrc")
     ).wait()
 
-    # First, kill any running web server processes regardless of configuration
-    try:
-        LOGGER.info("Killing any existing web server processes...")
-        await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
-    except Exception as e:
-        LOGGER.error(f"Error killing web server processes: {e}")
-
-    # Check if web server should be started (BASE_URL_PORT = 0 means disabled)
-    if Config.BASE_URL_PORT == 0:
-        LOGGER.info("Web server is disabled (BASE_URL_PORT = 0)")
-        # Double-check to make sure no web server is running
-        try:
-            # Use pgrep to check if any gunicorn processes are still running
-            process = await create_subprocess_exec(
-                "pgrep", "-f", "gunicorn", stdout=-1
-            )
-            stdout, _ = await process.communicate()
-            if stdout:
-                LOGGER.warning(
-                    "Gunicorn processes still detected, attempting to kill again..."
-                )
-                await (
-                    await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")
-                ).wait()
-        except Exception as e:
-            LOGGER.error(f"Error checking for gunicorn processes: {e}")
-    else:
-        # Use Config.BASE_URL_PORT instead of environment variable
-        # Explicitly convert to string to avoid any type issues
-        PORT = environ.get("PORT") or str(Config.BASE_URL_PORT) or "80"
-        LOGGER.info(f"Starting web server on port {PORT}")
-        await create_subprocess_shell(
-            f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}",
-        )
-
-    if await aiopath.exists("cfg.zip"):
-        if await aiopath.exists("/JDownloader/cfg"):
-            await rmtree("/JDownloader/cfg", ignore_errors=True)
-        await (
-            await create_subprocess_exec("7z", "x", "cfg.zip", "-o/JDownloader")
-        ).wait()
-
-    if await aiopath.exists("shorteners.txt"):
-        async with aiopen("shorteners.txt") as f:
-            lines = await f.readlines()
-            for line in lines:
-                temp = line.strip().split()
-                if len(temp) == 2:
-                    shorteners_list.append({"domain": temp[0], "api_key": temp[1]})
-
-    if await aiopath.exists("accounts.zip"):
-        if await aiopath.exists("accounts"):
-            await rmtree("accounts")
-        await (
-            await create_subprocess_exec(
-                "7z",
-                "x",
-                "-o.",
-                "-aoa",
-                "accounts.zip",
-                "accounts/*.json",
-            )
-        ).wait()
-        await (await create_subprocess_exec("chmod", "-R", "777", "accounts")).wait()
-        await remove("accounts.zip")
-
-    if not await aiopath.exists("accounts"):
+    # If accounts directory logic was essential for something else, it's removed.
+    # For a streamlined bot, it's unlikely needed.
+    if not await aiopath.exists("accounts"): # This check might be irrelevant now
         Config.USE_SERVICE_ACCOUNTS = False
 
 

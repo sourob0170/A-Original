@@ -1,8 +1,12 @@
-asyncio
 aiofiles>=23.1.0
 aioshutil
+apscheduler # For task scheduling
+asyncio
 electrogram
 httpx
+psutil # For stats module
+pytz # Timezone library, likely for apscheduler or logging
 requests
+uvloop # For pyrogram/core networking
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev

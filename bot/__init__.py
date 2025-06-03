@@ -24,7 +24,7 @@ from time import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from pytz import timezone
 
-from sabnzbdapi import SabnzbdClient
+# from sabnzbdapi import SabnzbdClient # Removed
 
 getLogger("requests").setLevel(WARNING)
 getLogger("urllib3").setLevel(WARNING)
@@ -111,29 +111,29 @@ nzb_listener_lock = Lock()
 jd_listener_lock = Lock()
 shorteners_list = []
 
-sabnzbd_client = SabnzbdClient(
-    host="http://localhost",
-    api_key="admin",
-    port="8070",
-)
-subprocess.run(["xnox", "-d", f"--profile={os.getcwd()}"], check=False)
-subprocess.run(
-    [
-        "xnzb",
-        "-f",
-        "sabnzbd/SABnzbd.ini",
-        "-s",
-        ":::8070",
-        "-b",
-        "0",
-        "-d",
-        "-c",
-        "-l",
-        "0",
-        "--console",
-    ],
-    check=False,
-)
+# sabnzbd_client = SabnzbdClient( # Removed
+# host="http://localhost",
+# api_key="admin",
+# port="8070",
+# )
+# subprocess.run(["xnox", "-d", f"--profile={os.getcwd()}"], check=False) # qBittorrent related, remove
+# subprocess.run( # SABnzbd related, remove
+# [
+# "xnzb",
+# "-f",
+# "sabnzbd/SABnzbd.ini",
+# "-s",
+# ":::8070",
+# "-b",
+# "0",
+# "-d",
+# "-c",
+# "-l",
+# "0",
+# "--console",
+# ],
+# check=False,
+# )
 
 
 scheduler = AsyncIOScheduler(event_loop=bot_loop)

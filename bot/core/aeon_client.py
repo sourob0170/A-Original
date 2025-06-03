@@ -12,24 +12,24 @@ class TgClient:
     _hlock = Lock()
     bot = None
     user = None
-    helper_bots = {}
-    helper_loads = {}
+    helper_bots = {} # Will remain empty
+    helper_loads = {} # Will remain empty
     NAME = ""
     ID = 0
-    IS_PREMIUM_USER = False
-    MAX_SPLIT_SIZE = 2097152000
+    IS_PREMIUM_USER = False # Defaulting to False as user client is disabled
+    MAX_SPLIT_SIZE = 2097152000 # Default non-premium split size
 
     @classmethod
     async def start_bot(cls):
         LOGGER.info("Creating client from BOT_TOKEN")
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
         cls.bot = Client(
-            cls.ID,
-            Config.TELEGRAM_API,
-            Config.TELEGRAM_HASH,
+            name=":memory:", # Use in-memory session for testing this specific error
+            api_id=Config.TELEGRAM_API,
+            api_hash=Config.TELEGRAM_HASH,
             proxy=Config.TG_PROXY,
             bot_token=Config.BOT_TOKEN,
-            workdir="/usr/src/app",
+            # workdir="/usr/src/app", # Workdir might not be needed for in-memory
             parse_mode=enums.ParseMode.HTML,
             max_concurrent_transmissions=10,
             no_updates=False,  # Ensure updates are enabled
@@ -50,97 +50,29 @@ class TgClient:
                 ) from e
             raise
 
-    @classmethod
-    async def start_user(cls):
-        # Check if USER_SESSION_STRING is a valid string with content
-        if (
-            Config.USER_SESSION_STRING
-            and isinstance(Config.USER_SESSION_STRING, str)
-            and len(Config.USER_SESSION_STRING) > 0
-        ):
-            LOGGER.info("Creating client from USER_SESSION_STRING")
-            try:
-                cls.user = Client(
-                    "user",
-                    Config.TELEGRAM_API,
-                    Config.TELEGRAM_HASH,
-                    proxy=Config.TG_PROXY,
-                    session_string=Config.USER_SESSION_STRING,
-                    parse_mode=enums.ParseMode.HTML,
-                    no_updates=True,
-                    max_concurrent_transmissions=10,
-                )
-                await cls.user.start()
-                cls.IS_PREMIUM_USER = cls.user.me.is_premium
-                if cls.IS_PREMIUM_USER:
-                    cls.MAX_SPLIT_SIZE = 4194304000
-            except KeyError as e:
-                if str(e) == "None":
-                    LOGGER.error(
-                        "Failed to connect to Telegram: DataCenter ID is None. This might be due to network issues or API configuration."
-                    )
-                    LOGGER.error(
-                        "Please check your internet connection and TELEGRAM_API/TELEGRAM_HASH configuration."
-                    )
-                    cls.IS_PREMIUM_USER = False
-                    cls.user = None
-                else:
-                    raise
-            except Exception as e:
-                LOGGER.error(f"Failed to start client from USER_SESSION_STRING. {e}")
-                cls.IS_PREMIUM_USER = False
-                cls.user = None
-        elif Config.USER_SESSION_STRING and not isinstance(
-            Config.USER_SESSION_STRING, str
-        ):
-            cls.IS_PREMIUM_USER = False
-            cls.user = None
+    # @classmethod
+    # async def start_user(cls):
+    #     # User client initialization logic is removed/commented out
+    #     # USER_SESSION_STRING is no longer used to start a client here.
+    #     # cls.IS_PREMIUM_USER will remain False as set by default.
+    #     # cls.MAX_SPLIT_SIZE will remain 2097152000 as set by default.
+    #     LOGGER.info("User client (USER_SESSION_STRING) initialization is disabled.")
+    #     cls.user = None
+    #     cls.IS_PREMIUM_USER = False
 
-    @classmethod
-    async def start_hclient(cls, no, b_token):
-        try:
-            hbot = Client(
-                f"helper{no}",
-                Config.TELEGRAM_API,
-                Config.TELEGRAM_HASH,
-                proxy=Config.TG_PROXY,
-                bot_token=b_token,
-                parse_mode=enums.ParseMode.HTML,
-                no_updates=True,
-                max_concurrent_transmissions=10,
-            )
-            await hbot.start()
-            LOGGER.info(f"Helper Bot [@{hbot.me.username}] Started!")
-            cls.helper_bots[no], cls.helper_loads[no] = hbot, 0
-        except Exception as e:
-            LOGGER.error(f"Failed to start helper bot {no} from HELPER_TOKENS. {e}")
-            cls.helper_bots.pop(no, None)
 
-    @classmethod
-    async def start_helper_bots(cls):
-        if not Config.HELPER_TOKENS:
-            LOGGER.info(
-                "No HELPER_TOKENS found, hyper download will not be available"
-            )
-            return
-        LOGGER.info("Generating helper clients from HELPER_TOKENS")
-        async with cls._hlock:
-            await gather(
-                *(
-                    cls.start_hclient(no, b_token)
-                    for no, b_token in enumerate(
-                        Config.HELPER_TOKENS.split(), start=1
-                    )
-                )
-            )
-        if cls.helper_bots:
-            LOGGER.info(
-                f"Started {len(cls.helper_bots)} helper bots for hyper download"
-            )
-        else:
-            LOGGER.warning(
-                "Failed to start any helper bots, hyper download will not be available"
-            )
+    # @classmethod
+    # async def start_hclient(cls, no, b_token):
+    #     # Helper bot client initialization logic is removed/commented out
+    #     LOGGER.info(f"Helper bot {no} initialization is disabled.")
+
+
+    # @classmethod
+    # async def start_helper_bots(cls):
+    #     # Helper bots initialization logic is removed/commented out
+    #     # HELPER_TOKENS is no longer used here.
+    #     LOGGER.info("Helper bots (HELPER_TOKENS) initialization is disabled.")
+    #     cls.helper_bots = {} # Ensure it's empty
 
     @classmethod
     async def stop(cls):
@@ -149,16 +81,17 @@ class TgClient:
             cls.bot = None
             LOGGER.info("Bot client stopped.")
 
-        if cls.user:
+        if cls.user: # Check if user client was somehow initialized (should not happen)
             await cls.user.stop()
             cls.user = None
-            LOGGER.info("User client stopped.")
+            LOGGER.info("User client stopped (unexpectedly).")
 
-        if cls.helper_bots:
+        if cls.helper_bots: # Check if helper_bots was somehow populated (should not happen)
             await gather(*[h_bot.stop() for h_bot in cls.helper_bots.values()])
             cls.helper_bots = {}
-            LOGGER.info("Helper bots stopped.")
+            LOGGER.info("Helper bots stopped (unexpectedly).")
 
+        # These are already defaulted, but ensure they are reset if stop is called.
         cls.IS_PREMIUM_USER = False
         cls.MAX_SPLIT_SIZE = 2097152000
 
@@ -166,13 +99,14 @@ class TgClient:
     async def reload(cls):
         async with cls._lock:
             await cls.bot.restart()
-            if cls.user:
-                await cls.user.restart()
-            if cls.helper_bots:
-                await gather(
-                    *[h_bot.restart() for h_bot in cls.helper_bots.values()]
-                )
-            LOGGER.info("All clients restarted")
+            # User client and helper bots are disabled, so no need to restart them.
+            # if cls.user:
+            #     await cls.user.restart()
+            # if cls.helper_bots:
+            #     await gather(
+            #         *[h_bot.restart() for h_bot in cls.helper_bots.values()]
+            #     )
+            LOGGER.info("Main bot client restarted. User/Helper clients are disabled.")
 
     @classmethod
     def are_helper_bots_available(cls):
