@@ -1,10 +1,7 @@
 name: Deploy to Heroku
 
 on:
-  # Manual deployment trigger - only available on extended branch
   workflow_dispatch:
-    branches:
-      - extended  # Manual trigger only available on extended branch
     inputs:
       HEROKU_APP_NAME:
         description: "Heroku App name"
@@ -34,26 +31,12 @@ on:
         description: "Telegram HASH from https://my.telegram.org/"
         required: true
 
-  # Automatic deployment when requirements.txt or Dockerfile is updated
-  push:
-    paths:
-      - 'requirements.txt'
-      - 'Dockerfile'
-    branches:
-      - extended  # Deploy from extended branch only
-
-  # Monthly scheduled deployment at 3 AM UTC on the 1st of every month
-  schedule:
-    - cron: '0 3 1 * *'
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: extended  # Always checkout extended branch
 
       - name: Delete unnecessary directories and files
         run: |
@@ -78,21 +61,19 @@ jobs:
       - name: Deploy to Heroku
         uses: 5hojib/heroku-deploy-action@v2
         with:
-          # Use inputs for manual deployment, secrets for automatic deployment
-          heroku_api_key: ${{ inputs.HEROKU_API_KEY || secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ inputs.HEROKU_APP_NAME || secrets.HEROKU_APP_NAME }}
-          heroku_email: ${{ inputs.HEROKU_EMAIL || secrets.HEROKU_EMAIL }}
-          team: ${{ inputs.HEROKU_TEAM_NAME || secrets.HEROKU_TEAM_NAME || '' }}
+          heroku_api_key: ${{inputs.HEROKU_API_KEY}}
+          heroku_app_name: ${{inputs.HEROKU_APP_NAME}}
+          heroku_email: ${{inputs.HEROKU_EMAIL}}
+          team: ${{ inputs.HEROKU_TEAM_NAME != '' && format('{0}', inputs.HEROKU_TEAM_NAME) || '' }}
           usedocker: true
           docker_heroku_process_type: web
           stack: "container"
           region: "eu"
         env:
-          # Use inputs for manual deployment, secrets for automatic deployment
-          HD_OWNER_ID: ${{ inputs.OWNER_ID || secrets.OWNER_ID }}
-          HD_TELEGRAM_API: ${{ inputs.TELEGRAM_API || secrets.TELEGRAM_API }}
-          HD_TELEGRAM_HASH: ${{ inputs.TELEGRAM_HASH || secrets.TELEGRAM_HASH }}
-          HD_DATABASE_URL: ${{ inputs.DATABASE_URL || secrets.DATABASE_URL }}
-          HD_BOT_TOKEN: ${{ inputs.BOT_TOKEN || secrets.BOT_TOKEN }}
-          HD_HEROKU_APP_NAME: ${{ inputs.HEROKU_APP_NAME || secrets.HEROKU_APP_NAME }}
-          HD_HEROKU_API_KEY: ${{ inputs.HEROKU_API_KEY || secrets.HEROKU_API_KEY }}
+          HD_OWNER_ID: ${{inputs.OWNER_ID}}
+          HD_TELEGRAM_API: ${{inputs.TELEGRAM_API}}
+          HD_TELEGRAM_HASH: ${{inputs.TELEGRAM_HASH}}
+          HD_DATABASE_URL: ${{inputs.DATABASE_URL}}
+          HD_BOT_TOKEN: ${{inputs.BOT_TOKEN}}
+          HD_HEROKU_APP_NAME: ${{inputs.HEROKU_APP_NAME}}
+          HD_HEROKU_API_KEY: ${{inputs.HEROKU_API_KEY}}
