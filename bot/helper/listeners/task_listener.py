@@ -371,9 +371,7 @@ class TaskListener(TaskConfig):
             )
             del yt
         elif is_gdrive_id(self.up_dest):
-            LOGGER.info(
-                f"Uploading to Google Drive: {self.name}"
-            )
+            LOGGER.info(f"Uploading to Google Drive: {self.name}")
             drive = GoogleDriveUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
@@ -412,7 +410,9 @@ class TaskListener(TaskConfig):
         done_msg = f"{self.tag}\nYour task is complete\nPlease check your inbox."
         LOGGER.info(f"Task Done: {self.name}")
 
-        upload_service = "yt" if self.raw_up_dest and self.raw_up_dest.startswith("yt") else ""
+        upload_service = (
+            "yt" if self.raw_up_dest and self.raw_up_dest.startswith("yt") else ""
+        )
 
         if not upload_service:
             upload_service = self.user_dict.get(
