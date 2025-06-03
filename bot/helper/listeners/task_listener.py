@@ -350,7 +350,7 @@ class TaskListener(TaskConfig):
             )
 
         if self.is_leech:
-            LOGGER.info(f"Leeching: {self.name} (no specific uploader or is_leech)")
+            LOGGER.info(f"Leeching: {self.name}")
             tg = TelegramUploader(self, up_dir)
             async with task_dict_lock:
                 task_dict[self.mid] = TelegramStatus(self, tg, gid, "up")
@@ -361,7 +361,7 @@ class TaskListener(TaskConfig):
             await delete_message(tg.log_msg)
             del tg
         elif upload_service == "yt":
-            LOGGER.info(f"Uploading to YouTube: {self.name} (Service selected: yt)")
+            LOGGER.info(f"Uploading to YouTube: {self.name}")
             yt = YouTubeUpload(self, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = YtStatus(self, yt, gid)
@@ -372,7 +372,7 @@ class TaskListener(TaskConfig):
             del yt
         elif is_gdrive_id(self.up_dest):
             LOGGER.info(
-                f"Uploading to Google Drive (path-detected): {self.name} (Destination ID: {self.up_dest})"
+                f"Uploading to Google Drive: {self.name}"
             )
             drive = GoogleDriveUpload(self, up_path)
             async with task_dict_lock:
@@ -383,7 +383,7 @@ class TaskListener(TaskConfig):
             )
             del drive
         else:
-            LOGGER.info("Uploading to Rclone")
+            LOGGER.info(f"Uploading to Rclone: {self.name}")
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
@@ -412,36 +412,14 @@ class TaskListener(TaskConfig):
         done_msg = f"{self.tag}\nYour task is complete\nPlease check your inbox."
         LOGGER.info(f"Task Done: {self.name}")
 
-        # Determine the upload service for message formatting
-        upload_service = ""
-        if self.raw_up_dest == "yt" or (
-            self.raw_up_dest and self.raw_up_dest.startswith("yt:")
-        ):
-            upload_service = "yt"
-        elif self.raw_up_dest == "gd":
-            upload_service = "gd"
-        elif self.raw_up_dest == "rc":
-            upload_service = "rc"
+        upload_service = "yt" if self.raw_up_dest and self.raw_up_dest.startswith("yt") else ""
 
-        if not upload_service:  # If -up didn't specify a service directly
+        if not upload_service:
             upload_service = self.user_dict.get(
                 "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
             )
 
-        if upload_service == "yt":
-            msg += "\n<b>Type: </b>Video/Playlist"  # Updated to reflect it can be a playlist
-            if link:
-                msg += f"\n<b>Link: </b><a href='{link}'>Link</a>"  # Generic "Link" as it can be video or playlist
-            msg += f"\n\n<b>cc: </b>{self.tag}"
-
-            await send_message(self.user_id, msg)
-            if Config.LOG_CHAT_ID:
-                await send_message(int(Config.LOG_CHAT_ID), msg)
-            await send_message(
-                self.message,
-                f"{self.tag}\nYour video has been uploaded to YouTube successfully!",
-            )
-        elif self.is_leech:
+        if self.is_leech:
             msg += f"\n<b>Total Files: </b>{folders}"
             if mime_type != 0:
                 msg += f"\n<b>Corrupted Files: </b>{mime_type}"
@@ -475,6 +453,19 @@ class TaskListener(TaskConfig):
                             f"{msg}<blockquote expandable>{fmsg}</blockquote>",
                         )
                 await send_message(self.message, done_msg)
+        elif upload_service == "yt":
+            msg += "\n<b>Type: </b>Video/Playlist"
+            if link:
+                msg += f"\n<b>Link: </b><a href='{link}'>Link</a>"
+            msg += f"\n\n<b>cc: </b>{self.tag}"
+
+            await send_message(self.user_id, msg)
+            if Config.LOG_CHAT_ID:
+                await send_message(int(Config.LOG_CHAT_ID), msg)
+            await send_message(
+                self.message,
+                f"{self.tag}\nYour video has been uploaded to YouTube successfully!",
+            )
         else:
             msg += f"\n\n<b>Type: </b>{mime_type}"
             if mime_type == "Folder":
