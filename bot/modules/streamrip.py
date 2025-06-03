@@ -9,10 +9,7 @@ from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
     add_streamrip_download,
 )
 from bot.helper.streamrip_utils.quality_selector import show_quality_selector
-from bot.helper.streamrip_utils.search_handler import (
-    search_music,
-    search_music_auto_first,
-)
+# search_handler.py was deleted, so remove this import
 from bot.helper.streamrip_utils.url_parser import (
     is_file_input,
     is_lastfm_url,
@@ -44,47 +41,10 @@ class StreamripCommands:
             "link": "",
         }
 
-    @staticmethod
-    def _parse_search_args(args_list):
-        """Custom argument parser for search commands"""
-        args = {
-            "-p": "",
-            "-platform": "",
-            "-t": "",
-            "-type": "",
-            "-f": False,
-            "-first": False,
-            "-n": "",
-            "-num": "",
-            "link": "",
-        }
-
-        i = 0
-        while i < len(args_list):
-            arg = args_list[i]
-
-            if (
-                arg in ["-p", "-platform"]
-                or arg in ["-t", "-type"]
-                or arg in ["-n", "-num"]
-            ):
-                if i + 1 < len(args_list) and not args_list[i + 1].startswith("-"):
-                    args[arg] = args_list[i + 1]
-                    i += 2
-                else:
-                    i += 1
-            elif arg in ["-f", "-first"]:
-                args[arg] = True
-                i += 1
-            else:
-                # Non-flag argument goes to link
-                if args["link"]:
-                    args["link"] += " " + arg
-                else:
-                    args["link"] = arg
-                i += 1
-
-        return args
+    # This method is no longer used after removing search functionality
+    # @staticmethod
+    # def _parse_search_args(args_list):
+    #     ... (removed) ...
 
     @staticmethod
     async def _process_streamrip_download(message, is_leech: bool):
@@ -126,10 +86,11 @@ class StreamripCommands:
 
         if not input_data:
             # Show interactive help menu using COMMAND_USAGE for consistency
+            # Assuming COMMAND_USAGE will now have a "download" key for the /download command
             from bot.helper.ext_utils.bot_utils import COMMAND_USAGE
 
             reply = await send_message(
-                message, COMMAND_USAGE["streamrip"][0], COMMAND_USAGE["streamrip"][1]
+                message, COMMAND_USAGE["download"][0], COMMAND_USAGE["download"][1]
             )
             await auto_delete_message(reply, time=600)
             return
@@ -297,196 +258,17 @@ class StreamripCommands:
 
     @staticmethod
     @new_task
-    async def streamrip_mirror(_, message):
-        """Handle streamrip mirror command"""
-        await StreamripCommands._process_streamrip_download(message, is_leech=False)
-
-    @staticmethod
-    @new_task
-    async def streamrip_leech(_, message):
-        """Handle streamrip leech command"""
+    async def process_download_command(_, message):
+        """Handle streamrip download command (equivalent to leech)"""
         await StreamripCommands._process_streamrip_download(message, is_leech=True)
 
-    @staticmethod
-    @new_task
-    async def streamrip_search(_, message):
-        """Handle streamrip search command"""
-        if not Config.STREAMRIP_ENABLED:
-            reply = await send_message(
-                message,
-                "❌ <b>Streamrip downloads are disabled!</b>\n\n"
-                "💡 <i>Enable streamrip in bot settings to use this feature.</i>",
-            )
-            await auto_delete_message(reply, time=300)
-            return
-
-        # Parse arguments using custom search parser
-        text = message.text.split()
-        args = StreamripCommands._parse_search_args(text[1:])
-
-        # Get search query - reply takes precedence over command arguments
-        query = ""
-
-        # Check if replying to a message with query (reply always takes precedence)
-        if message.reply_to_message and message.reply_to_message.text:
-            query = message.reply_to_message.text.strip()
-        else:
-            # If no reply, get from command arguments
-            query = args.get("link", "").strip()
-
-        if not query:
-            reply = await send_message(
-                message,
-                "🔍 <b>Streamrip Search Help</b>\n\n"
-                "❌ <b>Please provide a search query!</b>\n\n"
-                "📋 <b>Usage:</b>\n"
-                "• <code>/srs &lt;query&gt; [options]</code>\n"
-                "• <code>/srs [options]</code> <i>(reply to message with query)</i>\n\n"
-                "💡 <b>Examples:</b>\n"
-                "• <code>/srs Daft Punk Random Access Memories</code>\n"
-                '• <code>/srs -p qobuz</code> <i>(reply to: "Thriller")</i>\n\n'
-                "📁 <b>Note:</b> Search results are always <b>leeched to Telegram</b> for easy access!\n\n"
-                "⚙️ <b>Available Options:</b>\n"
-                "• <code>-p &lt;platform&gt;</code> - Search specific platform\n"
-                "  <pre>qobuz, tidal, deezer, soundcloud</pre>\n"
-                "• <code>-t &lt;type&gt;</code> - Filter by media type\n"
-                "  <pre>album, track, artist, playlist</pre>\n"
-                "• <code>-f</code> - Auto-download first result\n"
-                "• <code>-n &lt;number&gt;</code> - Limit results (default: 200)\n\n"
-                "🎯 <b>Command Examples:</b>\n"
-                "• <code>/srs -p qobuz -t album Thriller</code>\n"
-                "• <code>/srs -f Blinding Lights</code> <i>(auto-download first)</i>\n"
-                "• <code>/srs -p tidal -n 10 Daft Punk</code>\n\n"
-                "💬 <b>Reply Examples:</b>\n"
-                '• Reply to <code>"Random Access Memories"</code> with <code>/srs -p qobuz -t album</code>\n'
-                '• Reply to <code>"Get Lucky"</code> with <code>/srs -f</code>\n\n'
-                "🎵 <b>Supported Platforms:</b>\n"
-                "🟦 <b>Qobuz</b> - <pre>Hi-Res FLAC (24-bit/192kHz)</pre>\n"
-                "⚫ <b>Tidal</b> - <pre>MQA/Hi-Res (24-bit/96kHz)</pre>\n"
-                "🟣 <b>Deezer</b> - <pre>CD Quality (16-bit/44.1kHz)</pre>\n"
-                "🟠 <b>SoundCloud</b> - <pre>MP3 320kbps</pre>",
-            )
-            await auto_delete_message(reply, time=300)
-            return
-
-        # Parse platform filter - handle both -p and -platform flags
-        platform = None
-        platform_value = args.get("-p") or args.get("-platform")
-        if platform_value and platform_value != "":
-            platform = platform_value.lower()
-            supported_platforms = ["qobuz", "tidal", "deezer", "soundcloud"]
-            if platform not in supported_platforms:
-                reply = await send_message(
-                    message,
-                    f"❌ <b>Invalid platform:</b> <code>{platform}</code>\n\n"
-                    "🎵 <b>Supported platforms:</b>\n"
-                    "🟦 <code>qobuz</code> - Hi-Res FLAC\n"
-                    "⚫ <code>tidal</code> - MQA/Hi-Res\n"
-                    "🟣 <code>deezer</code> - CD Quality\n"
-                    "🟠 <code>soundcloud</code> - MP3 320kbps",
-                )
-                await auto_delete_message(reply, time=300)
-                return
-
-        # Parse media type filter - handle both -t and -type flags
-        media_type_filter = None
-        type_value = args.get("-t") or args.get("-type")
-        if type_value and type_value != "":
-            media_type_filter = type_value.lower()
-            supported_types = ["album", "track", "artist", "playlist"]
-            if media_type_filter not in supported_types:
-                reply = await send_message(
-                    message,
-                    f"❌ <b>Invalid media type:</b> <code>{media_type_filter}</code>\n\n"
-                    "📁 <b>Supported media types:</b>\n"
-                    "🎵 <code>track</code> - Individual songs\n"
-                    "💿 <code>album</code> - Full albums\n"
-                    "👤 <code>artist</code> - Artist profiles\n"
-                    "📋 <code>playlist</code> - Curated playlists",
-                )
-                await auto_delete_message(reply, time=300)
-                return
-
-        # Parse auto-download first result flag - handle both -f and -first flags
-        auto_first = bool(args.get("-f")) or bool(args.get("-first"))
-
-        # Parse result limit - handle both -n and -num flags
-        result_limit = Config.STREAMRIP_MAX_SEARCH_RESULTS
-        limit_value = args.get("-n") or args.get("-num")
-        if limit_value and limit_value != "":
-            try:
-                result_limit = int(limit_value)
-                if result_limit < 1:
-                    raise ValueError("Result limit must be at least 1")
-            except ValueError:
-                reply = await send_message(
-                    message,
-                    "❌ <b>Invalid result limit!</b>\n\n"
-                    "📊 <b>Requirements:</b>\n"
-                    "• Must be a <b>positive number</b> (minimum: <code>1</code>)\n"
-                    "• <b>Example:</b> <code>/srs -n 50 daft punk</code>\n"
-                    "• <b>Note:</b> Higher numbers may take longer to search",
-                )
-                await auto_delete_message(reply, time=300)
-                return
-
-        # Delete command message and reply message instantly
-        messages_to_delete = [message]
-        if message.reply_to_message:
-            messages_to_delete.append(message.reply_to_message)
-
-        # Delete messages instantly without waiting
-        _ = asyncio.create_task(delete_message(*messages_to_delete))
-
-        # Create listener - always leech for search results (users expect files in Telegram)
-        listener = StreamripListener(message, isLeech=True)
-
-        # Perform search with all parameters
-        if auto_first:
-            # For auto-first, we need to implement direct search without interactive selection
-            result = await search_music_auto_first(
-                listener, query, platform, media_type_filter, result_limit
-            )
-        else:
-            # Regular interactive search
-            result = await search_music(
-                listener, query, platform, media_type_filter, result_limit
-            )
-
-        if not result:
-            return  # Search was cancelled or failed
-
-        # Start download with selected result
-        url = result["url"]
-        platform = result["platform"]
-        media_type = result["type"]
-
-        # Set platform and media_type attributes for telegram uploader
-        listener.platform = platform
-        listener.media_type = media_type
-
-        # Show quality selector
-        selection = await show_quality_selector(listener, platform, media_type)
-
-        if not selection:
-            return  # User cancelled or timeout
-
-        quality = selection["quality"]
-        codec = selection["codec"]
-
-        # Delete original command message and replied message instantly before starting download
-        try:
-            await delete_message(message)
-            if message.reply_to_message:
-                await delete_message(message.reply_to_message)
-        except Exception as e:
-            LOGGER.error(f"Failed to delete command messages: {e}")
-
-        # Start download (search results don't support force flag currently)
-        await add_streamrip_download(listener, url, quality, codec, False)
-
+    # streamrip_search and its helper _parse_search_args are removed
+    # _get_streamrip_args and _process_streamrip_download are kept as they are used by process_download_command
 
 # Export command functions for handlers.py
-streamrip_mirror = StreamripCommands.streamrip_mirror
-streamrip_leech = StreamripCommands.streamrip_leech
-streamrip_search = StreamripCommands.streamrip_search
+# streamrip_mirror = StreamripCommands.streamrip_mirror # Removed
+# streamrip_leech = StreamripCommands.streamrip_leech # Renamed/Replaced
+# streamrip_search = StreamripCommands.streamrip_search # Removed
+download = StreamripCommands.process_download_command
+# The large block of code below this was the body of the old streamrip_search command.
+# It is no longer used and is effectively dead code. It has been removed.

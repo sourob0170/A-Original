@@ -440,119 +440,23 @@ class StreamripListener(TaskListener):
                         # Directory - use directory name
                         self.name = first_item.name
 
-            # Set up size and other attributes like TaskListener does - crucial for proper completion message for BOTH leech and mirror
+            # Set up name and size, which are expected by the parent TaskListener's on_download_complete
+            if Path(self.dir).exists():
+                items = list(Path(self.dir).iterdir())
+                if items:
+                    first_item = items[0]
+                    # Ensure self.name is set for TaskListener
+                    self.name = first_item.stem if first_item.is_file() else first_item.name
+
             from bot.helper.ext_utils.files_utils import get_path_size
+            self.size = await get_path_size(self.dir) # Ensure self.size is set for TaskListener
 
-            self.size = await get_path_size(self.dir)
-
-            # Set up_path for mirror operations (TaskListener sets this for proper completion messaging)
-            self.up_path = self.dir
-
-            # Import required classes for upload operations
-            from asyncio import gather
-
-            from bot.helper.ext_utils.bot_utils import sync_to_async
-            from bot.helper.ext_utils.links_utils import is_gdrive_id
-            from bot.helper.mirror_leech_utils.gdrive_utils.upload import (
-                GoogleDriveUpload,
-            )
-            from bot.helper.mirror_leech_utils.rclone_utils.transfer import (
-                RcloneTransferHelper,
-            )
-            from bot.helper.mirror_leech_utils.status_utils.gdrive_status import (
-                GoogleDriveStatus,
-            )
-            from bot.helper.mirror_leech_utils.status_utils.rclone_status import (
-                RcloneStatus,
-            )
-            from bot.helper.mirror_leech_utils.status_utils.telegram_status import (
-                TelegramStatus,
-            )
-            from bot.helper.mirror_leech_utils.telegram_uploader import (
-                TelegramUploader,
-            )
-            from bot.helper.telegram_helper.message_utils import (
-                update_status_message,
-            )
-
-            # For leech operations, use standard TelegramUploader like TaskListener does
-            if self.isLeech:
-                # Create standard TelegramUploader (same as TaskListener)
-                tg = TelegramUploader(self, self.dir)
-
-                # Store a reference to the telegram uploader for later use (e.g., during cancellation)
-                self.telegram_uploader = tg
-
-                # Add to task dict with TelegramStatus (same as TaskListener)
-                async with task_dict_lock:
-                    task_dict[self.mid] = TelegramStatus(self, tg, self.mid, "up")
-
-                # Start upload using TelegramUploader (same as TaskListener)
-                await gather(
-                    update_status_message(self.message.chat.id),
-                    tg.upload(),
-                )
-
-                # Keep reference for cancellation (same as TaskListener)
-                if (hasattr(tg, "dump_chat_msgs") and tg.dump_chat_msgs) or (
-                    hasattr(tg, "log_msg") and tg.log_msg
-                ):
-                    pass
-
-            elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
-                LOGGER.info(f"Streamrip Gdrive Upload Name: {self.name}")
-
-                # If up_dest is "gd", use the configured GDRIVE_ID (same as TaskListener)
-                if self.up_dest == "gd":
-                    gdrive_id = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
-                    if gdrive_id:
-                        self.up_dest = gdrive_id
-                    else:
-                        LOGGER.warning(
-                            "DEFAULT_UPLOAD is 'gd' but no GDRIVE_ID configured, falling back to Rclone"
-                        )
-                        LOGGER.info(f"Streamrip Rclone Upload Name: {self.name}")
-                        RCTransfer = RcloneTransferHelper(self)
-                        async with task_dict_lock:
-                            task_dict[self.mid] = RcloneStatus(
-                                self, RCTransfer, self.mid, "up"
-                            )
-                        await gather(
-                            update_status_message(self.message.chat.id),
-                            RCTransfer.upload(self.dir),
-                        )
-                        del RCTransfer
-                        return
-
-                # Use Google Drive upload (same as TaskListener)
-                drive = GoogleDriveUpload(self, self.dir)
-                async with task_dict_lock:
-                    task_dict[self.mid] = GoogleDriveStatus(
-                        self, drive, self.mid, "up"
-                    )
-                await gather(
-                    update_status_message(self.message.chat.id),
-                    sync_to_async(drive.upload),
-                )
-                del drive
-            else:
-                # Use Rclone upload (default for mirror operations, same as TaskListener)
-                LOGGER.info(f"Streamrip Rclone Upload Name: {self.name}")
-
-                RCTransfer = RcloneTransferHelper(self)
-                async with task_dict_lock:
-                    task_dict[self.mid] = RcloneStatus(
-                        self, RCTransfer, self.mid, "up"
-                    )
-                await gather(
-                    update_status_message(self.message.chat.id),
-                    RCTransfer.upload(self.dir),
-                )
-                del RCTransfer
-            return
+            # Since streamrip is now leech-only, we call the parent's on_download_complete,
+            # which should handle the Telegram upload.
+            await super().on_download_complete()
 
         except Exception as e:
-            LOGGER.error(f"Error in streamrip download complete: {e}")
+            LOGGER.error(f"Error in streamrip on_download_complete: {e}")
             await self.on_download_error(str(e))
 
     # Remove the custom on_upload_complete override to use standard TaskListener behavior

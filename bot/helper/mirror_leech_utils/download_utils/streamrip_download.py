@@ -13,11 +13,9 @@ from bot import (
     task_dict_lock,
 )
 from bot.core.config_manager import Config
-from bot.helper.ext_utils.limit_checker import limit_checker
-from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
-from bot.helper.mirror_leech_utils.status_utils.streamrip_status import (
-    StreamripDownloadStatus,
-)
+# from bot.helper.ext_utils.limit_checker import limit_checker # Removed
+# from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus # Removed
+# from bot.helper.mirror_leech_utils.status_utils.streamrip_status import StreamripDownloadStatus # Removed
 from bot.helper.telegram_helper.message_utils import (
     send_status_message,
 )
@@ -2613,20 +2611,17 @@ async def add_streamrip_download(
             listener.platform = "Unknown"
             listener.media_type = "Unknown"
 
-    # Check streamrip limits
-    if Config.STREAMRIP_LIMIT > 0:
-        # For streamrip, we'll estimate size based on quality and track count
-        # This is approximate since we don't know exact size until download
-        estimated_size = await _estimate_streamrip_size(
-            url, quality or Config.STREAMRIP_DEFAULT_QUALITY
-        )
-
-        if estimated_size > 0:
-            limit_msg = await limit_checker(
-                estimated_size, listener, isStreamrip=True
-            )
-            if limit_msg:
-                return
+    # Limit checking removed for now as limit_checker.py was deleted.
+    # if Config.STREAMRIP_LIMIT > 0:
+    #     estimated_size = await _estimate_streamrip_size(
+    #         url, quality or Config.STREAMRIP_DEFAULT_QUALITY
+    #     )
+    #     if estimated_size > 0:
+    #         limit_msg = await limit_checker(
+    #             estimated_size, listener, isStreamrip=True
+    #         )
+    #         if limit_msg:
+    #             return
 
     # Create download helper
     download_helper = StreamripDownloadHelper(listener)
@@ -2637,36 +2632,17 @@ async def add_streamrip_download(
     # Set force flag in listener for CLI command generation
     listener.force_download = force
 
-    # Add to task dict
-    async with task_dict_lock:
-        task_dict[listener.mid] = StreamripDownloadStatus(
-            listener, download_helper, url, quality, codec
-        )
-
-    # Add to queue if needed
-    async with queue_dict_lock:
-        dl_count = len(
-            [k for k, v in task_dict.items() if v.status() == "Downloading"]
-        )
-
-        if dl_count >= Config.QUEUE_DOWNLOAD:
-            LOGGER.info(f"Added streamrip download to queue: {url}")
-            task_dict[listener.mid] = QueueStatus(listener, listener.mid, "dl")
-            await send_status_message(
-                listener.message, "⏳ Added to download queue!"
-            )
-            return
+    # The listener (StreamripListener, which inherits TaskListener) should handle
+    # adding itself or its status object to task_dict and queue_dict.
+    # Direct manipulation of task_dict with StreamripDownloadStatus or QueueStatus here is removed.
 
     # Start download immediately
     LOGGER.info(f"Starting streamrip download: {url}")
 
-    # Add to task dict with StreamripDownloadStatus for status tracking
-    async with task_dict_lock:
-        task_dict[listener.mid] = StreamripDownloadStatus(
-            listener, download_helper, url, quality, codec
-        )
-
-    # Send status message automatically when download starts (instead of initial download start message)
+    # Send initial status message. The listener's __init__ or a dedicated
+    # on_start method (if TaskListener has one) should manage adding to task_dict.
+    # For now, we rely on the fact that StreamripListener's __init__ calls super().__init__
+    # which should make it part of task_dict.
     await send_status_message(listener.message)
 
     try:

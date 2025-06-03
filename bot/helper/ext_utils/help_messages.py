@@ -1021,12 +1021,11 @@ VT_HELP_DICT = {
 # Streamrip help content
 streamrip_main = """<b>🎵 Streamrip Downloads</b>
 
-Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, and SoundCloud.
+Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, and SoundCloud directly to Telegram.
 
-<b>Commands:</b>
-• <code>/srm</code>, <code>/srmirror</code> or <code>/streamripmirror</code> - Mirror music to cloud storage
-• <code>/srl</code>, <code>/srleech</code> or <code>/streamripleech</code> - Leech music to Telegram
-• <code>/srs</code>, <code>/srsearch</code> or <code>/streamripsearch</code> - Search for music across platforms
+<b>Command:</b>
+• <code>/download link [options]</code> or <code>/dl link [options]</code>
+• Reply to a link with <code>/download [options]</code> or <code>/dl [options]</code>
 
 <b>Supported Platforms:</b>
 • <b>Qobuz</b> - Up to Hi-Res+ quality (24-bit/192kHz)
@@ -1038,16 +1037,14 @@ Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, 
 • Direct URLs from supported platforms
 • ID format: <code>platform:type:id</code> (e.g., <code>qobuz:album:123456</code>)
 • Last.fm playlist URLs (converted to source platforms)
-• Batch files (text/JSON with multiple URLs/IDs)
+• Batch files (text/JSON with multiple URLs/IDs) - reply to file with command
 
-<b>Quality Levels:</b>
-• <b>0</b> - 128 kbps (~4MB/track)
-• <b>1</b> - 320 kbps (~10MB/track)
-• <b>2</b> - CD Quality 16-bit/44.1kHz (~35MB/track)
-• <b>3</b> - Hi-Res 24-bit/≤96kHz (~80MB/track)
-• <b>4</b> - Hi-Res+ 24-bit/≤192kHz (~150MB/track)
+<b>Common Options (see other help sections for more):</b>
+• <code>-q &lt;0-4&gt;</code> - Quality level (0:128k, 1:320k, 2:CD, 3:Hi-Res, 4:Hi-Res+)
+• <code>-c &lt;codec&gt;</code> - Audio codec (flac, mp3, m4a, opus)
+• <code>-n &lt;name&gt;</code> - Custom filename/folder name for the download
 
-<b>Note:</b> Higher quality levels require premium subscriptions on respective platforms."""
+<b>Note:</b> Higher quality levels may require premium subscriptions on respective platforms."""
 
 streamrip_quality_flags = """<b>🎯 Quality & Format Flags</b>
 
@@ -1070,9 +1067,9 @@ Control the quality and format of your music downloads.
   - <code>-c opus</code> - Modern codec, excellent quality
 
 <b>Examples:</b>
-• <code>/srm https://qobuz.com/album/... -q 3 -c flac</code>
-• <code>/srl qobuz:album:123456 -q 2</code>
-• <code>/srm -q 4 -c flac</code> (reply to URL)
+• <code>/download https://qobuz.com/album/... -q 3 -c flac</code>
+• <code>/dl qobuz:album:123456 -q 2</code>
+• <code>/download -q 4 -c flac</code> (reply to URL)
 
 <b>Platform Compatibility:</b>
 • <b>Qobuz:</b> All quality levels (0-4)
@@ -1112,8 +1109,8 @@ Customize how your music downloads are handled.
 • <code>-h &lt;headers&gt;</code> - Custom headers (key:value|key1:value1)
 
 <b>Examples:</b>
-• <code>/srm url -n "Jazz Collection" -up "Music/Jazz"</code>
-• <code>/srl url -sp 2GB -doc -cap "High Quality Music"</code>"""
+• <code>/download url -n "Jazz Collection"</code>
+• <code>/dl url -sp 2GB -doc -cap "High Quality Music"</code>"""
 
 streamrip_media_tools = """<b>🎬 Media Tools Integration</b>
 
@@ -1149,9 +1146,9 @@ Enhance your music downloads with powerful media processing tools.
 • <code>-replace</code> - Replace existing tracks
 
 <b>Examples:</b>
-• <code>/srm url -mt -compress -audio-medium</code>
-• <code>/srl url -mt -add-attachment -preserve</code>
-• <code>/srm url -mt -comp-audio -extract-attachment</code>
+• <code>/download url -mt -compress -audio-medium</code>
+• <code>/dl url -mt -add-attachment -preserve</code>
+• <code>/download url -mt -comp-audio -extract-attachment</code>
 
 <b>Note:</b> Media tools require additional processing time but provide enhanced output quality."""
 
@@ -1185,9 +1182,9 @@ Fine-tune your streamrip downloads with advanced options.
 • <code>-med</code> - Upload as media (Telegram compression)
 
 <b>Examples:</b>
-• <code>/srm url -z "secure123" -sync -f</code>
-• <code>/srl url -s -j -doc -e "log,cue"</code>
-• <code>/srm url -rcf "--transfers:8" -fd</code>
+• <code>/download url -z "secure123" -f</code>
+• <code>/dl url -s -j -doc -e "log,cue"</code>
+• <code>/download url -fd</code>
 
 <b>Tips:</b>
 • Use <code>-doc</code> for lossless audio preservation
@@ -1196,43 +1193,38 @@ Fine-tune your streamrip downloads with advanced options.
 
 streamrip_examples = """<b>📋 Usage Examples</b>
 
-Real-world examples of streamrip commands for different scenarios.
+Real-world examples of the /download command for different scenarios.
 
 <b>🎵 Basic Downloads:</b>
-• <code>/srm https://qobuz.com/album/xyz</code>
-• <code>/srl https://tidal.com/browse/track/123</code>
-• <code>/srs Daft Punk Random Access Memories</code>
+• <code>/download https://qobuz.com/album/xyz</code>
+• <code>/dl https://tidal.com/browse/track/123</code>
 
 <b>🎯 Quality-Focused Downloads:</b>
-• <code>/srm qobuz:album:123456 -q 4 -c flac</code>
-• <code>/srl tidal:album:789012 -q 3 -doc</code>
-• <code>/srm url -q 2 -c flac -n "Lossless Collection"</code>
+• <code>/download qobuz:album:123456 -q 4 -c flac</code>
+• <code>/dl tidal:album:789012 -q 3 -doc</code>
+• <code>/download url -q 2 -c flac -n "Lossless Collection"</code>
 
 <b>📁 Organized Downloads:</b>
-• <code>/srm url -n "Artist - Album (2023)" -up "Music/2023"</code>
-• <code>/srl url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
+• <code>/download url -n "Artist - Album (2023)"</code>
+• <code>/dl url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
 
 <b>🎬 Media Tools Enhanced:</b>
-• <code>/srm url -mt -compress -audio-medium</code>
-• <code>/srl url -mt -add-attachment -preserve</code>
-• <code>/srm url -mt -comp-audio -extract-attachment</code>
+• <code>/download url -mt -compress -audio-medium</code>
+• <code>/dl url -mt -add-attachment -preserve</code>
+• <code>/download url -mt -comp-audio -extract-attachment</code>
 
 <b>🔒 Secure Downloads:</b>
-• <code>/srm url -z "mypassword" -compress</code>
-• <code>/srl url -doc -z "secure123"</code>
+• <code>/download url -z "mypassword" -compress</code>
+• <code>/dl url -doc -z "secure123"</code>
 
 <b>📦 Batch Processing:</b>
 • Upload a text file with multiple URLs and use:
-• <code>/srm -q 3 -c flac -mt</code> (reply to file)
-• <code>/srl -doc -sp 2GB</code> (reply to file)
+• <code>/download -q 3 -c flac -mt</code> (reply to file)
+• <code>/dl -doc -sp 2GB</code> (reply to file)
 
 <b>🔍 Advanced Selection:</b>
-• <code>/srm url -s -e "log,cue" -j</code>
-• <code>/srl url -s -doc -thumb "https://image.url"</code>
-
-<b>☁️ Cloud Integration:</b>
-• <code>/srm url -sync -rcf "--transfers:8"</code>
-• <code>/srm url -up "Music/Streamrip" -sync</code>
+• <code>/download url -s -e "log,cue" -j</code>
+• <code>/dl url -s -doc -thumb "https://image.url"</code>
 
 <b>💡 Pro Tips:</b>
 • Combine quality and media tools for best results
@@ -1749,9 +1741,7 @@ download_commands = f"""
 /{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
 /{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.
 /{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
-/{BotCommands.StreamripMirrorCommand[0]} or /{BotCommands.StreamripMirrorCommand[1]}: Mirror music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud).
-/{BotCommands.StreamripLeechCommand[0]} or /{BotCommands.StreamripLeechCommand[1]}: Leech music from streaming platforms to Telegram.
-/{BotCommands.StreamripSearchCommand[0]} or /{BotCommands.StreamripSearchCommand[1]}: Search for music across streaming platforms.
+/{BotCommands.DownloadCommand[0]} or /{BotCommands.DownloadCommand[1]}: Download music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud) to Telegram using Streamrip.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
 """
 
