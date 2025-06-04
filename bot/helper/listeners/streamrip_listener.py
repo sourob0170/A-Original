@@ -101,7 +101,6 @@ class StreamripListener(TaskListener):
         self.select = False
         self.join = False
         self.private_link = False
-        self.stop_duplicate = False
         self.sample_video = False
         self.convert_audio = False
         self.convert_video = False

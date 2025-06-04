@@ -331,20 +331,6 @@ async def get_user_settings(from_user, stype="main"):
         buttons.data_button("token.pickle", f"userset {user_id} menu TOKEN_PICKLE")
         buttons.data_button("Default Gdrive ID", f"userset {user_id} menu GDRIVE_ID")
         buttons.data_button("Index URL", f"userset {user_id} menu INDEX_URL")
-        if user_dict.get("STOP_DUPLICATE", False) or (
-            "STOP_DUPLICATE" not in user_dict and Config.STOP_DUPLICATE
-        ):
-            buttons.data_button(
-                "Disable Stop Duplicate",
-                f"userset {user_id} tog STOP_DUPLICATE f",
-            )
-            sd_msg = "Enabled"
-        else:
-            buttons.data_button(
-                "Enable Stop Duplicate",
-                f"userset {user_id} tog STOP_DUPLICATE t",
-            )
-            sd_msg = "Disabled"
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
         tokenmsg = "Exists" if await aiopath.exists(token_pickle) else "Not Exists"
@@ -360,8 +346,7 @@ async def get_user_settings(from_user, stype="main"):
         text = f"""<u><b>Gdrive API Settings for {name}</b></u>
 -> Gdrive Token: <b>{tokenmsg}</b>
 -> Gdrive ID: <code>{gdrive_id}</code>
--> Index URL: <code>{index}</code>
--> Stop Duplicate: <b>{sd_msg}</b>"""
+-> Index URL: <code>{index}</code>"""
     elif stype == "ai":
         # Add buttons for each AI setting
         for option in ai_options:
@@ -1227,8 +1212,6 @@ async def edit_user_settings(client, query):
     elif data[2] == "tog":
         await query.answer()
         update_user_ldata(user_id, data[3], data[4] == "t")
-        if data[3] == "STOP_DUPLICATE":
-            back_to = "gdrive"
         elif data[3] == "USER_TOKENS" or data[3] == "MEDIAINFO_ENABLED":
             back_to = "main"
         # Convert settings have been moved to Media Tools settings

@@ -11,52 +11,8 @@ from bot import (
 from bot.core.config_manager import Config
 from bot.helper.mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
 
-from .bot_utils import get_telegraph_list, sync_to_async
+from .bot_utils import sync_to_async
 from .files_utils import get_base_name
-
-
-async def stop_duplicate_check(listener):
-    if (
-        isinstance(listener.up_dest, int)
-        or listener.is_leech
-        or listener.select
-        or (listener.up_dest.startswith("mtp:") and listener.stop_duplicate)
-        or not listener.stop_duplicate
-        or listener.same_dir
-    ):
-        return False, None
-
-    name = listener.name
-    LOGGER.info(f"Checking File/Folder if already in Drive: {name}")
-
-    if listener.compress:
-        # Check if it's the new compression feature or the old 7z compression
-        if hasattr(listener, "compression_enabled") and listener.compression_enabled:
-            # For the new compression feature, we keep the original name
-            # as the compressed file will maintain its extension
-            pass
-        else:
-            # For the old 7z compression
-            name = f"{name}.7z"
-    elif listener.extract:
-        try:
-            name = get_base_name(name)
-        except Exception:
-            name = None
-
-    if name is not None:
-        telegraph_content, contents_no = await sync_to_async(
-            GoogleDriveSearch(stop_dup=True, no_multi=listener.is_clone).drive_list,
-            name,
-            listener.up_dest,
-            listener.user_id,
-        )
-        if telegraph_content:
-            msg = f"File/Folder is already available in Drive.\nHere are {contents_no} list results:"
-            button = await get_telegraph_list(telegraph_content)
-            return msg, button
-
-    return False, None
 
 
 async def check_running_tasks(listener, state="dl"):

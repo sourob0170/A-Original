@@ -30,7 +30,6 @@ from .help_messages import (
     VT_HELP_DICT,
     YT_HELP_DICT,
 )
-from .telegraph_helper import telegraph
 
 COMMAND_USAGE = {}
 
@@ -86,24 +85,6 @@ def bt_selection_buttons(id_):
     buttons.data_button("Done Selecting", f"sel done {gid} {id_}")
     buttons.data_button("Cancel", f"sel cancel {gid}")
     return buttons.build_menu(2)
-
-
-async def get_telegraph_list(telegraph_content):
-    path = [
-        (
-            await telegraph.create_page(
-                title="Mirror-Leech-Bot Drive Search",
-                content=content,
-            )
-        )["path"]
-        for content in telegraph_content
-    ]
-    if len(path) > 1:
-        await telegraph.edit_telegraph(path, telegraph_content)
-    buttons = ButtonMaker()
-    buttons.url_button("🔎 VIEW", f"https://telegra.ph/{path[0]}")
-    return buttons.build_menu(1)
-
 
 def arg_parser(items, arg_base):
     if not items:

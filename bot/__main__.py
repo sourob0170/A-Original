@@ -81,7 +81,6 @@ async def main():
         log_memory_usage,
         smart_garbage_collection,
     )
-    # Removed telegraph, rclone_serve_booter imports and calls
 
     from .modules import ( # Assuming these are general purpose enough
         get_packages_version,
@@ -101,8 +100,6 @@ async def main():
         # initiate_search_tools(), # Removed
         get_packages_version(),
         restart_notification(),
-        # telegraph.create_account(), # Removed
-        # rclone_serve_booter(), # Removed
     )
 
     create_task(start_monitoring())
