@@ -24,11 +24,6 @@ from bot import (
     task_dict_lock,
 )
 from bot.core.config_manager import Config
-from bot.helper.ext_utils.gc_utils import (
-    log_memory_usage,
-    monitor_thread_usage,
-    smart_garbage_collection,
-)
 from bot.helper.ext_utils.status_utils import (
     MirrorStatus,
     speed_string_to_bytes,
@@ -738,14 +733,6 @@ async def monitor_tasks():
             cpu_usage_history.append(psutil.cpu_percent())
             memory_usage_history.append(psutil.virtual_memory().percent)
 
-            # Check thread usage
-            high_thread_usage = monitor_thread_usage()
-            if high_thread_usage:
-                # If thread usage is high, force garbage collection
-                LOGGER.warning(
-                    "High thread usage detected, forcing garbage collection"
-                )
-                smart_garbage_collection(aggressive=True)
         except Exception as e:
             LOGGER.error(f"Error getting system resource usage: {e}")
             # Use default values if we can't get actual usage
@@ -855,13 +842,6 @@ async def monitor_tasks():
             except Exception as e:
                 LOGGER.error(f"Error processing task {gid}: {e}")
 
-        # Add periodic memory cleanup
-        if time.time() % 300 < 1:  # Every ~5 minutes
-            # Use our smart garbage collection utility
-            # Check if memory usage is high (>75%)
-            memory_percent = memory_usage_history[-1] if memory_usage_history else 0
-            smart_garbage_collection(aggressive=memory_percent > 75)
-            log_memory_usage()
     except Exception as e:
         LOGGER.error(f"Error in task monitoring: {e}")
 
@@ -869,10 +849,6 @@ async def monitor_tasks():
 async def start_monitoring():
     """Start the task monitoring loop."""
     LOGGER.info("Starting task monitoring system")
-
-    # Initial garbage collection and memory usage logging
-    smart_garbage_collection(aggressive=False)
-    log_memory_usage()
 
     while True:
         if Config.TASK_MONITOR_ENABLED:

@@ -5,8 +5,6 @@ from logging import getLogger
 
 import aiohttp
 
-from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
 LOGGER = getLogger(__name__)
 
 # Directory to store Google Fonts

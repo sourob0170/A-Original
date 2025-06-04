@@ -18,10 +18,6 @@ from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.aiofiles_compat import aiopath
 
-try:
-    from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-except ImportError:
-    smart_garbage_collection = None
 
 
 class DbManager:

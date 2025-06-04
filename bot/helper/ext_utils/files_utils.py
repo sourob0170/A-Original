@@ -19,7 +19,6 @@ from bot.helper.ext_utils.aiofiles_compat import readlink as aioreadlink
 
 from .bot_utils import cmd_exec, sync_to_async
 from .exceptions import NotSupportedExtractionArchive
-from .gc_utils import smart_garbage_collection
 
 ARCH_EXT = [
     ".tar.bz2",

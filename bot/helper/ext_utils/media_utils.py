@@ -25,10 +25,6 @@ from .bot_utils import cmd_exec, sync_to_async
 from .files_utils import get_mime_type, get_path_size, is_archive, is_archive_split
 from .status_utils import time_to_seconds
 
-try:
-    from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-except ImportError:
-    smart_garbage_collection = None
 
 # Media information cache
 # This cache stores information about media files to avoid repeated ffprobe calls

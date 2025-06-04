@@ -37,9 +37,6 @@ async def check_running_tasks(listener, state="dl"):
                 f"Forcing task {listener.mid} to queue."
             )
             # Force garbage collection to try to free up resources
-            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
-            smart_garbage_collection(aggressive=True)
 
             # Create event for queuing
             event = Event()
@@ -112,10 +109,6 @@ async def start_from_queued():
                 f"System resources too high to start queued tasks: Memory {memory_percent}%, CPU {cpu_percent}%. "
                 f"Will try again later."
             )
-            # Force garbage collection to try to free up resources
-            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
-            smart_garbage_collection(aggressive=True)
             return
 
         # If resources are moderately high, start fewer tasks

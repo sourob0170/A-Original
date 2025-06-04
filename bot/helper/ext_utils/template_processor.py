@@ -10,13 +10,6 @@ from bot.helper.ext_utils.font_utils import (
     is_google_font,
 )
 
-# Legacy implementation is used directly in this file
-
-try:
-    from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-except ImportError:
-    smart_garbage_collection = None
-
 LOGGER = getLogger(__name__)
 
 # Regular expression patterns for template variables with different styling options
@@ -710,14 +703,6 @@ async def process_template(template, data_dict):
     # Final processing of HTML tags to ensure they're properly formatted
     processed_result = await process_html_tags(result)
 
-    # Force garbage collection after processing complex templates
-    # This can create many temporary strings and objects
-    if smart_garbage_collection and len(template) > 1000:  # Only for large templates
-        # Use normal mode for template processing
-        smart_garbage_collection(aggressive=False)
-    elif len(template) > 1000:  # Only for large templates
-        # Only collect generation 0 (youngest objects) for better performance
-        gc.collect(0)
 
     return processed_result
 
@@ -794,14 +779,5 @@ async def process_html_tags(text):
 
     if open_tags:
         pass
-
-    # Return the potentially modified text
-    # Force garbage collection if the text is very large
-    if smart_garbage_collection and len(text) > 10000:  # Only for very large texts
-        # Use normal mode for HTML processing
-        smart_garbage_collection(aggressive=False)
-    elif len(text) > 10000:  # Only for very large texts
-        # Only collect generation 0 (youngest objects) for better performance
-        gc.collect(0)
 
     return text

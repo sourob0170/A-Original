@@ -77,10 +77,6 @@ async def main():
     await start_bot() # Starts scheduler, calls on_startup tasks like ensure_streamrip_config
 
     from .helper.ext_utils.files_utils import clean_all
-    from .helper.ext_utils.gc_utils import (
-        log_memory_usage,
-        smart_garbage_collection,
-    )
 
     from .modules import ( # Assuming these are general purpose enough
         get_packages_version,
@@ -112,9 +108,6 @@ async def main():
     await _load_user_data()
 
     LOGGER.info("Performing initial garbage collection...")
-    smart_garbage_collection(aggressive=True)
-    log_memory_usage()
-
 
 bot_loop.run_until_complete(main())
 

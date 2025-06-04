@@ -17,11 +17,6 @@ from bot import LOGGER, bot_loop, user_data
 from bot.core.config_manager import Config
 from bot.helper.telegram_helper.button_build import ButtonMaker
 
-try:
-    from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-except ImportError:
-    smart_garbage_collection = None
-
 from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
@@ -534,15 +529,6 @@ async def _save_user_data():
             # and disable pretty printing (indent=None) to save memory
             await f.write(json.dumps(user_data, separators=(",", ":"), indent=None))
 
-        # Force garbage collection after saving large data
-        try:
-            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
-            smart_garbage_collection(aggressive=False)
-        except ImportError:
-            import gc
-
-            gc.collect()
 
     except Exception:
         pass
@@ -584,33 +570,10 @@ async def _load_user_data():
 
                         # Force garbage collection after each batch
                         if (i + batch_size) < len(keys):
-                            try:
-                                from bot.helper.ext_utils.gc_utils import (
-                                    smart_garbage_collection,
-                                )
-
-                                smart_garbage_collection(aggressive=False)
-                            except ImportError:
-                                import gc
-
-                                gc.collect()
-
-                    # Data loaded successfully
 
                     # Clear the loaded_data variable to free memory
                     del loaded_data
 
-                    # Final garbage collection
-                    try:
-                        from bot.helper.ext_utils.gc_utils import (
-                            smart_garbage_collection,
-                        )
-
-                        smart_garbage_collection(aggressive=True)
-                    except ImportError:
-                        import gc
-
-                        gc.collect()
     except Exception:
         # Keep using the empty user_data dictionary
         pass
@@ -742,12 +705,6 @@ async def sync_to_async(func, *args, wait=True, **kwargs):
     try:
         # Check if we should run garbage collection before creating a new thread
         # This helps prevent resource exhaustion in high-load situations
-        if smart_garbage_collection is not None:
-            # Monitor thread usage and run garbage collection if needed
-            from bot.helper.ext_utils.gc_utils import monitor_thread_usage
-
-            if monitor_thread_usage():
-                smart_garbage_collection(aggressive=True)
 
         # Create partial function with arguments
         pfunc = partial(func, *args, **kwargs)
@@ -772,10 +729,6 @@ async def sync_to_async(func, *args, wait=True, **kwargs):
         # Handle thread creation errors
         if "can't start new thread" in str(e):
             LOGGER.error(f"Thread limit reached: {e}")
-            # Force aggressive garbage collection
-            if smart_garbage_collection is not None:
-                smart_garbage_collection(aggressive=True)
-            # Wait a bit and retry
             await sleep(1)
 
             # Retry the operation
