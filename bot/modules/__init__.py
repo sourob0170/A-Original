@@ -1,5 +1,3 @@
-from .ad_broadcaster import init_ad_broadcaster
-from .ai import ask_ai
 from .bot_settings import edit_bot_settings, send_bot_settings
 from .broadcast import (
     broadcast,
@@ -16,7 +14,6 @@ from .check_deletion import (
     force_delete_all_messages,
 )
 from .exec import aioexecute, clear, execute
-from .file_selector import confirm_selection, select
 from .font_styles import font_styles_cmd
 from .force_start import remove_from_queue
 from .gen_session import (
@@ -47,18 +44,15 @@ from .restart import (
 from .rss import get_rss_menu, rss_listener
 from .services import aeon_callback, log, login, ping, start
 from .shell import run_shell
-from .sox import spectrum_handler
 from .speedtest import speedtest
 from .stats import bot_stats, get_packages_version
 from .status import status_pages, task_status
-from .truecaller import truecaller_lookup
 from .users_settings import (
     edit_user_settings,
     get_users_settings,
     send_user_settings,
 )
 from .virustotal import virustotal_scan
-from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
 from .ytdlp import ytdl, ytdl_leech
 
 __all__ = [
@@ -66,7 +60,6 @@ __all__ = [
     "aeon_callback",
     "aioexecute",
     "arg_usage",
-    "ask_ai",
     "authorize",
     "bot_help",
     "bot_stats",
@@ -79,7 +72,6 @@ __all__ = [
     "check_scheduled_deletions",
     "clear",
     "confirm_restart",
-    "confirm_selection",
     "delete_pending_messages",
     "edit_bot_settings",
     "edit_media_tools_settings",
@@ -98,8 +90,6 @@ __all__ = [
     "handle_cancel_command",
     "handle_command",
     "handle_group_gensession",
-    "handle_no_suffix_commands",
-    "handle_qb_commands",
     "handle_session_input",
     "imdb_callback",
     "imdb_search",
@@ -120,15 +110,12 @@ __all__ = [
     "restart_notification",
     "rss_listener",
     "run_shell",
-    "select",
     "send_bot_settings",
     "send_user_settings",
-    "spectrum_handler",
     "speedtest",
     "start",
     "status_pages",
     "task_status",
-    "truecaller_lookup",
     "unauthorize",
     "virustotal_scan",
     "ytdl",
