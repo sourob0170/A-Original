@@ -1,6 +1,3 @@
-from bot.core.aeon_client import TgClient
-from bot.helper.telegram_helper.bot_commands import BotCommands
-
 # FFmpeg help message with concise and visual format
 ffmpeg_help = """<b>Custom FFmpeg Commands</b>: -ff
 
@@ -1372,7 +1369,7 @@ user_settings_text = {
 Use /fontstyles for more options.
 
 Timeout: 60 sec""",
-    "LEECH_SPLIT_SIZE": f"Send Leech split size in bytes or use gb or mb. Example: 40000000 or 2.5gb or 1000mb. IS_PREMIUM_USER: {TgClient.IS_PREMIUM_USER}. Timeout: 60 sec",
+    "LEECH_SPLIT_SIZE": "Send Leech split size in bytes or use gb or mb. Example: 40000000 or 2.5gb or 1000mb. IS_PREMIUM_USER: {TgClient.IS_PREMIUM_USER}. Timeout: 60 sec",
     "LEECH_DUMP_CHAT": """"Send leech destination ID/USERNAME/PM. You can specify multiple destinations separated by commas.
 * b:id/@username/pm (b: means leech by bot) (id or username of the chat or write pm means private message so bot will send the files in private to you) when you should use b:(leech by bot)? When your default settings is leech by user and you want to leech by bot for specific task.
 * u:id/@username(u: means leech by user) This incase OWNER added USER_SESSION_STRING.
@@ -1723,7 +1720,7 @@ Use the buttons below to navigate through different command categories.
 """
 
 # Download Commands page
-download_commands = f"""
+download_commands = """
 <b>🔄 Download Commands</b>
 
 /{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to cloud.
@@ -1741,7 +1738,7 @@ download_commands = f"""
 """
 
 # Status & Management page
-status_commands = f"""
+status_commands = """
 <b>📊 Status & Management</b>
 
 /{BotCommands.StatusCommand[0]} or /{BotCommands.StatusCommand[1]} or /{BotCommands.StatusCommand[2]} or /{BotCommands.StatusCommand[3]}: Shows a status of all the downloads.
@@ -1755,7 +1752,7 @@ status_commands = f"""
 """
 
 # Search Tools page
-search_commands = f"""
+search_commands = """
 <b>🔍 Search Tools</b>
 
 /{BotCommands.ListCommand} [query]: Search in Google Drive(s).
@@ -1765,7 +1762,7 @@ search_commands = f"""
 """
 
 # File Management page
-file_commands = f"""
+file_commands = """
 <b>📁 File Management</b>
 
 /{BotCommands.MediaInfoCommand[0]} or /{BotCommands.MediaInfoCommand[1]}: Get MediaInfo from telegram file or direct link.
@@ -1776,7 +1773,7 @@ file_commands = f"""
 """
 
 # Security & Authentication page
-security_commands = f"""
+security_commands = """
 <b>🔒 Security & Authentication</b>
 
 /{BotCommands.LoginCommand}: Login to the bot using password for permanent access.
@@ -1790,7 +1787,7 @@ security_commands = f"""
 """
 
 # Settings & Configuration page
-settings_commands = f"""
+settings_commands = """
 <b>⚙️ Settings & Configuration</b>
 
 /{BotCommands.UserSetCommand[0]} or /{BotCommands.UserSetCommand[1]} or /{BotCommands.UserSetCommand[2]} [query]: Users settings.
@@ -1802,7 +1799,7 @@ settings_commands = f"""
 """
 
 # AI & Special Features page
-special_commands = f"""
+special_commands = """
 <b>🤖 AI & Special Features</b>
 
 /{BotCommands.AskCommand}: Chat with AI using the bot (Mistral or DeepSeek).
@@ -1810,7 +1807,7 @@ special_commands = f"""
 """
 
 # System Commands page
-system_commands = f"""
+system_commands = """
 <b>🛠️ System Commands (Owner & Sudo only)</b>
 
 /{BotCommands.RestartCommand[0]} or /{BotCommands.RestartCommand[1]}: Restart and update the bot.
@@ -1823,7 +1820,7 @@ system_commands = f"""
 """
 
 # Help page
-help_commands = f"""
+help_commands = """
 <b>❓ Help</b>
 
 /{BotCommands.HelpCommand}: Show this help message.
