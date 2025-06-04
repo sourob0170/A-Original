@@ -48,6 +48,9 @@ from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
 from bot.helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
+from bot.helper.mirror_leech_utils.download_utils.zotify_download import (
+    add_zotify_download,
+)
 from bot.helper.streamrip_utils.url_parser import is_streamrip_url
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
@@ -55,6 +58,7 @@ from bot.helper.telegram_helper.message_utils import (
     get_tg_link_message,
     send_message,
 )
+from bot.helper.zotify_utils.url_parser import is_zotify_url
 from bot.modules.media_tools import show_media_tools_for_task
 
 
@@ -673,7 +677,13 @@ class Mirror(TaskListener):
             try:
                 reply_to, session = await get_tg_link_message(self.link, user_id)
             except Exception as e:
-                x = await send_message(self.message, f"ERROR: {e}")
+                # Convert exception to string to avoid TypeError in send_message
+                error_msg = (
+                    f"ERROR: {e!s}"
+                    if e
+                    else "ERROR: Failed to process Telegram link"
+                )
+                x = await send_message(self.message, error_msg)
                 await self.remove_from_same_dir()
                 await delete_links(self.message)
                 return await auto_delete_message(x, time=300)
@@ -811,7 +821,11 @@ class Mirror(TaskListener):
         try:
             await self.before_start()
         except Exception as e:
-            x = await send_message(self.message, e)
+            # Convert exception to string to avoid TypeError in send_message
+            error_msg = (
+                str(e) if e else "An unknown error occurred during initialization"
+            )
+            x = await send_message(self.message, error_msg)
             await self.remove_from_same_dir()
             await delete_links(self.message)
             return await auto_delete_message(x, time=300)
@@ -873,7 +887,13 @@ class Mirror(TaskListener):
                         await delete_links(self.message)
                         return await auto_delete_message(x, time=300)
                 except Exception as e:
-                    x = await send_message(self.message, e)
+                    # Convert exception to string to avoid TypeError in send_message
+                    error_msg = (
+                        str(e)
+                        if e
+                        else "An unknown error occurred during link processing"
+                    )
+                    x = await send_message(self.message, error_msg)
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
@@ -910,6 +930,9 @@ class Mirror(TaskListener):
         elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
             # Handle streamrip downloads
             create_task(add_streamrip_download(self, self.link))
+        elif Config.ZOTIFY_ENABLED and await is_zotify_url(self.link):
+            # Handle zotify downloads
+            create_task(add_zotify_download(self, self.link))
         else:
             ussr = args["-au"]
             pssw = args["-ap"]

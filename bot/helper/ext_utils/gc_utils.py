@@ -410,8 +410,18 @@ def monitor_thread_usage():
         # Log warning if thread usage is high
         if usage_percent > 80:
             LOGGER.warning(
-                f"High thread usage: {thread_count}/{hard_limit} ({usage_percent:.1f}%)"
+                f"🧵 HIGH THREAD USAGE: {thread_count}/{hard_limit} ({usage_percent:.1f}%)"
             )
+
+            # Only show detailed thread analysis when usage is EXTREMELY high (>90%)
+            # This helps identify the main cause of thread exhaustion
+            if usage_percent > 90:
+                thread_details = _get_thread_analysis()
+                LOGGER.warning(
+                    "🚨 EXTREMELY HIGH THREAD USAGE - NEEDS INVESTIGATION"
+                )
+                LOGGER.warning(f"📊 THREAD ANALYSIS: {thread_details}")
+
             return True
         if usage_percent > 60:
             LOGGER.info(
@@ -425,7 +435,10 @@ def monitor_thread_usage():
 
 
 def smart_garbage_collection(
-    aggressive=False, for_split_file=False, memory_error=False
+    aggressive=False,
+    for_split_file=False,
+    memory_error=False,
+    for_music_download=False,
 ):
     """
     Perform a smart garbage collection that adapts based on memory usage.
@@ -437,6 +450,8 @@ def smart_garbage_collection(
     Args:
         aggressive: Whether to force aggressive collection regardless of memory usage
         for_split_file: Whether this is being called for a split file upload (more aggressive)
+        memory_error: Whether this is being called after a memory error (most aggressive)
+        for_music_download: Whether this is being called for music downloads (moderate aggressive)
 
     Returns:
         bool: True if collection was performed successfully
@@ -462,11 +477,18 @@ def smart_garbage_collection(
         if for_split_file:
             aggressive = True
 
+        # For music downloads, be moderately aggressive due to format conversion
+        if for_music_download and memory_percent > 60:
+            aggressive = True
+
         # Decide which collection method to use based on memory pressure and thread usage
 
         # If this is a memory error recovery, use the most aggressive approach
         if memory_error:
-            LOGGER.warning("Performing emergency memory cleanup after memory error")
+            memory_before = _get_detailed_memory_info()
+            LOGGER.warning("🚨 EMERGENCY MEMORY CLEANUP - Memory error detected")
+            LOGGER.warning(f"📊 Memory before cleanup: {memory_before}")
+
             # Clear any unreachable objects first
             if gc.garbage:
                 gc.garbage.clear()
@@ -488,6 +510,8 @@ def smart_garbage_collection(
             except Exception as e:
                 LOGGER.error(f"Failed to perform malloc_trim: {e}")
 
+            memory_after = _get_detailed_memory_info()
+            LOGGER.warning(f"📊 Memory after cleanup: {memory_after}")
             return True
 
         # For high memory usage, thread issues, or forced aggressive mode
@@ -521,3 +545,160 @@ def smart_garbage_collection(
             return True
         except Exception:
             return False
+
+
+def music_download_cleanup():
+    """
+    Perform cleanup specifically optimized for music download tasks.
+    Music downloads can create many small files and temporary objects.
+    """
+    try:
+        # Clear any unreachable objects first
+        if gc.garbage:
+            gc.garbage.clear()
+
+        # Do a focused collection on generation 0 and 1 (most temporary objects)
+        gc.collect(0)
+        gc.collect(1)
+
+        # Only collect generation 2 if we have high memory usage
+        if psutil is not None:
+            try:
+                memory = psutil.virtual_memory()
+                if memory.percent > 80:
+                    gc.collect(2)
+            except Exception:
+                pass
+
+        return True
+    except Exception as e:
+        LOGGER.error(f"Error during music download cleanup: {e}")
+        return False
+
+
+def _get_detailed_memory_info() -> str:
+    """Get detailed memory information for debugging"""
+    try:
+        info_parts = []
+
+        # Garbage collection stats
+        gc_stats = gc.get_stats()
+        for i, stat in enumerate(gc_stats):
+            info_parts.append(
+                f"GC Gen{i}: {stat['collections']} collections, {stat['collected']} collected, {stat['uncollectable']} uncollectable"
+            )
+
+        # Object counts by type
+        try:
+            from collections import Counter
+
+            # Get object counts (limit to avoid performance issues)
+            obj_types = Counter()
+            for obj in gc.get_objects()[:10000]:  # Limit to first 10k objects
+                obj_types[type(obj).__name__] += 1
+
+            # Show top 5 object types
+            top_objects = obj_types.most_common(5)
+            if top_objects:
+                obj_info = ", ".join(
+                    [f"{name}: {count}" for name, count in top_objects]
+                )
+                info_parts.append(f"Top objects: {obj_info}")
+        except Exception:
+            info_parts.append("Object analysis failed")
+
+        # System memory info
+        if psutil is not None:
+            try:
+                process = psutil.Process()
+                memory_info = process.memory_info()
+                memory_full_info = process.memory_full_info()
+
+                info_parts.append(f"RSS: {memory_info.rss / 1024**2:.1f}MB")
+                info_parts.append(f"VMS: {memory_info.vms / 1024**2:.1f}MB")
+                info_parts.append(f"USS: {memory_full_info.uss / 1024**2:.1f}MB")
+                info_parts.append(f"PSS: {memory_full_info.pss / 1024**2:.1f}MB")
+
+                # System memory
+                system_memory = psutil.virtual_memory()
+                info_parts.append(f"System: {system_memory.percent:.1f}% used")
+                info_parts.append(
+                    f"Available: {system_memory.available / 1024**3:.1f}GB"
+                )
+
+            except Exception:
+                info_parts.append("System memory analysis failed")
+
+        # Thread count
+        try:
+            import threading
+
+            thread_count = threading.active_count()
+            info_parts.append(f"Threads: {thread_count}")
+        except Exception:
+            pass
+
+        return " | ".join(info_parts)
+
+    except Exception as e:
+        return f"Memory analysis failed: {e}"
+
+
+def _get_thread_analysis() -> str:
+    """Get detailed thread analysis for debugging high thread usage"""
+    try:
+        import threading
+
+        analysis_parts = []
+
+        # Basic thread info
+        main_thread = threading.main_thread()
+        current_thread = threading.current_thread()
+        all_threads = threading.enumerate()
+
+        analysis_parts.append(f"Total: {len(all_threads)}")
+        analysis_parts.append(f"Main alive: {main_thread.is_alive()}")
+        analysis_parts.append(f"Current: {current_thread.name}")
+
+        # Thread types analysis
+        thread_types = {}
+        daemon_count = 0
+        alive_count = 0
+
+        for thread in all_threads:
+            thread_type = type(thread).__name__
+            thread_types[thread_type] = thread_types.get(thread_type, 0) + 1
+
+            if thread.daemon:
+                daemon_count += 1
+            if thread.is_alive():
+                alive_count += 1
+
+        analysis_parts.append(f"Alive: {alive_count}")
+        analysis_parts.append(f"Daemon: {daemon_count}")
+
+        # Show thread types
+        if thread_types:
+            type_info = ", ".join(
+                [f"{name}: {count}" for name, count in sorted(thread_types.items())]
+            )
+            analysis_parts.append(f"Types: {type_info}")
+
+        # Show some thread names (first 5)
+        thread_names = [t.name for t in all_threads[:5] if t.name]
+        if thread_names:
+            analysis_parts.append(f"Names: {', '.join(thread_names)}")
+
+        # Process info if available
+        if psutil is not None:
+            try:
+                process = psutil.Process()
+                num_threads = process.num_threads()
+                analysis_parts.append(f"Process threads: {num_threads}")
+            except Exception:
+                pass
+
+        return " | ".join(analysis_parts)
+
+    except Exception as e:
+        return f"Thread analysis failed: {e}"

@@ -75,6 +75,24 @@ convert_options = []
 
 rclone_options = ["RCLONE_CONFIG", "RCLONE_PATH", "RCLONE_FLAGS"]
 gdrive_options = ["TOKEN_PICKLE", "GDRIVE_ID", "INDEX_URL"]
+youtube_options = [
+    "YOUTUBE_TOKEN_PICKLE",
+    "YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+    "YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+    "YOUTUBE_UPLOAD_DEFAULT_TAGS",
+    "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+    "YOUTUBE_UPLOAD_DEFAULT_TITLE",
+    "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE",
+    "YOUTUBE_UPLOAD_DEFAULT_LICENSE",
+    "YOUTUBE_UPLOAD_EMBEDDABLE",
+    "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+    "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+    "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+    "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+    "YOUTUBE_UPLOAD_RECORDING_DATE",
+    "YOUTUBE_UPLOAD_AUTO_LEVELS",
+    "YOUTUBE_UPLOAD_STABILIZE",
+]
 yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES", "FFMPEG_CMDS"]
 
 
@@ -362,6 +380,203 @@ async def get_user_settings(from_user, stype="main"):
 -> Gdrive ID: <code>{gdrive_id}</code>
 -> Index URL: <code>{index}</code>
 -> Stop Duplicate: <b>{sd_msg}</b>"""
+    elif stype == "youtube":
+        # Create organized menu with categories
+        buttons.data_button(
+            "🔑 YouTube Token", f"userset {user_id} menu YOUTUBE_TOKEN_PICKLE"
+        )
+        buttons.data_button("📹 Basic Settings", f"userset {user_id} youtube_basic")
+        buttons.data_button(
+            "⚙️ Advanced Settings", f"userset {user_id} youtube_advanced"
+        )
+
+        buttons.data_button("Back", f"userset {user_id} back")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Check if YouTube token exists
+        youtube_token_path = f"tokens/{user_id}_youtube.pickle"
+        youtube_tokenmsg = (
+            "Exists" if await aiopath.exists(youtube_token_path) else "Not Exists"
+        )
+
+        # Get basic YouTube settings with user priority over owner settings
+        youtube_privacy = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_PRIVACY", Config.YOUTUBE_UPLOAD_DEFAULT_PRIVACY
+        )
+        youtube_category = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_CATEGORY", Config.YOUTUBE_UPLOAD_DEFAULT_CATEGORY
+        )
+        youtube_tags = (
+            user_dict.get(
+                "YOUTUBE_UPLOAD_DEFAULT_TAGS", Config.YOUTUBE_UPLOAD_DEFAULT_TAGS
+            )
+            or "None"
+        )
+        youtube_description = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+            Config.YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION,
+        )
+
+        text = f"""<u><b>YouTube API Settings for {name}</b></u>
+-> YouTube Token: <b>{youtube_tokenmsg}</b>
+-> Default Privacy: <code>{youtube_privacy}</code>
+-> Default Category: <code>{youtube_category}</code>
+-> Default Tags: <code>{youtube_tags}</code>
+-> Default Description: <code>{youtube_description}</code>
+
+<i>Note: Your settings will take priority over the bot owner's settings.</i>
+<i>Upload videos to YouTube using: -up yt or -up yt:privacy:category:tags</i>
+<i>Use the menu buttons below to configure different aspects of YouTube uploads.</i>"""
+    elif stype == "youtube_basic":
+        # Basic YouTube settings
+        buttons.data_button(
+            "Default Privacy",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+        )
+        buttons.data_button(
+            "Default Category",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+        )
+        buttons.data_button(
+            "Default Tags", f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_TAGS"
+        )
+        buttons.data_button(
+            "Default Description",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+        )
+        buttons.data_button(
+            "Default Title", f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_TITLE"
+        )
+        buttons.data_button(
+            "Default Language",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_LANGUAGE",
+        )
+        buttons.data_button("Back", f"userset {user_id} youtube")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get basic settings
+        youtube_privacy = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_PRIVACY", Config.YOUTUBE_UPLOAD_DEFAULT_PRIVACY
+        )
+        youtube_category = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_CATEGORY", Config.YOUTUBE_UPLOAD_DEFAULT_CATEGORY
+        )
+        youtube_tags = (
+            user_dict.get(
+                "YOUTUBE_UPLOAD_DEFAULT_TAGS", Config.YOUTUBE_UPLOAD_DEFAULT_TAGS
+            )
+            or "None"
+        )
+        youtube_description = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+            Config.YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION,
+        )
+        youtube_title = (
+            user_dict.get(
+                "YOUTUBE_UPLOAD_DEFAULT_TITLE", Config.YOUTUBE_UPLOAD_DEFAULT_TITLE
+            )
+            or "Auto (from filename)"
+        )
+        youtube_language = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE", Config.YOUTUBE_UPLOAD_DEFAULT_LANGUAGE
+        )
+
+        text = f"""<u><b>YouTube Basic Settings for {name}</b></u>
+-> Default Privacy: <code>{youtube_privacy}</code>
+-> Default Category: <code>{youtube_category}</code>
+-> Default Tags: <code>{youtube_tags}</code>
+-> Default Description: <code>{youtube_description}</code>
+-> Default Title: <code>{youtube_title}</code>
+-> Default Language: <code>{youtube_language}</code>
+
+<i>These are the basic settings for YouTube uploads.</i>"""
+    elif stype == "youtube_advanced":
+        # Advanced YouTube settings
+        buttons.data_button(
+            "Default License",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_DEFAULT_LICENSE",
+        )
+        buttons.data_button(
+            "Embeddable", f"userset {user_id} tog YOUTUBE_UPLOAD_EMBEDDABLE"
+        )
+        buttons.data_button(
+            "Public Stats Viewable",
+            f"userset {user_id} tog YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+        )
+        buttons.data_button(
+            "Made for Kids", f"userset {user_id} tog YOUTUBE_UPLOAD_MADE_FOR_KIDS"
+        )
+        buttons.data_button(
+            "Notify Subscribers",
+            f"userset {user_id} tog YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+        )
+        buttons.data_button(
+            "Location Description",
+            f"userset {user_id} menu YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+        )
+        buttons.data_button(
+            "Recording Date", f"userset {user_id} menu YOUTUBE_UPLOAD_RECORDING_DATE"
+        )
+        buttons.data_button(
+            "Auto Levels", f"userset {user_id} tog YOUTUBE_UPLOAD_AUTO_LEVELS"
+        )
+        buttons.data_button(
+            "Stabilize", f"userset {user_id} tog YOUTUBE_UPLOAD_STABILIZE"
+        )
+        buttons.data_button("Back", f"userset {user_id} youtube")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get advanced settings
+        youtube_license = user_dict.get(
+            "YOUTUBE_UPLOAD_DEFAULT_LICENSE", Config.YOUTUBE_UPLOAD_DEFAULT_LICENSE
+        )
+        youtube_embeddable = user_dict.get(
+            "YOUTUBE_UPLOAD_EMBEDDABLE", Config.YOUTUBE_UPLOAD_EMBEDDABLE
+        )
+        youtube_public_stats = user_dict.get(
+            "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+            Config.YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE,
+        )
+        youtube_made_for_kids = user_dict.get(
+            "YOUTUBE_UPLOAD_MADE_FOR_KIDS", Config.YOUTUBE_UPLOAD_MADE_FOR_KIDS
+        )
+        youtube_notify_subs = user_dict.get(
+            "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+            Config.YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS,
+        )
+        youtube_location = (
+            user_dict.get(
+                "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+                Config.YOUTUBE_UPLOAD_LOCATION_DESCRIPTION,
+            )
+            or "None"
+        )
+        youtube_recording_date = (
+            user_dict.get(
+                "YOUTUBE_UPLOAD_RECORDING_DATE", Config.YOUTUBE_UPLOAD_RECORDING_DATE
+            )
+            or "None"
+        )
+        youtube_auto_levels = user_dict.get(
+            "YOUTUBE_UPLOAD_AUTO_LEVELS", Config.YOUTUBE_UPLOAD_AUTO_LEVELS
+        )
+        youtube_stabilize = user_dict.get(
+            "YOUTUBE_UPLOAD_STABILIZE", Config.YOUTUBE_UPLOAD_STABILIZE
+        )
+
+        text = f"""<u><b>YouTube Advanced Settings for {name}</b></u>
+-> Default License: <code>{youtube_license}</code>
+-> Embeddable: <b>{"✅ Yes" if youtube_embeddable else "❌ No"}</b>
+-> Public Stats Viewable: <b>{"✅ Yes" if youtube_public_stats else "❌ No"}</b>
+-> Made for Kids: <b>{"✅ Yes" if youtube_made_for_kids else "❌ No"}</b>
+-> Notify Subscribers: <b>{"✅ Yes" if youtube_notify_subs else "❌ No"}</b>
+-> Location Description: <code>{youtube_location}</code>
+-> Recording Date: <code>{youtube_recording_date}</code>
+-> Auto Levels: <b>{"✅ Yes" if youtube_auto_levels else "❌ No"}</b>
+-> Stabilize: <b>{"✅ Yes" if youtube_stabilize else "❌ No"}</b>
+
+<i>These are advanced settings for YouTube uploads.</i>"""
+
     elif stype == "ai":
         # Add buttons for each AI setting
         for option in ai_options:
@@ -514,6 +729,9 @@ Please use /mediatools command to configure convert settings.
         # Only show Gdrive API button if Mirror operations are enabled
         if Config.MIRROR_ENABLED:
             buttons.data_button("Gdrive API", f"userset {user_id} gdrive")
+        # Only show YouTube API button if YouTube upload is enabled
+        if Config.YOUTUBE_UPLOAD_ENABLED:
+            buttons.data_button("YouTube API", f"userset {user_id} youtube")
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
             buttons.data_button("AI Settings", f"userset {user_id} ai")
@@ -538,18 +756,49 @@ Please use /mediatools command to configure convert settings.
         # If Rclone is disabled or Mirror is disabled and default upload is set to Rclone, change it to Gdrive
         if (
             not Config.RCLONE_ENABLED or not Config.MIRROR_ENABLED
-        ) and default_upload != "gd":
+        ) and default_upload not in ["gd", "yt"]:
             default_upload = "gd"
             # Update the user's settings
             update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
 
-        du = "Gdrive API" if default_upload == "gd" else "Rclone"
+        # If YouTube upload is disabled and default upload is set to YouTube, change it to Gdrive
+        if not Config.YOUTUBE_UPLOAD_ENABLED and default_upload == "yt":
+            default_upload = "gd"
+            # Update the user's settings
+            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
 
-        # Only show the toggle button if both Rclone and Mirror are enabled
+        if default_upload == "gd":
+            du = "Gdrive API"
+        elif default_upload == "yt":
+            du = "YouTube"
+        else:
+            du = "Rclone"
+
+        # Show upload toggle buttons based on enabled services
+        available_uploads = []
+        if Config.MIRROR_ENABLED:
+            available_uploads.append(("gd", "Gdrive API"))
         if Config.RCLONE_ENABLED and Config.MIRROR_ENABLED:
-            dur = "Gdrive API" if default_upload != "gd" else "Rclone"
+            available_uploads.append(("rc", "Rclone"))
+        if Config.YOUTUBE_UPLOAD_ENABLED:
+            available_uploads.append(("yt", "YouTube"))
+
+        # Only show toggle if there are multiple upload options
+        if len(available_uploads) > 1:
+            # Find next upload option
+            current_index = next(
+                (
+                    i
+                    for i, (code, _) in enumerate(available_uploads)
+                    if code == default_upload
+                ),
+                0,
+            )
+            next_index = (current_index + 1) % len(available_uploads)
+            next_code, next_name = available_uploads[next_index]
+
             buttons.data_button(
-                f"Upload using {dur}",
+                f"Upload using {next_name}",
                 f"userset {user_id} {default_upload}",
             )
 
@@ -784,6 +1033,11 @@ async def add_file(_, message, ftype):
             await makedirs(tpath, exist_ok=True)
             des_dir = f"{tpath}{user_id}.pickle"
             await message.download(file_name=des_dir)  # TODO user font
+        elif ftype == "YOUTUBE_TOKEN_PICKLE":
+            tpath = f"{getcwd()}/tokens/"
+            await makedirs(tpath, exist_ok=True)
+            des_dir = f"{tpath}{user_id}_youtube.pickle"
+            await message.download(file_name=des_dir)
         elif ftype == "USER_COOKIES":
             cpath = f"{getcwd()}/cookies/"
             await makedirs(cpath, exist_ok=True)
@@ -1038,7 +1292,13 @@ async def get_menu(option, message, user_id):
     handler_dict[user_id] = False
     user_dict = user_data.get(user_id, {})
     buttons = ButtonMaker()
-    if option in ["THUMBNAIL", "RCLONE_CONFIG", "TOKEN_PICKLE", "USER_COOKIES"]:
+    if option in [
+        "THUMBNAIL",
+        "RCLONE_CONFIG",
+        "TOKEN_PICKLE",
+        "YOUTUBE_TOKEN_PICKLE",
+        "USER_COOKIES",
+    ]:
         key = "file"
     else:
         key = "set"
@@ -1075,6 +1335,9 @@ async def get_menu(option, message, user_id):
     elif option in gdrive_options:
         # If mirror is disabled, go back to main menu
         back_to = "gdrive" if Config.MIRROR_ENABLED else "back"
+    elif option in youtube_options:
+        # If YouTube upload is disabled, go back to main menu
+        back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
     elif option in metadata_options:
         back_to = "metadata"
     # Convert options have been moved to Media Tools settings
@@ -1212,11 +1475,26 @@ async def edit_user_settings(client, query):
         return
     if data[2] == "setevent":
         await query.answer()
-    elif data[2] in ["leech", "gdrive", "rclone", "metadata", "convert", "ai"]:
+    elif data[2] in [
+        "leech",
+        "gdrive",
+        "rclone",
+        "youtube",
+        "metadata",
+        "convert",
+        "ai",
+        "youtube_basic",
+        "youtube_advanced",
+    ]:
         await query.answer()
         # Redirect to main menu if trying to access disabled features
-        if (data[2] == "leech" and not Config.LEECH_ENABLED) or (
-            data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED
+        if (
+            (data[2] == "leech" and not Config.LEECH_ENABLED)
+            or (data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED)
+            or (
+                data[2] in ["youtube", "youtube_basic", "youtube_advanced"]
+                and not Config.YOUTUBE_UPLOAD_ENABLED
+            )
         ):
             await update_user_settings(query, "main")
         else:
@@ -1231,6 +1509,15 @@ async def edit_user_settings(client, query):
             back_to = "gdrive"
         elif data[3] == "USER_TOKENS" or data[3] == "MEDIAINFO_ENABLED":
             back_to = "main"
+        elif data[3] in [
+            "YOUTUBE_UPLOAD_EMBEDDABLE",
+            "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+            "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+            "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+            "YOUTUBE_UPLOAD_AUTO_LEVELS",
+            "YOUTUBE_UPLOAD_STABILIZE",
+        ]:
+            back_to = "youtube_advanced"
         # Convert settings have been moved to Media Tools settings
         else:
             back_to = "leech"
@@ -1336,13 +1623,21 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await get_menu(data[3], message, user_id)
     elif data[2] == "remove":
         await query.answer("Removed!", show_alert=True)
-        if data[3] in ["THUMBNAIL", "RCLONE_CONFIG", "TOKEN_PICKLE", "USER_COOKIES"]:
+        if data[3] in [
+            "THUMBNAIL",
+            "RCLONE_CONFIG",
+            "TOKEN_PICKLE",
+            "YOUTUBE_TOKEN_PICKLE",
+            "USER_COOKIES",
+        ]:
             if data[3] == "THUMBNAIL":
                 fpath = thumb_path
             elif data[3] == "RCLONE_CONFIG":
                 fpath = rclone_conf
             elif data[3] == "USER_COOKIES":
                 fpath = f"cookies/{user_id}.txt"
+            elif data[3] == "YOUTUBE_TOKEN_PICKLE":
+                fpath = f"tokens/{user_id}_youtube.pickle"
             else:
                 fpath = token_pickle
             if await aiopath.exists(fpath):
@@ -1441,9 +1736,24 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 create_task(  # noqa: RUF006
                     auto_delete_message(msg, time=10),
                 )  # Delete after 10 seconds
-    elif data[2] in ["gd", "rc"]:
+    elif data[2] in ["gd", "rc", "yt"]:
         await query.answer()
-        du = "rc" if data[2] == "gd" else "gd"
+        # Cycle through available upload options
+        available_uploads = []
+        if Config.MIRROR_ENABLED:
+            available_uploads.append("gd")
+        if Config.RCLONE_ENABLED and Config.MIRROR_ENABLED:
+            available_uploads.append("rc")
+        if Config.YOUTUBE_UPLOAD_ENABLED:
+            available_uploads.append("yt")
+
+        # Find current index and get next option
+        current_index = (
+            available_uploads.index(data[2]) if data[2] in available_uploads else 0
+        )
+        next_index = (current_index + 1) % len(available_uploads)
+        du = available_uploads[next_index]
+
         update_user_ldata(user_id, "DEFAULT_UPLOAD", du)
         await update_user_settings(query)
         await database.update_user_data(user_id)

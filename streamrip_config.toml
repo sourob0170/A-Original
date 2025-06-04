@@ -183,8 +183,8 @@ fallback_source = ""
 [cli]
 # Print "Downloading {Album name}" etc. to screen
 text_output = true
-# Show resolve, download progress bars
-progress_bars = true
+# Show resolve, download progress bars (disabled for bot)
+progress_bars = false
 # The maximum number of search results to show in the interactive menu
 max_search_results = 100
 

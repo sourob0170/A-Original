@@ -58,6 +58,13 @@ async def start(client, message):
         )
 
         await handle_streamrip_start_command(client, message)
+    elif len(message.command) > 1 and message.command[1].startswith("zotify_"):
+        # Handle zotify inline search start command
+        from bot.helper.zotify_utils.search_handler import (
+            handle_zotify_start_command,
+        )
+
+        await handle_zotify_start_command(client, message)
     elif len(message.command) > 1 and message.command[1] != "start":
         userid = message.from_user.id
         if len(message.command[1]) == 36:

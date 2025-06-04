@@ -109,6 +109,10 @@ class TelegramUploader:
         self._streamrip_platform = getattr(listener, "platform", None)
         self._streamrip_media_type = getattr(listener, "media_type", None)
 
+        # Zotify-specific attributes
+        self._is_zotify = hasattr(listener, "tool") and listener.tool == "zotify"
+        self._zotify_platform = "spotify"  # Zotify is always Spotify
+
     async def _upload_progress(self, current, _):
         if self._listener.is_cancelled:
             if self._user_session:
@@ -312,6 +316,11 @@ class TelegramUploader:
                         }.get(self._streamrip_platform.lower(), "🎶")
 
                         cap_mono = f"<code>{platform_emoji} {self._streamrip_platform.title()}\n{display_name}</code>"
+
+                    # Enhanced caption for zotify downloads
+                    elif self._is_zotify:
+                        # Add zotify platform info to caption
+                        cap_mono = f"<code>🎧 Spotify\n{display_name}</code>"
 
             # Rename the file with the final filename
             if final_filename != file_:
@@ -899,6 +908,10 @@ class TelegramUploader:
                     if (
                         self._listener.hybrid_leech
                         and self._listener.user_transmission
+                        and not self._listener.is_cancelled
+                        and self._sent_msg is not None
+                        and hasattr(self._sent_msg, "chat")
+                        and self._sent_msg.chat is not None
                     ):
                         self._user_session = f_size > 2097152000
                         if self._user_session:
@@ -919,12 +932,27 @@ class TelegramUploader:
                     await self._upload_file(cap_mono, file_, actual_file_path)
                     if self._listener.is_cancelled:
                         return
+
+                    # Perform memory cleanup after each file upload for memory-constrained environments
+                    try:
+                        from bot.helper.ext_utils.gc_utils import (
+                            smart_garbage_collection,
+                        )
+
+                        smart_garbage_collection(aggressive=False)
+                    except ImportError:
+                        import gc
+
+                        gc.collect()
+
                     # Store the actual filename (which may have been modified by leech filename)
                     actual_filename = ospath.basename(self._up_path)
                     if (
                         not self._is_corrupted
                         and (self._listener.is_super_chat or self._listener.up_dest)
                         and not self._is_private
+                        and self._sent_msg is not None
+                        and hasattr(self._sent_msg, "link")
                     ):
                         self._msgs_dict[self._sent_msg.link] = actual_filename
                     await sleep(1)
@@ -942,7 +970,13 @@ class TelegramUploader:
                 if not self._listener.is_cancelled and await aiopath.exists(
                     self._up_path,
                 ):
-                    await remove(self._up_path)
+                    try:
+                        await remove(self._up_path)
+                    except FileNotFoundError:
+                        # File was already deleted, ignore
+                        pass
+                    except Exception as e:
+                        LOGGER.error(f"Error removing file {self._up_path}: {e}")
         # Process any remaining media groups at the end of the task
         try:
             for key, value in list(self._media_dict.items()):
@@ -1237,12 +1271,16 @@ class TelegramUploader:
                         else:
                             raise
 
-            await self._copy_message()
+            # Check if task is cancelled before copying message
+            if not self._listener.is_cancelled and self._sent_msg is not None:
+                await self._copy_message()
 
             if (
                 not self._listener.is_cancelled
                 and self._media_group
                 and self._sent_msg is not None
+                and hasattr(self._sent_msg, "chat")
+                and self._sent_msg.chat is not None
                 and (
                     (hasattr(self._sent_msg, "video") and self._sent_msg.video)
                     or (
@@ -1293,25 +1331,42 @@ class TelegramUploader:
             err_type = "RPCError: " if isinstance(err, RPCError) else ""
             LOGGER.error(f"{err_type}{err}. Path: {self._up_path}")
 
-            # Handle memory errors specifically
-            if "MemoryError" in str(
-                err
-            ) or "'NoneType' object has no attribute 'write'" in str(err):
+            # Handle memory errors and cancellation-related errors specifically
+            if (
+                "MemoryError" in str(err)
+                or "'NoneType' object has no attribute 'write'" in str(err)
+                or "'NoneType' object has no attribute 'chat'" in str(err)
+            ):
+                if "'NoneType' object has no attribute 'chat'" in str(err):
+                    LOGGER.error(
+                        f"Cancellation race condition detected during upload. Path: {self._up_path}"
+                    )
+                    # This is likely due to task cancellation, just return without retrying
+                    return None
                 LOGGER.error(
                     f"Memory error detected during upload. Path: {self._up_path}"
                 )
 
-                # Simple memory cleanup
-                gc.collect()
+                # Aggressive memory cleanup for memory errors
+                try:
+                    from bot.helper.ext_utils.gc_utils import (
+                        smart_garbage_collection,
+                    )
+
+                    smart_garbage_collection(aggressive=True, memory_error=True)
+                except ImportError:
+                    # Fallback to basic garbage collection
+                    gc.collect()
+                    gc.collect()  # Run twice for better cleanup
 
                 if not force_document:
                     LOGGER.info(
-                        f"Retrying upload as document. Path: {self._up_path}"
+                        f"Retrying upload as document after memory cleanup. Path: {self._up_path}"
                     )
                     return await self._upload_file(cap_mono, file, o_path, True)
 
                 LOGGER.error(
-                    f"Unable to upload file. Skipping file. Path: {self._up_path}"
+                    f"Unable to upload file after memory cleanup. Skipping file. Path: {self._up_path}"
                 )
                 self._is_corrupted = True
                 return None
@@ -1587,9 +1642,28 @@ class TelegramUploader:
     async def _copy_message(self):
         await sleep(0.5)
 
+        # Check if task is cancelled or _sent_msg is None (due to cancellation)
+        if self._listener.is_cancelled or self._sent_msg is None:
+            LOGGER.info(
+                "Task is cancelled or _sent_msg is None, skipping message copy"
+            )
+            return
+
+        # Additional safety check for _sent_msg.chat
+        if not hasattr(self._sent_msg, "chat") or self._sent_msg.chat is None:
+            LOGGER.error(
+                "Cannot copy message: _sent_msg has no chat attribute or chat is None"
+            )
+            return
+
         async def _copy(target, retries=2):
             for attempt in range(retries):
                 try:
+                    # Double-check _sent_msg is still valid before each copy attempt
+                    if self._listener.is_cancelled or self._sent_msg is None:
+                        LOGGER.info("Task cancelled during copy attempt, aborting")
+                        return
+
                     msg = await TgClient.bot.get_messages(
                         self._sent_msg.chat.id,
                         self._sent_msg.id,
@@ -1614,8 +1688,22 @@ class TelegramUploader:
 
         # Copy to leech dump chats if configured and enabled
         if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
+            # Additional safety check before processing leech dump chats
+            if self._listener.is_cancelled or self._sent_msg is None:
+                LOGGER.info(
+                    "Task cancelled during leech dump chat processing, aborting"
+                )
+                return
+
             if isinstance(Config.LEECH_DUMP_CHAT, list):
                 for i in Config.LEECH_DUMP_CHAT:
+                    # Check cancellation status before each iteration
+                    if self._listener.is_cancelled or self._sent_msg is None:
+                        LOGGER.info(
+                            "Task cancelled during leech dump chat iteration, aborting"
+                        )
+                        break
+
                     # Process chat ID format (handle prefixes like b:, u:, h:)
                     processed_chat_id = i
                     if isinstance(processed_chat_id, str):
@@ -1656,9 +1744,19 @@ class TelegramUploader:
         self._listener.is_cancelled = True
         LOGGER.info(f"Cancelling Upload: {self._listener.name}")
 
-        # Set self._sent_msg to None to prevent any further attempts to copy it
-        # This will prevent the "Cannot copy message: self._sent_msg is None" error
-        if hasattr(self, "_sent_msg"):
-            self._sent_msg = None
+        # Safely handle cancellation to prevent race conditions
+        try:
+            # Clear media dictionaries to prevent further processing
+            if hasattr(self, "_media_dict"):
+                self._media_dict.clear()
+            if hasattr(self, "_msgs_dict"):
+                self._msgs_dict.clear()
+
+            # Set self._sent_msg to None to prevent any further attempts to copy it
+            # This will prevent the "Cannot copy message: self._sent_msg is None" error
+            if hasattr(self, "_sent_msg"):
+                self._sent_msg = None
+        except Exception as e:
+            LOGGER.error(f"Error during upload cancellation cleanup: {e}")
 
         await self._listener.on_upload_error("your upload has been stopped!")

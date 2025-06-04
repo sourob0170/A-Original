@@ -1,3 +1,4 @@
+import time
 from asyncio import Event
 
 from bot import (
@@ -67,25 +68,30 @@ async def check_running_tasks(listener, state="dl"):
     event = None
     is_over_limit = False
 
-    # Check system resources before allowing new tasks
+    # Check system resources before allowing new tasks using shared resource manager
     try:
-        import psutil
+        from bot.helper.ext_utils.gc_utils import smart_garbage_collection
+        from bot.helper.ext_utils.task_monitor import resource_manager
 
-        memory_percent = psutil.virtual_memory().percent
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        should_queue, reason = resource_manager.should_force_queue_task()
 
-        # If system resources are critically low, force queue regardless of limits
-        resource_critical = memory_percent > 90 or cpu_percent > 95
+        if should_queue:
+            # Get detailed analysis for consolidated logging when resources are extremely critical
+            cpu_percent, memory_percent = resource_manager.get_resource_usage()
+            if memory_percent > 95 or cpu_percent > 98:
+                detailed_analysis = _get_task_manager_resource_analysis()
+                disk_info = _get_disk_usage_info()
+                LOGGER.warning(
+                    f"🚨 EXTREMELY CRITICAL RESOURCES - {disk_info} {reason} Forcing task {listener.mid} to queue. "
+                    f"Will start only 1 task to prevent system overload. "
+                    f"📊 DETAILS: {detailed_analysis}"
+                )
+            else:
+                LOGGER.warning(f"{reason} Forcing task {listener.mid} to queue.")
 
-        if resource_critical:
-            LOGGER.warning(
-                f"System resources critical: Memory {memory_percent}%, CPU {cpu_percent}%. "
-                f"Forcing task {listener.mid} to queue."
-            )
             # Force garbage collection to try to free up resources
-            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
-            smart_garbage_collection(aggressive=True)
+            startup_phase = resource_manager.is_startup_phase()
+            smart_garbage_collection(aggressive=not startup_phase)
 
             # Create event for queuing
             event = Event()
@@ -145,30 +151,31 @@ async def start_up_from_queued(mid: int):
 
 
 async def start_from_queued():
-    # Check system resources before starting queued tasks
+    # Check system resources before starting queued tasks using shared resource manager
     try:
-        import psutil
+        from bot.helper.ext_utils.gc_utils import smart_garbage_collection
+        from bot.helper.ext_utils.task_monitor import (
+            ResourceConstraint,
+            resource_manager,
+        )
 
-        memory_percent = psutil.virtual_memory().percent
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        resource_constraint = resource_manager.get_resource_constraint()
+        cpu_percent, memory_percent = resource_manager.get_resource_usage()
 
-        # If system resources are critically low, don't start new tasks
-        if memory_percent > 85 or cpu_percent > 90:
-            LOGGER.warning(
-                f"System resources too high to start queued tasks: Memory {memory_percent}%, CPU {cpu_percent}%. "
-                f"Will try again later."
-            )
+        if resource_constraint == ResourceConstraint.CRITICAL:
+            # Only log here if we haven't already logged in check_running_tasks
+            # This prevents duplicate logging when both functions detect critical resources
+
             # Force garbage collection to try to free up resources
-            from bot.helper.ext_utils.gc_utils import smart_garbage_collection
-
             smart_garbage_collection(aggressive=True)
-            return
-
-        # If resources are moderately high, start fewer tasks
-        resource_constraint = memory_percent > 75 or cpu_percent > 80
+        elif resource_constraint == ResourceConstraint.MODERATE:
+            LOGGER.info(
+                f"System resources moderately high: Memory {memory_percent:.1f}%, CPU {cpu_percent:.1f}%. "
+                f"Will start at most 2 tasks."
+            )
     except ImportError:
         # If psutil is not available, assume no resource constraints
-        resource_constraint = False
+        resource_constraint = "normal"  # Use string fallback
 
     if all_limit := Config.QUEUE_ALL:
         dl_limit = Config.QUEUE_DOWNLOAD
@@ -179,10 +186,22 @@ async def start_from_queued():
             all_ = dl + up
             if all_ < all_limit:
                 f_tasks = all_limit - all_
-                if resource_constraint:
-                    f_tasks = min(
-                        f_tasks, 2
-                    )  # Start at most 2 tasks when resources are constrained
+
+                # Apply resource constraints using shared resource manager
+                try:
+                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+
+                    max_tasks = resource_manager.get_max_tasks_for_constraint(
+                        resource_constraint
+                    )
+                    if max_tasks != float("inf"):
+                        f_tasks = min(f_tasks, max_tasks)
+                except ImportError:
+                    # Fallback to old logic if import fails
+                    if resource_constraint == ResourceConstraint.CRITICAL:
+                        f_tasks = min(f_tasks, 1)
+                    elif resource_constraint == ResourceConstraint.MODERATE:
+                        f_tasks = min(f_tasks, 2)
 
                 if queued_up and (not up_limit or up < up_limit):
                     for index, mid in enumerate(list(queued_up.keys()), start=1):
@@ -197,14 +216,29 @@ async def start_from_queued():
                             break
         return
 
-    # If resources are constrained, be more conservative with task starts
-    1 if resource_constraint else float("inf")
-
+    # Handle individual queue limits with resource constraints
     if up_limit := Config.QUEUE_UPLOAD:
         async with queue_dict_lock:
             up = len(non_queued_up)
             if queued_up and up < up_limit:
                 f_tasks = up_limit - up
+
+                # Apply resource constraints using shared resource manager
+                try:
+                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+
+                    max_tasks = resource_manager.get_max_tasks_for_constraint(
+                        resource_constraint
+                    )
+                    if max_tasks != float("inf"):
+                        f_tasks = min(f_tasks, max_tasks)
+                except ImportError:
+                    # Fallback to old logic if import fails
+                    if resource_constraint == ResourceConstraint.CRITICAL:
+                        f_tasks = min(f_tasks, 1)
+                    elif resource_constraint == ResourceConstraint.MODERATE:
+                        f_tasks = min(f_tasks, 2)
+
                 for index, mid in enumerate(list(queued_up.keys()), start=1):
                     await start_up_from_queued(mid)
                     if index == f_tasks:
@@ -212,14 +246,64 @@ async def start_from_queued():
     else:
         async with queue_dict_lock:
             if queued_up:
-                for mid in list(queued_up.keys()):
-                    await start_up_from_queued(mid)
+                # Even without upload limits, respect resource constraints
+                try:
+                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+
+                    max_tasks = resource_manager.get_max_tasks_for_constraint(
+                        resource_constraint
+                    )
+
+                    if max_tasks == 1:
+                        # Start only 1 upload task under critical conditions
+                        mid = next(iter(queued_up.keys()))
+                        await start_up_from_queued(mid)
+                    elif max_tasks == 2:
+                        # Start at most 2 upload tasks under moderate conditions
+                        for index, mid in enumerate(list(queued_up.keys()), start=1):
+                            await start_up_from_queued(mid)
+                            if index >= 2:
+                                break
+                    else:
+                        # No resource constraints, start all queued uploads
+                        for mid in list(queued_up.keys()):
+                            await start_up_from_queued(mid)
+                except ImportError:
+                    # Fallback to old logic if import fails
+                    if resource_constraint == ResourceConstraint.CRITICAL:
+                        mid = next(iter(queued_up.keys()))
+                        await start_up_from_queued(mid)
+                    elif resource_constraint == ResourceConstraint.MODERATE:
+                        for index, mid in enumerate(list(queued_up.keys()), start=1):
+                            await start_up_from_queued(mid)
+                            if index >= 2:
+                                break
+                    else:
+                        for mid in list(queued_up.keys()):
+                            await start_up_from_queued(mid)
 
     if dl_limit := Config.QUEUE_DOWNLOAD:
         async with queue_dict_lock:
             dl = len(non_queued_dl)
             if queued_dl and dl < dl_limit:
                 f_tasks = dl_limit - dl
+
+                # Apply resource constraints using shared resource manager
+                try:
+                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+
+                    max_tasks = resource_manager.get_max_tasks_for_constraint(
+                        resource_constraint
+                    )
+                    if max_tasks != float("inf"):
+                        f_tasks = min(f_tasks, max_tasks)
+                except ImportError:
+                    # Fallback to old logic if import fails
+                    if resource_constraint == ResourceConstraint.CRITICAL:
+                        f_tasks = min(f_tasks, 1)
+                    elif resource_constraint == ResourceConstraint.MODERATE:
+                        f_tasks = min(f_tasks, 2)
+
                 for index, mid in enumerate(list(queued_dl.keys()), start=1):
                     await start_dl_from_queued(mid)
                     if index == f_tasks:
@@ -227,5 +311,446 @@ async def start_from_queued():
     else:
         async with queue_dict_lock:
             if queued_dl:
-                for mid in list(queued_dl.keys()):
-                    await start_dl_from_queued(mid)
+                # Even without download limits, respect resource constraints
+                try:
+                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+
+                    max_tasks = resource_manager.get_max_tasks_for_constraint(
+                        resource_constraint
+                    )
+
+                    if max_tasks == 1:
+                        # Start only 1 download task under critical conditions
+                        mid = next(iter(queued_dl.keys()))
+                        await start_dl_from_queued(mid)
+                    elif max_tasks == 2:
+                        # Start at most 2 download tasks under moderate conditions
+                        for index, mid in enumerate(list(queued_dl.keys()), start=1):
+                            await start_dl_from_queued(mid)
+                            if index >= 2:
+                                break
+                    else:
+                        # No resource constraints, start all queued downloads
+                        for mid in list(queued_dl.keys()):
+                            await start_dl_from_queued(mid)
+                except ImportError:
+                    # Fallback to old logic if import fails
+                    if resource_constraint == ResourceConstraint.CRITICAL:
+                        mid = next(iter(queued_dl.keys()))
+                        await start_dl_from_queued(mid)
+                    elif resource_constraint == ResourceConstraint.MODERATE:
+                        for index, mid in enumerate(list(queued_dl.keys()), start=1):
+                            await start_dl_from_queued(mid)
+                            if index >= 2:
+                                break
+                    else:
+                        for mid in list(queued_dl.keys()):
+                            await start_dl_from_queued(mid)
+
+
+async def start_queue_processor():
+    """
+    Periodic queue processor that ensures at least one task runs even under high system resources.
+    This addresses the issue where tasks get stuck in queue when system resources are high.
+    """
+    import asyncio
+
+    from bot import LOGGER
+
+    LOGGER.info("Queue processor started - ensuring continuous task execution")
+
+    # Start processing immediately without waiting
+
+    while True:
+        try:
+            # Check if there are any queued tasks and no running tasks
+            async with queue_dict_lock:
+                has_queued_tasks = bool(queued_dl or queued_up)
+                running_tasks_count = len(non_queued_dl) + len(non_queued_up)
+
+            if has_queued_tasks:
+                # Get current resource constraint
+                try:
+                    from bot.helper.ext_utils.task_monitor import (
+                        ResourceConstraint,
+                        resource_manager,
+                    )
+
+                    constraint = resource_manager.get_resource_constraint()
+                    cpu_percent, memory_percent = (
+                        resource_manager.get_resource_usage()
+                    )
+
+                    # Determine if we should force start a task
+                    should_force_start = False
+
+                    if running_tasks_count == 0:
+                        # No tasks running at all - always start at least one
+                        should_force_start = True
+                        reason = "No tasks running"
+                    elif (
+                        constraint == ResourceConstraint.CRITICAL
+                        and running_tasks_count < 1
+                    ):
+                        # Critical resources but less than 1 task - ensure at least 1 runs
+                        should_force_start = True
+                        reason = f"Critical resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) but ensuring minimum 1 task"
+                    elif (
+                        constraint == ResourceConstraint.MODERATE
+                        and running_tasks_count < 2
+                    ):
+                        # Moderate resources but less than 2 tasks - can run up to 2
+                        should_force_start = True
+                        reason = f"Moderate resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) allowing up to 2 tasks"
+                    elif constraint == ResourceConstraint.NORMAL:
+                        # Normal resources - start queued tasks normally
+                        should_force_start = True
+                        reason = f"Normal resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) processing queue"
+
+                    if should_force_start:
+                        LOGGER.info(
+                            f"Queue processor: {reason} - starting queued tasks"
+                        )
+                        await start_from_queued()
+
+                        # Force garbage collection after starting tasks to free up memory
+                        from bot.helper.ext_utils.gc_utils import (
+                            smart_garbage_collection,
+                        )
+
+                        smart_garbage_collection(
+                            aggressive=(constraint == ResourceConstraint.CRITICAL)
+                        )
+
+                except ImportError:
+                    # Fallback if resource manager is not available
+                    if running_tasks_count == 0:
+                        LOGGER.info(
+                            "Queue processor: No tasks running - starting queued tasks (fallback mode)"
+                        )
+                        await start_from_queued()
+
+            # Adjust sleep interval based on system load and queue status
+            if has_queued_tasks and running_tasks_count == 0:
+                # Urgent: No tasks running but have queued tasks
+                sleep_interval = 10  # Check every 10 seconds
+            elif has_queued_tasks:
+                # Normal: Have queued tasks and some running
+                sleep_interval = 30  # Check every 30 seconds
+            else:
+                # Idle: No queued tasks
+                sleep_interval = 60  # Check every minute
+
+            await asyncio.sleep(sleep_interval)
+
+        except Exception as e:
+            LOGGER.error(f"Error in queue processor: {e}")
+            await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+
+
+def _get_task_manager_resource_analysis() -> str:
+    """Get detailed resource analysis specific to task manager operations"""
+    try:
+        import threading
+
+        import psutil
+
+        from bot import non_queued_dl, non_queued_up, queued_dl, queued_up, task_dict
+
+        analysis_parts = []
+
+        # Add system resource overview first
+        try:
+            # System-wide resource info
+            cpu_count = psutil.cpu_count(logical=True)
+            cpu_count_physical = psutil.cpu_count(logical=False)
+            cpu_freq = psutil.cpu_freq()
+
+            analysis_parts.append(
+                f"🖥️  SYSTEM: {cpu_count} logical cores ({cpu_count_physical} physical)"
+            )
+            if cpu_freq:
+                analysis_parts.append(f"CPU Freq: {cpu_freq.current:.0f}MHz")
+
+            # Memory details
+            memory = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            analysis_parts.append(
+                f"Memory: {memory.used / 1024**3:.1f}GB/{memory.total / 1024**3:.1f}GB ({memory.percent:.1f}%)"
+            )
+            analysis_parts.append(
+                f"Available: {memory.available / 1024**3:.1f}GB, Swap: {swap.used / 1024**3:.1f}GB/{swap.total / 1024**3:.1f}GB ({swap.percent:.1f}%)"
+            )
+
+            # System load
+            try:
+                if hasattr(psutil, "getloadavg"):
+                    load_avg = psutil.getloadavg()
+                    if load_avg and len(load_avg) >= 3:
+                        analysis_parts.append(
+                            f"Load avg: {load_avg[0]:.2f}, {load_avg[1]:.2f}, {load_avg[2]:.2f}"
+                        )
+            except Exception:
+                pass
+
+            # System uptime
+            try:
+                boot_time = psutil.boot_time()
+                uptime_seconds = time.time() - boot_time
+                uptime_hours = uptime_seconds / 3600
+                analysis_parts.append(f"Uptime: {uptime_hours:.1f}h")
+            except Exception:
+                pass
+
+        except Exception:
+            analysis_parts.append("System info unavailable")
+
+        # Task queue analysis
+        async def get_task_counts():
+            async with queue_dict_lock:
+                return {
+                    "queued_dl": len(queued_dl),
+                    "queued_up": len(queued_up),
+                    "running_dl": len(non_queued_dl),
+                    "running_up": len(non_queued_up),
+                    "total_tasks": len(task_dict),
+                }
+
+        # Since this is called from sync context, we'll get basic counts
+        try:
+            analysis_parts.append(
+                f"Tasks - Running DL: {len(non_queued_dl)}, Running UP: {len(non_queued_up)}"
+            )
+            analysis_parts.append(
+                f"Queued DL: {len(queued_dl)}, Queued UP: {len(queued_up)}, Total: {len(task_dict)}"
+            )
+        except Exception:
+            analysis_parts.append("Task count analysis failed")
+
+        # Thread analysis
+        thread_count = threading.active_count()
+        analysis_parts.append(f"Active threads: {thread_count}")
+
+        # Process analysis
+        current_process = psutil.Process()
+
+        # CPU times
+        cpu_times = current_process.cpu_times()
+        analysis_parts.append(
+            f"CPU times - User: {cpu_times.user:.1f}s, System: {cpu_times.system:.1f}s"
+        )
+
+        # Memory details
+        memory_info = current_process.memory_info()
+        memory_full_info = current_process.memory_full_info()
+        analysis_parts.append(
+            f"Memory - RSS: {memory_info.rss / 1024**2:.1f}MB, VMS: {memory_info.vms / 1024**2:.1f}MB"
+        )
+        analysis_parts.append(
+            f"Memory - USS: {memory_full_info.uss / 1024**2:.1f}MB, PSS: {memory_full_info.pss / 1024**2:.1f}MB"
+        )
+
+        # File descriptors
+        try:
+            num_fds = current_process.num_fds()
+            analysis_parts.append(f"File descriptors: {num_fds}")
+        except Exception:
+            pass
+
+        # Connections
+        try:
+            connections = current_process.connections()
+            tcp_count = sum(
+                1 for conn in connections if conn.type.name == "SOCK_STREAM"
+            )
+            udp_count = sum(
+                1 for conn in connections if conn.type.name == "SOCK_DGRAM"
+            )
+            analysis_parts.append(
+                f"Network connections - TCP: {tcp_count}, UDP: {udp_count}"
+            )
+        except Exception:
+            pass
+
+        # Enhanced child processes analysis
+        try:
+            children = current_process.children(recursive=True)
+            if children:
+                analysis_parts.append(f"Child processes: {len(children)}")
+
+                # Collect detailed child process info with robust error handling
+                child_details = []
+                for child in children:
+                    try:
+                        # Get basic info first
+                        child_pid = child.pid
+                        child_name = "unknown"
+                        child_cmdline = "unknown"
+                        child_memory_mb = 0
+                        child_cpu = 0
+                        child_status = "unknown"
+                        child_age = 0
+
+                        # Try to get each piece of info individually with error handling
+                        try:
+                            child_name = child.name()
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_name = "access_denied"
+                        except Exception:
+                            child_name = "error_name"
+
+                        try:
+                            child_memory = child.memory_info()
+                            child_memory_mb = child_memory.rss / 1024**2
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_memory_mb = 0
+                        except Exception:
+                            child_memory_mb = 0
+
+                        try:
+                            child_cpu = child.cpu_percent()
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_cpu = 0
+                        except Exception:
+                            child_cpu = 0
+
+                        try:
+                            cmdline_list = child.cmdline()
+                            if cmdline_list:
+                                child_cmdline = " ".join(cmdline_list[:3])
+                            else:
+                                child_cmdline = "no_cmdline"
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_cmdline = "access_denied"
+                        except Exception:
+                            child_cmdline = "error_cmdline"
+
+                        try:
+                            child_status = child.status()
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_status = "access_denied"
+                        except Exception:
+                            child_status = "error_status"
+
+                        try:
+                            child_create_time = child.create_time()
+                            child_age = time.time() - child_create_time
+                        except (
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                            psutil.ZombieProcess,
+                        ):
+                            child_age = 0
+                        except Exception:
+                            child_age = 0
+
+                        child_details.append(
+                            {
+                                "pid": child_pid,
+                                "name": child_name,
+                                "cmdline": child_cmdline,
+                                "memory_mb": child_memory_mb,
+                                "cpu_percent": child_cpu,
+                                "status": child_status,
+                                "age_seconds": child_age,
+                            }
+                        )
+
+                    except (
+                        psutil.NoSuchProcess,
+                        psutil.AccessDenied,
+                        psutil.ZombieProcess,
+                    ):
+                        # Process no longer exists or access denied
+                        child_details.append(
+                            {
+                                "pid": getattr(child, "pid", "unknown"),
+                                "name": "process_gone",
+                                "cmdline": "process_no_longer_exists",
+                                "memory_mb": 0,
+                                "cpu_percent": 0,
+                                "status": "gone",
+                                "age_seconds": 0,
+                            }
+                        )
+                    except Exception as e:
+                        # Other unexpected errors
+                        child_details.append(
+                            {
+                                "pid": getattr(child, "pid", "unknown"),
+                                "name": "error",
+                                "cmdline": f"unexpected_error: {str(e)[:20]}",
+                                "memory_mb": 0,
+                                "cpu_percent": 0,
+                                "status": "error",
+                                "age_seconds": 0,
+                            }
+                        )
+
+                # Sort by CPU usage first, then memory
+                child_details.sort(
+                    key=lambda x: (x["cpu_percent"], x["memory_mb"]), reverse=True
+                )
+
+                # Show detailed info for all children
+                for i, child in enumerate(child_details, 1):
+                    analysis_parts.append(
+                        f"  Child {i}: PID {child['pid']} | {child['name']} | "
+                        f"CMD: {child['cmdline'][:50]} | "
+                        f"MEM: {child['memory_mb']:.1f}MB | "
+                        f"CPU: {child['cpu_percent']:.1f}% | "
+                        f"STATUS: {child['status']} | "
+                        f"AGE: {child['age_seconds']:.0f}s"
+                    )
+        except Exception as e:
+            analysis_parts.append(f"Child process analysis failed: {e!s}")
+
+        return " | ".join(analysis_parts)
+
+    except Exception as e:
+        return f"Task manager analysis failed: {e}"
+
+
+def _get_disk_usage_info() -> str:
+    """Get disk usage information for consolidated logging"""
+    try:
+        import shutil
+
+        from bot import DOWNLOAD_DIR
+        from bot.helper.ext_utils.bot_utils import get_readable_file_size
+
+        # Get disk usage statistics
+        usage = shutil.disk_usage(DOWNLOAD_DIR)
+        free = usage.free
+        total = usage.total
+        used_percent = (usage.used / total) * 100
+
+        # Calculate storage threshold (20GB default)
+        threshold = 20 * 1024 * 1024 * 1024  # 20GB in bytes
+
+        return (
+            f"💾 DISK: {used_percent:.1f}% used, {get_readable_file_size(free)} free, "
+            f"threshold {get_readable_file_size(threshold)} |"
+        )
+    except Exception as e:
+        return f"💾 DISK: analysis failed ({str(e)[:20]}) |"

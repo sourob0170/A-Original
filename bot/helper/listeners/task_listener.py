@@ -45,6 +45,8 @@ from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from bot.helper.mirror_leech_utils.status_utils.telegram_status import TelegramStatus
 from bot.helper.mirror_leech_utils.telegram_uploader import TelegramUploader
+from bot.helper.mirror_leech_utils.youtube_utils.status import YouTubeStatus
+from bot.helper.mirror_leech_utils.youtube_utils.upload import YouTubeUpload
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
@@ -66,9 +68,20 @@ class TaskListener(TaskConfig):
                 for intvl in list(st.values()):
                     intvl.cancel()
             intervals["status"].clear()
-            await gather(TorrentManager.aria2.purgeDownloadResult(), delete_status())
+
+            # Handle aria2 cleanup with better error handling
+            try:
+                await TorrentManager.aria2.purgeDownloadResult()
+            except Exception as aria2_error:
+                # Ignore transport closing errors as they're expected during cleanup
+                if "closing transport" not in str(aria2_error).lower():
+                    LOGGER.warning(f"Aria2 cleanup warning: {aria2_error}")
+
+            await delete_status()
         except Exception as e:
-            LOGGER.error(e)
+            # Ignore transport closing errors as they're expected during cleanup
+            if "closing transport" not in str(e).lower():
+                LOGGER.error(e)
 
     def clear(self):
         self.subname = ""
@@ -76,6 +89,252 @@ class TaskListener(TaskConfig):
         self.files_to_proceed = []
         self.proceed_count = 0
         self.progress = True
+
+    async def _send_message_part(self, msg, fmsg):
+        """Helper method to send a message part to appropriate destinations"""
+        # Check if user specified a destination with -up flag
+        if (
+            self.up_dest
+            and not is_gdrive_id(self.up_dest)
+            and not is_rclone_path(self.up_dest)
+        ):
+            # If user specified a destination with -up flag, we need to send to all dump chats too
+            # First, send to the specified destination
+            try:
+                # Send to the specified destination
+                await send_message(
+                    int(self.up_dest),
+                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                )
+                # Also send to user's PM if it's not the same as the specified destination
+                if int(self.up_dest) != self.user_id:
+                    await send_message(
+                        self.user_id,
+                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                    )
+
+                # Send to user's dump if it's set and not the same as up_dest or user's PM
+                user_dump = self.user_dict.get("USER_DUMP")
+                if user_dump:
+                    try:
+                        user_dump_int = int(user_dump)
+                        # Skip if this is the up_dest or user's PM (already sent there)
+                        if (
+                            user_dump_int != int(self.up_dest)
+                            and user_dump_int != self.user_id
+                        ):
+                            LOGGER.info(
+                                f"Sending task details message to user's dump: {user_dump}"
+                            )
+                            await send_message(
+                                user_dump_int,
+                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                            )
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Failed to send task details message to user's dump {user_dump}: {e}"
+                        )
+
+                # Now send to all dump chats except the one specified with -up flag
+                # Only use leech dump chats if leech operations are enabled
+                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
+                    if isinstance(Config.LEECH_DUMP_CHAT, list):
+                        for chat_id in Config.LEECH_DUMP_CHAT:
+                            processed_chat_id = chat_id
+
+                            # Process the chat ID format (handle prefixes like b:, u:, h:)
+                            if isinstance(processed_chat_id, str):
+                                # Remove any prefixes like "b:", "u:", "h:" if present
+                                if ":" in processed_chat_id:
+                                    processed_chat_id = processed_chat_id.split(
+                                        ":", 1
+                                    )[1]
+
+                                # Remove any suffixes after | if present (for hybrid format)
+                                if "|" in processed_chat_id:
+                                    processed_chat_id = processed_chat_id.split(
+                                        "|", 1
+                                    )[0]
+
+                            # Skip if this is the up_dest (already sent there) or the user's PM
+                            try:
+                                processed_chat_id_int = int(processed_chat_id)
+                                if (
+                                    processed_chat_id_int == int(self.up_dest)
+                                    or processed_chat_id_int == self.user_id
+                                ):
+                                    continue
+
+                                # Skip if this is the user's dump (already sent there)
+                                if user_dump and processed_chat_id_int == int(
+                                    user_dump
+                                ):
+                                    continue
+
+                                # Send to this dump chat
+                                await send_message(
+                                    processed_chat_id_int,
+                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                                )
+                            except Exception as e:
+                                LOGGER.error(
+                                    f"Failed to send task details message to dump chat {processed_chat_id}: {e}"
+                                )
+                    else:
+                        # For backward compatibility with single chat ID
+                        try:
+                            # Skip if this is the up_dest, user's PM, or user's dump
+                            if (
+                                int(Config.LEECH_DUMP_CHAT) != int(self.up_dest)
+                                and int(Config.LEECH_DUMP_CHAT) != self.user_id
+                                and (
+                                    not user_dump
+                                    or int(Config.LEECH_DUMP_CHAT) != int(user_dump)
+                                )
+                            ):
+                                LOGGER.info(
+                                    f"Sending task details message to single dump chat: {Config.LEECH_DUMP_CHAT}"
+                                )
+                                await send_message(
+                                    int(Config.LEECH_DUMP_CHAT),
+                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                                )
+                        except Exception as e:
+                            LOGGER.error(
+                                f"Failed to send task details message to single dump chat {Config.LEECH_DUMP_CHAT}: {e}"
+                            )
+
+            except Exception as e:
+                LOGGER.error(
+                    f"Failed to send leech log to specified destination {self.up_dest}: {e}"
+                )
+                # Fallback to user's PM
+                await send_message(
+                    self.user_id,
+                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                )
+        else:
+            # No specific destination was specified or it's a cloud destination
+            # Determine leech destinations based on requirements
+            leech_destinations = []
+
+            # Only add user's PM for file details, not for task completion messages
+            # We'll send the task completion message only to groups/supergroups
+            leech_destinations.append(self.user_id)
+
+            # Check if user has set their own dump and owner's premium status
+            user_dump = self.user_dict.get("USER_DUMP")
+            owner_has_premium = TgClient.IS_PREMIUM_USER
+
+            # Case 1: If user didn't set any dump
+            if not user_dump:
+                # Send to leech dump chat and bot PM
+                if Config.LEECH_DUMP_CHAT:
+                    # Handle LEECH_DUMP_CHAT as a list
+                    if isinstance(Config.LEECH_DUMP_CHAT, list):
+                        for chat_id in Config.LEECH_DUMP_CHAT:
+                            # Process the chat ID format (handle prefixes like b:, u:, h:)
+                            if isinstance(chat_id, str):
+                                # Remove any prefixes like "b:", "u:", "h:" if present
+                                if ":" in chat_id:
+                                    chat_id = chat_id.split(":", 1)[1]
+
+                                # Remove any suffixes after | if present (for hybrid format)
+                                if "|" in chat_id:
+                                    chat_id = chat_id.split("|", 1)[0]
+
+                            # Add to destinations
+                            try:
+                                leech_destinations.append(int(chat_id))
+                            except ValueError:
+                                # If it's not an integer (e.g., @username), add as is
+                                leech_destinations.append(chat_id)
+                    else:
+                        # For backward compatibility with single chat ID
+                        leech_destinations.append(int(Config.LEECH_DUMP_CHAT))
+
+            # Case 2: If user set their own dump and owner has no premium string
+            elif user_dump and not owner_has_premium:
+                # Send to user's own dump, leech dump chat, and bot PM
+                leech_destinations.append(int(user_dump))
+                if Config.LEECH_DUMP_CHAT:
+                    # Handle LEECH_DUMP_CHAT as a list
+                    if isinstance(Config.LEECH_DUMP_CHAT, list):
+                        for chat_id in Config.LEECH_DUMP_CHAT:
+                            # Process the chat ID format (handle prefixes like b:, u:, h:)
+                            if isinstance(chat_id, str):
+                                # Remove any prefixes like "b:", "u:", "h:" if present
+                                if ":" in chat_id:
+                                    chat_id = chat_id.split(":", 1)[1]
+
+                                # Remove any suffixes after | if present (for hybrid format)
+                                if "|" in chat_id:
+                                    chat_id = chat_id.split("|", 1)[0]
+
+                            # Add to destinations
+                            try:
+                                leech_destinations.append(int(chat_id))
+                            except ValueError:
+                                # If it's not an integer (e.g., @username), add as is
+                                leech_destinations.append(chat_id)
+                    else:
+                        # For backward compatibility with single chat ID
+                        leech_destinations.append(int(Config.LEECH_DUMP_CHAT))
+
+            # Case 3: If user set their own dump and owner has premium string
+            elif user_dump and owner_has_premium:
+                # By default, send to leech dump chat and bot PM
+                if Config.LEECH_DUMP_CHAT:
+                    # Handle LEECH_DUMP_CHAT as a list
+                    if isinstance(Config.LEECH_DUMP_CHAT, list):
+                        for chat_id in Config.LEECH_DUMP_CHAT:
+                            # Process the chat ID format (handle prefixes like b:, u:, h:)
+                            if isinstance(chat_id, str):
+                                # Remove any prefixes like "b:", "u:", "h:" if present
+                                if ":" in chat_id:
+                                    chat_id = chat_id.split(":", 1)[1]
+
+                                # Remove any suffixes after | if present (for hybrid format)
+                                if "|" in chat_id:
+                                    chat_id = chat_id.split("|", 1)[0]
+
+                            # Add to destinations
+                            try:
+                                leech_destinations.append(int(chat_id))
+                            except ValueError:
+                                # If it's not an integer (e.g., @username), add as is
+                                leech_destinations.append(chat_id)
+                    else:
+                        # For backward compatibility with single chat ID
+                        leech_destinations.append(int(Config.LEECH_DUMP_CHAT))
+
+                # Add user's dump to destinations regardless of premium status
+                # This ensures task details are always sent to the user's dump
+                try:
+                    leech_destinations.append(int(user_dump))
+                    LOGGER.info(
+                        f"Adding user's dump {user_dump} to task details destinations"
+                    )
+                except Exception as e:
+                    LOGGER.error(f"Error adding user's dump to destinations: {e}")
+
+            # Remove duplicates while preserving order
+            seen = set()
+            leech_destinations = [
+                x for x in leech_destinations if not (x in seen or seen.add(x))
+            ]
+
+            # Send to all destinations
+            for dest in leech_destinations:
+                try:
+                    await send_message(
+                        dest,
+                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                    )
+                except Exception as e:
+                    LOGGER.error(
+                        f"Failed to send leech log to destination {dest}: {e}"
+                    )
 
     async def remove_from_same_dir(self):
         async with task_dict_lock:
@@ -546,6 +805,54 @@ class TaskListener(TaskConfig):
                         )
             # Don't delete the tg reference as we need it for cancellation
             # We'll keep the reference in self.telegram_uploader
+        elif self.up_dest == "yt" or self.up_dest.startswith("yt:"):
+            # YouTube upload
+            if not getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
+                await self.on_upload_error(
+                    "YouTube upload is disabled by administrator"
+                )
+                return
+
+            LOGGER.info(f"YouTube Upload Name: {self.name}")
+
+            # For YouTube mirror tasks, send the command message to log chat ID if configured
+            if not self.is_leech and Config.LOG_CHAT_ID:
+                try:
+                    msg = self.message.text.lstrip("/")
+                    # Send command message to log chat ID
+                    await self.client.send_message(
+                        chat_id=int(Config.LOG_CHAT_ID),
+                        text=msg,
+                        disable_web_page_preview=True,
+                        disable_notification=True,
+                    )
+                except Exception:
+                    pass
+
+            youtube_upload = YouTubeUpload(self, up_path)
+
+            # Parse YouTube-specific parameters from up_dest
+            if self.up_dest.startswith("yt:"):
+                # Format: yt:privacy:category:tags:title
+                # Example: yt:unlisted:22:music,video:My Custom Title
+                parts = self.up_dest.split(":")
+                if len(parts) > 1 and parts[1]:
+                    youtube_upload.privacy_status = parts[1]
+                if len(parts) > 2 and parts[2]:
+                    youtube_upload.category_id = parts[2]
+                if len(parts) > 3 and parts[3]:
+                    youtube_upload.default_tags = parts[3]
+                if len(parts) > 4 and parts[4]:
+                    # Custom title provided via command line
+                    youtube_upload.custom_title = parts[4]
+
+            async with task_dict_lock:
+                task_dict[self.mid] = YouTubeStatus(self, youtube_upload, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                sync_to_async(youtube_upload.upload),
+            )
+            del youtube_upload
         elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             # If up_dest is "gd", use the configured GDRIVE_ID
@@ -676,667 +983,258 @@ class TaskListener(TaskConfig):
             if not files:
                 await send_message(self.message, msg)
             else:
-                fmsg = ""
-                for index, (url, name) in enumerate(files.items(), start=1):
-                    # Truncate file name if too long
-                    display_file_name = name
-                    if len(display_file_name) > 80:
-                        display_file_name = display_file_name[:77] + "..."
-                    fmsg += f"{index}. <a href='{url}'>{display_file_name}</a>"
+                # Convert files dict to list for easier processing
+                files_list = list(files.items())
+                total_files = len(files_list)
 
-                    # Add store link if enabled
-                    # Check if Media Store is enabled for this user
-                    user_media_store_enabled = self.user_dict.get(
-                        "MEDIA_STORE", None
-                    )
-                    if user_media_store_enabled is None:
-                        user_media_store_enabled = Config.MEDIA_STORE
-                    if user_media_store_enabled:
-                        chat_id, msg_id = url.split("/")[-2:]
-                        if chat_id.isdigit():
-                            chat_id = f"-100{chat_id}"
-                        store_link = f"https://t.me/{TgClient.NAME}?start={encode_slink('file' + chat_id + '&&' + msg_id)}"
-                        fmsg += f"\n┖ <b>Get Media</b> → <a href='{store_link}'>Store Link</a> | <a href='https://t.me/share/url?url={store_link}'>Share Link</a>"
+                # Process files in chunks, ensuring at least 10 files per message
+                file_index = 0
+                message_parts = []
 
-                    # Add MediaInfo link for media files if enabled
-                    # Check if MediaInfo is enabled for this user
+                while file_index < total_files:
+                    fmsg = ""
+                    files_in_current_message = 0
+                    start_index = file_index
+
+                    # Build message with files, ensuring minimum 10 files per message
+                    while file_index < total_files:
+                        url, name = files_list[file_index]
+                        current_file_number = file_index + 1
+
+                        # Build complete file entry
+                        file_entry = ""
+
+                        # Truncate file name if too long
+                        display_file_name = name
+                        if len(display_file_name) > 80:
+                            display_file_name = display_file_name[:77] + "..."
+                        file_entry += f"{current_file_number}. <a href='{url}'>{display_file_name}</a>"
+
+                        # Add store link if enabled
+                        # Check if Media Store is enabled for this user
+                        user_media_store_enabled = self.user_dict.get(
+                            "MEDIA_STORE", None
+                        )
+                        if user_media_store_enabled is None:
+                            user_media_store_enabled = Config.MEDIA_STORE
+                        if user_media_store_enabled:
+                            chat_id, msg_id = url.split("/")[-2:]
+                            if chat_id.isdigit():
+                                chat_id = f"-100{chat_id}"
+                            store_link = f"https://t.me/{TgClient.NAME}?start={encode_slink('file' + chat_id + '&&' + msg_id)}"
+                            file_entry += f"\n┖ <b>Get Media</b> → <a href='{store_link}'>Store Link</a> | <a href='https://t.me/share/url?url={store_link}'>Share Link</a>"
+
+                        # Add MediaInfo link for media files if enabled
+                        # Check if MediaInfo is enabled for this user
+                        user_mediainfo_enabled = self.user_dict.get(
+                            "MEDIAINFO_ENABLED", None
+                        )
+                        if user_mediainfo_enabled is None:
+                            user_mediainfo_enabled = Config.MEDIAINFO_ENABLED  # Use the pre-generated MediaInfo link if available and valid
+                        if (
+                            user_mediainfo_enabled
+                            and hasattr(self, "mediainfo_link")
+                            and self.mediainfo_link
+                            and self.mediainfo_link.strip()
+                        ):
+                            # Support all media types including archives, documents, images, etc.
+                            file_entry += f"\n┖ <b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
+                            # Log that MediaInfo link was successfully added to the message
+                        elif user_mediainfo_enabled and hasattr(
+                            self, "mediainfo_link"
+                        ):
+                            # MediaInfo was attempted but failed or returned empty
+                            pass
+
+                        file_entry += "\n"
+
+                        # Check if adding this complete file entry would exceed the limit
+                        test_message = fmsg + file_entry
+                        test_full_message = test_message.encode() + msg.encode()
+
+                        # Check if adding this file would exceed the limit
+                        if len(test_full_message) > 4000:
+                            # If we have at least 10 files, we can always split here
+                            if files_in_current_message >= 10:
+                                # Don't add this file to current message, it will start the next message
+                                break
+                            # If we have 8 or 9 files and adding this file would cause truncation,
+                            # split here to prevent truncation (even if we don't reach exactly 10 files)
+                            if files_in_current_message >= 8:
+                                # Don't add this file to current message, it will start the next message
+                                # This prevents truncation while still trying to get close to 10 files
+                                break
+                            # If we have less than 8 files, include this file even if it exceeds the limit
+                            # to try to get closer to the 10 file minimum
+
+                        # Add the complete file entry to the message
+                        fmsg += file_entry
+                        files_in_current_message += 1
+                        file_index += 1
+
+                        # If we've processed all files, break
+                        if file_index >= total_files:
+                            break
+
+                    # Store this message part
+                    if fmsg:
+                        message_parts.append((fmsg, start_index + 1, file_index))
+
+                # Send all message parts
+                for part_index, (fmsg, start_file_num, end_file_num) in enumerate(
+                    message_parts
+                ):
+                    # Add part indicator if there are multiple parts
+                    part_msg = msg
+                    if len(message_parts) > 1:
+                        part_msg = msg.replace(
+                            "</blockquote>\n\n",
+                            f"\n<b>Part {part_index + 1}/{len(message_parts)}</b> (Files {start_file_num}-{end_file_num})</blockquote>\n\n",
+                        )
+
+                    # Send this message part
+                    await self._send_message_part(part_msg, fmsg)
+
+                    # Add delay between parts
+                    if part_index < len(message_parts) - 1:
+                        await sleep(1)
+
+        else:
+            # Check if this is a YouTube upload result
+            if isinstance(link, dict) and "video_url" in link:
+                # YouTube upload result
+                youtube_result = link
+                if isinstance(youtube_result, list):
+                    # Multiple videos uploaded
+                    msg += "\n\n<b>Type: </b>YouTube Videos"
+                    msg += f"\n<b>Videos Uploaded: </b>{len(youtube_result)}"
+
+                    # Add MediaInfo link if available
                     user_mediainfo_enabled = self.user_dict.get(
                         "MEDIAINFO_ENABLED", None
                     )
                     if user_mediainfo_enabled is None:
-                        user_mediainfo_enabled = Config.MEDIAINFO_ENABLED  # Use the pre-generated MediaInfo link if available and valid
+                        user_mediainfo_enabled = Config.MEDIAINFO_ENABLED
                     if (
                         user_mediainfo_enabled
                         and hasattr(self, "mediainfo_link")
                         and self.mediainfo_link
                         and self.mediainfo_link.strip()
                     ):
-                        # Support all media types including archives, documents, images, etc.
-                        fmsg += f"\n┖ <b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
-                        # Log that MediaInfo link was successfully added to the message
-                    elif user_mediainfo_enabled and hasattr(self, "mediainfo_link"):
-                        # MediaInfo was attempted but failed or returned empty
-                        pass
+                        msg += f"\n<b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
 
-                    fmsg += "\n"
-                    if len(fmsg.encode() + msg.encode()) > 4000:
-                        # Check if user specified a destination with -up flag
-                        if (
-                            self.up_dest
-                            and not is_gdrive_id(self.up_dest)
-                            and not is_rclone_path(self.up_dest)
-                        ):
-                            # If user specified a destination with -up flag, we need to send to all dump chats too
-                            # First, send to the specified destination
-                            try:
-                                # Send to the specified destination
-                                await send_message(
-                                    int(self.up_dest),
-                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                )
-                                # Also send to user's PM if it's not the same as the specified destination
-                                if int(self.up_dest) != self.user_id:
-                                    await send_message(
-                                        self.user_id,
-                                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                    )
+                    buttons = ButtonMaker()
+                    for i, video in enumerate(
+                        youtube_result[:5]
+                    ):  # Show first 5 videos
+                        video_title = video.get("title", f"Video {i + 1}")[:20]
+                        buttons.url_button(f"📺 {video_title}", video["video_url"])
 
-                                # Send to user's dump if it's set and not the same as up_dest or user's PM
-                                user_dump = self.user_dict.get("USER_DUMP")
-                                if user_dump:
-                                    try:
-                                        user_dump_int = int(user_dump)
-                                        # Skip if this is the up_dest or user's PM (already sent there)
-                                        if (
-                                            user_dump_int != int(self.up_dest)
-                                            and user_dump_int != self.user_id
-                                        ):
-                                            LOGGER.info(
-                                                f"Sending task details message to user's dump: {user_dump}"
-                                            )
-                                            await send_message(
-                                                user_dump_int,
-                                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                            )
-                                    except Exception as e:
-                                        LOGGER.error(
-                                            f"Failed to send task details message to user's dump {user_dump}: {e}"
-                                        )
+                    if len(youtube_result) > 5:
+                        msg += f"\n<i>Showing first 5 of {len(youtube_result)} videos</i>"
 
-                                # Now send to all dump chats except the one specified with -up flag
-                                # Only use leech dump chats if leech operations are enabled
-                                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
-                                    if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                        for chat_id in Config.LEECH_DUMP_CHAT:
-                                            processed_chat_id = chat_id
+                    button = buttons.build_menu(1)
+                else:
+                    # Single video uploaded
+                    msg += "\n\n<b>Type: </b>YouTube Video"
+                    msg += f"\n<b>Privacy: </b>{youtube_result.get('privacy_status', 'unlisted').title()}"
 
-                                            # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                            if isinstance(processed_chat_id, str):
-                                                # Remove any prefixes like "b:", "u:", "h:" if present
-                                                if ":" in processed_chat_id:
-                                                    processed_chat_id = (
-                                                        processed_chat_id.split(
-                                                            ":", 1
-                                                        )[1]
-                                                    )
-
-                                                # Remove any suffixes after | if present (for hybrid format)
-                                                if "|" in processed_chat_id:
-                                                    processed_chat_id = (
-                                                        processed_chat_id.split(
-                                                            "|", 1
-                                                        )[0]
-                                                    )
-
-                                            # Skip if this is the up_dest (already sent there) or the user's PM
-                                            try:
-                                                processed_chat_id_int = int(
-                                                    processed_chat_id
-                                                )
-                                                if (
-                                                    processed_chat_id_int
-                                                    == int(self.up_dest)
-                                                    or processed_chat_id_int
-                                                    == self.user_id
-                                                ):
-                                                    continue
-
-                                                # Skip if this is the user's dump (already sent there)
-                                                if (
-                                                    user_dump
-                                                    and processed_chat_id_int
-                                                    == int(user_dump)
-                                                ):
-                                                    continue
-
-                                                # Send to this dump chat
-                                                await send_message(
-                                                    processed_chat_id_int,
-                                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                                )
-                                            except Exception as e:
-                                                LOGGER.error(
-                                                    f"Failed to send task details message to dump chat {processed_chat_id}: {e}"
-                                                )
-                                    else:
-                                        # For backward compatibility with single chat ID
-                                        try:
-                                            # Skip if this is the up_dest, user's PM, or user's dump
-                                            if (
-                                                int(Config.LEECH_DUMP_CHAT)
-                                                != int(self.up_dest)
-                                                and int(Config.LEECH_DUMP_CHAT)
-                                                != self.user_id
-                                                and (
-                                                    not user_dump
-                                                    or int(Config.LEECH_DUMP_CHAT)
-                                                    != int(user_dump)
-                                                )
-                                            ):
-                                                LOGGER.info(
-                                                    f"Sending task details message to single dump chat: {Config.LEECH_DUMP_CHAT}"
-                                                )
-                                                await send_message(
-                                                    int(Config.LEECH_DUMP_CHAT),
-                                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                                )
-                                        except Exception as e:
-                                            LOGGER.error(
-                                                f"Failed to send task details message to single dump chat {Config.LEECH_DUMP_CHAT}: {e}"
-                                            )
-
-                            except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to send leech log to specified destination {self.up_dest}: {e}"
-                                )
-                                # Fallback to user's PM
-                                await send_message(
-                                    self.user_id,
-                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                )
-                        else:
-                            # No specific destination was specified or it's a cloud destination
-                            # Determine leech destinations based on requirements
-                            leech_destinations = []
-
-                            # Only add user's PM for file details, not for task completion messages
-                            # We'll send the task completion message only to groups/supergroups
-                            leech_destinations.append(self.user_id)
-
-                            # Check if user has set their own dump and owner's premium status
-                            user_dump = self.user_dict.get("USER_DUMP")
-                            owner_has_premium = TgClient.IS_PREMIUM_USER
-
-                            # Case 1: If user didn't set any dump
-                            if not user_dump:
-                                # Send to leech dump chat and bot PM
-                                if Config.LEECH_DUMP_CHAT:
-                                    # Handle LEECH_DUMP_CHAT as a list
-                                    if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                        for chat_id in Config.LEECH_DUMP_CHAT:
-                                            # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                            if isinstance(chat_id, str):
-                                                # Remove any prefixes like "b:", "u:", "h:" if present
-                                                if ":" in chat_id:
-                                                    chat_id = chat_id.split(":", 1)[
-                                                        1
-                                                    ]
-
-                                                # Remove any suffixes after | if present (for hybrid format)
-                                                if "|" in chat_id:
-                                                    chat_id = chat_id.split("|", 1)[
-                                                        0
-                                                    ]
-
-                                            # Add to destinations
-                                            try:
-                                                leech_destinations.append(
-                                                    int(chat_id)
-                                                )
-                                            except ValueError:
-                                                # If it's not an integer (e.g., @username), add as is
-                                                leech_destinations.append(chat_id)
-                                    else:
-                                        # For backward compatibility with single chat ID
-                                        leech_destinations.append(
-                                            int(Config.LEECH_DUMP_CHAT)
-                                        )
-
-                            # Case 2: If user set their own dump and owner has no premium string
-                            elif user_dump and not owner_has_premium:
-                                # Send to user's own dump, leech dump chat, and bot PM
-                                leech_destinations.append(int(user_dump))
-                                if Config.LEECH_DUMP_CHAT:
-                                    # Handle LEECH_DUMP_CHAT as a list
-                                    if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                        for chat_id in Config.LEECH_DUMP_CHAT:
-                                            # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                            if isinstance(chat_id, str):
-                                                # Remove any prefixes like "b:", "u:", "h:" if present
-                                                if ":" in chat_id:
-                                                    chat_id = chat_id.split(":", 1)[
-                                                        1
-                                                    ]
-
-                                                # Remove any suffixes after | if present (for hybrid format)
-                                                if "|" in chat_id:
-                                                    chat_id = chat_id.split("|", 1)[
-                                                        0
-                                                    ]
-
-                                            # Add to destinations
-                                            try:
-                                                leech_destinations.append(
-                                                    int(chat_id)
-                                                )
-                                            except ValueError:
-                                                # If it's not an integer (e.g., @username), add as is
-                                                leech_destinations.append(chat_id)
-                                    else:
-                                        # For backward compatibility with single chat ID
-                                        leech_destinations.append(
-                                            int(Config.LEECH_DUMP_CHAT)
-                                        )
-
-                            # Case 3: If user set their own dump and owner has premium string
-                            elif user_dump and owner_has_premium:
-                                # By default, send to leech dump chat and bot PM
-                                if Config.LEECH_DUMP_CHAT:
-                                    # Handle LEECH_DUMP_CHAT as a list
-                                    if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                        for chat_id in Config.LEECH_DUMP_CHAT:
-                                            # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                            if isinstance(chat_id, str):
-                                                # Remove any prefixes like "b:", "u:", "h:" if present
-                                                if ":" in chat_id:
-                                                    chat_id = chat_id.split(":", 1)[
-                                                        1
-                                                    ]
-
-                                                # Remove any suffixes after | if present (for hybrid format)
-                                                if "|" in chat_id:
-                                                    chat_id = chat_id.split("|", 1)[
-                                                        0
-                                                    ]
-
-                                            # Add to destinations
-                                            try:
-                                                leech_destinations.append(
-                                                    int(chat_id)
-                                                )
-                                            except ValueError:
-                                                # If it's not an integer (e.g., @username), add as is
-                                                leech_destinations.append(chat_id)
-                                    else:
-                                        # For backward compatibility with single chat ID
-                                        leech_destinations.append(
-                                            int(Config.LEECH_DUMP_CHAT)
-                                        )
-
-                                # Add user's dump to destinations regardless of premium status
-                                # This ensures task details are always sent to the user's dump
-                                try:
-                                    leech_destinations.append(int(user_dump))
-                                    LOGGER.info(
-                                        f"Adding user's dump {user_dump} to task details destinations"
-                                    )
-                                except Exception as e:
-                                    LOGGER.error(
-                                        f"Error adding user's dump to destinations: {e}"
-                                    )
-
-                            # Remove duplicates while preserving order
-                            seen = set()
-                            leech_destinations = [
-                                x
-                                for x in leech_destinations
-                                if not (x in seen or seen.add(x))
-                            ]
-
-                            # Send to all destinations
-                            for dest in leech_destinations:
-                                try:
-                                    await send_message(
-                                        dest,
-                                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                    )
-                                except Exception as e:
-                                    LOGGER.error(
-                                        f"Failed to send leech log to destination {dest}: {e}"
-                                    )
-
-                        await sleep(1)
-                        fmsg = ""
-                if fmsg != "":
-                    # Check if user specified a destination with -up flag
+                    # Add MediaInfo link if available
+                    user_mediainfo_enabled = self.user_dict.get(
+                        "MEDIAINFO_ENABLED", None
+                    )
+                    if user_mediainfo_enabled is None:
+                        user_mediainfo_enabled = Config.MEDIAINFO_ENABLED
                     if (
-                        self.up_dest
-                        and not is_gdrive_id(self.up_dest)
-                        and not is_rclone_path(self.up_dest)
+                        user_mediainfo_enabled
+                        and hasattr(self, "mediainfo_link")
+                        and self.mediainfo_link
+                        and self.mediainfo_link.strip()
                     ):
-                        # If user specified a destination with -up flag, we need to send to all dump chats too
-                        # First, send to the specified destination
-                        try:
-                            # Send to the specified destination
-                            await send_message(
-                                int(self.up_dest),
-                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                            )
+                        msg += f"\n<b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
 
-                            # Also send to user's PM if it's not the same as the specified destination
-                            if int(self.up_dest) != self.user_id:
-                                await send_message(
-                                    self.user_id,
-                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                )
+                    buttons = ButtonMaker()
+                    buttons.url_button(
+                        "📺 Watch on YouTube", youtube_result["video_url"]
+                    )
+                    button = buttons.build_menu(1)
+            else:
+                # Regular cloud upload
+                msg += f"\n\n<b>Type: </b>{mime_type}"
+                if mime_type == "Folder":
+                    msg += f"\n<b>SubFolders: </b>{folders}"
+                    msg += f"\n<b>Files: </b>{files}"
 
-                            # Send to user's dump if it's set and not the same as up_dest or user's PM
-                            user_dump = self.user_dict.get("USER_DUMP")
-                            if user_dump:
-                                try:
-                                    user_dump_int = int(user_dump)
-                                    # Skip if this is the up_dest or user's PM (already sent there)
-                                    if (
-                                        user_dump_int != int(self.up_dest)
-                                        and user_dump_int != self.user_id
-                                    ):
-                                        await send_message(
-                                            user_dump_int,
-                                            f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                        )
-                                except Exception as e:
-                                    LOGGER.error(
-                                        f"Failed to send task details message to user's dump {user_dump}: {e}"
-                                    )
-
-                            # Now send to all dump chats except the one specified with -up flag
-                            # Only use leech dump chats if leech operations are enabled
-                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
-                                if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                    for chat_id in Config.LEECH_DUMP_CHAT:
-                                        processed_chat_id = chat_id
-
-                                        # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                        if isinstance(processed_chat_id, str):
-                                            # Remove any prefixes like "b:", "u:", "h:" if present
-                                            if ":" in processed_chat_id:
-                                                processed_chat_id = (
-                                                    processed_chat_id.split(":", 1)[
-                                                        1
-                                                    ]
-                                                )
-
-                                            # Remove any suffixes after | if present (for hybrid format)
-                                            if "|" in processed_chat_id:
-                                                processed_chat_id = (
-                                                    processed_chat_id.split("|", 1)[
-                                                        0
-                                                    ]
-                                                )
-
-                                        # Skip if this is the up_dest (already sent there) or the user's PM
-                                        try:
-                                            processed_chat_id_int = int(
-                                                processed_chat_id
-                                            )
-                                            if (
-                                                processed_chat_id_int
-                                                == int(self.up_dest)
-                                                or processed_chat_id_int
-                                                == self.user_id
-                                            ):
-                                                continue
-
-                                            # Skip if this is the user's dump (already sent there)
-                                            if (
-                                                user_dump
-                                                and processed_chat_id_int
-                                                == int(user_dump)
-                                            ):
-                                                continue
-
-                                            # Send to this dump chat
-
-                                            await send_message(
-                                                processed_chat_id_int,
-                                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                            )
-                                        except Exception as e:
-                                            LOGGER.error(
-                                                f"Failed to send task details message to dump chat {processed_chat_id}: {e}"
-                                            )
-                                else:
-                                    # For backward compatibility with single chat ID
-                                    try:
-                                        # Skip if this is the up_dest, user's PM, or user's dump
-                                        if (
-                                            int(Config.LEECH_DUMP_CHAT)
-                                            != int(self.up_dest)
-                                            and int(Config.LEECH_DUMP_CHAT)
-                                            != self.user_id
-                                            and (
-                                                not user_dump
-                                                or int(Config.LEECH_DUMP_CHAT)
-                                                != int(user_dump)
-                                            )
-                                        ):
-                                            await send_message(
-                                                int(Config.LEECH_DUMP_CHAT),
-                                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                            )
-                                    except Exception as e:
-                                        LOGGER.error(
-                                            f"Failed to send task details message to single dump chat {Config.LEECH_DUMP_CHAT}: {e}"
-                                        )
-
-                        except Exception as e:
-                            LOGGER.error(
-                                f"Failed to send leech log to specified destination {self.up_dest}: {e}"
-                            )
-                            # Fallback to user's PM
-                            await send_message(
-                                self.user_id,
-                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                            )
+                # Add MediaInfo link for mirror tasks if enabled
+                # Check if MediaInfo is enabled for this user
+                user_mediainfo_enabled = self.user_dict.get(
+                    "MEDIAINFO_ENABLED", None
+                )
+                if user_mediainfo_enabled is None:
+                    user_mediainfo_enabled = (
+                        Config.MEDIAINFO_ENABLED
+                    )  # Use the pre-generated MediaInfo link if available and valid
+                if (
+                    user_mediainfo_enabled
+                    and hasattr(self, "mediainfo_link")
+                    and self.mediainfo_link
+                    and self.mediainfo_link.strip()
+                ):
+                    # Support all media types including archives, documents, images, etc.
+                    msg += f"\n<b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
+                    # Log that MediaInfo link was successfully added to the message
+                elif user_mediainfo_enabled and hasattr(self, "mediainfo_link"):
+                    # MediaInfo was attempted but failed or returned empty
+                    pass
+                if link or (
+                    rclone_path and Config.RCLONE_SERVE_URL and not self.private_link
+                ):
+                    buttons = ButtonMaker()
+                    if link and Config.SHOW_CLOUD_LINK:
+                        buttons.url_button("☁️ Cloud Link", link)
                     else:
-                        # No specific destination was specified or it's a cloud destination
-                        # Determine leech destinations based on requirements
-                        leech_destinations = []
-
-                        # Only add user's PM for file details, not for task completion messages
-                        # We'll send the task completion message only to groups/supergroups
-                        leech_destinations.append(self.user_id)
-
-                        # Check if user has set their own dump and owner's premium status
-                        user_dump = self.user_dict.get("USER_DUMP")
-                        owner_has_premium = TgClient.IS_PREMIUM_USER
-
-                        # Case 1: If user didn't set any dump
-                        if not user_dump:
-                            # Send to leech dump chat and bot PM
-                            # Only use leech dump chats if leech operations are enabled
-                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
-                                # Handle LEECH_DUMP_CHAT as a list
-                                if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                    for chat_id in Config.LEECH_DUMP_CHAT:
-                                        # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                        if isinstance(chat_id, str):
-                                            # Remove any prefixes like "b:", "u:", "h:" if present
-                                            if ":" in chat_id:
-                                                chat_id = chat_id.split(":", 1)[1]
-
-                                            # Remove any suffixes after | if present (for hybrid format)
-                                            if "|" in chat_id:
-                                                chat_id = chat_id.split("|", 1)[0]
-
-                                        # Add to destinations
-                                        try:
-                                            leech_destinations.append(int(chat_id))
-                                        except ValueError:
-                                            # If it's not an integer (e.g., @username), add as is
-                                            leech_destinations.append(chat_id)
-                                else:
-                                    # For backward compatibility with single chat ID
-                                    leech_destinations.append(
-                                        int(Config.LEECH_DUMP_CHAT)
-                                    )
-
-                        # Case 2: If user set their own dump and owner has no premium string
-                        elif user_dump and not owner_has_premium:
-                            # Send to user's own dump, leech dump chat, and bot PM
-                            leech_destinations.append(int(user_dump))
-                            # Only use leech dump chats if leech operations are enabled
-                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
-                                # Handle LEECH_DUMP_CHAT as a list
-                                if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                    for chat_id in Config.LEECH_DUMP_CHAT:
-                                        # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                        if isinstance(chat_id, str):
-                                            # Remove any prefixes like "b:", "u:", "h:" if present
-                                            if ":" in chat_id:
-                                                chat_id = chat_id.split(":", 1)[1]
-
-                                            # Remove any suffixes after | if present (for hybrid format)
-                                            if "|" in chat_id:
-                                                chat_id = chat_id.split("|", 1)[0]
-
-                                        # Add to destinations
-                                        try:
-                                            leech_destinations.append(int(chat_id))
-                                        except ValueError:
-                                            # If it's not an integer (e.g., @username), add as is
-                                            leech_destinations.append(chat_id)
-                                else:
-                                    # For backward compatibility with single chat ID
-                                    leech_destinations.append(
-                                        int(Config.LEECH_DUMP_CHAT)
-                                    )
-
-                        # Case 3: If user set their own dump and owner has premium string
-                        elif user_dump and owner_has_premium:
-                            # By default, send to leech dump chat and bot PM
-                            # Only use leech dump chats if leech operations are enabled
-                            if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
-                                # Handle LEECH_DUMP_CHAT as a list
-                                if isinstance(Config.LEECH_DUMP_CHAT, list):
-                                    for chat_id in Config.LEECH_DUMP_CHAT:
-                                        # Process the chat ID format (handle prefixes like b:, u:, h:)
-                                        if isinstance(chat_id, str):
-                                            # Remove any prefixes like "b:", "u:", "h:" if present
-                                            if ":" in chat_id:
-                                                chat_id = chat_id.split(":", 1)[1]
-
-                                            # Remove any suffixes after | if present (for hybrid format)
-                                            if "|" in chat_id:
-                                                chat_id = chat_id.split("|", 1)[0]
-
-                                        # Add to destinations
-                                        try:
-                                            leech_destinations.append(int(chat_id))
-                                        except ValueError:
-                                            # If it's not an integer (e.g., @username), add as is
-                                            leech_destinations.append(chat_id)
-                                else:
-                                    # For backward compatibility with single chat ID
-                                    leech_destinations.append(
-                                        int(Config.LEECH_DUMP_CHAT)
-                                    )
-
-                            # Add user's dump to destinations regardless of premium status
-                            # This ensures task details are always sent to the user's dump
-                            try:
-                                leech_destinations.append(int(user_dump))
-                                LOGGER.info(
-                                    f"Adding user's dump {user_dump} to task details destinations"
+                        msg += f"\n\nPath: <code>{rclone_path}</code>"
+                    if (
+                        rclone_path
+                        and Config.RCLONE_SERVE_URL
+                        and not self.private_link
+                    ):
+                        remote, rpath = rclone_path.split(":", 1)
+                        url_path = rutils.quote(f"{rpath}")
+                        share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
+                        if mime_type == "Folder":
+                            share_url += "/"
+                        buttons.url_button("🔗 Rclone Link", share_url)
+                    if not rclone_path and dir_id:
+                        INDEX_URL = ""
+                        if self.private_link:
+                            INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
+                        elif Config.INDEX_URL:
+                            INDEX_URL = Config.INDEX_URL
+                        if INDEX_URL:
+                            share_url = f"{INDEX_URL}findpath?id={dir_id}"
+                            buttons.url_button("⚡ Index Link", share_url)
+                            if mime_type.startswith(("image", "video", "audio")):
+                                share_urls = (
+                                    f"{INDEX_URL}findpath?id={dir_id}&view=true"
                                 )
-                            except Exception as e:
-                                LOGGER.error(
-                                    f"Error adding user's dump to destinations: {e}"
-                                )
-
-                        # Remove duplicates while preserving order
-                        seen = set()
-                        leech_destinations = [
-                            x
-                            for x in leech_destinations
-                            if not (x in seen or seen.add(x))
-                        ]
-
-                        # Send to all destinations including user's PM
-                        for dest in leech_destinations:
-                            try:
-                                await send_message(
-                                    dest,
-                                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                                )
-                            except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to send leech log to destination {dest}: {e}"
-                                )
-
-        else:
-            msg += f"\n\n<b>Type: </b>{mime_type}"
-            if mime_type == "Folder":
-                msg += f"\n<b>SubFolders: </b>{folders}"
-                msg += f"\n<b>Files: </b>{files}"
-
-            # Add MediaInfo link for mirror tasks if enabled
-            # Check if MediaInfo is enabled for this user
-            user_mediainfo_enabled = self.user_dict.get("MEDIAINFO_ENABLED", None)
-            if user_mediainfo_enabled is None:
-                user_mediainfo_enabled = (
-                    Config.MEDIAINFO_ENABLED
-                )  # Use the pre-generated MediaInfo link if available and valid
-            if (
-                user_mediainfo_enabled
-                and hasattr(self, "mediainfo_link")
-                and self.mediainfo_link
-                and self.mediainfo_link.strip()
-            ):
-                # Support all media types including archives, documents, images, etc.
-                msg += f"\n<b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
-                # Log that MediaInfo link was successfully added to the message
-            elif user_mediainfo_enabled and hasattr(self, "mediainfo_link"):
-                # MediaInfo was attempted but failed or returned empty
-                pass
-            if link or (
-                rclone_path and Config.RCLONE_SERVE_URL and not self.private_link
-            ):
-                buttons = ButtonMaker()
-                if link and Config.SHOW_CLOUD_LINK:
-                    buttons.url_button("☁️ Cloud Link", link)
+                                buttons.url_button("🌐 View Link", share_urls)
+                    button = buttons.build_menu(2)
                 else:
                     msg += f"\n\nPath: <code>{rclone_path}</code>"
-                if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
-                    remote, rpath = rclone_path.split(":", 1)
-                    url_path = rutils.quote(f"{rpath}")
-                    share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
-                    if mime_type == "Folder":
-                        share_url += "/"
-                    buttons.url_button("🔗 Rclone Link", share_url)
-                if not rclone_path and dir_id:
-                    INDEX_URL = ""
-                    if self.private_link:
-                        INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
-                    elif Config.INDEX_URL:
-                        INDEX_URL = Config.INDEX_URL
-                    if INDEX_URL:
-                        share_url = f"{INDEX_URL}findpath?id={dir_id}"
-                        buttons.url_button("⚡ Index Link", share_url)
-                        if mime_type.startswith(("image", "video", "audio")):
-                            share_urls = f"{INDEX_URL}findpath?id={dir_id}&view=true"
-                            buttons.url_button("🌐 View Link", share_urls)
-                button = buttons.build_menu(2)
-            else:
-                msg += f"\n\nPath: <code>{rclone_path}</code>"
-                button = None
+                    button = None
             msg += f"\n\n<b>cc: </b>{self.tag}</blockquote>"
 
             # Check if user specified a destination with -up flag
+            # Only treat as chat destination if it's not a cloud upload destination
+            def is_youtube_destination(dest):
+                return dest == "yt" or dest.startswith("yt:")
+
             if (
                 self.up_dest
                 and not is_gdrive_id(self.up_dest)
                 and not is_rclone_path(self.up_dest)
+                and not is_youtube_destination(self.up_dest)
             ):
                 # If user specified a destination with -up flag, it takes precedence
                 try:

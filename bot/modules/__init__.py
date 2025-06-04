@@ -74,6 +74,7 @@ from .users_settings import (
 from .virustotal import virustotal_scan
 from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
 from .ytdlp import ytdl, ytdl_leech
+from .zotify import zotify_leech, zotify_mirror, zotify_search
 
 __all__ = [
     "add_sudo",
@@ -162,4 +163,7 @@ __all__ = [
     "virustotal_scan",
     "ytdl",
     "ytdl_leech",
+    "zotify_leech",
+    "zotify_mirror",
+    "zotify_search",
 ]

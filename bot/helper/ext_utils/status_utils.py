@@ -185,8 +185,26 @@ def speed_string_to_bytes(size_text):
 
 
 def get_progress_bar_string(pct):
+    # Handle non-numeric progress values like 'N/A'
     if isinstance(pct, str):
-        pct = float(pct.strip("%"))
+        # Remove percentage sign and whitespace
+        pct_clean = pct.strip().strip("%")
+
+        # Check if the cleaned string is 'N/A' or other non-numeric values
+        if pct_clean.upper() == "N/A" or pct_clean == "-" or not pct_clean:
+            # Return empty progress bar for unknown progress
+            return "○" * 10
+
+        try:
+            pct = float(pct_clean)
+        except ValueError:
+            # If conversion fails, return empty progress bar
+            return "○" * 10
+
+    # Ensure pct is a number
+    if not isinstance(pct, int | float):
+        return "○" * 10
+
     p = min(max(pct, 0), 100)
     c_full = int((p + 5) // 10)
     p_str = "●" * c_full

@@ -7,11 +7,13 @@ jdmirror - or /jm Mirror using jdownloader
 nzbmirror - or /nm Mirror using sabnzbd
 ytdl - or /y Mirror yt-dlp supported links
 streamripmirror - or /srmirror or /srm Mirror music from streaming platforms
+zotifymirror - or /zmirror or /zm Mirror music from Spotify
 leech - or /l Upload to telegram
 jdleech - or /jl Leech using jdownloader
 nzbleech - or /nl Leech using sabnzbd
 ytdlleech - or /yl Leech yt-dlp supported links
 streamripleech - or /srleech or /srl Leech music from streaming platforms
+zotifyleech - or /zleech or /zl Leech music from Spotify
 clone - Copy file/folder to Drive
 mediainfo - or /mi Check mediainfo
 count - Count file/folder from GDrive
@@ -56,4 +58,5 @@ spectrum - or /sox Generate spectrum from audio
 paste - Paste text to katb.in website
 virustotal - Scan files or URLs for viruses using VirusTotal
 streamripsearch - or /srsearch or /srs Search music across platforms
+zotifysearch - or /zsearch or /zs Search music on Spotify
 ```

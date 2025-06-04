@@ -422,6 +422,13 @@ class RcloneTransferHelper:
         else:
             oconfig_path = "rclone.conf"
 
+        # Safety check: ensure rc_path contains a colon before splitting
+        if ":" not in rc_path:
+            await self._listener.on_upload_error(
+                f"Invalid rclone path format: '{rc_path}'. Expected format: 'remote:path'"
+            )
+            return
+
         oremote, rc_path = rc_path.split(":", 1)
 
         if await aiopath.isdir(path):

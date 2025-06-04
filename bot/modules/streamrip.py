@@ -4,7 +4,6 @@ import os
 from bot import LOGGER
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import arg_parser, new_task
-from bot.helper.listeners.streamrip_listener import StreamripListener
 from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
     add_streamrip_download,
 )
@@ -32,7 +31,7 @@ class StreamripCommands:
 
     @staticmethod
     def _get_streamrip_args():
-        """Get streamrip-specific argument definitions"""
+        """Get streamrip-specific argument definitions including standard mirror/leech flags"""
         return {
             # Streamrip specific flags
             "-q": "",  # Quality level
@@ -41,6 +40,10 @@ class StreamripCommands:
             "-codec": "",  # Codec (alias)
             "-f": False,  # Force run
             "-fd": False,  # Force download
+            # Standard mirror/leech flags for upload destination
+            "-up": "",  # Upload destination
+            "-rcf": "",  # Rclone flags
+            "-n": "",  # Custom name
             "link": "",
         }
 
@@ -191,8 +194,23 @@ class StreamripCommands:
 
                 platform, media_type, _ = parsed
 
-                # Create listener for each download
+                # Create proper streamrip listener for each download
+                from bot.helper.listeners.streamrip_listener import StreamripListener
+
                 listener = StreamripListener(message, isLeech=is_leech)
+
+                # Set upload destination and other standard flags
+                listener.up_dest = args.get("-up", "")
+                listener.rc_flags = args.get("-rcf", "")
+                if args.get("-n"):
+                    listener.name = args.get("-n")
+                else:
+                    # Extract actual album/playlist/artist name from streaming platform
+                    extracted_name = await _extract_streamrip_metadata_name(
+                        url, platform, media_type
+                    )
+                    if extracted_name:
+                        listener.name = extracted_name
 
                 # Set platform and media_type attributes for telegram uploader
                 listener.platform = platform
@@ -436,10 +454,16 @@ class StreamripCommands:
             messages_to_delete.append(message.reply_to_message)
 
         # Delete messages instantly without waiting
-        _ = asyncio.create_task(delete_message(*messages_to_delete))
+        asyncio.create_task(delete_message(*messages_to_delete))  # noqa: RUF006
 
-        # Create listener - always leech for search results (users expect files in Telegram)
+        # Create proper streamrip listener - always leech for search results (users expect files in Telegram)
+        from bot.helper.listeners.streamrip_listener import StreamripListener
+
         listener = StreamripListener(message, isLeech=True)
+
+        # Search results are always leeched, so no upload destination needed
+        listener.up_dest = ""
+        listener.rc_flags = ""
 
         # Perform search with all parameters
         if auto_first:
@@ -460,6 +484,13 @@ class StreamripCommands:
         url = result["url"]
         platform = result["platform"]
         media_type = result["type"]
+
+        # Extract actual name from search result
+        extracted_name = await _extract_streamrip_metadata_name(
+            url, platform, media_type
+        )
+        if extracted_name:
+            listener.name = extracted_name
 
         # Set platform and media_type attributes for telegram uploader
         listener.platform = platform
@@ -484,6 +515,99 @@ class StreamripCommands:
 
         # Start download (search results don't support force flag currently)
         await add_streamrip_download(listener, url, quality, codec, False)
+
+
+async def _extract_streamrip_metadata_name(
+    url: str, platform: str, media_type: str
+) -> str | None:
+    """Extract actual album/playlist/artist name from streaming platform using streamrip library"""
+    try:
+        # Import streamrip modules from venv
+        import sys
+        from pathlib import Path
+
+        # Add production venv to path (UV creates .venv in project root)
+        project_root = Path(__file__).parent.parent.parent
+        venv_path = None
+
+        # Production: UV creates .venv in project root
+        venv_base = project_root / ".venv" / "lib"
+
+        if venv_base.exists():
+            # Try Python 3.13 first (production), then fallback to others
+            for py_version in [
+                "python3.13",
+                "python3.12",
+                "python3.11",
+                "python3.10",
+            ]:
+                potential_path = venv_base / py_version / "site-packages"
+                if potential_path.exists():
+                    venv_path = potential_path
+                    break
+
+        if venv_path and str(venv_path) not in sys.path:
+            sys.path.insert(0, str(venv_path))
+
+        # Import streamrip modules
+        from streamrip.rip.main import Main
+
+        # Get streamrip config
+        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+        config = streamrip_config.get_config()
+        if not config:
+            return None
+
+        # Create Main instance
+        main = Main(config)
+
+        # Parse URL to get media ID
+        from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
+
+        parsed = await parse_streamrip_url(url)
+        if not parsed:
+            return None
+
+        platform, media_type, media_id = parsed
+
+        # Get authenticated client
+        client = await main.get_logged_in_client(platform)
+        if not client:
+            return None
+
+        # Get metadata using streamrip's client
+        metadata = await client.get_metadata(media_id, media_type)
+        if not metadata:
+            return None
+
+        # Extract name based on media type
+        if media_type in {"album", "playlist"}:
+            return getattr(metadata, "title", None) or getattr(
+                metadata, "name", None
+            )
+        if media_type == "artist":
+            return getattr(metadata, "name", None) or getattr(
+                metadata, "title", None
+            )
+        if media_type == "track":
+            # For tracks, use "Artist - Title" format
+            artist = (
+                getattr(metadata, "artist", None)
+                or getattr(metadata, "artists", [None])[0]
+            )
+            title = getattr(metadata, "title", None) or getattr(
+                metadata, "name", None
+            )
+            if artist and title:
+                return f"{artist} - {title}"
+            return title
+
+        return None
+
+    except Exception as e:
+        LOGGER.warning(f"Failed to extract streamrip metadata name: {e}")
+        return None
 
 
 # Export command functions for handlers.py

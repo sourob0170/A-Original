@@ -388,6 +388,35 @@ def add_handlers():
         # Add streamrip handlers to command_filters
         command_filters.update(streamrip_handlers)
 
+    # Add zotify handlers if zotify is enabled
+    if Config.ZOTIFY_ENABLED:
+        from bot.modules.zotify import (
+            zotify_leech,
+            zotify_mirror,
+            zotify_search,
+        )
+
+        zotify_handlers = {
+            "zotify_mirror": (
+                zotify_mirror,
+                BotCommands.ZotifyMirrorCommand,
+                CustomFilters.authorized,
+            ),
+            "zotify_leech": (
+                zotify_leech,
+                BotCommands.ZotifyLeechCommand,
+                CustomFilters.authorized,
+            ),
+            "zotify_search": (
+                zotify_search,
+                BotCommands.ZotifySearchCommand,
+                CustomFilters.authorized,
+            ),
+        }
+
+        # Add zotify handlers to command_filters
+        command_filters.update(zotify_handlers)
+
     for handler_func, command_name, custom_filter in command_filters.values():
         if custom_filter:
             filters_to_apply = (
@@ -433,6 +462,22 @@ def add_handlers():
         "^mthelp": media_tools_help_callback,
         "^gensession_cancel$": handle_cancel_button,
     }
+
+    # Add Zotify quality selector callback handler if enabled
+    if Config.ZOTIFY_ENABLED:
+        from bot.helper.zotify_utils.quality_selector import (
+            ZotifyQualitySelector,
+            get_active_zotify_quality_selector,
+        )
+
+        async def handle_zotify_quality_callback(client, query):
+            """Handle Zotify quality selector callbacks"""
+            user_id = query.from_user.id
+            selector = get_active_zotify_quality_selector(user_id)
+            if selector:
+                await ZotifyQualitySelector._handle_callback(client, query, selector)
+
+        public_regex_filters["^zq"] = handle_zotify_quality_callback
 
     # Add handlers for callbacks that don't need authorization (accessible to all users)
     # These have higher priority (group=-1) to ensure they're processed first
@@ -483,7 +528,7 @@ def add_handlers():
         MessageHandler(
             handle_no_suffix_commands,
             filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|srm|streamripleech|srleech|srl|streamripsearch|srsearch|srs|streamripquality|srquality|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
+                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|srm|streamripleech|srleech|srl|streamripsearch|srsearch|srs|streamripquality|srquality|zotifymirror|zmirror|zm|zotifyleech|zleech|zl|zotifysearch|zsearch|zs|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
             )
             & CustomFilters.pm_or_authorized,
         ),

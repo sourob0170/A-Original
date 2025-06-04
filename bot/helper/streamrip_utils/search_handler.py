@@ -17,8 +17,8 @@ from pyrogram.types import (
 )
 
 from bot import LOGGER
+from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
-from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.status_utils import get_readable_time
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
@@ -85,8 +85,8 @@ class StreamripSearchHandler:
             "playlist": "https://www.deezer.com/playlist/{}",
         },
         "soundcloud": {
-            "track": "https://soundcloud.com/track/{}",
-            "playlist": "https://soundcloud.com/playlist/{}",
+            "track": "https://soundcloud.com/user/{}",  # Note: SoundCloud uses permalink_url in practice
+            "playlist": "https://soundcloud.com/user/sets/{}",
         },
     }
 
@@ -115,6 +115,8 @@ class StreamripSearchHandler:
 
     __slots__ = (
         "_cached_all_results",
+        "_config",
+        "_enabled_platforms",
         "_reply_to",
         "_time",
         "_timeout",
@@ -160,12 +162,19 @@ class StreamripSearchHandler:
         self._cached_all_results = None  # Cache flattened results for O(1) access
 
     async def initialize_clients(self):
-        """Initialize platform clients"""
+        """Initialize platform clients with lazy loading and reduced resource usage"""
         if not STREAMRIP_AVAILABLE:
             return False
 
         try:
-            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+            # Ensure streamrip is initialized first
+            from bot.helper.streamrip_utils.streamrip_config import (
+                ensure_streamrip_initialized,
+                streamrip_config,
+            )
+
+            if not await ensure_streamrip_initialized():
+                return False
 
             config = streamrip_config.get_config()
             if not config:
@@ -180,13 +189,22 @@ class StreamripSearchHandler:
             if not enabled_platforms:
                 return False
 
-            # Initialize only enabled platforms using class constants for O(1) lookup
+            # Use lazy initialization - only store config and platform info
+            # Actual client creation will happen when needed to reduce startup overhead
+            self._config = config
+            self._enabled_platforms = enabled_platforms
+
+            # Initialize clients efficiently without delays to reduce CPU overhead
+            initialized_count = 0
             for platform in enabled_platforms:
                 if platform in self.CLIENT_CLASSES:
                     try:
+                        # Remove sleep delays to reduce CPU overhead and improve performance
                         self.clients[platform] = self.CLIENT_CLASSES[platform](
                             config
                         )
+                        initialized_count += 1
+                        LOGGER.debug(f"✅ Initialized {platform.title()} client")
                     except Exception as e:
                         LOGGER.error(
                             f"❌ Failed to initialize {platform.title()} client: {e}"
@@ -194,6 +212,11 @@ class StreamripSearchHandler:
 
             # Store initial platform list for comparison later
             self.initial_platforms = list(self.clients.keys())
+
+            if initialized_count > 0:
+                LOGGER.info(
+                    f"Successfully initialized {initialized_count}/{len(enabled_platforms)} streamrip clients"
+                )
 
             return len(self.clients) > 0
 
@@ -475,9 +498,27 @@ class StreamripSearchHandler:
         results = []
 
         try:
-            # Login to client first
+            # Login to client first with better session management
             if hasattr(client, "login"):
                 try:
+                    # Check if session is still valid before login
+                    if (
+                        hasattr(client, "session")
+                        and client.session
+                        and client.session.closed
+                    ):
+                        LOGGER.warning(
+                            f"⚠️ {platform.title()} session is closed, recreating client"
+                        )
+                        # Recreate client if session is closed
+                        from bot.helper.streamrip_utils.streamrip_config import (
+                            streamrip_config,
+                        )
+
+                        config = streamrip_config.get_config()
+                        client = self.CLIENT_CLASSES[platform](config)
+                        self.clients[platform] = client
+
                     await client.login()
                 except Exception as auth_error:
                     # Handle authentication failures consistently for all platforms
@@ -521,15 +562,92 @@ class StreamripSearchHandler:
                                 search_response, platform, search_type
                             )
 
-                            for item in actual_results:
-                                # Extract metadata based on platform and type
-                                result = await self._extract_search_result(
-                                    item, platform, search_type
-                                )
-                                if result:
-                                    results.append(result)
+                            # Process results in batches to reduce CPU overhead
+                            batch_size = 10  # Process 10 items at a time
+                            for i in range(0, len(actual_results), batch_size):
+                                batch = actual_results[i : i + batch_size]
+                                for item in batch:
+                                    # Extract metadata based on platform and type
+                                    result = await self._extract_search_result(
+                                        item, platform, search_type
+                                    )
+                                    if result:
+                                        results.append(result)
+
+                                # Yield control to prevent CPU blocking
+                                if i + batch_size < len(actual_results):
+                                    await asyncio.sleep(0)  # Yield to event loop
 
                     except Exception as search_error:
+                        error_msg = str(search_error)
+
+                        # Handle specific connection errors
+                        if (
+                            "Connector is closed" in error_msg
+                            or "Session is closed" in error_msg
+                        ):
+                            LOGGER.warning(
+                                f"Connection closed for {platform}, attempting to recreate client"
+                            )
+                            try:
+                                # Recreate client and retry once
+                                from bot.helper.streamrip_utils.streamrip_config import (
+                                    streamrip_config,
+                                )
+
+                                config = streamrip_config.get_config()
+                                client = self.CLIENT_CLASSES[platform](config)
+                                self.clients[platform] = client
+
+                                # Login and retry search
+                                if hasattr(client, "login"):
+                                    await client.login()
+
+                                # Retry the search once
+                                search_response = await client.search(
+                                    search_type,
+                                    self.query,
+                                    limit=self.result_limit,
+                                )
+
+                                if search_response:
+                                    actual_results = (
+                                        self._extract_results_from_containers(
+                                            search_response, platform, search_type
+                                        )
+                                    )
+
+                                    # Process retry results in batches to reduce CPU overhead
+                                    batch_size = 10  # Process 10 items at a time
+                                    for i in range(
+                                        0, len(actual_results), batch_size
+                                    ):
+                                        batch = actual_results[i : i + batch_size]
+                                        for item in batch:
+                                            result = (
+                                                await self._extract_search_result(
+                                                    item, platform, search_type
+                                                )
+                                            )
+                                            if result:
+                                                results.append(result)
+
+                                        # Yield control to prevent CPU blocking
+                                        if i + batch_size < len(actual_results):
+                                            await asyncio.sleep(
+                                                0
+                                            )  # Yield to event loop
+
+                                LOGGER.info(
+                                    f"Successfully recovered {platform} connection"
+                                )
+                                continue
+
+                            except Exception as retry_error:
+                                LOGGER.error(
+                                    f"Failed to recover {platform} connection: {retry_error}"
+                                )
+
                         LOGGER.warning(
                             f"Search type '{search_type}' failed on {platform}: {search_error}"
                         )
@@ -552,7 +670,7 @@ class StreamripSearchHandler:
     async def _extract_search_result(
         self, item, platform: str, search_type: str
     ) -> dict[str, Any] | None:
-        """Extract search result metadata"""
+        """Extract search result metadata with comprehensive thumbnail and metadata extraction"""
         try:
             result = {
                 "platform": platform,
@@ -565,6 +683,7 @@ class StreamripSearchHandler:
                 "id": "",
                 "quality": "Unknown",
                 "cover_url": "",
+                "thumbnail_url": "",  # Add thumbnail_url for compatibility
             }
 
             # Extract metadata from dict structure (all platforms return dicts)
@@ -624,15 +743,90 @@ class StreamripSearchHandler:
                             else:
                                 result["artist"] = str(first_contributor)
                 elif platform == "soundcloud":
-                    if "user" in item:
-                        if isinstance(item["user"], dict):
-                            result["artist"] = item["user"].get(
-                                "username", str(item["user"])
-                            )
-                        else:
-                            result["artist"] = str(item["user"])
-                    elif "uploader" in item:
-                        result["artist"] = str(item["uploader"])
+                    # Enhanced SoundCloud metadata extraction
+                    # Try multiple SoundCloud artist field patterns with more robust handling
+                    artist_found = False
+
+                    # Method 1: Try user object (most common)
+                    if "user" in item and not artist_found:
+                        user_obj = item["user"]
+
+                        if isinstance(user_obj, dict):
+                            # Try different user fields in order of preference
+                            for field in [
+                                "username",
+                                "display_name",
+                                "full_name",
+                                "name",
+                            ]:
+                                if user_obj.get(field):
+                                    result["artist"] = str(user_obj[field]).strip()
+                                    artist_found = True
+                                    break
+
+                            # If no specific field found, try to extract from user object
+                            if not artist_found:
+                                result["artist"] = str(user_obj)
+                                artist_found = True
+                        elif isinstance(user_obj, str) and user_obj.strip():
+                            result["artist"] = str(user_obj).strip()
+                            artist_found = True
+
+                    # Method 2: Try uploader field
+                    if "uploader" in item and not artist_found:
+                        uploader = item["uploader"]
+                        if uploader and str(uploader).strip():
+                            result["artist"] = str(uploader).strip()
+                            artist_found = True
+
+                    # Method 3: Try publisher metadata
+                    if "publisher_metadata" in item and not artist_found:
+                        pub_meta = item["publisher_metadata"]
+
+                        if isinstance(pub_meta, dict):
+                            for field in [
+                                "artist",
+                                "performer",
+                                "creator",
+                                "author",
+                            ]:
+                                if pub_meta.get(field):
+                                    result["artist"] = str(pub_meta[field]).strip()
+                                    artist_found = True
+                                    break
+
+                    # Method 4: Try other common fields
+                    if not artist_found:
+                        for field in [
+                            "artist",
+                            "performer",
+                            "creator",
+                            "author",
+                            "channel",
+                        ]:
+                            if item.get(field):
+                                field_value = item[field]
+                                if (
+                                    isinstance(field_value, dict)
+                                    and "name" in field_value
+                                ):
+                                    result["artist"] = str(
+                                        field_value["name"]
+                                    ).strip()
+                                elif (
+                                    isinstance(field_value, str)
+                                    and field_value.strip()
+                                ):
+                                    result["artist"] = str(field_value).strip()
+                                else:
+                                    continue
+                                artist_found = True
+                                break
+
+                    if not artist_found:
+                        LOGGER.warning(
+                            f"🎵 [SOUNDCLOUD] No artist field found, keeping default: {result['artist']}"
+                        )
                 elif platform == "tidal":
                     if "artist" in item:
                         if isinstance(item["artist"], dict):
@@ -711,7 +905,7 @@ class StreamripSearchHandler:
                             else:
                                 result["artist"] = str(item["creator"])
 
-                # Extract album
+                # Extract album with platform-specific handling
                 if "album" in item:
                     if isinstance(item["album"], dict):
                         result["album"] = item["album"].get(
@@ -719,12 +913,45 @@ class StreamripSearchHandler:
                         )
                     else:
                         result["album"] = str(item["album"])
+                elif platform == "soundcloud":
+                    # SoundCloud doesn't typically have albums, but check for playlist or publisher info
+                    if "publisher_metadata" in item and isinstance(
+                        item["publisher_metadata"], dict
+                    ):
+                        album_title = item["publisher_metadata"].get("album_title")
+                        if album_title:
+                            result["album"] = str(album_title)
+                    elif "playlistdebug" in item and isinstance(
+                        item["playlist"], dict
+                    ):
+                        playlist_title = item["playlist"].get("title")
+                        if playlist_title:
+                            result["album"] = str(playlist_title)
 
-                # Extract duration
-                result["duration"] = item.get("duration", 0)
+                # Extract duration with platform-specific handling
+                if "duration" in item:
+                    duration = item["duration"]
+                    if isinstance(duration, int | float):
+                        # SoundCloud duration is in milliseconds, others in seconds
+                        if (
+                            platform == "soundcloud" and duration > 10000
+                        ):  # Likely milliseconds
+                            result["duration"] = int(duration / 1000)
+                        else:
+                            result["duration"] = int(duration)
+                    else:
+                        result["duration"] = 0
+                else:
+                    result["duration"] = 0
 
                 # Extract ID
                 result["id"] = str(item.get("id", ""))
+
+                # Extract cover/thumbnail URLs with platform-specific logic
+                cover_url = self._extract_cover_url(item, platform, search_type)
+                if cover_url:
+                    result["cover_url"] = cover_url
+                    result["thumbnail_url"] = cover_url  # For compatibility
 
             else:
                 # Fallback for object attributes (shouldn't happen with current API)
@@ -739,9 +966,13 @@ class StreamripSearchHandler:
 
             # Generate URL based on platform and ID
             if result["id"]:
-                result["url"] = self._generate_platform_url(
-                    platform, search_type, result["id"]
-                )
+                # For SoundCloud, use permalink_url if available, otherwise generate URL
+                if platform == "soundcloud" and "permalink_url" in item:
+                    result["url"] = str(item["permalink_url"])
+                else:
+                    result["url"] = self._generate_platform_url(
+                        platform, search_type, result["id"]
+                    )
 
             # Set quality info
             quality_map = {
@@ -754,8 +985,221 @@ class StreamripSearchHandler:
 
             return result
 
-        except Exception:
+        except Exception as e:
+            LOGGER.warning(f"Failed to extract search result from {platform}: {e}")
             return None
+
+    def _extract_cover_url(self, item: dict, platform: str, search_type: str) -> str:
+        """Extract cover/thumbnail URL from API response with platform-specific logic"""
+        try:
+            cover_url = ""
+
+            if platform == "qobuz":
+                # Qobuz cover URL patterns
+                if "image" in item:
+                    if isinstance(item["image"], dict):
+                        # Try different size variants (prefer larger sizes)
+                        for size in ["large", "medium", "small", "thumbnail"]:
+                            if size in item["image"] and item["image"][size]:
+                                cover_url = item["image"][size]
+                                break
+                        # Fallback to any available image URL
+                        if not cover_url:
+                            for value in item["image"].values():
+                                if isinstance(value, str) and value.startswith(
+                                    "http"
+                                ):
+                                    cover_url = value
+                                    break
+                    elif isinstance(item["image"], str):
+                        cover_url = item["image"]
+
+                # Alternative Qobuz fields
+                if not cover_url:
+                    for field in ["cover", "cover_url", "artwork_url", "picture"]:
+                        if item.get(field):
+                            cover_url = str(item[field])
+                            break
+
+                # For albums, try album image
+                if (
+                    not cover_url
+                    and "album" in item
+                    and isinstance(item["album"], dict)
+                ):
+                    album_image = item["album"].get("image")
+                    if isinstance(album_image, dict):
+                        for size in ["large", "medium", "small"]:
+                            if album_image.get(size):
+                                cover_url = album_image[size]
+                                break
+                    elif isinstance(album_image, str):
+                        cover_url = album_image
+
+            elif platform == "tidal":
+                # Tidal cover URL patterns
+                if "cover" in item:
+                    cover_id = item["cover"]
+                    if cover_id:
+                        # Tidal cover URL format: https://resources.tidal.com/images/{cover_id}/1280x1280.jpg
+                        cover_url = f"https://resources.tidal.com/images/{cover_id.replace('-', '/')}/1280x1280.jpg"
+
+                # Alternative Tidal fields
+                if not cover_url:
+                    for field in ["image", "picture", "artwork_url", "cover_url"]:
+                        if item.get(field):
+                            cover_url = str(item[field])
+                            break
+
+                # For albums, try album cover
+                if (
+                    not cover_url
+                    and "album" in item
+                    and isinstance(item["album"], dict)
+                ):
+                    album_cover = item["album"].get("cover")
+                    if album_cover:
+                        cover_url = f"https://resources.tidal.com/images/{album_cover.replace('-', '/')}/1280x1280.jpg"
+
+            elif platform == "deezer":
+                # Deezer cover URL patterns
+                for field in [
+                    "picture",
+                    "picture_medium",
+                    "picture_big",
+                    "picture_small",
+                    "cover",
+                    "cover_medium",
+                    "cover_big",
+                ]:
+                    if item.get(field):
+                        cover_url = str(item[field])
+                        break
+
+                # For albums, try album picture
+                if (
+                    not cover_url
+                    and "album" in item
+                    and isinstance(item["album"], dict)
+                ):
+                    for field in [
+                        "picture",
+                        "picture_medium",
+                        "picture_big",
+                        "cover",
+                    ]:
+                        if item["album"].get(field):
+                            cover_url = str(item["album"][field])
+                            break
+
+                # For artists, try artist picture
+                if not cover_url and search_type == "artist" and "picture" in item:
+                    cover_url = str(item["picture"])
+
+            elif platform == "soundcloud":
+                # Enhanced SoundCloud artwork URL patterns
+                # Method 1: Direct artwork_url field
+                if item.get("artwork_url"):
+                    cover_url = str(item["artwork_url"])
+
+                # Method 2: Try user avatar if no artwork
+                if (
+                    not cover_url
+                    and "user" in item
+                    and isinstance(item["user"], dict)
+                ):
+                    user_obj = item["user"]
+
+                    for avatar_field in ["avatar_url", "avatar", "picture", "image"]:
+                        if user_obj.get(avatar_field):
+                            cover_url = str(user_obj[avatar_field])
+                            break
+
+                # Method 3: Try other image fields
+                if not cover_url:
+                    for field in [
+                        "avatar_url",
+                        "picture",
+                        "image",
+                        "thumbnail",
+                        "waveform_url",
+                    ]:
+                        if item.get(field):
+                            cover_url = str(item[field])
+                            break
+
+                # Method 4: Try nested fields
+                if not cover_url:
+                    nested_fields = [
+                        "user.avatar_url",
+                        "user.picture",
+                        "media.artwork_url",
+                    ]
+                    for nested_field in nested_fields:
+                        parts = nested_field.split(".")
+                        value = item
+                        for part in parts:
+                            if isinstance(value, dict) and part in value:
+                                value = value[part]
+                            else:
+                                value = None
+                                break
+                        if (
+                            value
+                            and isinstance(value, str)
+                            and value.startswith("http")
+                        ):
+                            cover_url = value
+                            break
+
+                # SoundCloud URL quality enhancement
+                if cover_url:
+                    # Upgrade to higher quality variants
+                    if "large.jpg" in cover_url:
+                        cover_url = cover_url.replace("large.jpg", "t500x500.jpg")
+                    elif "t300x300" in cover_url:
+                        cover_url = cover_url.replace("t300x300", "t500x500")
+                    elif "small.jpg" in cover_url:
+                        cover_url = cover_url.replace("small.jpg", "t500x500.jpg")
+                    elif "tiny.jpg" in cover_url:
+                        cover_url = cover_url.replace("tiny.jpg", "t500x500.jpg")
+
+            # Generic fallback for any platform
+            if not cover_url:
+                for field in [
+                    "image",
+                    "picture",
+                    "cover",
+                    "artwork",
+                    "thumbnail",
+                    "avatar",
+                    "photo",
+                ]:
+                    if item.get(field):
+                        field_value = item[field]
+                        if isinstance(field_value, str) and field_value.startswith(
+                            "http"
+                        ):
+                            cover_url = field_value
+                            break
+                        if isinstance(field_value, dict):
+                            # Try to find URL in nested object
+                            for value in field_value.values():
+                                if isinstance(value, str) and value.startswith(
+                                    "http"
+                                ):
+                                    cover_url = value
+                                    break
+                            if cover_url:
+                                break
+
+            # Log the extraction result
+
+            return cover_url
+
+        except Exception as e:
+            LOGGER.warning(f"Failed to extract cover URL from {platform}: {e}")
+            return ""
 
     def _generate_platform_url(
         self, platform: str, media_type: str, media_id: str
@@ -1128,9 +1572,19 @@ STREAMRIP_CACHE_COUNTER = 0
 # Cache for streamrip result info (for start command access)
 STREAMRIP_RESULT_CACHE = {}
 
-# Global cache for authenticated clients (to avoid re-authentication)
+# Global cache for authenticated clients with activity tracking
 STREAMRIP_CLIENT_CACHE = {}
-CLIENT_CACHE_EXPIRY = 300  # 5 minutes
+CLIENT_CACHE_EXPIRY = (
+    3600  # 1 hour max age - but will be cleaned based on inactivity
+)
+CLIENT_INACTIVITY_TIMEOUT = 60  # 1 minute of inactivity before cleanup
+CLIENT_LAST_ACTIVITY = {}  # Track last activity per client
+_cleanup_task = None  # Background cleanup task
+
+# Circuit breaker for failed platforms
+PLATFORM_FAILURE_TRACKER = {}
+FAILURE_THRESHOLD = 3  # Number of consecutive failures before circuit opens
+CIRCUIT_RESET_TIME = 60  # Time in seconds before trying failed platform again
 
 
 def generate_streamrip_cache_key(query, platform, media_type, user_id):
@@ -1139,13 +1593,54 @@ def generate_streamrip_cache_key(query, platform, media_type, user_id):
     return hashlib.md5(key.encode()).hexdigest()
 
 
+def is_platform_circuit_open(platform_name):
+    """Check if circuit breaker is open for a platform."""
+    if platform_name not in PLATFORM_FAILURE_TRACKER:
+        return False
+
+    failure_data = PLATFORM_FAILURE_TRACKER[platform_name]
+    current_time = time_module.time()
+
+    # If enough time has passed, reset the circuit
+    if current_time - failure_data["last_failure"] > CIRCUIT_RESET_TIME:
+        del PLATFORM_FAILURE_TRACKER[platform_name]
+        return False
+
+    # Check if failure threshold exceeded
+    return failure_data["count"] >= FAILURE_THRESHOLD
+
+
+def record_platform_failure(platform_name):
+    """Record a platform failure for circuit breaker."""
+    current_time = time_module.time()
+
+    if platform_name not in PLATFORM_FAILURE_TRACKER:
+        PLATFORM_FAILURE_TRACKER[platform_name] = {
+            "count": 1,
+            "last_failure": current_time,
+        }
+    else:
+        PLATFORM_FAILURE_TRACKER[platform_name]["count"] += 1
+        PLATFORM_FAILURE_TRACKER[platform_name]["last_failure"] = current_time
+
+
+def record_platform_success(platform_name):
+    """Record a platform success, resetting circuit breaker."""
+    PLATFORM_FAILURE_TRACKER.pop(platform_name, None)
+
+
 def encrypt_streamrip_data(data_string):
     """Create a compact token for streamrip result data."""
     global STREAMRIP_CACHE_COUNTER
     try:
-        # Check if this data is already in the cache
-        for key, value in STREAMRIP_RESULT_CACHE.items():
-            if value == data_string:
+        # Use hash-based lookup instead of linear search to reduce CPU overhead
+        import hashlib
+
+        data_hash = hashlib.md5(data_string.encode()).hexdigest()[:16]
+
+        # Check if this hash is already in the cache (more efficient lookup)
+        for key in STREAMRIP_RESULT_CACHE:
+            if key.endswith(data_hash):
                 return key
 
         # Generate a new short ID
@@ -1180,25 +1675,102 @@ def decrypt_streamrip_data(short_id):
         return short_id
 
 
+def _update_client_activity(platform_name):
+    """Update last activity time for a client"""
+    CLIENT_LAST_ACTIVITY[platform_name] = time_module.time()
+
+
+async def _cleanup_inactive_clients():
+    """Clean up clients that have been inactive for more than CLIENT_INACTIVITY_TIMEOUT"""
+    current_time = time_module.time()
+    clients_to_remove = []
+
+    for platform_name in list(CLIENT_LAST_ACTIVITY.keys()):
+        last_activity = CLIENT_LAST_ACTIVITY.get(platform_name, 0)
+        if current_time - last_activity > CLIENT_INACTIVITY_TIMEOUT:
+            clients_to_remove.append(platform_name)
+
+    for platform_name in clients_to_remove:
+        cache_key = f"{platform_name}_client"
+        if cache_key in STREAMRIP_CLIENT_CACHE:
+            try:
+                cached_time, cached_client = STREAMRIP_CLIENT_CACHE[cache_key]
+                # Clean up client session
+                if (
+                    hasattr(cached_client, "session")
+                    and cached_client.session
+                    and not cached_client.session.closed
+                ):
+                    await cached_client.session.close()
+                    LOGGER.debug(f"Closed inactive {platform_name} client session")
+            except Exception as e:
+                LOGGER.warning(
+                    f"Error cleaning up inactive {platform_name} client: {e}"
+                )
+            finally:
+                del STREAMRIP_CLIENT_CACHE[cache_key]
+                CLIENT_LAST_ACTIVITY.pop(platform_name, None)
+
+
+async def _start_cleanup_task():
+    """Start background cleanup task if not already running"""
+    global _cleanup_task
+    if _cleanup_task is None or _cleanup_task.done():
+        _cleanup_task = asyncio.create_task(_background_cleanup_loop())
+
+
+async def _background_cleanup_loop():
+    """Background loop to clean up inactive clients every 30 seconds"""
+    while True:
+        try:
+            await asyncio.sleep(30)  # Check every 30 seconds
+            await _cleanup_inactive_clients()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            LOGGER.warning(f"Error in background cleanup: {e}")
+            await asyncio.sleep(30)  # Continue after error
+
+
 async def _get_or_create_cached_client(platform_name, config):
     """Get cached client or create new one with authentication."""
     try:
+        # Check circuit breaker first
+        if is_platform_circuit_open(platform_name):
+            LOGGER.warning(f"Circuit breaker open for {platform_name}, skipping")
+            return None
+
         current_time = time_module.time()
         cache_key = f"{platform_name}_client"
+
+        # Start background cleanup task if needed
+        await _start_cleanup_task()
+
+        # Clean up inactive clients first
+        await _cleanup_inactive_clients()
 
         # Check if we have a valid cached client
         if cache_key in STREAMRIP_CLIENT_CACHE:
             cached_time, cached_client = STREAMRIP_CLIENT_CACHE[cache_key]
-            if current_time - cached_time < CLIENT_CACHE_EXPIRY:
+            # Check both max age and inactivity
+            last_activity = CLIENT_LAST_ACTIVITY.get(platform_name, cached_time)
+            if (
+                current_time - cached_time < CLIENT_CACHE_EXPIRY
+                and current_time - last_activity < CLIENT_INACTIVITY_TIMEOUT
+            ):
                 # Verify client is still valid
                 if (
                     hasattr(cached_client, "session")
                     and cached_client.session
                     and not cached_client.session.closed
                 ):
+                    # Update activity and reset circuit breaker
+                    _update_client_activity(platform_name)
+                    record_platform_success(platform_name)
                     return cached_client
-                # Remove invalid cached client
-                del STREAMRIP_CLIENT_CACHE[cache_key]
+            # Remove invalid or inactive cached client
+            STREAMRIP_CLIENT_CACHE.pop(cache_key, None)
+            CLIENT_LAST_ACTIVITY.pop(platform_name, None)
 
         # Create new client with timeout
         client = None
@@ -1215,14 +1787,18 @@ async def _get_or_create_cached_client(platform_name, config):
                 LOGGER.warning(f"Unsupported platform for caching: {platform_name}")
                 return None
 
-            # Authenticate with timeout
+            # Authenticate with reasonable timeout for inline queries
             if hasattr(client, "login"):
                 await asyncio.wait_for(
                     client.login(), timeout=10.0
-                )  # 10 second auth timeout
+                )  # Increased auth timeout to 10 seconds for better reliability
 
-            # Cache the authenticated client
+            # Cache the authenticated client and track activity
             STREAMRIP_CLIENT_CACHE[cache_key] = (current_time, client)
+            _update_client_activity(platform_name)
+            record_platform_success(
+                platform_name
+            )  # Reset circuit breaker on success
 
             # Clean up old cache entries
             if len(STREAMRIP_CLIENT_CACHE) > 10:
@@ -1245,6 +1821,9 @@ async def _get_or_create_cached_client(platform_name, config):
 
         except TimeoutError:
             LOGGER.warning(f"Authentication timeout for {platform_name} (10s)")
+            record_platform_failure(
+                platform_name
+            )  # Record failure for circuit breaker
             if (
                 client
                 and hasattr(client, "session")
@@ -1258,6 +1837,9 @@ async def _get_or_create_cached_client(platform_name, config):
             LOGGER.warning(
                 f"Authentication failed for {platform_name}: {auth_error}"
             )
+            record_platform_failure(
+                platform_name
+            )  # Record failure for circuit breaker
             if (
                 client
                 and hasattr(client, "session")
@@ -1274,7 +1856,9 @@ async def _get_or_create_cached_client(platform_name, config):
 
 
 async def perform_inline_streamrip_search(query, platform, media_type, user_id):
-    """Perform streamrip search for inline queries with direct platform authentication."""
+    """Perform streamrip search for inline queries with optimized timeouts and connection management."""
+    time_module.time()
+
     try:
         # Check cache first
         cache_key = generate_streamrip_cache_key(
@@ -1289,12 +1873,17 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
         # Initialize streamrip clients directly for inline search
         clients = {}
 
+        # Initialize streamrip on-demand
+        from bot.helper.streamrip_utils.streamrip_config import (
+            ensure_streamrip_initialized,
+        )
+
+        if not await ensure_streamrip_initialized():
+            LOGGER.warning("Streamrip initialization failed for inline search")
+            return []
+
         # Import streamrip configuration
         from bot.helper.streamrip_utils.streamrip_config import streamrip_config
-
-        # Ensure streamrip config is initialized
-        if not streamrip_config.is_initialized():
-            await streamrip_config.initialize()
 
         config = streamrip_config.get_config()
         if not config:
@@ -1310,14 +1899,19 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             platforms_to_search = []
             platform_status = streamrip_config.get_platform_status()
 
-            # Only include platforms that are enabled and have credentials
+            # Only include platforms that are enabled, have credentials, and circuit breaker is closed
             for platform_name, enabled in platform_status.items():
-                if enabled and platform_name in [
-                    "qobuz",
-                    "tidal",
-                    "deezer",
-                    "soundcloud",
-                ]:
+                if (
+                    enabled
+                    and platform_name
+                    in [
+                        "qobuz",
+                        "tidal",
+                        "deezer",
+                        "soundcloud",
+                    ]
+                    and not is_platform_circuit_open(platform_name)
+                ):
                     platforms_to_search.append(platform_name)
 
         if not platforms_to_search:
@@ -1328,6 +1922,9 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
         auth_tasks = []
         for platform_name in platforms_to_search:
             auth_tasks.append(_get_or_create_cached_client(platform_name, config))
+
+        # Remove aggressive time check - let authentication complete naturally
+        # Authentication is important for search quality
 
         # Execute authentication in parallel with individual timeouts
         auth_results = await asyncio.gather(*auth_tasks, return_exceptions=True)
@@ -1348,6 +1945,9 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
                 "No streamrip clients could be initialized for inline search"
             )
             return []
+
+        # Remove aggressive time check - let searches complete naturally
+        # Search completion is more important than arbitrary time limits
 
         # Perform searches on all available platforms
         all_results = []
@@ -1370,9 +1970,15 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
                 LOGGER.warning(
                     f"Search failed for platform {platform_name}: {result}"
                 )
+                record_platform_failure(
+                    platform_name
+                )  # Record failure for circuit breaker
                 continue
             if result:
                 all_results.extend(result)
+                # Update activity for successful searches
+                _update_client_activity(platform_name)
+                record_platform_success(platform_name)  # Record success
 
         # Sort by relevance (title match first, then artist match)
         query_lower = query.lower()
@@ -1410,10 +2016,7 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
     except Exception as e:
         LOGGER.error(f"Error in inline streamrip search: {e}")
         return []
-    finally:
-        # Cleanup clients to prevent unclosed sessions
-        if "clients" in locals():
-            await _cleanup_inline_clients(clients)
+    # Note: We don't cleanup clients here anymore - they're kept alive for 1 minute of inactivity
 
 
 async def _cleanup_inline_clients(clients):
@@ -1484,13 +2087,10 @@ async def _search_platform_inline(client, platform_name, query, media_type):
         # Perform search for each type with timeout and limit
         for search_type in search_types:
             try:
-                # Search using streamrip client API with timeout and reasonable limit
-                search_response = await asyncio.wait_for(
-                    client.search(
-                        search_type, query, limit=50
-                    ),  # Reduced limit for faster response
-                    timeout=8.0,  # 8 second timeout per search type
-                )
+                # Search using streamrip client API without timeout - let it complete
+                search_response = await client.search(
+                    search_type, query, limit=15
+                )  # No timeout - let search complete naturally
 
                 if search_response:
                     # Extract results from platform-specific containers
@@ -1512,10 +2112,6 @@ async def _search_platform_inline(client, platform_name, query, media_type):
                     # If we have enough results, break early
                     if len(results) >= 25:
                         break
-                else:
-                    LOGGER.debug(
-                        f"Platform {platform_name} {search_type} returned empty response"
-                    )
 
             except TimeoutError:
                 LOGGER.warning(
@@ -1523,6 +2119,77 @@ async def _search_platform_inline(client, platform_name, query, media_type):
                 )
                 continue
             except Exception as search_error:
+                error_msg = str(search_error)
+
+                # Handle specific connection errors for inline search
+                if (
+                    "Connector is closed" in error_msg
+                    or "Session is closed" in error_msg
+                ):
+                    LOGGER.warning(
+                        f"Connection closed for {platform_name} (inline), attempting to recreate client"
+                    )
+                    try:
+                        # Recreate client and retry once for inline search
+                        from bot.helper.streamrip_utils.streamrip_config import (
+                            streamrip_config,
+                        )
+
+                        config = streamrip_config.get_config()
+
+                        # Import and get the appropriate client class
+                        from streamrip.client import (
+                            DeezerClient,
+                            QobuzClient,
+                            SoundcloudClient,
+                            TidalClient,
+                        )
+
+                        client_classes = {
+                            "qobuz": QobuzClient,
+                            "tidal": TidalClient,
+                            "deezer": DeezerClient,
+                            "soundcloud": SoundcloudClient,
+                        }
+
+                        if platform_name in client_classes:
+                            client = client_classes[platform_name](config)
+
+                            # Login and retry search
+                            if hasattr(client, "login"):
+                                await client.login()
+
+                            # Retry the search once without timeout
+                            search_response = await client.search(
+                                search_type, query, limit=15
+                            )
+
+                            if search_response:
+                                actual_results = (
+                                    _extract_results_from_containers_inline(
+                                        search_response, platform_name, search_type
+                                    )
+                                )
+
+                                for item in actual_results:
+                                    result = _extract_search_result_inline(
+                                        item, platform_name, search_type
+                                    )
+                                    if result:
+                                        results.append(result)
+                                        if len(results) >= 25:
+                                            break
+
+                                LOGGER.info(
+                                    f"Successfully recovered {platform_name} connection (inline)"
+                                )
+                                continue
+
+                    except Exception as retry_error:
+                        LOGGER.error(
+                            f"Failed to recover {platform_name} connection (inline): {retry_error}"
+                        )
+
                 LOGGER.warning(
                     f"Search type '{search_type}' failed on {platform_name}: {search_error}"
                 )
@@ -1548,6 +2215,9 @@ def _extract_results_from_containers_inline(search_response, platform, search_ty
                 result_container = search_response["data"]
             elif "results" in search_response:
                 result_container = search_response["results"]
+            elif "collection" in search_response:
+                # SoundCloud uses 'collection' to wrap results
+                result_container = search_response["collection"]
             elif search_type in search_response:
                 result_container = search_response[search_type]
             else:
@@ -1580,16 +2250,27 @@ def _extract_results_from_containers_inline(search_response, platform, search_ty
                         "albums",
                         "artists",
                         "playlists",
+                        "collection",  # SoundCloud uses 'collection'
                     ]:
-                        if (
-                            container_type in list_item
-                            and isinstance(list_item[container_type], dict)
-                            and "items" in list_item[container_type]
-                        ):
-                            items_to_add = list_item[container_type]["items"]
-                            actual_results.extend(items_to_add)
-                            extracted_from_nested = True
-                            break
+                        if container_type in list_item:
+                            container_value = list_item[container_type]
+                            if (
+                                isinstance(container_value, dict)
+                                and "items" in container_value
+                            ):
+                                # Standard nested structure: {'tracks': {'items': [...]}}
+                                items_to_add = container_value["items"]
+                                actual_results.extend(items_to_add)
+                                extracted_from_nested = True
+                                break
+                            if (
+                                isinstance(container_value, list)
+                                and container_type == "collection"
+                            ):
+                                # SoundCloud direct collection: {'collection': [...]}
+                                actual_results.extend(container_value)
+                                extracted_from_nested = True
+                                break
 
                     # If no nested container found, check for direct 'items'
                     if not extracted_from_nested and "items" in list_item:
@@ -1615,7 +2296,7 @@ def _extract_results_from_containers_inline(search_response, platform, search_ty
 
 
 def _extract_search_result_inline(item, platform, search_type):
-    """Extract search result metadata for inline search."""
+    """Extract search result metadata for inline search with thumbnail support."""
     try:
         result = {
             "platform": platform,
@@ -1626,9 +2307,11 @@ def _extract_search_result_inline(item, platform, search_type):
             "duration": 0,
             "url": "",
             "id": "",
+            "cover_url": "",
+            "thumbnail_url": "",
         }
 
-        # Handle Deezer's nested data structure
+        # Handle platform-specific nested data structures
         if platform == "deezer" and isinstance(item, dict) and "data" in item:
             # Deezer wraps results in a 'data' array, extract the first item
             if isinstance(item["data"], list) and item["data"]:
@@ -1761,8 +2444,69 @@ def _extract_search_result_inline(item, platform, search_type):
                     )
                 else:
                     result["artist"] = str(first_contributor)
+        elif platform == "soundcloud":
+            # Enhanced SoundCloud metadata extraction for inline search
+            # Try multiple SoundCloud artist field patterns with more robust handling
+            artist_found = False
+
+            # Method 1: Try user object (most common)
+            if "user" in actual_item and not artist_found:
+                user_obj = actual_item["user"]
+
+                if isinstance(user_obj, dict):
+                    # Try different user fields in order of preference
+                    for field in ["username", "display_name", "full_name", "name"]:
+                        if user_obj.get(field):
+                            result["artist"] = str(user_obj[field]).strip()
+                            artist_found = True
+                            break
+
+                    # If no specific field found, try to extract from user object
+                    if not artist_found:
+                        result["artist"] = str(user_obj)
+                        artist_found = True
+                elif isinstance(user_obj, str) and user_obj.strip():
+                    result["artist"] = str(user_obj).strip()
+                    artist_found = True
+
+            # Method 2: Try uploader field
+            if "uploader" in actual_item and not artist_found:
+                uploader = actual_item["uploader"]
+                if uploader and str(uploader).strip():
+                    result["artist"] = str(uploader).strip()
+                    artist_found = True
+
+            # Method 3: Try publisher metadata
+            if "publisher_metadata" in actual_item and not artist_found:
+                pub_meta = actual_item["publisher_metadata"]
+
+                if isinstance(pub_meta, dict):
+                    for field in ["artist", "performer", "creator", "author"]:
+                        if pub_meta.get(field):
+                            result["artist"] = str(pub_meta[field]).strip()
+                            artist_found = True
+                            break
+
+            # Method 4: Try other common fields
+            if not artist_found:
+                for field in ["artist", "performer", "creator", "author", "channel"]:
+                    if actual_item.get(field):
+                        field_value = actual_item[field]
+                        if isinstance(field_value, dict) and "name" in field_value:
+                            result["artist"] = str(field_value["name"]).strip()
+                        elif isinstance(field_value, str) and field_value.strip():
+                            result["artist"] = str(field_value).strip()
+                        else:
+                            continue
+                        artist_found = True
+                        break
+
+            if not artist_found:
+                LOGGER.warning(
+                    f"🎵 [INLINE-SOUNDCLOUD] No artist field found, keeping default: {result['artist']}"
+                )
         elif "user" in item:
-            # SoundCloud uses 'user' field
+            # Generic user field handling for other platforms
             if isinstance(item["user"], dict):
                 result["artist"] = item["user"].get(
                     "username", item["user"].get("name", str(item["user"]))
@@ -1770,10 +2514,10 @@ def _extract_search_result_inline(item, platform, search_type):
             else:
                 result["artist"] = str(item["user"])
         elif "uploader" in item:
-            # Alternative SoundCloud field
+            # Alternative uploader field
             result["artist"] = str(item["uploader"])
 
-        # Extract album
+        # Extract album with platform-specific handling
         if "album" in actual_item:
             if isinstance(actual_item["album"], dict):
                 result["album"] = actual_item["album"].get(
@@ -1782,19 +2526,54 @@ def _extract_search_result_inline(item, platform, search_type):
                 )
             else:
                 result["album"] = str(actual_item["album"])
+        elif platform == "soundcloud":
+            # SoundCloud doesn't typically have albums, but check for playlist or publisher info
+            if "publisher_metadata" in actual_item and isinstance(
+                actual_item["publisher_metadata"], dict
+            ):
+                album_title = actual_item["publisher_metadata"].get("album_title")
+                if album_title:
+                    result["album"] = str(album_title)
+            elif "playlist" in actual_item and isinstance(
+                actual_item["playlist"], dict
+            ):
+                playlist_title = actual_item["playlist"].get("title")
+                if playlist_title:
+                    result["album"] = str(playlist_title)
 
-        # Extract duration
+        # Extract duration with platform-specific handling
         if "duration" in actual_item:
-            result["duration"] = (
-                int(actual_item["duration"]) if actual_item["duration"] else 0
-            )
+            duration = actual_item["duration"]
+            if isinstance(duration, int | float):
+                # SoundCloud duration is in milliseconds, others in seconds
+                if (
+                    platform == "soundcloud" and duration > 10000
+                ):  # Likely milliseconds
+                    result["duration"] = int(duration / 1000)
+                else:
+                    result["duration"] = int(duration)
+            else:
+                result["duration"] = 0
+        else:
+            result["duration"] = 0
 
         # Extract ID and generate URL
         if "id" in actual_item:
             result["id"] = str(actual_item["id"])
-            result["url"] = _generate_platform_url_inline(
-                platform, search_type, result["id"]
-            )
+
+            # For SoundCloud, use permalink_url if available, otherwise generate URL
+            if platform == "soundcloud" and "permalink_url" in actual_item:
+                result["url"] = str(actual_item["permalink_url"])
+            else:
+                result["url"] = _generate_platform_url_inline(
+                    platform, search_type, result["id"]
+                )
+
+        # Extract cover/thumbnail URLs for inline search
+        cover_url = _extract_cover_url_inline(actual_item, platform, search_type)
+        if cover_url:
+            result["cover_url"] = cover_url
+            result["thumbnail_url"] = cover_url
 
         # Enhanced fallback for missing metadata
         if result["title"] == "Unknown":
@@ -1839,6 +2618,188 @@ def _extract_search_result_inline(item, platform, search_type):
         return None
 
 
+def _extract_cover_url_inline(item, platform, search_type):
+    """Extract cover/thumbnail URL from API response for inline search."""
+    try:
+        cover_url = ""
+
+        if platform == "qobuz":
+            # Qobuz cover URL patterns
+            if "image" in item:
+                if isinstance(item["image"], dict):
+                    # Try different size variants (prefer larger sizes)
+                    for size in ["large", "medium", "small", "thumbnail"]:
+                        if size in item["image"] and item["image"][size]:
+                            cover_url = item["image"][size]
+                            break
+                    # Fallback to any available image URL
+                    if not cover_url:
+                        for value in item["image"].values():
+                            if isinstance(value, str) and value.startswith("http"):
+                                cover_url = value
+                                break
+                elif isinstance(item["image"], str):
+                    cover_url = item["image"]
+
+            # Alternative Qobuz fields
+            if not cover_url:
+                for field in ["cover", "cover_url", "artwork_url", "picture"]:
+                    if item.get(field):
+                        cover_url = str(item[field])
+                        break
+
+            # For albums, try album image
+            if not cover_url and "album" in item and isinstance(item["album"], dict):
+                album_image = item["album"].get("image")
+                if isinstance(album_image, dict):
+                    for size in ["large", "medium", "small"]:
+                        if album_image.get(size):
+                            cover_url = album_image[size]
+                            break
+                elif isinstance(album_image, str):
+                    cover_url = album_image
+
+        elif platform == "tidal":
+            # Tidal cover URL patterns
+            if "cover" in item:
+                cover_id = item["cover"]
+                if cover_id:
+                    # Tidal cover URL format: https://resources.tidal.com/images/{cover_id}/1280x1280.jpg
+                    cover_url = f"https://resources.tidal.com/images/{cover_id.replace('-', '/')}/1280x1280.jpg"
+
+            # Alternative Tidal fields
+            if not cover_url:
+                for field in ["image", "picture", "artwork_url", "cover_url"]:
+                    if item.get(field):
+                        cover_url = str(item[field])
+                        break
+
+            # For albums, try album cover
+            if not cover_url and "album" in item and isinstance(item["album"], dict):
+                album_cover = item["album"].get("cover")
+                if album_cover:
+                    cover_url = f"https://resources.tidal.com/images/{album_cover.replace('-', '/')}/1280x1280.jpg"
+
+        elif platform == "deezer":
+            # Deezer cover URL patterns
+            for field in [
+                "picture",
+                "picture_medium",
+                "picture_big",
+                "picture_small",
+                "cover",
+                "cover_medium",
+                "cover_big",
+            ]:
+                if item.get(field):
+                    cover_url = str(item[field])
+                    break
+
+            # For albums, try album picture
+            if not cover_url and "album" in item and isinstance(item["album"], dict):
+                for field in ["picture", "picture_medium", "picture_big", "cover"]:
+                    if item["album"].get(field):
+                        cover_url = str(item["album"][field])
+                        break
+
+            # For artists, try artist picture
+            if not cover_url and search_type == "artist" and "picture" in item:
+                cover_url = str(item["picture"])
+
+        elif platform == "soundcloud":
+            # Enhanced SoundCloud artwork URL patterns for inline search
+            # Method 1: Direct artwork_url field
+            if item.get("artwork_url"):
+                cover_url = str(item["artwork_url"])
+
+            # Method 2: Try user avatar if no artwork
+            if not cover_url and "user" in item and isinstance(item["user"], dict):
+                user_obj = item["user"]
+
+                for avatar_field in ["avatar_url", "avatar", "picture", "image"]:
+                    if user_obj.get(avatar_field):
+                        cover_url = str(user_obj[avatar_field])
+                        break
+
+            # Method 3: Try other image fields
+            if not cover_url:
+                for field in [
+                    "avatar_url",
+                    "picture",
+                    "image",
+                    "thumbnail",
+                    "waveform_url",
+                ]:
+                    if item.get(field):
+                        cover_url = str(item[field])
+                        break
+
+            # Method 4: Try nested fields
+            if not cover_url:
+                nested_fields = [
+                    "user.avatar_url",
+                    "user.picture",
+                    "media.artwork_url",
+                ]
+                for nested_field in nested_fields:
+                    parts = nested_field.split(".")
+                    value = item
+                    for part in parts:
+                        if isinstance(value, dict) and part in value:
+                            value = value[part]
+                        else:
+                            value = None
+                            break
+                    if value and isinstance(value, str) and value.startswith("http"):
+                        cover_url = value
+                        break
+
+            # SoundCloud URL quality enhancement
+            if cover_url:
+                # Upgrade to higher quality variants
+                if "large.jpg" in cover_url:
+                    cover_url = cover_url.replace("large.jpg", "t500x500.jpg")
+                elif "t300x300" in cover_url:
+                    cover_url = cover_url.replace("t300x300", "t500x500")
+                elif "small.jpg" in cover_url:
+                    cover_url = cover_url.replace("small.jpg", "t500x500.jpg")
+                elif "tiny.jpg" in cover_url:
+                    cover_url = cover_url.replace("tiny.jpg", "t500x500.jpg")
+
+        # Generic fallback for any platform
+        if not cover_url:
+            for field in [
+                "image",
+                "picture",
+                "cover",
+                "artwork",
+                "thumbnail",
+                "avatar",
+                "photo",
+            ]:
+                if item.get(field):
+                    field_value = item[field]
+                    if isinstance(field_value, str) and field_value.startswith(
+                        "http"
+                    ):
+                        cover_url = field_value
+                        break
+                    if isinstance(field_value, dict):
+                        # Try to find URL in nested object
+                        for value in field_value.values():
+                            if isinstance(value, str) and value.startswith("http"):
+                                cover_url = value
+                                break
+                        if cover_url:
+                            break
+
+        return cover_url
+
+    except Exception as e:
+        LOGGER.warning(f"Failed to extract cover URL from {platform} (inline): {e}")
+        return ""
+
+
 def _generate_platform_url_inline(platform, media_type, media_id):
     """Generate platform URL for inline search results."""
     url_templates = {
@@ -1861,8 +2822,8 @@ def _generate_platform_url_inline(platform, media_type, media_id):
             "playlist": f"https://www.deezer.com/playlist/{media_id}",
         },
         "soundcloud": {
-            "track": f"https://soundcloud.com/track/{media_id}",
-            "playlist": f"https://soundcloud.com/playlist/{media_id}",
+            "track": f"https://soundcloud.com/user/{media_id}",  # Note: SoundCloud uses permalink_url in practice
+            "playlist": f"https://soundcloud.com/user/sets/{media_id}",
         },
     }
 
@@ -1871,20 +2832,23 @@ def _generate_platform_url_inline(platform, media_type, media_id):
     )
 
 
-@new_task
 async def inline_streamrip_search(_, inline_query: InlineQuery):
     """Handle inline queries for streamrip search."""
-    # Check if streamrip is enabled
-    if not Config.STREAMRIP_ENABLED:
-        LOGGER.warning("Streamrip is disabled")
+    # Initialize streamrip on-demand
+    from bot.helper.streamrip_utils.streamrip_config import (
+        ensure_streamrip_initialized,
+    )
+
+    if not await ensure_streamrip_initialized():
+        LOGGER.warning("Streamrip initialization failed")
         await inline_query.answer(
             results=[
                 InlineQueryResultArticle(
                     id="disabled",
-                    title="Streamrip search is disabled",
-                    description="Streamrip has been disabled by the administrator",
+                    title="Streamrip search is unavailable",
+                    description="Streamrip could not be initialized or is not configured",
                     input_message_content=InputTextMessageContent(
-                        "🎵 Streamrip search is currently disabled by the administrator."
+                        "🎵 Streamrip search is currently unavailable. Please check configuration."
                     ),
                 )
             ],
@@ -1894,6 +2858,9 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
 
     # Skip empty queries
     if not inline_query.query:
+        # Import and use the comprehensive help guide
+        from bot.helper.inline_search_router import get_comprehensive_help_text
+
         await inline_query.answer(
             results=[
                 InlineQueryResultArticle(
@@ -1901,13 +2868,7 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
                     title="🎵 Search music on streaming platforms",
                     description="Type a search query to find music",
                     input_message_content=InputTextMessageContent(
-                        "🎵 <b>Streamrip Inline Search</b>\n\n"
-                        "Type a query to search for music across streaming platforms.\n\n"
-                        "📋 <b>Format:</b> <code>@bot_username query</code>\n"
-                        "🎯 <b>Filter by type:</b> <code>@bot_username track:query</code>\n"
-                        "🎛️ <b>Filter by platform:</b> <code>@bot_username qobuz:query</code>\n\n"
-                        "🎵 <b>Supported types:</b> track, album, playlist, artist\n"
-                        "🎧 <b>Supported platforms:</b> qobuz, tidal, deezer, soundcloud"
+                        get_comprehensive_help_text()
                     ),
                 )
             ],
@@ -1934,6 +2895,26 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
                 )
             ],
             cache_time=1,  # Very short cache for typing feedback
+        )
+        return
+
+    # Import debouncing function from inline search router
+    from bot.helper.inline_search_router import should_debounce_query
+
+    # Check for query debouncing to prevent rapid-fire requests
+    if should_debounce_query(query):
+        await inline_query.answer(
+            results=[
+                InlineQueryResultArticle(
+                    id="debounce",
+                    title="⏳ Please wait...",
+                    description="Searching too fast. Please wait a moment.",
+                    input_message_content=InputTextMessageContent(
+                        "⏳ **Please wait...**\n\nYou're searching too fast. Please wait a moment before trying again."
+                    ),
+                )
+            ],
+            cache_time=1,
         )
         return
 
@@ -1978,17 +2959,15 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
         return
 
     try:
-        # Use asyncio.wait_for with optimized timeout for inline queries
-        search_timeout = (
-            35  # Increased timeout to allow for authentication and search
-        )
+        # Note: Removed blocking "Please wait while we search music platforms" message
+        # Streamrip platform-specific search now sends results directly
 
-        # Perform search with timeout protection
-        results = await asyncio.wait_for(
+        # Perform search without timeout - let it complete naturally
+        # Use asyncio.shield to prevent cancellation and ensure completion
+        results = await asyncio.shield(
             perform_inline_streamrip_search(
                 query, platform, media_type, inline_query.from_user.id
-            ),
-            timeout=search_timeout,
+            )
         )
 
         if not results:
@@ -2099,13 +3078,16 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
             message_text += f"📁 <b>Type:</b> {media_type_name}\n\n"
             message_text += "⏳ <i>Preparing quality selection...</i>"
 
-            # Create reply markup with callback button that will trigger quality selector
+            # Create reply markup with URL button that will trigger quality selector in private message
+            # This ensures users get quality selection in private message instead of spamming groups
+            start_command = f"streamrip_{encrypted_id}"
+
             reply_markup = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
                             text=f"🎵 Download {media_type_name}",
-                            callback_data=callback_data,
+                            url=f"https://t.me/{TgClient.NAME}?start={start_command}",
                         )
                     ],
                     [
@@ -2117,15 +3099,23 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
                 ]
             )
 
-            inline_results.append(
-                InlineQueryResultArticle(
-                    id=result_id,
-                    title=display_title,
-                    description=description,
-                    input_message_content=InputTextMessageContent(message_text),
-                    reply_markup=reply_markup,
-                )
-            )
+            # Add thumbnail support for streamrip inline results
+            thumbnail_url = result.get("cover_url") or result.get("thumbnail_url")
+
+            # Create inline result with thumbnail if available
+            inline_result_params = {
+                "id": result_id,
+                "title": display_title,
+                "description": description,
+                "input_message_content": InputTextMessageContent(message_text),
+                "reply_markup": reply_markup,
+            }
+
+            # Add thumbnail if available (Pyrogram uses 'thumb_url')
+            if thumbnail_url and thumbnail_url.startswith("http"):
+                inline_result_params["thumb_url"] = thumbnail_url
+
+            inline_results.append(InlineQueryResultArticle(**inline_result_params))
 
         # Answer the inline query with timeout protection
         try:
@@ -2192,6 +3182,12 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
             return
         if "QUERY_TOO_OLD" in error_msg or "query too old" in error_msg.lower():
             LOGGER.warning("Query too old - search took too long")
+            return
+        if "Connection lost" in error_msg or "SSL shutdown timed out" in error_msg:
+            LOGGER.warning("Connection lost during search - network issue")
+            return
+        if "Connector is closed" in error_msg or "Session is closed" in error_msg:
+            LOGGER.warning("Session closed during search - connection issue")
             return
 
         # Try to answer with error message for other errors (with timeout protection)
@@ -2309,9 +3305,6 @@ async def handle_streamrip_callback(_, callback_query):
             # Create a minimal message-like object for the listener
             from types import SimpleNamespace
 
-            # Import TgClient to get the bot instance for sending messages
-            from bot.core.aeon_client import TgClient
-
             fake_message = SimpleNamespace()
             fake_message.from_user = callback_query.from_user
             fake_message.chat = SimpleNamespace()
@@ -2404,6 +3397,151 @@ async def handle_streamrip_callback(_, callback_query):
             await callback_query.answer(f"❌ Error: {e!s}", show_alert=True)
 
 
+async def handle_streamrip_start_command(client, message):
+    """Handle start commands for streamrip downloads from inline search results."""
+    try:
+        # Initialize streamrip on-demand
+        from bot.helper.streamrip_utils.streamrip_config import (
+            ensure_streamrip_initialized,
+        )
+
+        if not await ensure_streamrip_initialized():
+            await send_message(
+                message,
+                "❌ Streamrip is not available or not configured properly.",
+            )
+            return
+
+        # Extract the encrypted ID from the start command
+        if len(message.command) < 2 or not message.command[1].startswith(
+            "streamrip_"
+        ):
+            await send_message(
+                message,
+                "❌ Invalid streamrip start command format.",
+            )
+            return
+
+        # Get the encrypted ID
+        encrypted_id = message.command[1].replace("streamrip_", "")
+
+        # Decrypt the result data
+        result_data_str = decrypt_streamrip_data(encrypted_id)
+
+        if result_data_str == encrypted_id:  # Decryption failed
+            LOGGER.error("Decryption failed for start command data")
+            await send_message(
+                message,
+                "❌ Invalid or expired link. Please search again.",
+            )
+            return
+
+        # Parse the result data
+        try:
+            import ast
+
+            result_data = ast.literal_eval(result_data_str)
+        except (ValueError, SyntaxError) as e:
+            LOGGER.error(f"Failed to parse streamrip result data: {e}")
+            await send_message(
+                message,
+                "❌ Invalid result data. Please search again.",
+            )
+            return
+
+        # Check if streamrip is enabled
+        if not Config.STREAMRIP_ENABLED:
+            await send_message(
+                message,
+                "❌ Streamrip downloads are disabled!",
+            )
+            return
+
+        # Extract data
+        url = result_data.get("url", "")
+        platform = result_data.get("platform", "")
+        media_type = result_data.get("type", "track")
+        title = result_data.get("title", "Unknown")
+        artist = result_data.get("artist", "Unknown")
+
+        if not url:
+            await send_message(
+                message,
+                "❌ Invalid download URL. Please search again.",
+            )
+            return
+
+        # Send initial message with track info and start command
+        start_command = f"/start streamrip_{encrypted_id}"
+        info_msg = "<b>🎵 Streamrip Download</b>\n\n"
+        info_msg += f"<code>{start_command}</code>\n\n"
+        info_msg += f"🎵 <b>{title}</b>\n"
+        if artist:
+            info_msg += f"👤 <b>Artist:</b> {artist}\n"
+        info_msg += f"🎧 <b>Platform:</b> {platform.title()}\n"
+        info_msg += f"📁 <b>Type:</b> {media_type.title()}\n\n"
+        info_msg += "⏳ <i>Preparing quality selection...</i>"
+
+        status_msg = await send_message(message, info_msg)
+
+        # Create listener for download
+        from bot.helper.listeners.streamrip_listener import StreamripListener
+
+        listener = StreamripListener(message, isLeech=True)
+
+        # Set platform and media_type attributes for telegram uploader
+        listener.platform = platform
+        listener.media_type = media_type
+
+        # Show quality selector
+        from bot.helper.streamrip_utils.quality_selector import show_quality_selector
+
+        selection = await show_quality_selector(listener, platform, media_type)
+
+        if not selection:
+            # Update status message to show cancellation
+            cancel_msg = "<b>🎵 Streamrip Download</b>\n\n"
+            cancel_msg += f"<code>{start_command}</code>\n\n"
+            cancel_msg += f"🎵 <b>{title}</b>\n"
+            if artist:
+                cancel_msg += f"👤 <b>Artist:</b> {artist}\n"
+            cancel_msg += f"🎧 <b>Platform:</b> {platform.title()}\n"
+            cancel_msg += f"📁 <b>Type:</b> {media_type.title()}\n\n"
+            cancel_msg += "❌ <i>Quality selection cancelled.</i>"
+
+            await edit_message(status_msg, cancel_msg)
+            return
+
+        quality = selection["quality"]
+        codec = selection["codec"]
+
+        # Update status message to show download starting
+        download_msg = "<b>🎵 Streamrip Download</b>\n\n"
+        download_msg += f"<code>{start_command}</code>\n\n"
+        download_msg += f"🎵 <b>{title}</b>\n"
+        if artist:
+            download_msg += f"👤 <b>Artist:</b> {artist}\n"
+        download_msg += f"🎧 <b>Platform:</b> {platform.title()}\n"
+        download_msg += f"📁 <b>Type:</b> {media_type.title()}\n\n"
+        download_msg += f"🚀 <i>Starting download with {quality} quality...</i>"
+
+        await edit_message(status_msg, download_msg)
+
+        # Start download
+        from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
+            add_streamrip_download,
+        )
+
+        await add_streamrip_download(listener, url, quality, codec, False)
+
+    except Exception as e:
+        LOGGER.error(f"Error in streamrip start command handler: {e}")
+        await send_message(
+            message,
+            f"❌ Error: {e!s}",
+        )
+
+
 def init_streamrip_inline_search(bot, register_inline=True):
     """Initialize streamrip inline search handlers."""
     if not Config.STREAMRIP_ENABLED:
@@ -2417,16 +3555,66 @@ def init_streamrip_inline_search(bot, register_inline=True):
 
     # Register streamrip inline query handler only if requested
     if register_inline:
-        bot.add_handler(InlineQueryHandler(inline_streamrip_search))
+        # Create a wrapper to handle task creation and exception handling
+        async def safe_inline_streamrip_search(client, inline_query):
+            """Wrapper for inline_streamrip_search that handles exceptions properly"""
+            try:
+                await inline_streamrip_search(client, inline_query)
+            except Exception as e:
+                error_msg = str(e)
+                # Don't log QUERY_ID_INVALID errors as they're expected
+                if (
+                    "QUERY_ID_INVALID" not in error_msg
+                    and "query id is invalid" not in error_msg.lower()
+                ):
+                    LOGGER.error(
+                        f"Unhandled error in inline Streamrip search: {error_msg}"
+                    )
+                # Don't try to answer if query is invalid
+                if (
+                    "QUERY_ID_INVALID" in error_msg
+                    or "query id is invalid" in error_msg.lower()
+                ):
+                    return
+                # Try to answer with error for other exceptions
+                try:
+                    await inline_query.answer(
+                        results=[
+                            InlineQueryResultArticle(
+                                id="handler_error",
+                                title="🔍 Search Error",
+                                description="An unexpected error occurred",
+                                input_message_content=InputTextMessageContent(
+                                    "❌ **Search Error**\n\nAn unexpected error occurred. Please try again."
+                                ),
+                            )
+                        ],
+                        cache_time=5,
+                    )
+                except Exception:
+                    pass  # Ignore errors when trying to answer
+
+        bot.add_handler(InlineQueryHandler(safe_inline_streamrip_search))
 
     # Register streamrip callback handler for inline results
-    async def debug_streamrip_callback(_, callback_query):
-        await handle_streamrip_callback(_, callback_query)
+    async def safe_streamrip_callback(_, callback_query):
+        """Wrapper for handle_streamrip_callback that handles exceptions properly"""
+        try:
+            await handle_streamrip_callback(_, callback_query)
+        except Exception as e:
+            error_msg = str(e)
+            LOGGER.error(f"Error in Streamrip callback handler: {error_msg}")
+            try:
+                await callback_query.answer(
+                    f"❌ Error: {error_msg}", show_alert=True
+                )
+            except Exception:
+                pass  # Ignore errors when trying to answer
 
     # Create proper filter for streamrip callbacks (including quality selector callbacks)
     streamrip_filter = pyrogram_filters.regex(r"^(streamrip_dl_|srq)")
 
     bot.add_handler(
-        CallbackQueryHandler(debug_streamrip_callback, filters=streamrip_filter),
+        CallbackQueryHandler(safe_streamrip_callback, filters=streamrip_filter),
         group=-1,  # Higher priority than other callback handlers
     )

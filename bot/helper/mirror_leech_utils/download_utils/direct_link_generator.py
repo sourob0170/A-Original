@@ -639,11 +639,12 @@ def uploadee(url):
 
 
 def terabox(url):
+    from bot.core.config_manager import Config
+
     try:
         encoded_url = quote(url)
-        final_url = (
-            f"https://teradlrobot.cheemsbackup.workers.dev/?url={encoded_url}"
-        )
+        proxy_url = Config.TERABOX_PROXY.rstrip("/")
+        final_url = f"{proxy_url}/?url={encoded_url}"
         return final_url
     except Exception as e:
         raise DirectDownloadLinkException("ERROR: Failed to bypass Terabox URL")

@@ -29,6 +29,7 @@ from .help_messages import (
     STREAMRIP_HELP_DICT,
     VT_HELP_DICT,
     YT_HELP_DICT,
+    ZOTIFY_HELP_DICT,
 )
 from .telegraph_helper import telegraph
 
@@ -66,6 +67,7 @@ def create_help_buttons():
     _build_command_usage(AI_HELP_DICT, "ai")
     _build_command_usage(VT_HELP_DICT, "virustotal")
     _build_command_usage(STREAMRIP_HELP_DICT, "streamrip")
+    _build_command_usage(ZOTIFY_HELP_DICT, "zotify")
 
 
 def bt_selection_buttons(id_):
@@ -1138,11 +1140,8 @@ def check_storage_threshold(size, threshold, arch=False):
         free = usage.free
         total = usage.total
 
-        # Log current disk usage
-        used_percent = (usage.used / total) * 100
-        LOGGER.info(
-            f"Current disk usage: {used_percent:.2f}% (Free: {get_readable_file_size(free)})"
-        )
+        # Calculate disk usage (logging will be done in consolidated critical resource logs)
+        (usage.used / total) * 100
 
         # Calculate space needed based on whether it's an archive
         space_needed = size
@@ -1166,13 +1165,9 @@ def check_storage_threshold(size, threshold, arch=False):
         # Check if there's enough space
         has_enough_space = (free - space_needed) >= threshold
 
-        # Log the result
+        # Log the result (only log failures, success will be in consolidated critical resource logs)
         if has_enough_space:
-            LOGGER.info(
-                f"Storage check passed: Need {get_readable_file_size(space_needed)}, "
-                f"have {get_readable_file_size(free)}, "
-                f"threshold {get_readable_file_size(threshold)}"
-            )
+            pass  # Success logging handled in consolidated critical resource logs
         else:
             LOGGER.warning(
                 f"Storage check failed: Need {get_readable_file_size(space_needed)}, "

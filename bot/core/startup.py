@@ -70,6 +70,50 @@ async def update_nzb_options():
     nzb_options.update(no)
 
 
+async def load_zotify_credentials_from_db():
+    """Load Zotify credentials from database and recreate credentials file"""
+    try:
+        from bot import LOGGER
+        from bot.helper.zotify_utils.zotify_config import zotify_config
+
+        # Check if we have any users with Zotify credentials
+        if database.db is not None:
+            # Look for any user with Zotify credentials (prioritize owner)
+            owner_id = getattr(Config, "OWNER_ID", None)
+            user_with_creds = None
+
+            if owner_id:
+                # Check owner first
+                owner_data = await database.db.users.find_one({"_id": owner_id})
+                if owner_data and "ZOTIFY_CREDENTIALS" in owner_data:
+                    user_with_creds = owner_data
+
+            # If owner doesn't have credentials, check other users
+            if not user_with_creds:
+                user_data = await database.db.users.find_one(
+                    {"ZOTIFY_CREDENTIALS": {"$exists": True}}
+                )
+                if user_data:
+                    user_with_creds = user_data
+                    LOGGER.info(
+                        f"Found Zotify credentials for user {user_data['_id']}"
+                    )
+
+            # If we found credentials, recreate the file
+            if user_with_creds and "ZOTIFY_CREDENTIALS" in user_with_creds:
+                credentials = user_with_creds["ZOTIFY_CREDENTIALS"]
+                success = zotify_config.save_credentials_to_file(credentials)
+                if not success:
+                    LOGGER.error(
+                        "❌ Failed to restore Zotify credentials from database"
+                    )
+            else:
+                LOGGER.info("No Zotify credentials found in database")
+
+    except Exception as e:
+        LOGGER.error(f"Error loading Zotify credentials from database: {e}")
+
+
 async def load_settings():
     if not Config.DATABASE_URL:
         return
@@ -182,6 +226,7 @@ async def load_settings():
                 thumb_path = f"thumbnails/{uid}.jpg"
                 rclone_config_path = f"rclone/{uid}.conf"
                 token_path = f"tokens/{uid}.pickle"
+                youtube_token_path = f"tokens/{uid}_youtube.pickle"
                 if row.get("THUMBNAIL"):
                     async with aiopen(thumb_path, "wb+") as f:
                         await f.write(row["THUMBNAIL"])
@@ -194,6 +239,11 @@ async def load_settings():
                     async with aiopen(token_path, "wb+") as f:
                         await f.write(row["TOKEN_PICKLE"])
                     row["TOKEN_PICKLE"] = token_path
+                # Load YouTube token pickle if available
+                if row.get("YOUTUBE_TOKEN_PICKLE"):
+                    async with aiopen(youtube_token_path, "wb+") as f:
+                        await f.write(row["YOUTUBE_TOKEN_PICKLE"])
+                    row["YOUTUBE_TOKEN_PICKLE"] = youtube_token_path
                 # Load user cookies if available
                 cookies_path = f"cookies/{uid}.txt"
                 if row.get("USER_COOKIES"):
@@ -217,6 +267,9 @@ async def load_settings():
 
             LOGGER.info("Users data has been imported from Database")
 
+        # Load Zotify credentials from database if available
+        await load_zotify_credentials_from_db()
+
         if await database.db.rss[BOT_ID].find_one():
             rows = database.db.rss[BOT_ID].find({})
             async for row in rows:
@@ -224,19 +277,6 @@ async def load_settings():
                 del row["_id"]
                 rss_dict[user_id] = row
             LOGGER.info("Rss data has been imported from Database.")
-
-        # Initialize streamrip configuration
-        if Config.STREAMRIP_ENABLED:
-            try:
-                from bot.helper.streamrip_utils.streamrip_config import (
-                    streamrip_config,
-                )
-
-                await streamrip_config.initialize()
-                LOGGER.info("Streamrip configuration initialized successfully")
-            except Exception as e:
-                LOGGER.error(f"Failed to initialize streamrip configuration: {e}")
-                Config.STREAMRIP_ENABLED = False
 
 
 async def save_settings():
@@ -599,18 +639,17 @@ async def start_bot():
 
 async def wait_for_bot_and_start_checker():
     """Wait for TgClient.bot to be initialized and then start the scheduled deletion checker"""
-    # Check less frequently to reduce resource usage
+    # Check immediately and then with short intervals
     # The bot initialization is a one-time event that happens during startup
-    await sleep(60)  # Initial delay to allow bot to initialize normally
 
-    # Check a few times with longer intervals
-    for _ in range(5):  # Try 5 times
+    # Check a few times with short intervals
+    for _ in range(10):  # Try 10 times
         if hasattr(TgClient, "bot") and TgClient.bot is not None:
             LOGGER.info(
                 "TgClient.bot is now initialized, starting scheduled deletion checker",
             )
             create_task(scheduled_deletion_checker())  # noqa: RUF006
             return
-        await sleep(60)  # Check every minute
+        await sleep(5)  # Check every 5 seconds instead of 60
 
     # If we get here, the bot still isn't initialized after 5 minutes

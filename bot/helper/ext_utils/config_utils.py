@@ -396,7 +396,7 @@ async def reset_streamrip_configs(database):
     streamrip_global_configs = {
         "STREAMRIP_ENABLED": False,
         "STREAMRIP_CONCURRENT_DOWNLOADS": 4,
-        "STREAMRIP_MAX_SEARCH_RESULTS": 20,
+        "STREAMRIP_MAX_SEARCH_RESULTS": 200,
         "STREAMRIP_ENABLE_DATABASE": True,
         "STREAMRIP_AUTO_CONVERT": True,
         "STREAMRIP_DEFAULT_QUALITY": 3,
@@ -432,14 +432,12 @@ async def reset_streamrip_configs(database):
         "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS": True,
         "STREAMRIP_SOUNDCLOUD_CLIENT_ID": "",
         "STREAMRIP_SOUNDCLOUD_APP_VERSION": "",
-        "STREAMRIP_YOUTUBE_ENABLED": True,
         "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS": False,
         "STREAMRIP_FILENAME_TEMPLATE": "",
         "STREAMRIP_FOLDER_TEMPLATE": "",
         "STREAMRIP_EMBED_COVER_ART": True,
         "STREAMRIP_SAVE_COVER_ART": True,
         "STREAMRIP_COVER_ART_SIZE": "large",
-        "STREAMRIP_LIMIT": 0.0,
         "STREAMRIP_MAX_CONNECTIONS": 6,
         "STREAMRIP_REQUESTS_PER_MINUTE": 60,
         "STREAMRIP_SOURCE_SUBDIRECTORIES": False,
@@ -456,10 +454,7 @@ async def reset_streamrip_configs(database):
         "STREAMRIP_QOBUZ_FILTERS_FEATURES": False,
         "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS": False,
         "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER": False,
-        "STREAMRIP_ARTWORK_EMBED": True,
-        "STREAMRIP_ARTWORK_EMBED_SIZE": "large",
         "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH": -1,
-        "STREAMRIP_ARTWORK_SAVE_ARTWORK": True,
         "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH": -1,
         # Database Configuration
         "STREAMRIP_DATABASE_DOWNLOADS_ENABLED": True,
@@ -487,7 +482,7 @@ async def reset_streamrip_configs(database):
         # CLI Configuration
         "STREAMRIP_CLI_TEXT_OUTPUT": True,
         "STREAMRIP_CLI_PROGRESS_BARS": True,
-        "STREAMRIP_CLI_MAX_SEARCH_RESULTS": 100,
+        "STREAMRIP_CLI_MAX_SEARCH_RESULTS": 200,
         # Misc Configuration
         "STREAMRIP_MISC_CHECK_FOR_UPDATES": True,
     }
@@ -895,3 +890,185 @@ async def reset_tool_configs(tool_name, database):
         # Update the database if there are user configurations to reset
         if user_configs_to_reset:
             await database.update_user_data(user_id)
+
+
+async def reset_youtube_configs(database):
+    """Reset all YouTube-related configurations to their default values when YouTube upload is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific YouTube configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # YouTube-related keys to reset
+        youtube_keys = [
+            "YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+            "YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+            "YOUTUBE_UPLOAD_DEFAULT_TAGS",
+            "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+        ]
+
+        # Reset each YouTube-related key
+        for key in youtube_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Remove user's YouTube token file if it exists
+        youtube_token_path = f"tokens/{user_id}_youtube.pickle"
+        if await aiopath.exists(youtube_token_path):
+            try:
+                await aioremove(youtube_token_path)
+            except Exception as e:
+                from bot import LOGGER
+
+                LOGGER.error(f"Error removing YouTube token for user {user_id}: {e}")
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Reset global YouTube configurations to defaults
+    youtube_global_configs = {
+        "YOUTUBE_UPLOAD_ENABLED": False,
+        "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "unlisted",
+        "YOUTUBE_UPLOAD_DEFAULT_CATEGORY": "22",
+        "YOUTUBE_UPLOAD_DEFAULT_TAGS": "",
+        "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Uploaded by AIM",
+    }
+
+    # Update global configurations
+    for key, default_value in youtube_global_configs.items():
+        Config.set(key, default_value)
+
+    # Update the database with global configurations
+    await database.update_config(youtube_global_configs)
+
+
+async def reset_zotify_configs(database):
+    """Reset all zotify-related configurations to their default values when zotify is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific zotify configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Zotify-related keys to reset
+        zotify_keys = [
+            "ZOTIFY_CREDENTIALS_PATH",
+            "ZOTIFY_ALBUM_LIBRARY",
+            "ZOTIFY_PODCAST_LIBRARY",
+            "ZOTIFY_PLAYLIST_LIBRARY",
+            "ZOTIFY_OUTPUT_ALBUM",
+            "ZOTIFY_OUTPUT_PLAYLIST_TRACK",
+            "ZOTIFY_OUTPUT_PLAYLIST_EPISODE",
+            "ZOTIFY_OUTPUT_PODCAST",
+            "ZOTIFY_OUTPUT_SINGLE",
+            "ZOTIFY_DOWNLOAD_QUALITY",
+            "ZOTIFY_AUDIO_FORMAT",
+            "ZOTIFY_ARTWORK_SIZE",
+            "ZOTIFY_TRANSCODE_BITRATE",
+            "ZOTIFY_DOWNLOAD_REAL_TIME",
+            "ZOTIFY_REPLACE_EXISTING",
+            "ZOTIFY_SKIP_DUPLICATES",
+            "ZOTIFY_SKIP_PREVIOUS",
+            "ZOTIFY_SAVE_METADATA",
+            "ZOTIFY_SAVE_GENRE",
+            "ZOTIFY_ALL_ARTISTS",
+            "ZOTIFY_LYRICS_FILE",
+            "ZOTIFY_LYRICS_ONLY",
+            "ZOTIFY_SAVE_SUBTITLES",
+            "ZOTIFY_CREATE_PLAYLIST_FILE",
+            "ZOTIFY_FFMPEG_PATH",
+            "ZOTIFY_FFMPEG_ARGS",
+            "ZOTIFY_LANGUAGE",
+            "ZOTIFY_PRINT_PROGRESS",
+            "ZOTIFY_PRINT_DOWNLOADS",
+            "ZOTIFY_PRINT_ERRORS",
+            "ZOTIFY_PRINT_WARNINGS",
+            "ZOTIFY_PRINT_SKIPS",
+            "ZOTIFY_MATCH_EXISTING",
+        ]
+
+        # Reset each zotify-related key
+        for key in zotify_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Reset global zotify configurations to defaults (from config_manager.py)
+    zotify_global_configs = {
+        "ZOTIFY_ENABLED": False,
+        "ZOTIFY_CREDENTIALS_PATH": "./zotify_credentials.json",
+        "ZOTIFY_ALBUM_LIBRARY": "Music/Zotify Albums",
+        "ZOTIFY_PODCAST_LIBRARY": "Music/Zotify Podcasts",
+        "ZOTIFY_PLAYLIST_LIBRARY": "Music/Zotify Playlists",
+        "ZOTIFY_OUTPUT_ALBUM": "{album_artist}/{album}/{track_num:02d}. {artists} - {title}",
+        "ZOTIFY_OUTPUT_PLAYLIST_TRACK": "{playlist}/{artists} - {title}",
+        "ZOTIFY_OUTPUT_PLAYLIST_EPISODE": "{playlist}/{episode_number} - {title}",
+        "ZOTIFY_OUTPUT_PODCAST": "{podcast}/{episode_number} - {title}",
+        "ZOTIFY_OUTPUT_SINGLE": "{artists} - {title}",
+        "ZOTIFY_DOWNLOAD_QUALITY": "auto",
+        "ZOTIFY_AUDIO_FORMAT": "vorbis",
+        "ZOTIFY_ARTWORK_SIZE": "large",
+        "ZOTIFY_TRANSCODE_BITRATE": -1,
+        "ZOTIFY_DOWNLOAD_REAL_TIME": False,
+        "ZOTIFY_REPLACE_EXISTING": False,
+        "ZOTIFY_SKIP_DUPLICATES": True,
+        "ZOTIFY_SKIP_PREVIOUS": True,
+        "ZOTIFY_SAVE_METADATA": True,
+        "ZOTIFY_SAVE_GENRE": False,
+        "ZOTIFY_ALL_ARTISTS": True,
+        "ZOTIFY_LYRICS_FILE": False,
+        "ZOTIFY_LYRICS_ONLY": False,
+        "ZOTIFY_SAVE_SUBTITLES": False,
+        "ZOTIFY_CREATE_PLAYLIST_FILE": True,
+        "ZOTIFY_FFMPEG_PATH": "",
+        "ZOTIFY_FFMPEG_ARGS": "",
+        "ZOTIFY_LANGUAGE": "en",
+        "ZOTIFY_PRINT_PROGRESS": True,
+        "ZOTIFY_PRINT_DOWNLOADS": False,
+        "ZOTIFY_PRINT_ERRORS": True,
+        "ZOTIFY_PRINT_WARNINGS": True,
+        "ZOTIFY_PRINT_SKIPS": False,
+        "ZOTIFY_MATCH_EXISTING": False,
+    }
+
+    # Update global configurations
+    for key, default_value in zotify_global_configs.items():
+        Config.set(key, default_value)
+
+    # Update the database with global configurations
+    await database.update_config(zotify_global_configs)
+
+    # Remove zotify config files if they exist
+    from bot import LOGGER
+
+    # Remove global zotify credentials file
+    zotify_credentials_path = "zotify_credentials.json"
+    if await aiopath.exists(zotify_credentials_path):
+        try:
+            await aioremove(zotify_credentials_path)
+            LOGGER.info("Removed global zotify credentials file")
+        except Exception as e:
+            LOGGER.error(f"Error removing zotify credentials file: {e}")
+
+    # Remove user-specific zotify configs
+    for user_id in user_data:
+        user_credentials_path = f"zotify_configs/{user_id}_credentials.json"
+        if await aiopath.exists(user_credentials_path):
+            try:
+                await aioremove(user_credentials_path)
+                LOGGER.info(f"Removed zotify credentials for user {user_id}")
+            except Exception as e:
+                LOGGER.error(
+                    f"Error removing zotify credentials for user {user_id}: {e}"
+                )

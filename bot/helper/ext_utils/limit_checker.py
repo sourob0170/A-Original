@@ -112,7 +112,6 @@ async def limit_checker(
     isPlayList=None,
     is_jd=False,
     is_nzb=False,
-    isStreamrip=False,
 ):
     """Check size limits with improved memory management.
 
@@ -129,7 +128,7 @@ async def limit_checker(
         isPlayList: Number of items in playlist
         is_jd: Whether it's a JDownloader download
         is_nzb: Whether it's an NZB download
-        isStreamrip: Whether it's a streamrip download
+
 
     Returns:
         None: If no limit exceeded
@@ -219,10 +218,14 @@ async def limit_checker(
             error_msg = f"⚠️ Torrent limit is {get_readable_file_size(limit)}. Your task has been cancelled."
             return await send_limit_error(listener, error_msg)
 
-    elif isStreamrip and (STREAMRIP_LIMIT := Config.STREAMRIP_LIMIT):
-        limit = STREAMRIP_LIMIT * 1024**3
+    elif (
+        hasattr(listener, "tool")
+        and listener.tool == "zotify"
+        and (ZOTIFY_LIMIT := Config.ZOTIFY_LIMIT)
+    ):
+        limit = ZOTIFY_LIMIT * 1024**3
         if size > limit:
-            error_msg = f"⚠️ Streamrip limit is {get_readable_file_size(limit)}. Your task has been cancelled."
+            error_msg = f"⚠️ Zotify limit is {get_readable_file_size(limit)}. Your task has been cancelled."
             return await send_limit_error(listener, error_msg)
 
     elif DIRECT_LIMIT := Config.DIRECT_LIMIT:

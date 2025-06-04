@@ -187,7 +187,8 @@ LEECH_LIMIT = 0  # Maximum size for leech operations in GB (0 = unlimited)
 JD_LIMIT = 0  # Maximum size for JDownloader downloads in GB (0 = unlimited)
 NZB_LIMIT = 0  # Maximum size for NZB downloads in GB (0 = unlimited)
 PLAYLIST_LIMIT = 0  # Maximum number of videos in a playlist (0 = unlimited)
-STREAMRIP_LIMIT = 0  # GB (0 = no limit)
+
+ZOTIFY_LIMIT = 0  # Maximum size for Zotify downloads in GB (0 = unlimited)
 DAILY_TASK_LIMIT = 0  # Maximum number of tasks per day per user (0 = unlimited)
 DAILY_MIRROR_LIMIT = 0  # Maximum mirror size in GB per day per user (0 = unlimited)
 DAILY_LEECH_LIMIT = 0  # Maximum leech size in GB per day per user (0 = unlimited)
@@ -196,6 +197,9 @@ BOT_MAX_TASKS = (
     0  # Maximum number of concurrent tasks the bot can handle (0 = unlimited)
 )
 USER_TIME_INTERVAL = 0  # Minimum time between user tasks in seconds (0 = no delay)
+STATUS_UPDATE_INTERVAL = (
+    3  # Status update interval in seconds (minimum 2, recommended: 3-5)
+)
 STATUS_LIMIT = 10  # Number of tasks to display in status message (recommended: 4-10)
 SEARCH_LIMIT = 0  # Maximum number of search results to display (0 = unlimited)
 
@@ -228,6 +232,9 @@ VT_MAX_FILE_SIZE = (
     33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
 )
 TRUECALLER_API_URL = ""  # Truecaller API URL for phone number lookup
+
+# Direct Link Generator Settings
+TERABOX_PROXY = "https://teradlrobot.cheemsbackup.workers.dev/"  # Terabox proxy URL for bypassing restrictions
 
 # Custom template for IMDB results formatting.
 IMDB_TEMPLATE = """<b>🎬 Title:</b> <code>{title}</code> [{year}]
@@ -394,12 +401,125 @@ STREAMRIP_FILEPATHS_TRUNCATE_TO = 120  # Truncate filenames to length
 STREAMRIP_LASTFM_SOURCE = "qobuz"  # Last.fm source platform
 STREAMRIP_LASTFM_FALLBACK_SOURCE = ""  # Last.fm fallback source platform
 STREAMRIP_CLI_TEXT_OUTPUT = True  # Enable CLI text output
-STREAMRIP_CLI_PROGRESS_BARS = True  # Show CLI progress bars
+STREAMRIP_CLI_PROGRESS_BARS = False  # Show CLI progress bars (disabled for bot)
 STREAMRIP_CLI_MAX_SEARCH_RESULTS = 200  # Max CLI search results
 
 # Streamrip Miscellaneous
 STREAMRIP_MISC_CHECK_FOR_UPDATES = True  # Check for streamrip updates
 STREAMRIP_MISC_VERSION = "2.0.6"  # Streamrip version
+
+# Zotify Settings - Spotify Music Downloader
+ZOTIFY_ENABLED = True  # Enable/disable Zotify feature for Spotify downloads
+
+# Zotify Authentication
+ZOTIFY_CREDENTIALS_PATH = (
+    "./zotify_credentials.json"  # Path to Spotify credentials file
+)
+
+# Zotify Library Paths - Where downloaded content is organized
+ZOTIFY_ALBUM_LIBRARY = "Music/Zotify Albums"  # Directory for album downloads
+ZOTIFY_PODCAST_LIBRARY = "Music/Zotify Podcasts"  # Directory for podcast downloads
+ZOTIFY_PLAYLIST_LIBRARY = (
+    "Music/Zotify Playlists"  # Directory for playlist downloads
+)
+
+# Zotify Output Templates - How files and folders are named
+ZOTIFY_OUTPUT_ALBUM = "{album_artist}/{album}/{track_num:02d}. {artists} - {title}"  # Album track naming template
+ZOTIFY_OUTPUT_PLAYLIST_TRACK = (
+    "{playlist}/{artists} - {title}"  # Playlist track naming template
+)
+ZOTIFY_OUTPUT_PLAYLIST_EPISODE = (
+    "{playlist}/{episode_number} - {title}"  # Playlist episode naming template
+)
+ZOTIFY_OUTPUT_PODCAST = (
+    "{podcast}/{episode_number} - {title}"  # Podcast episode naming template
+)
+ZOTIFY_OUTPUT_SINGLE = (
+    "{artists} - {title}"  # Single track naming template (not in albums)
+)
+
+# Zotify Quality and Format Settings
+ZOTIFY_DOWNLOAD_QUALITY = "auto"  # Download quality: auto, normal, high, very_high
+ZOTIFY_AUDIO_FORMAT = "vorbis"  # Output audio format: vorbis, mp3, flac, aac, fdk_aac, opus, wav, wavpack
+ZOTIFY_ARTWORK_SIZE = "large"  # Album artwork size: small, medium, large
+ZOTIFY_TRANSCODE_BITRATE = (
+    -1
+)  # Transcoding bitrate in kbps (-1 to use download rate)
+
+# Zotify Download Settings
+ZOTIFY_DOWNLOAD_REAL_TIME = (
+    False  # Download at the same rate as track playback (slower but more stable)
+)
+ZOTIFY_REPLACE_EXISTING = False  # Replace existing files when downloading
+ZOTIFY_SKIP_DUPLICATES = True  # Skip downloading duplicate tracks
+ZOTIFY_SKIP_PREVIOUS = True  # Skip tracks that were previously downloaded
+
+# Zotify Metadata and Files
+ZOTIFY_SAVE_METADATA = True  # Save metadata tags to downloaded files
+ZOTIFY_SAVE_GENRE = False  # Include genre information in metadata
+ZOTIFY_ALL_ARTISTS = True  # Include all artists in metadata (not just main artist)
+ZOTIFY_LYRICS_FILE = False  # Save lyrics as separate .lrc files
+ZOTIFY_LYRICS_ONLY = False  # Download only lyrics without audio
+ZOTIFY_SAVE_SUBTITLES = False  # Save subtitles for podcast episodes
+ZOTIFY_CREATE_PLAYLIST_FILE = True  # Create .m3u playlist files for playlists
+
+# Zotify FFmpeg Settings
+ZOTIFY_FFMPEG_PATH = ""  # FFmpeg binary path or name (empty = use 'xtra', can be full path like '/usr/bin/ffmpeg' or just 'ffmpeg')
+ZOTIFY_FFMPEG_ARGS = ""  # Additional FFmpeg arguments for transcoding
+
+# Zotify Language and Locale
+ZOTIFY_LANGUAGE = "en"  # Language code for metadata and interface
+
+# Zotify Print/Logging Settings
+ZOTIFY_PRINT_PROGRESS = True  # Show download progress in logs
+ZOTIFY_PRINT_DOWNLOADS = False  # Print download start messages
+ZOTIFY_PRINT_ERRORS = True  # Print error messages
+ZOTIFY_PRINT_WARNINGS = True  # Print warning messages
+ZOTIFY_PRINT_SKIPS = False  # Print skip messages for existing files
+
+# Zotify Match Functionality
+ZOTIFY_MATCH_EXISTING = False  # Match existing files for skip functionality
+
+# YouTube Upload Settings
+YOUTUBE_UPLOAD_ENABLED = False  # Enable/disable YouTube upload feature
+YOUTUBE_UPLOAD_DEFAULT_PRIVACY = (
+    "unlisted"  # Default privacy setting: public, unlisted, private
+)
+YOUTUBE_UPLOAD_DEFAULT_CATEGORY = "22"  # Default category ID (22 = People & Blogs)
+YOUTUBE_UPLOAD_DEFAULT_TAGS = (
+    ""  # Default tags for uploaded videos, separated by comma
+)
+YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION = (
+    "Uploaded by Aeon"  # Default description for uploaded videos
+)
+YOUTUBE_UPLOAD_DEFAULT_TITLE = ""  # Default title template (empty = use filename)
+# Title template supports variables: {filename}, {date}, {time}, {size}
+# Examples:
+# "{filename} - {date}" -> "Video.mp4 - 2024-01-15"
+# "My Channel - {filename}" -> "My Channel - Video.mp4"
+# "" (empty) -> Uses cleaned filename as title
+
+# Advanced YouTube API Settings
+YOUTUBE_UPLOAD_DEFAULT_LANGUAGE = (
+    "en"  # Default language for video metadata (ISO 639-1 code)
+)
+YOUTUBE_UPLOAD_DEFAULT_LICENSE = (
+    "youtube"  # License: youtube (standard) or creativeCommon
+)
+YOUTUBE_UPLOAD_EMBEDDABLE = True  # Allow video to be embedded on other websites
+YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE = True  # Allow public to see video statistics
+YOUTUBE_UPLOAD_MADE_FOR_KIDS = (
+    False  # Mark videos as made for kids (COPPA compliance)
+)
+YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS = True  # Notify subscribers when video is uploaded
+YOUTUBE_UPLOAD_LOCATION_DESCRIPTION = ""  # Location description for videos
+YOUTUBE_UPLOAD_RECORDING_DATE = (
+    ""  # Recording date (YYYY-MM-DD format, empty = upload date)
+)
+
+
+YOUTUBE_UPLOAD_AUTO_LEVELS = False  # Auto-enhance video levels
+YOUTUBE_UPLOAD_STABILIZE = False  # Auto-stabilize shaky videos
 
 # Media Tools Settings
 MEDIA_TOOLS_ENABLED = (

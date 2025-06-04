@@ -1,3 +1,3 @@
-FROM ubuntu:25.04
+FROM ubuntu:latest
 COPY . .
 RUN bash Aeon

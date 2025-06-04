@@ -126,9 +126,6 @@ class Config:
     STREAMRIP_SAVE_COVER_ART: bool = True
     STREAMRIP_COVER_ART_SIZE: str = "large"
 
-    # Streamrip Limits
-    STREAMRIP_LIMIT: float = 0  # GB
-
     # Streamrip Downloads Configuration
     STREAMRIP_MAX_CONNECTIONS: int = 6
     STREAMRIP_REQUESTS_PER_MINUTE: int = 60
@@ -164,6 +161,96 @@ class Config:
     STREAMRIP_DATABASE_DOWNLOADS_PATH: str = "./downloads.db"
     STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED: bool = True
     STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH: str = "./failed_downloads.db"
+
+    # Zotify Settings - Based on official Zotify CONFIG_VALUES
+    ZOTIFY_ENABLED: bool = True
+
+    # Zotify Authentication
+    ZOTIFY_CREDENTIALS_PATH: str = "./zotify_credentials.json"
+
+    # Zotify Library Paths (from LIBRARY_PATHS)
+    ZOTIFY_ALBUM_LIBRARY: str = "Music/Zotify Albums"
+    ZOTIFY_PODCAST_LIBRARY: str = "Music/Zotify Podcasts"
+    ZOTIFY_PLAYLIST_LIBRARY: str = "Music/Zotify Playlists"
+
+    # Zotify Output Templates (from OUTPUT_PATHS and CONFIG_VALUES)
+    ZOTIFY_OUTPUT_ALBUM: str = (
+        "{album_artist}/{album}/{track_num:02d}. {artists} - {title}"
+    )
+    ZOTIFY_OUTPUT_PLAYLIST_TRACK: str = "{playlist}/{artists} - {title}"
+    ZOTIFY_OUTPUT_PLAYLIST_EPISODE: str = "{playlist}/{episode_number} - {title}"
+    ZOTIFY_OUTPUT_PODCAST: str = "{podcast}/{episode_number} - {title}"
+    ZOTIFY_OUTPUT_SINGLE: str = (
+        "{artists} - {title}"  # For single tracks not in albums
+    )
+
+    # Zotify Quality and Format Settings (Optimized for free accounts)
+    ZOTIFY_DOWNLOAD_QUALITY: str = (
+        "normal"  # auto, normal, high, very_high (normal=160kbps max for free)
+    )
+    ZOTIFY_AUDIO_FORMAT: str = "mp3"  # vorbis, mp3, flac, aac, fdk_aac, opus, wav, wavpack (mp3 most compatible)
+    ZOTIFY_ARTWORK_SIZE: str = "medium"  # small, medium, large (medium to reduce bandwidth for free accounts)
+    ZOTIFY_TRANSCODE_BITRATE: int = -1  # -1 to use download rate
+
+    # Zotify Download Settings
+    ZOTIFY_DOWNLOAD_REAL_TIME: bool = False
+    ZOTIFY_REPLACE_EXISTING: bool = False
+    ZOTIFY_SKIP_DUPLICATES: bool = True  # Default True in Zotify
+    ZOTIFY_SKIP_PREVIOUS: bool = True  # Default True in Zotify
+
+    # Zotify Metadata and Files
+    ZOTIFY_SAVE_METADATA: bool = True
+    ZOTIFY_SAVE_GENRE: bool = False
+    ZOTIFY_ALL_ARTISTS: bool = True  # Default True in Zotify
+    ZOTIFY_LYRICS_FILE: bool = False
+    ZOTIFY_LYRICS_ONLY: bool = False
+    ZOTIFY_SAVE_SUBTITLES: bool = False
+    ZOTIFY_CREATE_PLAYLIST_FILE: bool = True
+
+    # Zotify FFmpeg Settings
+    ZOTIFY_FFMPEG_PATH: str = ""
+    ZOTIFY_FFMPEG_ARGS: str = ""
+
+    # Zotify Language and Locale
+    ZOTIFY_LANGUAGE: str = "en"
+
+    # Zotify Print/Logging Settings (from CONFIG_VALUES)
+    ZOTIFY_PRINT_PROGRESS: bool = True
+    ZOTIFY_PRINT_DOWNLOADS: bool = False  # Default False in Zotify
+    ZOTIFY_PRINT_ERRORS: bool = True
+    ZOTIFY_PRINT_WARNINGS: bool = True
+    ZOTIFY_PRINT_SKIPS: bool = False  # Default False in Zotify
+
+    # Zotify Match Functionality (from CONFIG_VALUES)
+    ZOTIFY_MATCH_EXISTING: bool = (
+        False  # Match existing files for skip functionality
+    )
+
+    # Missing CONFIG_VALUES from Zotify (exact 25 total)
+    # Note: We already have most, but these were missing or incorrectly named
+
+    # Zotify Supported Formats (for validation)
+    ZOTIFY_SUPPORTED_AUDIO_FORMATS: ClassVar[list[str]] = [
+        "vorbis",
+        "mp3",
+        "flac",
+        "aac",
+        "fdk_aac",
+        "opus",
+        "wav",
+        "wavpack",
+    ]
+    ZOTIFY_SUPPORTED_QUALITIES: ClassVar[list[str]] = [
+        "auto",
+        "normal",
+        "high",
+        "very_high",
+    ]
+    ZOTIFY_SUPPORTED_ARTWORK_SIZES: ClassVar[list[str]] = [
+        "small",
+        "medium",
+        "large",
+    ]
 
     # Streamrip Conversion Configuration
     STREAMRIP_CONVERSION_ENABLED: bool = False
@@ -249,6 +336,51 @@ class Config:
     # Media Tools Settings
     MEDIA_TOOLS_ENABLED: bool = True
     MEDIAINFO_ENABLED: bool = False
+
+    # YouTube Upload Settings
+    YOUTUBE_UPLOAD_ENABLED: bool = False  # Enable/disable YouTube upload feature
+    YOUTUBE_UPLOAD_DEFAULT_PRIVACY: str = (
+        "unlisted"  # Default privacy setting: public, unlisted, private
+    )
+    YOUTUBE_UPLOAD_DEFAULT_CATEGORY: str = (
+        "22"  # Default category ID (22 = People & Blogs)
+    )
+    YOUTUBE_UPLOAD_DEFAULT_TAGS: str = (
+        ""  # Default tags for uploaded videos, separated by comma
+    )
+    YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION: str = (
+        "Uploaded by AIM"  # Default description for uploaded videos
+    )
+    YOUTUBE_UPLOAD_DEFAULT_TITLE: str = (
+        ""  # Default title template (empty = use filename)
+    )
+
+    # Advanced YouTube API Settings
+    YOUTUBE_UPLOAD_DEFAULT_LANGUAGE: str = (
+        "en"  # Default language for video metadata (ISO 639-1 code)
+    )
+    YOUTUBE_UPLOAD_DEFAULT_LICENSE: str = (
+        "youtube"  # License: youtube (standard) or creativeCommon
+    )
+    YOUTUBE_UPLOAD_EMBEDDABLE: bool = (
+        True  # Allow video to be embedded on other websites
+    )
+    YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE: bool = (
+        True  # Allow public to see video statistics
+    )
+    YOUTUBE_UPLOAD_MADE_FOR_KIDS: bool = (
+        False  # Mark videos as made for kids (COPPA compliance)
+    )
+    YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: bool = (
+        True  # Notify subscribers when video is uploaded
+    )
+    YOUTUBE_UPLOAD_LOCATION_DESCRIPTION: str = ""  # Location description for videos
+    YOUTUBE_UPLOAD_RECORDING_DATE: str = (
+        ""  # Recording date (YYYY-MM-DD format, empty = upload date)
+    )
+
+    YOUTUBE_UPLOAD_AUTO_LEVELS: bool = False  # Auto-enhance video levels
+    YOUTUBE_UPLOAD_STABILIZE: bool = False  # Auto-stabilize shaky videos
 
     # Compression Settings
     COMPRESSION_ENABLED: bool = False
@@ -638,6 +770,7 @@ class Config:
     LEECH_LIMIT: float = 0  # GB
     JD_LIMIT: float = 0  # GB
     NZB_LIMIT: float = 0  # GB
+    ZOTIFY_LIMIT: float = 0  # GB
     PLAYLIST_LIMIT: int = 0  # Number of videos
     DAILY_TASK_LIMIT: int = 0  # Number of tasks per day
     DAILY_MIRROR_LIMIT: float = 0  # GB per day
@@ -647,6 +780,7 @@ class Config:
     BOT_MAX_TASKS: int = (
         0  # Maximum number of concurrent tasks the bot can handle (0 = unlimited)
     )
+    STATUS_UPDATE_INTERVAL: int = 3  # Status update interval in seconds (minimum 2)
     STATUS_LIMIT: int = 10  # Number of tasks to display in status message
     SEARCH_LIMIT: int = (
         0  # Maximum number of search results to display (0 = unlimited)
@@ -718,6 +852,9 @@ class Config:
     VT_API_TIMEOUT: int = 500
     VT_ENABLED: bool = False
     VT_MAX_FILE_SIZE: int = 32 * 1024 * 1024  # 32MB default limit
+
+    # Terabox Proxy Settings
+    TERABOX_PROXY: str = "https://teradlrobot.cheemsbackup.workers.dev/"
 
     HEROKU_APP_NAME: str = ""
     HEROKU_API_KEY: str = ""

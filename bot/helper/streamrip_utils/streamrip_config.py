@@ -20,6 +20,33 @@ class StreamripConfigHelper:
         self.config: StreamripConfig | None = None
         self.config_path: Path | None = None
         self._initialized = False
+        self._initialization_attempted = False
+
+    async def lazy_initialize(self) -> bool:
+        """Lazy initialization - only initialize when needed"""
+        if self._initialized:
+            return True
+
+        if self._initialization_attempted:
+            return False
+
+        success = await self.initialize()
+        self._initialization_attempted = True
+
+        if success:
+            # Enable streamrip if initialization was successful
+            from bot.core.config_manager import Config
+
+            Config.STREAMRIP_ENABLED = True
+
+        else:
+            # Disable streamrip if initialization failed
+            from bot.core.config_manager import Config
+
+            Config.STREAMRIP_ENABLED = False
+            LOGGER.warning("❌ Streamrip disabled due to initialization failure")
+
+        return success
 
     async def initialize(self) -> bool:
         """Initialize streamrip configuration"""
@@ -57,9 +84,7 @@ class StreamripConfigHelper:
                     try:
                         # Try alternative initialization
                         self.config = StreamripConfig.defaults()
-                        LOGGER.info(
-                            "Created default streamrip config using defaults()"
-                        )
+
                     except Exception:
                         # Fallback: create config file manually and load it
                         await self._create_default_config_file()
@@ -678,9 +703,8 @@ max_search_results = 20
                         Config, "STREAMRIP_CLI_TEXT_OUTPUT", True
                     )
                 if hasattr(self.config.session.cli, "progress_bars"):
-                    self.config.session.cli.progress_bars = getattr(
-                        Config, "STREAMRIP_CLI_PROGRESS_BARS", True
-                    )
+                    # Always disable progress bars for bot usage
+                    self.config.session.cli.progress_bars = False
                 if hasattr(self.config.session.cli, "max_search_results"):
                     self.config.session.cli.max_search_results = getattr(
                         Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100
@@ -831,3 +855,8 @@ max_search_results = 20
 
 # Global config helper instance
 streamrip_config = StreamripConfigHelper()
+
+
+async def ensure_streamrip_initialized() -> bool:
+    """Ensure streamrip is initialized and enabled when needed"""
+    return await streamrip_config.lazy_initialize()

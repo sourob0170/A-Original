@@ -3390,6 +3390,25 @@ class TaskConfig:
                 not self.up_dest and default_upload == "gd"
             ) or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
+
+            # Check YouTube upload as fallback when no upload destination is set
+            if not self.up_dest and getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
+                # Check if user has YouTube token based on USER_TOKENS setting
+                from bot.helper.ext_utils.aiofiles_compat import aiopath
+
+                youtube_token_path = f"tokens/{self.user_id}_youtube.pickle"
+                user_tokens_enabled = self.user_dict.get("USER_TOKENS", False)
+
+                if user_tokens_enabled:
+                    # When USER_TOKENS is enabled, only use user's personal token
+                    if await aiopath.exists(youtube_token_path):
+                        self.up_dest = "yt"
+                elif await aiopath.exists(
+                    youtube_token_path
+                ) or await aiopath.exists("youtube_token.pickle"):
+                    # When USER_TOKENS is disabled, check user token first, then fallback to owner token
+                    self.up_dest = "yt"
+
             if not self.up_dest:
                 raise ValueError("No Upload Destination!")
             if is_gdrive_id(self.up_dest):
@@ -3404,6 +3423,10 @@ class TaskConfig:
                 ):
                     self.up_dest = f"mrcc:{self.up_dest}"
                 self.up_dest = self.up_dest.strip("/")
+            elif self.up_dest == "yt" or self.up_dest.startswith("yt:"):
+                # YouTube upload destination - validate that YouTube upload is enabled
+                if not getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
+                    raise ValueError("YouTube upload is disabled!")
             else:
                 raise ValueError("Wrong Upload Destination!")
 

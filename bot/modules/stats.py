@@ -39,6 +39,14 @@ commands = {
         ["python3", "-c", "import streamrip; print(streamrip.__version__)"],
         r"([\d.\w-]+)",
     ),
+    "zotify": (
+        [
+            "python3",
+            "-c",
+            "import importlib.metadata; print(importlib.metadata.version('zotify'))",
+        ],
+        r"([\d.\w-]+)",
+    ),
 }
 
 
@@ -96,7 +104,8 @@ async def bot_stats(_, message):
 <b>Leech Limit:</b> {format_limit(Config.LEECH_LIMIT)}
 <b>JDownloader Limit:</b> {format_limit(Config.JD_LIMIT)}
 <b>NZB Limit:</b> {format_limit(Config.NZB_LIMIT)}
-<b>Streamrip Limit:</b> {format_limit(Config.STREAMRIP_LIMIT)}
+
+<b>Zotify Limit:</b> {format_limit(Config.ZOTIFY_LIMIT)}
 <b>Playlist Limit:</b> {format_limit(Config.PLAYLIST_LIMIT, unit="videos")}
 
 <b>Daily Task Limit:</b> {format_limit(Config.DAILY_TASK_LIMIT, unit="tasks")}
@@ -116,6 +125,7 @@ async def bot_stats(_, message):
 <b>rclone:</b> {commands["rclone"]}
 <b>yt-dlp:</b> {commands["yt-dlp"]}
 <b>streamrip:</b> {commands["streamrip"]}
+<b>zotify:</b> {commands["zotify"]}
 <b>xtra:</b> {commands["xtra"]}
 <b>7z:</b> {commands["7z"]}
 """

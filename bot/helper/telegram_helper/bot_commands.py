@@ -60,3 +60,6 @@ class BotCommands:
     StreamripMirrorCommand = [f"streamripmirror{i}", f"srmirror{i}", f"srm{i}"]
     StreamripLeechCommand = [f"streamripleech{i}", f"srleech{i}", f"srl{i}"]
     StreamripSearchCommand = [f"streamripsearch{i}", f"srsearch{i}", f"srs{i}"]
+    ZotifyMirrorCommand = [f"zotifymirror{i}", f"zmirror{i}", f"zm{i}"]
+    ZotifyLeechCommand = [f"zotifyleech{i}", f"zleech{i}", f"zl{i}"]
+    ZotifySearchCommand = [f"zotifysearch{i}", f"zsearch{i}", f"zs{i}"]

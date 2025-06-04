@@ -147,7 +147,6 @@ DEFAULT_VALUES = {
     "STREAMRIP_SAVE_COVER_ART": False,
     "STREAMRIP_COVER_ART_SIZE": "large",
     # Missing Streamrip Settings
-    "STREAMRIP_LIMIT": 0,
     "STREAMRIP_MAX_CONNECTIONS": 6,
     "STREAMRIP_REQUESTS_PER_MINUTE": 60,
     "STREAMRIP_SOURCE_SUBDIRECTORIES": False,
@@ -205,6 +204,47 @@ DEFAULT_VALUES = {
     "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH": -1,
     "STREAMRIP_ARTWORK_SAVE_ARTWORK": True,
     "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH": -1,
+    # Zotify Settings - Based on official Zotify CONFIG_VALUES
+    "ZOTIFY_ENABLED": True,
+    "ZOTIFY_CREDENTIALS_PATH": "./zotify_credentials.json",
+    "ZOTIFY_ALBUM_LIBRARY": "Music/Zotify Albums",
+    "ZOTIFY_PODCAST_LIBRARY": "Music/Zotify Podcasts",
+    "ZOTIFY_PLAYLIST_LIBRARY": "Music/Zotify Playlists",
+    "ZOTIFY_OUTPUT_ALBUM": "{album_artist}/{album}/Disc {discnumber}/{track_number}. {artists} - {title}",
+    "ZOTIFY_OUTPUT_PLAYLIST_TRACK": "{playlist}/{artists} - {title}",
+    "ZOTIFY_OUTPUT_PLAYLIST_EPISODE": "{playlist}/{episode_number} - {title}",
+    "ZOTIFY_OUTPUT_PODCAST": "{podcast}/{episode_number} - {title}",
+    "ZOTIFY_OUTPUT_SINGLE": "{artists} - {title}",
+    "ZOTIFY_DOWNLOAD_QUALITY": "auto",
+    "ZOTIFY_AUDIO_FORMAT": "vorbis",
+    "ZOTIFY_ARTWORK_SIZE": "large",
+    "ZOTIFY_TRANSCODE_BITRATE": -1,
+    "ZOTIFY_DOWNLOAD_REAL_TIME": False,
+    "ZOTIFY_REPLACE_EXISTING": False,
+    "ZOTIFY_SKIP_DUPLICATES": True,
+    "ZOTIFY_SKIP_PREVIOUS": True,
+    "ZOTIFY_SAVE_METADATA": True,
+    "ZOTIFY_SAVE_GENRE": False,
+    "ZOTIFY_ALL_ARTISTS": True,
+    "ZOTIFY_LYRICS_FILE": False,
+    "ZOTIFY_LYRICS_ONLY": False,
+    "ZOTIFY_SAVE_SUBTITLES": False,
+    "ZOTIFY_CREATE_PLAYLIST_FILE": True,
+    "ZOTIFY_FFMPEG_PATH": "",
+    "ZOTIFY_FFMPEG_ARGS": "",
+    "ZOTIFY_LANGUAGE": "en",
+    "ZOTIFY_PRINT_PROGRESS": True,
+    "ZOTIFY_PRINT_DOWNLOADS": False,
+    "ZOTIFY_PRINT_ERRORS": True,
+    "ZOTIFY_PRINT_WARNINGS": True,
+    "ZOTIFY_PRINT_SKIPS": False,
+    "ZOTIFY_MATCH_EXISTING": False,
+    # YouTube Upload Settings
+    "YOUTUBE_UPLOAD_ENABLED": False,
+    "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "unlisted",
+    "YOUTUBE_UPLOAD_DEFAULT_CATEGORY": "22",
+    "YOUTUBE_UPLOAD_DEFAULT_TAGS": "",
+    "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Uploaded by AIM",
     # Watermark Settings
     "WATERMARK_ENABLED": False,
     "WATERMARK_KEY": "",
@@ -554,6 +594,10 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         # Only show Streamrip Settings button if Streamrip is enabled
         if Config.STREAMRIP_ENABLED:
             buttons.data_button("🎵 Streamrip", "botset streamrip")
+
+        # Only show Zotify Settings button if Zotify is enabled
+        if Config.ZOTIFY_ENABLED:
+            buttons.data_button("🎧 Zotify", "botset zotify")
 
         buttons.data_button("❌ Close", "botset close")
         msg = "<b>Bot Settings</b>\nSelect a category to configure:"
@@ -1205,6 +1249,18 @@ Send one of the following position options:
                 )
                 msg += "<b>Example:</b> <code>24</code> (for daily restart)\n\n"
                 msg += "<b>Note:</b> Minimum value is 1 hour. Regular restarts can help maintain bot stability.\n\n"
+            elif key == "STATUS_UPDATE_INTERVAL":
+                msg += "<b>Status Update Interval</b>\n\n"
+                msg += (
+                    "Set how frequently status messages are updated in seconds.\n\n"
+                )
+                msg += "<b>Examples:</b>\n"
+                msg += "• <code>2</code> - Fast updates (may cause FloodWait)\n"
+                msg += "• <code>3</code> - Balanced (recommended)\n"
+                msg += (
+                    "• <code>5</code> - Slower updates (for high-traffic bots)\n\n"
+                )
+                msg += "<b>Note:</b> Minimum value is 2 seconds. Lower values may trigger Telegram rate limits.\n\n"
             elif key == "TRUECALLER_API_URL":
                 msg += "<b>Truecaller API URL</b>\n\n"
                 msg += "Set the API URL for Truecaller phone number lookup.\n\n"
@@ -1264,6 +1320,7 @@ Send one of the following position options:
                         "MISTRAL_",
                         "DEEPSEEK_",
                         "STREAMRIP_",  # Added STREAMRIP_ to exclude streamrip configs from main config menu
+                        "ZOTIFY_",  # Added ZOTIFY_ to exclude zotify configs from main config menu
                     )
                 )
                 or k
@@ -1281,6 +1338,7 @@ Send one of the following position options:
             "PIL_MEMORY_LIMIT",
             "AUTO_RESTART_ENABLED",
             "AUTO_RESTART_INTERVAL",
+            "STATUS_UPDATE_INTERVAL",
         ]
 
         # Add API settings to the config menu
@@ -1407,6 +1465,7 @@ Send any of these files:
 • cookies.txt
 • .netrc
 • streamrip_config.toml
+• zotify_credentials.json
 • Any other private file
 
 <b>Delete a private file:</b>
@@ -1415,6 +1474,7 @@ Send only the file name as text message.
 <b>Note:</b>
 • Changing .netrc will not take effect for aria2c until restart.
 • streamrip_config.toml will be used for custom streamrip configuration.
+• zotify_credentials.json will be used for Spotify authentication.
 
 <i>Timeout: 60 seconds</i>"""
     elif key == "aria":
@@ -1725,7 +1785,6 @@ Select a tool category to configure its settings."""
         general_settings = [
             "STREAMRIP_ENABLED",
             "STREAMRIP_AUTO_CONVERT",
-            "STREAMRIP_LIMIT",
         ]
 
         for setting in general_settings:
@@ -1761,20 +1820,15 @@ Select a tool category to configure its settings."""
         auto_convert = (
             "✅ Enabled" if Config.STREAMRIP_AUTO_CONVERT else "❌ Disabled"
         )
-        limit = (
-            f"{Config.STREAMRIP_LIMIT} GB" if Config.STREAMRIP_LIMIT else "No Limit"
-        )
 
         msg = f"""<b>🎵 Streamrip General Settings</b> | State: {state}
 
 <b>Status:</b> {enabled}
 <b>Auto Convert:</b> {auto_convert}
-<b>Download Limit:</b> <code>{limit}</code>
 
 <b>Description:</b>
 • <b>Enabled:</b> Master toggle for streamrip functionality
 • <b>Auto Convert:</b> Automatically convert downloaded files after download
-• <b>Download Limit:</b> Maximum download size per task (0 = no limit)
 
 <b>Note:</b>
 Other settings like concurrent downloads, search results, and database tracking have been moved to their dedicated sections for better organization."""
@@ -2611,6 +2665,526 @@ Metadata settings help customize how track information is handled during downloa
 <b>Note:</b>
 These settings primarily affect the streamrip CLI behavior and may not directly impact bot functionality."""
 
+    elif key == "zotify":
+        # Zotify Settings section
+        buttons.data_button("⚙️ General Settings", "botset zotify_general")
+        buttons.data_button("🎵 Quality & Format", "botset zotify_quality")
+        buttons.data_button("🔐 Authentication", "botset zotify_auth")
+        buttons.data_button("📁 Library Paths", "botset zotify_paths")
+        buttons.data_button("📝 Output Templates", "botset zotify_templates")
+        buttons.data_button("🎛️ Download Settings", "botset zotify_download")
+        buttons.data_button("🏷️ Metadata Settings", "botset zotify_metadata")
+        buttons.data_button("🔧 Advanced Settings", "botset zotify_advanced")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+        msg = "<b>🎧 Zotify Settings</b>\nSelect a category to configure:"
+
+    elif key == "zotify_general":
+        # General Zotify Settings
+        general_settings = [
+            "ZOTIFY_ENABLED",
+            "ZOTIFY_DOWNLOAD_REAL_TIME",
+            "ZOTIFY_REPLACE_EXISTING",
+            "ZOTIFY_SKIP_DUPLICATES",
+            "ZOTIFY_SKIP_PREVIOUS",
+        ]
+
+        for setting in general_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "ZOTIFY_ENABLED",
+                "ZOTIFY_DOWNLOAD_REAL_TIME",
+                "ZOTIFY_REPLACE_EXISTING",
+                "ZOTIFY_SKIP_DUPLICATES",
+                "ZOTIFY_SKIP_PREVIOUS",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_general", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_general", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_general", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current general settings
+        enabled = "✅ Enabled" if Config.ZOTIFY_ENABLED else "❌ Disabled"
+        real_time = (
+            "✅ Enabled" if Config.ZOTIFY_DOWNLOAD_REAL_TIME else "❌ Disabled"
+        )
+        replace_existing = (
+            "✅ Enabled" if Config.ZOTIFY_REPLACE_EXISTING else "❌ Disabled"
+        )
+        skip_duplicates = (
+            "✅ Enabled" if Config.ZOTIFY_SKIP_DUPLICATES else "❌ Disabled"
+        )
+        skip_previous = (
+            "✅ Enabled" if Config.ZOTIFY_SKIP_PREVIOUS else "❌ Disabled"
+        )
+
+        msg = f"""<b>🎧 Zotify General Settings</b> | State: {state}
+
+<b>Status:</b> {enabled}
+<b>Real-Time Download:</b> {real_time}
+<b>Replace Existing:</b> {replace_existing}
+<b>Skip Duplicates:</b> {skip_duplicates}
+<b>Skip Previous:</b> {skip_previous}
+
+<b>Description:</b>
+• <b>Enabled:</b> Master toggle for Zotify functionality
+• <b>Real-Time Download:</b> Download tracks in real-time (slower but more stable)
+• <b>Replace Existing:</b> Overwrite existing files instead of skipping
+• <b>Skip Duplicates:</b> Skip tracks that have already been downloaded
+• <b>Skip Previous:</b> Skip tracks that were previously downloaded (uses database)
+
+<b>Note:</b>
+These are core Zotify settings that control the basic download behavior."""
+
+    elif key == "zotify_quality":
+        # Quality & Format Settings
+        quality_settings = [
+            "ZOTIFY_DOWNLOAD_QUALITY",
+            "ZOTIFY_AUDIO_FORMAT",
+            "ZOTIFY_ARTWORK_SIZE",
+            "ZOTIFY_TRANSCODE_BITRATE",
+        ]
+
+        for setting in quality_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+            # For non-boolean settings, use editvar
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_quality", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_quality", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_quality", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current quality settings
+        download_quality = Config.ZOTIFY_DOWNLOAD_QUALITY or "auto (Default)"
+        audio_format = Config.ZOTIFY_AUDIO_FORMAT or "vorbis (Default)"
+        artwork_size = Config.ZOTIFY_ARTWORK_SIZE or "large (Default)"
+        transcode_bitrate = (
+            Config.ZOTIFY_TRANSCODE_BITRATE
+            if Config.ZOTIFY_TRANSCODE_BITRATE != -1
+            else "Use download rate (Default)"
+        )
+
+        msg = f"""<b>🎧 Zotify Quality & Format Settings</b> | State: {state}
+
+<b>Download Quality:</b> <code>{download_quality}</code>
+<b>Audio Format:</b> <code>{audio_format}</code>
+<b>Artwork Size:</b> <code>{artwork_size}</code>
+<b>Transcode Bitrate:</b> <code>{transcode_bitrate}</code>
+
+<b>Quality Options:</b>
+• <b>auto:</b> Automatic quality selection
+• <b>normal:</b> 96 kbps OGG Vorbis
+• <b>high:</b> 160 kbps OGG Vorbis
+• <b>very_high:</b> 320 kbps OGG Vorbis (Premium required)
+
+<b>Format Options:</b>
+• <b>vorbis:</b> OGG Vorbis (native, no transcoding)
+• <b>mp3:</b> MP3 (transcoded from OGG)
+• <b>flac:</b> FLAC (transcoded from OGG)
+• <b>aac:</b> AAC (transcoded from OGG)
+• <b>wav:</b> WAV (transcoded from OGG)
+
+<b>Artwork Sizes:</b>
+• <b>small:</b> 300x300px
+• <b>medium:</b> 640x640px
+• <b>large:</b> 1200x1200px (recommended)"""
+
+    elif key == "zotify_auth":
+        # Authentication Settings
+        auth_settings = [
+            "ZOTIFY_CREDENTIALS_PATH",
+        ]
+
+        for setting in auth_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+            # For non-boolean settings, use editvar
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add credential management buttons
+        buttons.data_button(
+            "📤 Upload Credentials", "botset upload_zotify_credentials"
+        )
+        buttons.data_button("🗑️ Clear Credentials", "botset clear_zotify_credentials")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_auth", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_auth", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_auth", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current auth settings
+        credentials_path = (
+            Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json (Default)"
+        )
+
+        # Check if credentials exist (database first, then file)
+        from bot.helper.zotify_utils.zotify_config import zotify_config
+
+        # Use the user_id parameter passed to get_buttons function
+        creds_exist = await zotify_config.has_credentials(user_id)
+        creds_status = "✅ Available" if creds_exist else "❌ Not Found"
+
+        msg = f"""<b>🎧 Zotify Authentication Settings</b> | State: {state}
+
+<b>Credentials Path:</b> <code>{credentials_path}</code>
+<b>Credentials Status:</b> {creds_status}
+
+<b>Authentication Methods:</b>
+• <b>File-based:</b> Upload a credentials.json file with saved login
+• <b>Interactive:</b> Login interactively when needed (fallback)
+
+<b>Credential Management:</b>
+• <b>Upload Credentials:</b> Upload a pre-saved credentials file
+• <b>Clear Credentials:</b> Remove existing credentials (will require re-login)
+
+<b>Note:</b>
+Zotify requires Spotify Premium for high-quality downloads. The bot will handle authentication automatically using the configured method."""
+
+    elif key == "zotify_paths":
+        # Library Paths Settings
+        path_settings = [
+            "ZOTIFY_ALBUM_LIBRARY",
+            "ZOTIFY_PODCAST_LIBRARY",
+            "ZOTIFY_PLAYLIST_LIBRARY",
+        ]
+
+        for setting in path_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+            # For non-boolean settings, use editvar
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_paths", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_paths", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_paths", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current path settings
+        album_library = (
+            Config.ZOTIFY_ALBUM_LIBRARY or "Music/Zotify Albums (Default)"
+        )
+        podcast_library = (
+            Config.ZOTIFY_PODCAST_LIBRARY or "Music/Zotify Podcasts (Default)"
+        )
+        playlist_library = (
+            Config.ZOTIFY_PLAYLIST_LIBRARY or "Music/Zotify Playlists (Default)"
+        )
+
+        msg = f"""<b>🎧 Zotify Library Paths</b> | State: {state}
+
+<b>Album Library:</b> <code>{album_library}</code>
+<b>Podcast Library:</b> <code>{podcast_library}</code>
+<b>Playlist Library:</b> <code>{playlist_library}</code>
+
+<b>Description:</b>
+• <b>Album Library:</b> Root directory for downloaded albums
+• <b>Podcast Library:</b> Root directory for downloaded podcasts
+• <b>Playlist Library:</b> Root directory for downloaded playlists
+
+<b>Note:</b>
+These paths are relative to the bot's download directory. Each content type will be organized in its respective library folder."""
+
+    elif key == "zotify_templates":
+        # Output Templates Settings
+        template_settings = [
+            "ZOTIFY_OUTPUT_ALBUM",
+            "ZOTIFY_OUTPUT_PLAYLIST_TRACK",
+            "ZOTIFY_OUTPUT_PLAYLIST_EPISODE",
+            "ZOTIFY_OUTPUT_PODCAST",
+            "ZOTIFY_OUTPUT_SINGLE",
+        ]
+
+        for setting in template_settings:
+            display_name = (
+                setting.replace("ZOTIFY_OUTPUT_", "").replace("_", " ").title()
+            )
+            # For non-boolean settings, use editvar
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_templates", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_templates", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_templates", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current template settings
+        album_template = (
+            Config.ZOTIFY_OUTPUT_ALBUM
+            or "{album_artist}/{album}/Disc {discnumber}/{track_number}. {artists} - {title} (Default)"
+        )
+        playlist_track_template = (
+            Config.ZOTIFY_OUTPUT_PLAYLIST_TRACK
+            or "{playlist}/{artists} - {title} (Default)"
+        )
+        playlist_episode_template = (
+            Config.ZOTIFY_OUTPUT_PLAYLIST_EPISODE
+            or "{playlist}/{episode_number} - {title} (Default)"
+        )
+        podcast_template = (
+            Config.ZOTIFY_OUTPUT_PODCAST
+            or "{podcast}/{episode_number} - {title} (Default)"
+        )
+        single_template = (
+            Config.ZOTIFY_OUTPUT_SINGLE or "{artists} - {title} (Default)"
+        )
+
+        msg = f"""<b>🎧 Zotify Output Templates</b> | State: {state}
+
+<b>Album:</b> <code>{album_template}</code>
+<b>Playlist Track:</b> <code>{playlist_track_template}</code>
+<b>Playlist Episode:</b> <code>{playlist_episode_template}</code>
+<b>Podcast:</b> <code>{podcast_template}</code>
+<b>Single:</b> <code>{single_template}</code>
+
+<b>Available Variables:</b>
+• <b>{{album_artist}}</b> - Album artist name
+• <b>{{album}}</b> - Album title
+• <b>{{artists}}</b> - Track artist(s)
+• <b>{{title}}</b> - Track/episode title
+• <b>{{track_number}}</b> - Track number
+• <b>{{discnumber}}</b> - Disc number
+• <b>{{playlist}}</b> - Playlist name
+• <b>{{podcast}}</b> - Podcast name
+• <b>{{episode_number}}</b> - Episode number
+
+<b>Note:</b>
+These templates control how files are named and organized within their respective library folders."""
+
+    elif key == "zotify_download":
+        # Download Settings
+        download_settings = [
+            "ZOTIFY_PRINT_PROGRESS",
+            "ZOTIFY_PRINT_DOWNLOADS",
+            "ZOTIFY_PRINT_ERRORS",
+            "ZOTIFY_PRINT_WARNINGS",
+            "ZOTIFY_PRINT_SKIPS",
+        ]
+
+        for setting in download_settings:
+            display_name = (
+                setting.replace("ZOTIFY_PRINT_", "Print ").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            setting_value = getattr(Config, setting, False)
+            status = "✅ ON" if setting_value else "❌ OFF"
+            display_name = f"{display_name}: {status}"
+            buttons.data_button(
+                display_name, f"botset toggle {setting} {not setting_value}"
+            )
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_download", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_download", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_download", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current download settings
+        print_progress = (
+            "✅ Enabled" if Config.ZOTIFY_PRINT_PROGRESS else "❌ Disabled"
+        )
+        print_downloads = (
+            "✅ Enabled" if Config.ZOTIFY_PRINT_DOWNLOADS else "❌ Disabled"
+        )
+        print_errors = "✅ Enabled" if Config.ZOTIFY_PRINT_ERRORS else "❌ Disabled"
+        print_warnings = (
+            "✅ Enabled" if Config.ZOTIFY_PRINT_WARNINGS else "❌ Disabled"
+        )
+        print_skips = "✅ Enabled" if Config.ZOTIFY_PRINT_SKIPS else "❌ Disabled"
+
+        msg = f"""<b>🎧 Zotify Download Settings</b> | State: {state}
+
+<b>Print Progress:</b> {print_progress}
+<b>Print Downloads:</b> {print_downloads}
+<b>Print Errors:</b> {print_errors}
+<b>Print Warnings:</b> {print_warnings}
+<b>Print Skips:</b> {print_skips}
+
+<b>Description:</b>
+• <b>Print Progress:</b> Show download progress information
+• <b>Print Downloads:</b> Log successful downloads
+• <b>Print Errors:</b> Log error messages
+• <b>Print Warnings:</b> Log warning messages
+• <b>Print Skips:</b> Log skipped files
+
+<b>Note:</b>
+These settings control the verbosity of Zotify's logging output during downloads."""
+
+    elif key == "zotify_metadata":
+        # Metadata Settings
+        metadata_settings = [
+            "ZOTIFY_SAVE_METADATA",
+            "ZOTIFY_SAVE_GENRE",
+            "ZOTIFY_ALL_ARTISTS",
+            "ZOTIFY_LYRICS_FILE",
+            "ZOTIFY_LYRICS_ONLY",
+            "ZOTIFY_SAVE_SUBTITLES",
+            "ZOTIFY_CREATE_PLAYLIST_FILE",
+        ]
+
+        for setting in metadata_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+
+            # For boolean settings, add toggle buttons with status
+            setting_value = getattr(Config, setting, False)
+            status = "✅ ON" if setting_value else "❌ OFF"
+            display_name = f"{display_name}: {status}"
+            buttons.data_button(
+                display_name, f"botset toggle {setting} {not setting_value}"
+            )
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_metadata", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_metadata", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_metadata", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current metadata settings
+        save_metadata = (
+            "✅ Enabled" if Config.ZOTIFY_SAVE_METADATA else "❌ Disabled"
+        )
+        save_genre = "✅ Enabled" if Config.ZOTIFY_SAVE_GENRE else "❌ Disabled"
+        all_artists = "✅ Enabled" if Config.ZOTIFY_ALL_ARTISTS else "❌ Disabled"
+        lyrics_file = "✅ Enabled" if Config.ZOTIFY_LYRICS_FILE else "❌ Disabled"
+        lyrics_only = "✅ Enabled" if Config.ZOTIFY_LYRICS_ONLY else "❌ Disabled"
+        save_subtitles = (
+            "✅ Enabled" if Config.ZOTIFY_SAVE_SUBTITLES else "❌ Disabled"
+        )
+        create_playlist_file = (
+            "✅ Enabled" if Config.ZOTIFY_CREATE_PLAYLIST_FILE else "❌ Disabled"
+        )
+
+        msg = f"""<b>🎧 Zotify Metadata Settings</b> | State: {state}
+
+<b>Save Metadata:</b> {save_metadata}
+<b>Save Genre:</b> {save_genre}
+<b>All Artists:</b> {all_artists}
+<b>Lyrics File:</b> {lyrics_file}
+<b>Lyrics Only:</b> {lyrics_only}
+<b>Save Subtitles:</b> {save_subtitles}
+<b>Create Playlist File:</b> {create_playlist_file}
+
+<b>Description:</b>
+• <b>Save Metadata:</b> Embed metadata tags in downloaded files
+• <b>Save Genre:</b> Include genre information in metadata
+• <b>All Artists:</b> Include all contributing artists in metadata
+• <b>Lyrics File:</b> Save lyrics as separate .lrc files
+• <b>Lyrics Only:</b> Download only lyrics without audio
+• <b>Save Subtitles:</b> Save podcast subtitles when available
+• <b>Create Playlist File:</b> Create .m3u playlist files for playlists
+
+<b>Note:</b>
+These settings control what additional information is saved with downloaded content."""
+
+    elif key == "zotify_advanced":
+        # Advanced Settings
+        advanced_settings = [
+            "ZOTIFY_FFMPEG_PATH",
+            "ZOTIFY_FFMPEG_ARGS",
+            "ZOTIFY_LANGUAGE",
+            "ZOTIFY_MATCH_EXISTING",
+        ]
+
+        for setting in advanced_settings:
+            display_name = setting.replace("ZOTIFY_", "").replace("_", " ").title()
+
+            # For boolean settings, add toggle buttons with status
+            if setting in ["ZOTIFY_MATCH_EXISTING"]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit zotify_advanced", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view zotify_advanced", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_zotify_advanced", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset zotify", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current advanced settings
+        ffmpeg_path = Config.ZOTIFY_FFMPEG_PATH or "xtra (Default)"
+        ffmpeg_args = Config.ZOTIFY_FFMPEG_ARGS or "None (Default)"
+        language = Config.ZOTIFY_LANGUAGE or "en (Default)"
+        match_existing = (
+            "✅ Enabled" if Config.ZOTIFY_MATCH_EXISTING else "❌ Disabled"
+        )
+
+        msg = f"""<b>🎧 Zotify Advanced Settings</b> | State: {state}
+
+<b>FFmpeg Path:</b> <code>{ffmpeg_path}</code>
+<b>FFmpeg Args:</b> <code>{ffmpeg_args}</code>
+<b>Language:</b> <code>{language}</code>
+<b>Match Existing:</b> {match_existing}
+
+<b>Description:</b>
+• <b>FFmpeg Path:</b> Custom path to FFmpeg binary (leave empty for auto-detection)
+• <b>FFmpeg Args:</b> Additional arguments to pass to FFmpeg during transcoding
+• <b>Language:</b> Language code for metadata and interface (ISO 639-1)
+• <b>Match Existing:</b> Match existing files for skip functionality
+
+<b>Note:</b>
+These are advanced settings that should only be modified if you understand their implications. The default values work for most users."""
+
     elif key == "operations":
         # Operations settings
 
@@ -2631,6 +3205,8 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
             "STREAMRIP_ENABLED",
+            "ZOTIFY_ENABLED",
+            "YOUTUBE_UPLOAD_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
@@ -2682,6 +3258,10 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
         rclone_enabled = "✅ Enabled" if Config.RCLONE_ENABLED else "❌ Disabled"
         streamrip_enabled = (
             "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
+        )
+        zotify_enabled = "✅ Enabled" if Config.ZOTIFY_ENABLED else "❌ Disabled"
+        youtube_upload_enabled = (
+            "✅ Enabled" if Config.YOUTUBE_UPLOAD_ENABLED else "❌ Disabled"
         )
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
@@ -2753,6 +3333,14 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
             f"botset toggle STREAMRIP_ENABLED {not Config.STREAMRIP_ENABLED}",
         )
         buttons.data_button(
+            f"🎧 Zotify Downloads: {zotify_enabled}",
+            f"botset toggle ZOTIFY_ENABLED {not Config.ZOTIFY_ENABLED}",
+        )
+        buttons.data_button(
+            f"📺 YouTube Upload: {youtube_upload_enabled}",
+            f"botset toggle YOUTUBE_UPLOAD_ENABLED {not Config.YOUTUBE_UPLOAD_ENABLED}",
+        )
+        buttons.data_button(
             f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
             f"botset toggle WRONG_CMD_WARNINGS_ENABLED {not Config.WRONG_CMD_WARNINGS_ENABLED}",
         )
@@ -2785,6 +3373,8 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
 <b>Media Search:</b> {media_search_enabled}
 <b>Rclone Operations:</b> {rclone_enabled}
 <b>Streamrip Downloads:</b> {streamrip_enabled}
+<b>Zotify Downloads:</b> {zotify_enabled}
+<b>YouTube Upload:</b> {youtube_upload_enabled}
 <b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
 <b>VirusTotal Scan:</b> {virustotal_enabled}
 <b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
@@ -2805,6 +3395,8 @@ These settings primarily affect the streamrip CLI behavior and may not directly 
 • <b>Media Search:</b> Controls whether users can search for media in configured channels
 • <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations
 • <b>Streamrip Downloads:</b> Controls whether users can download music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud)
+• <b>Zotify Downloads:</b> Controls whether users can download music from Spotify using Zotify
+• <b>YouTube Upload:</b> Controls whether users can upload videos directly to YouTube after downloading
 • <b>Command Warnings:</b> Controls whether warnings are shown for wrong command suffixes
 • <b>VirusTotal Scan:</b> Controls whether users can scan files and URLs for viruses using VirusTotal
 • <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users</blockquote>"""
@@ -5868,7 +6460,7 @@ Configure advanced merge settings that will be used when user settings are not a
             msg += f"\n<b>Page:</b> {current_page + 1}/{total_pages}"
 
     if key is None:
-        button = buttons.build_menu(1)
+        button = buttons.build_menu(2)
     elif key in {
         "mediatools_merge",
         "mediatools_merge_config",
@@ -6134,6 +6726,112 @@ async def handle_streamrip_config_upload(_, message, pre_message):
 
     # Return to streamrip config menu
     await update_buttons(pre_message, "streamrip_config")
+
+
+@new_task
+async def handle_zotify_credentials_upload(_, message, pre_message):
+    """Handle the upload of a Zotify credentials file from bot settings."""
+    user_id = message.from_user.id
+    handler_dict[user_id] = False
+
+    # Check if the message contains a document
+    if not message.document:
+        await send_message(message, "Please send a credentials file for Zotify.")
+        return
+
+    # Check file extension
+    file_name = message.document.file_name
+    if not file_name or not file_name.lower().endswith(".json"):
+        await send_message(
+            message,
+            "<b>❌ Invalid File</b>\n\n"
+            "Please send a valid JSON credentials file (must end with .json).",
+        )
+        return
+
+    # Check file size (5MB limit)
+    if message.document.file_size > 5 * 1024 * 1024:
+        await send_message(
+            message,
+            "<b>❌ File Too Large</b>\n\nCredentials file must be smaller than 5MB.",
+        )
+        return
+
+    temp_path = None
+    try:
+        # Download the file
+        temp_path = await message.download()
+
+        # Read the credentials content using aiofiles
+        from aiofiles import open as aiopen
+
+        async with aiopen(temp_path, encoding="utf-8") as f:
+            credentials_content = await f.read()
+
+        # Validate JSON format
+        try:
+            import json
+
+            credentials_data = json.loads(credentials_content)
+
+            # Basic validation - check if it looks like Spotify credentials
+            if not isinstance(credentials_data, dict):
+                raise ValueError("Credentials must be a JSON object")
+
+        except Exception as e:
+            await send_message(
+                message,
+                "<b>❌ Invalid JSON Format</b>\n\n"
+                f"The uploaded file is not a valid JSON credentials file:\n<code>{e}</code>",
+            )
+            return
+
+        # Save credentials to database and file using the new method
+        from bot.helper.zotify_utils.zotify_config import zotify_config
+
+        success = await zotify_config.save_credentials(credentials_data, user_id)
+
+        if success:
+            await send_message(
+                message,
+                "<b>✅ Credentials Upload Successful</b>\n\n"
+                "Zotify credentials have been uploaded and saved successfully.\n\n"
+                "<b>Changes:</b>\n"
+                "• Credentials saved to database (persistent across restarts)\n"
+                "• Credentials file created for immediate use\n"
+                "• Zotify will now use your uploaded credentials\n"
+                "• Authentication will be automatic for downloads\n\n"
+                "<i>Your credentials are now safely stored and will persist across bot restarts.</i>",
+            )
+        else:
+            await send_message(
+                message,
+                "<b>❌ Save Failed</b>\n\n"
+                "Failed to save Zotify credentials. Please try again or check the logs for more details.",
+            )
+
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.error(f"Error handling Zotify credentials upload: {e}")
+        await send_message(
+            message,
+            f"<b>❌ Error</b>\n\nFailed to process Zotify credentials: {e}",
+        )
+    finally:
+        # Clean up temporary file
+        if temp_path:
+            try:
+                from os import remove
+                from os.path import exists
+
+                if exists(temp_path):
+                    remove(temp_path)
+            except Exception:
+                pass
+
+    # Return to zotify auth menu
+    await update_buttons(pre_message, "zotify_auth")
 
 
 @new_task
@@ -6483,6 +7181,11 @@ async def edit_variable(_, message, pre_message, key):
                 create_task(schedule_auto_restart())
         except ValueError:
             value = 24  # Default to 24 hours if invalid input
+    elif key == "STATUS_UPDATE_INTERVAL":
+        try:
+            value = max(2, int(value))  # Minimum 2 seconds to prevent FloodWait
+        except ValueError:
+            value = 3  # Default to 3 seconds if invalid input
     elif value.isdigit():
         value = int(value)
     elif (value.startswith("[") and value.endswith("]")) or (
@@ -6609,7 +7312,6 @@ async def edit_variable(_, message, pre_message, key):
             "STREAMRIP_MAX_SEARCH_RESULTS",
             "STREAMRIP_ENABLE_DATABASE",
             "STREAMRIP_AUTO_CONVERT",
-            "STREAMRIP_LIMIT",
         ]:
             return_menu = "streamrip_general"
         elif key in [
@@ -7290,6 +7992,25 @@ async def update_private_file(_, message, pre_message):
 
             except Exception as e:
                 LOGGER.error(f"Error handling streamrip config deletion: {e}")
+        elif file_name == "zotify_credentials.json":
+            # Handle zotify credentials deletion
+            try:
+                from pathlib import Path
+
+                # Get credentials path from config
+                credentials_path = (
+                    Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
+                )
+                creds_file = Path(credentials_path)
+
+                if creds_file.exists():
+                    creds_file.unlink()
+                    LOGGER.info("Zotify credentials deleted successfully")
+                else:
+                    LOGGER.info("No Zotify credentials file found to delete")
+
+            except Exception as e:
+                LOGGER.error(f"Error handling Zotify credentials deletion: {e}")
         await delete_message(message)
     elif doc := message.document:
         file_name = doc.file_name
@@ -7376,6 +8097,56 @@ async def update_private_file(_, message, pre_message):
                 LOGGER.error(f"Error handling streamrip config upload: {e}")
                 if await aiopath.exists(file_name):
                     await remove(file_name)
+        elif file_name == "zotify_credentials.json":
+            # Handle zotify credentials upload
+            try:
+                # Read the uploaded credentials file
+                async with aiopen(file_name) as f:
+                    credentials_content = await f.read()
+
+                # Validate JSON format
+                import json
+
+                try:
+                    credentials_data = json.loads(credentials_content)
+
+                    # Basic validation - check if it looks like Spotify credentials
+                    if not isinstance(credentials_data, dict):
+                        raise ValueError("Credentials must be a JSON object")
+
+                except Exception as e:
+                    LOGGER.error(f"Invalid Zotify credentials JSON: {e}")
+                    if await aiopath.exists(file_name):
+                        await remove(file_name)
+                    return
+
+                # Save credentials to the configured path
+                from pathlib import Path
+
+                credentials_path = (
+                    Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
+                )
+                creds_file = Path(credentials_path)
+
+                # Ensure the directory exists
+                creds_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Write the credentials file
+                async with aiopen(credentials_path, "w", encoding="utf-8") as f:
+                    await f.write(credentials_content)
+
+                LOGGER.info(
+                    f"Zotify credentials uploaded and saved to {credentials_path}"
+                )
+
+                # Clean up the temporary file
+                if await aiopath.exists(file_name):
+                    await remove(file_name)
+
+            except Exception as e:
+                LOGGER.error(f"Error handling Zotify credentials upload: {e}")
+                if await aiopath.exists(file_name):
+                    await remove(file_name)
         await delete_message(message)
     if file_name == "rclone.conf":
         await rclone_serve_booter()
@@ -7393,6 +8164,7 @@ async def event_handler(client, query, pfunc, rfunc, document=False, photo=False
     chat_id = query.message.chat.id
     handler_dict[chat_id] = True
     start_time = time()  # pylint: disable=unused-argument
+    pre_message = query.message  # Store the pre_message for handlers that need it
 
     async def event_filter(_, *args):
         event = args[1]  # The event is the second argument
@@ -7413,8 +8185,50 @@ async def event_handler(client, query, pfunc, rfunc, document=False, photo=False
 
         return bool(user.id == query_user.id and event.chat.id == chat_id and mtype)
 
+    # Create a wrapper function that passes the pre_message as the third parameter
+    async def pfunc_wrapper(client, message):
+        # Check if the function expects 3 parameters (client, message, pre_message)
+        import inspect
+        from functools import partial
+
+        # Handle partial functions specially
+        if isinstance(pfunc, partial):
+            # For partial functions, check if pre_message is already bound
+            if "pre_message" in pfunc.keywords:
+                # pre_message is already bound as keyword argument, just call with 2 params
+                await pfunc(client, message)
+            else:
+                # pre_message not bound, check the original function signature
+                original_func = pfunc.func
+                sig = inspect.signature(original_func)
+                param_names = list(sig.parameters.keys())
+
+                if len(param_names) >= 3 and param_names[2] == "pre_message":
+                    # Original function expects pre_message as third parameter
+                    await pfunc(client, message, pre_message)
+                else:
+                    # Original function doesn't expect pre_message as third parameter
+                    await pfunc(client, message)
+        else:
+            # Regular function (not partial)
+            sig = inspect.signature(pfunc)
+            param_names = list(sig.parameters.keys())
+
+            if len(sig.parameters) >= 3:
+                # Check if the third parameter is named 'pre_message'
+                if len(param_names) >= 3 and param_names[2] == "pre_message":
+                    # Function expects pre_message as third parameter
+                    await pfunc(client, message, pre_message)
+                else:
+                    # Function has 3+ parameters but third is not 'pre_message'
+                    # This shouldn't happen with current handlers, but fallback to 2 params
+                    await pfunc(client, message)
+            else:
+                # Function only expects client and message
+                await pfunc(client, message)
+
     handler = client.add_handler(
-        MessageHandler(pfunc, filters=create(event_filter)),
+        MessageHandler(pfunc_wrapper, filters=create(event_filter)),
         group=-1,
     )
     while handler_dict[chat_id]:
@@ -7427,6 +8241,9 @@ async def event_handler(client, query, pfunc, rfunc, document=False, photo=False
 
 @new_task
 async def edit_bot_settings(client, query):
+    # Import database at the beginning to ensure it's available throughout the function
+    from bot.helper.ext_utils.db_handler import database
+
     data = query.data.split()
     message = query.message
     user_id = message.chat.id
@@ -7469,6 +8286,7 @@ async def edit_bot_settings(client, query):
                     "AI Settings",
                     "Bot Settings",
                     "Streamrip Settings",
+                    "Zotify Settings",
                 ]
             ):
                 # If we're in a main menu, return to the main settings menu
@@ -7496,6 +8314,21 @@ async def edit_bot_settings(client, query):
                 ]
             ):
                 return_menu = "streamrip"
+            # Check for Zotify submenu detection
+            elif any(
+                x in message.text
+                for x in [
+                    "Zotify General Settings",
+                    "Zotify Quality & Format Settings",
+                    "Zotify Authentication Settings",
+                    "Zotify Library Paths",
+                    "Zotify Output Templates",
+                    "Zotify Download Settings",
+                    "Zotify Metadata Settings",
+                    "Zotify Advanced Settings",
+                ]
+            ):
+                return_menu = "zotify"
             # Otherwise check the message title for submenu detection
             elif "Watermark" in message.text:
                 return_menu = "mediatools_watermark"
@@ -7572,6 +8405,22 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "streamrip")
 
+    elif data[1] == "zotify":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if zotify is enabled
+        if not Config.ZOTIFY_ENABLED:
+            await query.answer(
+                "Zotify is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify")
+
     elif data[1] in [
         "streamrip_general",
         "streamrip_quality",
@@ -7593,6 +8442,31 @@ async def edit_bot_settings(client, query):
         if not Config.STREAMRIP_ENABLED:
             await query.answer(
                 "Streamrip is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, data[1])
+
+    elif data[1] in [
+        "zotify_general",
+        "zotify_quality",
+        "zotify_auth",
+        "zotify_paths",
+        "zotify_templates",
+        "zotify_download",
+        "zotify_metadata",
+        "zotify_advanced",
+    ]:
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if zotify is enabled
+        if not Config.ZOTIFY_ENABLED:
+            await query.answer(
+                "Zotify is disabled by the bot owner.", show_alert=True
             )
             return
 
@@ -7787,6 +8661,143 @@ async def edit_bot_settings(client, query):
 
         # Return to streamrip config menu
         await update_buttons(message, "streamrip_config")
+
+    elif data[1] == "upload_zotify_credentials":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if zotify is enabled
+        if not Config.ZOTIFY_ENABLED:
+            await query.answer(
+                "Zotify is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set up handler for credentials file upload
+        handler_dict[message.chat.id] = True
+
+        # Send instructions to the user
+        buttons = ButtonMaker()
+        buttons.data_button("❌ Cancel", "botset cancel_zotify_upload")
+        button_markup = buttons.build_menu(1)
+
+        # Update the current message with upload instructions
+        await edit_message(
+            message,
+            "<b>📤 Upload Zotify Credentials</b>\n\n"
+            "Please send a <code>credentials.json</code> file for Zotify.\n\n"
+            "<b>Requirements:</b>\n"
+            "• File must be a valid JSON format\n"
+            "• File should contain Spotify authentication data\n"
+            "• Maximum file size: 5MB\n\n"
+            "<b>Note:</b> The uploaded credentials will be stored securely and used for Spotify authentication.\n\n"
+            "Click Cancel to abort.",
+            button_markup,
+        )
+
+        # Set up event handler for the credentials file upload
+        await event_handler(
+            client,
+            query,
+            handle_zotify_credentials_upload,
+            lambda: update_buttons(message, "zotify_auth"),
+            document=True,
+        )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+    elif data[1] == "clear_zotify_credentials":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if zotify is enabled
+        if not Config.ZOTIFY_ENABLED:
+            await query.answer(
+                "Zotify is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        try:
+            # Import required modules
+            from pathlib import Path
+
+            user_id = message.chat.id
+            credentials_cleared = False
+
+            # Clear credentials from database
+            if database.db is not None:
+                try:
+                    result = await database.db.users.update_one(
+                        {"_id": user_id},
+                        {"$unset": {"ZOTIFY_CREDENTIALS": ""}},
+                    )
+                    if result.modified_count > 0:
+                        credentials_cleared = True
+                except Exception as e:
+                    from bot import LOGGER
+
+                    LOGGER.error(
+                        f"Error clearing Zotify credentials from database: {e}"
+                    )
+
+            # Clear credentials file
+            credentials_path = (
+                Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
+            )
+            creds_file = Path(credentials_path)
+
+            if creds_file.exists():
+                # Remove the credentials file
+                creds_file.unlink()
+                credentials_cleared = True
+
+            if credentials_cleared:
+                await send_message(
+                    message,
+                    "<b>✅ Credentials Cleared</b>\n\n"
+                    "Zotify credentials have been successfully removed.\n\n"
+                    "<b>Changes:</b>\n"
+                    "• Credentials removed from database\n"
+                    "• Credentials file deleted (if existed)\n"
+                    "• Zotify will require re-authentication on next use\n\n"
+                    "<i>You can upload new credentials or let Zotify authenticate interactively.</i>",
+                )
+            else:
+                await send_message(
+                    message,
+                    "<b>ℹ️ No Credentials Found</b>\n\n"
+                    "No credentials were found to clear.\n\n"
+                    "Zotify will authenticate interactively when needed.",
+                )
+
+        except Exception as e:
+            from bot import LOGGER
+
+            LOGGER.error(f"Error clearing Zotify credentials: {e}")
+            await send_message(
+                message,
+                f"<b>❌ Error</b>\n\nFailed to clear Zotify credentials: {e!s}",
+            )
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+    elif data[1] == "cancel_zotify_upload":
+        await query.answer("Upload cancelled.")
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Disable the handler
+        handler_dict[message.chat.id] = False
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+        # Return to zotify auth menu
+        await update_buttons(message, "zotify_auth")
 
     elif data[1] == "operations":
         await query.answer()
@@ -9595,6 +10606,243 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "streamrip_advanced")
 
+    elif data[1] == "default_zotify_general":
+        await query.answer("Resetting Zotify general settings to default...")
+        # Reset Zotify general settings to default
+        Config.ZOTIFY_ENABLED = DEFAULT_VALUES.get("ZOTIFY_ENABLED", True)
+        Config.ZOTIFY_DOWNLOAD_REAL_TIME = DEFAULT_VALUES.get(
+            "ZOTIFY_DOWNLOAD_REAL_TIME", False
+        )
+        Config.ZOTIFY_REPLACE_EXISTING = DEFAULT_VALUES.get(
+            "ZOTIFY_REPLACE_EXISTING", False
+        )
+        Config.ZOTIFY_SKIP_DUPLICATES = DEFAULT_VALUES.get(
+            "ZOTIFY_SKIP_DUPLICATES", True
+        )
+        Config.ZOTIFY_SKIP_PREVIOUS = DEFAULT_VALUES.get(
+            "ZOTIFY_SKIP_PREVIOUS", True
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_ENABLED": Config.ZOTIFY_ENABLED,
+                "ZOTIFY_DOWNLOAD_REAL_TIME": Config.ZOTIFY_DOWNLOAD_REAL_TIME,
+                "ZOTIFY_REPLACE_EXISTING": Config.ZOTIFY_REPLACE_EXISTING,
+                "ZOTIFY_SKIP_DUPLICATES": Config.ZOTIFY_SKIP_DUPLICATES,
+                "ZOTIFY_SKIP_PREVIOUS": Config.ZOTIFY_SKIP_PREVIOUS,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_general")
+
+    elif data[1] == "default_zotify_quality":
+        await query.answer("Resetting Zotify quality settings to default...")
+        # Reset Zotify quality settings to default
+        Config.ZOTIFY_DOWNLOAD_QUALITY = DEFAULT_VALUES.get(
+            "ZOTIFY_DOWNLOAD_QUALITY", "auto"
+        )
+        Config.ZOTIFY_AUDIO_FORMAT = DEFAULT_VALUES.get(
+            "ZOTIFY_AUDIO_FORMAT", "vorbis"
+        )
+        Config.ZOTIFY_ARTWORK_SIZE = DEFAULT_VALUES.get(
+            "ZOTIFY_ARTWORK_SIZE", "large"
+        )
+        Config.ZOTIFY_TRANSCODE_BITRATE = DEFAULT_VALUES.get(
+            "ZOTIFY_TRANSCODE_BITRATE", -1
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_DOWNLOAD_QUALITY": Config.ZOTIFY_DOWNLOAD_QUALITY,
+                "ZOTIFY_AUDIO_FORMAT": Config.ZOTIFY_AUDIO_FORMAT,
+                "ZOTIFY_ARTWORK_SIZE": Config.ZOTIFY_ARTWORK_SIZE,
+                "ZOTIFY_TRANSCODE_BITRATE": Config.ZOTIFY_TRANSCODE_BITRATE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_quality")
+
+    elif data[1] == "default_zotify_auth":
+        await query.answer("Resetting Zotify authentication settings to default...")
+        # Reset Zotify auth settings to default
+        Config.ZOTIFY_CREDENTIALS_PATH = DEFAULT_VALUES.get(
+            "ZOTIFY_CREDENTIALS_PATH", "./zotify_credentials.json"
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_CREDENTIALS_PATH": Config.ZOTIFY_CREDENTIALS_PATH,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_auth")
+
+    elif data[1] == "default_zotify_paths":
+        await query.answer("Resetting Zotify path settings to default...")
+        # Reset Zotify path settings to default
+        Config.ZOTIFY_ALBUM_LIBRARY = DEFAULT_VALUES.get(
+            "ZOTIFY_ALBUM_LIBRARY", "Music/Zotify Albums"
+        )
+        Config.ZOTIFY_PODCAST_LIBRARY = DEFAULT_VALUES.get(
+            "ZOTIFY_PODCAST_LIBRARY", "Music/Zotify Podcasts"
+        )
+        Config.ZOTIFY_PLAYLIST_LIBRARY = DEFAULT_VALUES.get(
+            "ZOTIFY_PLAYLIST_LIBRARY", "Music/Zotify Playlists"
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_ALBUM_LIBRARY": Config.ZOTIFY_ALBUM_LIBRARY,
+                "ZOTIFY_PODCAST_LIBRARY": Config.ZOTIFY_PODCAST_LIBRARY,
+                "ZOTIFY_PLAYLIST_LIBRARY": Config.ZOTIFY_PLAYLIST_LIBRARY,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_paths")
+
+    elif data[1] == "default_zotify_templates":
+        await query.answer("Resetting Zotify template settings to default...")
+        # Reset Zotify template settings to default
+        Config.ZOTIFY_OUTPUT_ALBUM = DEFAULT_VALUES.get(
+            "ZOTIFY_OUTPUT_ALBUM",
+            "{album_artist}/{album}/Disc {discnumber}/{track_number}. {artists} - {title}",
+        )
+        Config.ZOTIFY_OUTPUT_PLAYLIST_TRACK = DEFAULT_VALUES.get(
+            "ZOTIFY_OUTPUT_PLAYLIST_TRACK", "{playlist}/{artists} - {title}"
+        )
+        Config.ZOTIFY_OUTPUT_PLAYLIST_EPISODE = DEFAULT_VALUES.get(
+            "ZOTIFY_OUTPUT_PLAYLIST_EPISODE", "{playlist}/{episode_number} - {title}"
+        )
+        Config.ZOTIFY_OUTPUT_PODCAST = DEFAULT_VALUES.get(
+            "ZOTIFY_OUTPUT_PODCAST", "{podcast}/{episode_number} - {title}"
+        )
+        Config.ZOTIFY_OUTPUT_SINGLE = DEFAULT_VALUES.get(
+            "ZOTIFY_OUTPUT_SINGLE", "{artists} - {title}"
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_OUTPUT_ALBUM": Config.ZOTIFY_OUTPUT_ALBUM,
+                "ZOTIFY_OUTPUT_PLAYLIST_TRACK": Config.ZOTIFY_OUTPUT_PLAYLIST_TRACK,
+                "ZOTIFY_OUTPUT_PLAYLIST_EPISODE": Config.ZOTIFY_OUTPUT_PLAYLIST_EPISODE,
+                "ZOTIFY_OUTPUT_PODCAST": Config.ZOTIFY_OUTPUT_PODCAST,
+                "ZOTIFY_OUTPUT_SINGLE": Config.ZOTIFY_OUTPUT_SINGLE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_templates")
+
+    elif data[1] == "default_zotify_download":
+        await query.answer("Resetting Zotify download settings to default...")
+        # Reset Zotify download settings to default
+        Config.ZOTIFY_PRINT_PROGRESS = DEFAULT_VALUES.get(
+            "ZOTIFY_PRINT_PROGRESS", True
+        )
+        Config.ZOTIFY_PRINT_DOWNLOADS = DEFAULT_VALUES.get(
+            "ZOTIFY_PRINT_DOWNLOADS", False
+        )
+        Config.ZOTIFY_PRINT_ERRORS = DEFAULT_VALUES.get("ZOTIFY_PRINT_ERRORS", True)
+        Config.ZOTIFY_PRINT_WARNINGS = DEFAULT_VALUES.get(
+            "ZOTIFY_PRINT_WARNINGS", True
+        )
+        Config.ZOTIFY_PRINT_SKIPS = DEFAULT_VALUES.get("ZOTIFY_PRINT_SKIPS", False)
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_PRINT_PROGRESS": Config.ZOTIFY_PRINT_PROGRESS,
+                "ZOTIFY_PRINT_DOWNLOADS": Config.ZOTIFY_PRINT_DOWNLOADS,
+                "ZOTIFY_PRINT_ERRORS": Config.ZOTIFY_PRINT_ERRORS,
+                "ZOTIFY_PRINT_WARNINGS": Config.ZOTIFY_PRINT_WARNINGS,
+                "ZOTIFY_PRINT_SKIPS": Config.ZOTIFY_PRINT_SKIPS,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_download")
+
+    elif data[1] == "default_zotify_metadata":
+        await query.answer("Resetting Zotify metadata settings to default...")
+        # Reset Zotify metadata settings to default
+        Config.ZOTIFY_SAVE_METADATA = DEFAULT_VALUES.get(
+            "ZOTIFY_SAVE_METADATA", True
+        )
+        Config.ZOTIFY_SAVE_GENRE = DEFAULT_VALUES.get("ZOTIFY_SAVE_GENRE", False)
+        Config.ZOTIFY_ALL_ARTISTS = DEFAULT_VALUES.get("ZOTIFY_ALL_ARTISTS", True)
+        Config.ZOTIFY_LYRICS_FILE = DEFAULT_VALUES.get("ZOTIFY_LYRICS_FILE", False)
+        Config.ZOTIFY_LYRICS_ONLY = DEFAULT_VALUES.get("ZOTIFY_LYRICS_ONLY", False)
+        Config.ZOTIFY_SAVE_SUBTITLES = DEFAULT_VALUES.get(
+            "ZOTIFY_SAVE_SUBTITLES", False
+        )
+        Config.ZOTIFY_CREATE_PLAYLIST_FILE = DEFAULT_VALUES.get(
+            "ZOTIFY_CREATE_PLAYLIST_FILE", True
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_SAVE_METADATA": Config.ZOTIFY_SAVE_METADATA,
+                "ZOTIFY_SAVE_GENRE": Config.ZOTIFY_SAVE_GENRE,
+                "ZOTIFY_ALL_ARTISTS": Config.ZOTIFY_ALL_ARTISTS,
+                "ZOTIFY_LYRICS_FILE": Config.ZOTIFY_LYRICS_FILE,
+                "ZOTIFY_LYRICS_ONLY": Config.ZOTIFY_LYRICS_ONLY,
+                "ZOTIFY_SAVE_SUBTITLES": Config.ZOTIFY_SAVE_SUBTITLES,
+                "ZOTIFY_CREATE_PLAYLIST_FILE": Config.ZOTIFY_CREATE_PLAYLIST_FILE,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_metadata")
+
+    elif data[1] == "default_zotify_advanced":
+        await query.answer("Resetting Zotify advanced settings to default...")
+        # Reset Zotify advanced settings to default
+        Config.ZOTIFY_FFMPEG_PATH = DEFAULT_VALUES.get("ZOTIFY_FFMPEG_PATH", "")
+        Config.ZOTIFY_FFMPEG_ARGS = DEFAULT_VALUES.get("ZOTIFY_FFMPEG_ARGS", "")
+        Config.ZOTIFY_LANGUAGE = DEFAULT_VALUES.get("ZOTIFY_LANGUAGE", "en")
+        Config.ZOTIFY_MATCH_EXISTING = DEFAULT_VALUES.get(
+            "ZOTIFY_MATCH_EXISTING", False
+        )
+
+        # Update the database
+        await database.update_config(
+            {
+                "ZOTIFY_FFMPEG_PATH": Config.ZOTIFY_FFMPEG_PATH,
+                "ZOTIFY_FFMPEG_ARGS": Config.ZOTIFY_FFMPEG_ARGS,
+                "ZOTIFY_LANGUAGE": Config.ZOTIFY_LANGUAGE,
+                "ZOTIFY_MATCH_EXISTING": Config.ZOTIFY_MATCH_EXISTING,
+            }
+        )
+
+        # Update the UI - maintain the current state
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "zotify_advanced")
+
     elif data[1] == "default_ai":
         await query.answer("Resetting all AI settings to default...")
         # Reset all AI settings to default
@@ -9900,6 +11148,7 @@ async def edit_bot_settings(client, query):
                 "TASK_MONITOR_MEMORY_LOW",
             ]
             and not data[2].startswith("STREAMRIP_")
+            and not data[2].startswith("ZOTIFY_")
         ):
             # In view mode, show the current value in a popup
             value = f"{Config.get(data[2])}"
@@ -9925,26 +11174,31 @@ async def edit_bot_settings(client, query):
         # For regular Config variables in the var section, directly set up the edit flow
         # This ensures the correct edit flow is used for Config variables in edit state
         if (
-            not data[2].startswith(
-                (
-                    "WATERMARK_",
-                    "AUDIO_WATERMARK_",
-                    "SUBTITLE_WATERMARK_",
-                    "IMAGE_WATERMARK_",
-                    "MERGE_",
-                    "METADATA_",
-                    "TASK_MONITOR_",
-                    "CONVERT_",
-                    "COMPRESSION_",
-                    "TRIM_",
-                    "EXTRACT_",
-                    "MISTRAL_",
-                    "DEEPSEEK_",
-                    "DEFAULT_AI_",
+            (
+                not data[2].startswith(
+                    (
+                        "WATERMARK_",
+                        "AUDIO_WATERMARK_",
+                        "SUBTITLE_WATERMARK_",
+                        "IMAGE_WATERMARK_",
+                        "MERGE_",
+                        "METADATA_",
+                        "TASK_MONITOR_",
+                        "CONVERT_",
+                        "COMPRESSION_",
+                        "TRIM_",
+                        "EXTRACT_",
+                        "MISTRAL_",
+                        "DEEPSEEK_",
+                        "DEFAULT_AI_",
+                    )
                 )
+                and data[2]
+                not in ["CONCAT_DEMUXER_ENABLED", "FILTER_COMPLEX_ENABLED"]
             )
-            and data[2] not in ["CONCAT_DEMUXER_ENABLED", "FILTER_COMPLEX_ENABLED"]
-        ) or data[2].startswith("STREAMRIP_"):
+            or data[2].startswith("STREAMRIP_")
+            or data[2].startswith("ZOTIFY_")
+        ):
             # Get the current state before making changes
             current_state = globals()["state"]
 
@@ -9962,7 +11216,6 @@ async def edit_bot_settings(client, query):
                     "STREAMRIP_MAX_SEARCH_RESULTS",
                     "STREAMRIP_ENABLE_DATABASE",
                     "STREAMRIP_AUTO_CONVERT",
-                    "STREAMRIP_LIMIT",
                 ]:
                     back_menu = "streamrip_general"
                 elif data[2] in [
@@ -10087,6 +11340,68 @@ async def edit_bot_settings(client, query):
                     back_menu = "streamrip_advanced"
                 else:
                     back_menu = "streamrip"
+            elif data[2].startswith("ZOTIFY_"):
+                # For zotify settings, determine which submenu to return to
+                if data[2] in [
+                    "ZOTIFY_ENABLED",
+                    "ZOTIFY_DOWNLOAD_REAL_TIME",
+                    "ZOTIFY_REPLACE_EXISTING",
+                    "ZOTIFY_SKIP_DUPLICATES",
+                    "ZOTIFY_SKIP_PREVIOUS",
+                ]:
+                    back_menu = "zotify_general"
+                elif data[2] in [
+                    "ZOTIFY_DOWNLOAD_QUALITY",
+                    "ZOTIFY_AUDIO_FORMAT",
+                    "ZOTIFY_ARTWORK_SIZE",
+                    "ZOTIFY_TRANSCODE_BITRATE",
+                ]:
+                    back_menu = "zotify_quality"
+                elif data[2] in [
+                    "ZOTIFY_CREDENTIALS_PATH",
+                ]:
+                    back_menu = "zotify_auth"
+                elif data[2] in [
+                    "ZOTIFY_ALBUM_LIBRARY",
+                    "ZOTIFY_PODCAST_LIBRARY",
+                    "ZOTIFY_PLAYLIST_LIBRARY",
+                ]:
+                    back_menu = "zotify_paths"
+                elif data[2] in [
+                    "ZOTIFY_OUTPUT_ALBUM",
+                    "ZOTIFY_OUTPUT_PLAYLIST_TRACK",
+                    "ZOTIFY_OUTPUT_PLAYLIST_EPISODE",
+                    "ZOTIFY_OUTPUT_PODCAST",
+                    "ZOTIFY_OUTPUT_SINGLE",
+                ]:
+                    back_menu = "zotify_templates"
+                elif data[2] in [
+                    "ZOTIFY_PRINT_PROGRESS",
+                    "ZOTIFY_PRINT_DOWNLOADS",
+                    "ZOTIFY_PRINT_ERRORS",
+                    "ZOTIFY_PRINT_WARNINGS",
+                    "ZOTIFY_PRINT_SKIPS",
+                ]:
+                    back_menu = "zotify_download"
+                elif data[2] in [
+                    "ZOTIFY_SAVE_METADATA",
+                    "ZOTIFY_SAVE_GENRE",
+                    "ZOTIFY_ALL_ARTISTS",
+                    "ZOTIFY_LYRICS_FILE",
+                    "ZOTIFY_LYRICS_ONLY",
+                    "ZOTIFY_SAVE_SUBTITLES",
+                    "ZOTIFY_CREATE_PLAYLIST_FILE",
+                ]:
+                    back_menu = "zotify_metadata"
+                elif data[2] in [
+                    "ZOTIFY_FFMPEG_PATH",
+                    "ZOTIFY_FFMPEG_ARGS",
+                    "ZOTIFY_LANGUAGE",
+                    "ZOTIFY_MATCH_EXISTING",
+                ]:
+                    back_menu = "zotify_advanced"
+                else:
+                    back_menu = "zotify"
 
             buttons.data_button("⬅️ Back", f"botset {back_menu}", "footer")
             if data[2] not in [
@@ -10288,7 +11603,6 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_MAX_SEARCH_RESULTS",
                 "STREAMRIP_ENABLE_DATABASE",
                 "STREAMRIP_AUTO_CONVERT",
-                "STREAMRIP_LIMIT",
             ]:
                 return_menu = "streamrip_general"
             elif data[2] in [
@@ -10409,6 +11723,69 @@ async def edit_bot_settings(client, query):
             else:
                 # For any other streamrip settings, default to main streamrip menu
                 return_menu = "streamrip"
+        elif data[2].startswith("ZOTIFY_"):
+            # For zotify settings, determine which submenu to return to based on the key
+            if data[2] in [
+                "ZOTIFY_ENABLED",
+                "ZOTIFY_DOWNLOAD_REAL_TIME",
+                "ZOTIFY_REPLACE_EXISTING",
+                "ZOTIFY_SKIP_DUPLICATES",
+                "ZOTIFY_SKIP_PREVIOUS",
+            ]:
+                return_menu = "zotify_general"
+            elif data[2] in [
+                "ZOTIFY_DOWNLOAD_QUALITY",
+                "ZOTIFY_AUDIO_FORMAT",
+                "ZOTIFY_ARTWORK_SIZE",
+                "ZOTIFY_TRANSCODE_BITRATE",
+            ]:
+                return_menu = "zotify_quality"
+            elif data[2] in [
+                "ZOTIFY_CREDENTIALS_PATH",
+            ]:
+                return_menu = "zotify_auth"
+            elif data[2] in [
+                "ZOTIFY_ALBUM_LIBRARY",
+                "ZOTIFY_PODCAST_LIBRARY",
+                "ZOTIFY_PLAYLIST_LIBRARY",
+            ]:
+                return_menu = "zotify_paths"
+            elif data[2] in [
+                "ZOTIFY_OUTPUT_ALBUM",
+                "ZOTIFY_OUTPUT_PLAYLIST_TRACK",
+                "ZOTIFY_OUTPUT_PLAYLIST_EPISODE",
+                "ZOTIFY_OUTPUT_PODCAST",
+                "ZOTIFY_OUTPUT_SINGLE",
+            ]:
+                return_menu = "zotify_templates"
+            elif data[2] in [
+                "ZOTIFY_PRINT_PROGRESS",
+                "ZOTIFY_PRINT_DOWNLOADS",
+                "ZOTIFY_PRINT_ERRORS",
+                "ZOTIFY_PRINT_WARNINGS",
+                "ZOTIFY_PRINT_SKIPS",
+            ]:
+                return_menu = "zotify_download"
+            elif data[2] in [
+                "ZOTIFY_SAVE_METADATA",
+                "ZOTIFY_SAVE_GENRE",
+                "ZOTIFY_ALL_ARTISTS",
+                "ZOTIFY_LYRICS_FILE",
+                "ZOTIFY_LYRICS_ONLY",
+                "ZOTIFY_SAVE_SUBTITLES",
+                "ZOTIFY_CREATE_PLAYLIST_FILE",
+            ]:
+                return_menu = "zotify_metadata"
+            elif data[2] in [
+                "ZOTIFY_FFMPEG_PATH",
+                "ZOTIFY_FFMPEG_ARGS",
+                "ZOTIFY_LANGUAGE",
+                "ZOTIFY_MATCH_EXISTING",
+            ]:
+                return_menu = "zotify_advanced"
+            else:
+                # For any other zotify settings, default to main zotify menu
+                return_menu = "zotify"
         elif data[2].startswith("MERGE_") or data[2] in [
             "CONCAT_DEMUXER_ENABLED",
             "FILTER_COMPLEX_ENABLED",
@@ -10696,6 +12073,15 @@ async def edit_bot_settings(client, query):
         "streamrip_cli",
         "streamrip_advanced",
         "streamrip_config",
+        "zotify",
+        "zotify_general",
+        "zotify_quality",
+        "zotify_auth",
+        "zotify_paths",
+        "zotify_templates",
+        "zotify_download",
+        "zotify_metadata",
+        "zotify_advanced",
     ] or data[1].startswith(
         "nzbser",
     ):
@@ -10843,7 +12229,6 @@ async def edit_bot_settings(client, query):
                 "STREAMRIP_MAX_SEARCH_RESULTS",
                 "STREAMRIP_ENABLE_DATABASE",
                 "STREAMRIP_AUTO_CONVERT",
-                "STREAMRIP_LIMIT",
             ]:
                 previous_menu = "streamrip_general"
             elif data[2] in [
@@ -12494,6 +13879,37 @@ async def edit_bot_settings(client, query):
                 # Streamrip operations enabled without logging
                 pass
 
+        # Special handling for ZOTIFY_ENABLED
+        elif key == "ZOTIFY_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Zotify is being disabled, reset all zotify-related configs
+                from bot.helper.ext_utils.config_utils import reset_zotify_configs
+
+                await reset_zotify_configs(database)
+            else:
+                # Zotify operations enabled without logging
+                pass
+
+        # Special handling for YOUTUBE_UPLOAD_ENABLED
+        elif key == "YOUTUBE_UPLOAD_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+            if not value:
+                # If YouTube upload is being disabled, reset all YouTube-related configs
+                from bot.helper.ext_utils.config_utils import reset_youtube_configs
+
+                await reset_youtube_configs(database)
+            else:
+                # YouTube upload operations enabled without logging
+                pass
+
         # Special handling for TORRENT_SEARCH_ENABLED
         elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
             "HYPERDL_ENABLED",
@@ -12580,7 +13996,7 @@ async def edit_bot_settings(client, query):
             return_menu = "archiveflags"
         elif key.startswith("STREAMRIP_") and key != "STREAMRIP_ENABLED":
             # For streamrip settings (except STREAMRIP_ENABLED which is handled in operations), determine which submenu to return to
-            if key in ["STREAMRIP_AUTO_CONVERT", "STREAMRIP_LIMIT"]:
+            if key in ["STREAMRIP_AUTO_CONVERT"]:
                 return_menu = "streamrip_general"
             elif key in [
                 "STREAMRIP_DEFAULT_QUALITY",
@@ -12705,6 +14121,8 @@ async def edit_bot_settings(client, query):
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
             "STREAMRIP_ENABLED",
+            "ZOTIFY_ENABLED",
+            "YOUTUBE_UPLOAD_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",

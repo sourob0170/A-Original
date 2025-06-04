@@ -5,13 +5,13 @@ rclone.conf
 .netrc
 log.txt
 cfg.zip
-accounts/*
+accounts/
 MediaInfo/*
 Images/*
-thumbnails/*
-rclone/*
-tokens/*
-sabnzbd/*
+thumbnails/
+rclone/
+tokens/
+sabnzbd/
 list_drives.txt
 shorteners.txt
 cookies.txt
@@ -20,3 +20,5 @@ downloads/*
 *.session
 __pycache__/
 venv/
+tdlib_user/
+tdlib_bot/

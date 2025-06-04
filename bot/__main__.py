@@ -1,4 +1,5 @@
 # ruff: noqa: E402
+import asyncio
 import gc
 from asyncio import create_task, gather
 
@@ -30,6 +31,9 @@ COMMANDS = {
     "StreamripMirrorCommand": "- Mirror music from streaming platforms",
     "StreamripLeechCommand": "- Leech music from streaming platforms",
     "StreamripSearchCommand": "- Search music across platforms",
+    "ZotifyMirrorCommand": "- Mirror music from Spotify",
+    "ZotifyLeechCommand": "- Leech music from Spotify",
+    "ZotifySearchCommand": "- Search music on Spotify",
     "CloneCommand": "- Copy file/folder to Drive",
     "MediaInfoCommand": "- Get mediainfo",
     "SoxCommand": "- Get audio spectrum",
@@ -77,10 +81,14 @@ async def set_commands():
 
 # Main Function
 async def main():
-    # Initialize garbage collection
-    LOGGER.info("Configuring garbage collection...")
+    # Initialize garbage collection with startup-optimized thresholds
+    LOGGER.info("Configuring garbage collection for startup optimization...")
     gc.enable()
-    gc.set_threshold(700, 10, 10)  # Adjust GC thresholds for better performance
+    # Use higher thresholds during startup to reduce GC overhead
+    # This reduces CPU usage during the critical startup phase
+    gc.set_threshold(
+        1000, 15, 15
+    )  # Higher thresholds to reduce GC frequency during startup
 
     from .core.startup import (
         load_configurations,
@@ -125,6 +133,7 @@ async def main():
         set_commands(),
         jdownloader.boot(),
     )
+    from .helper.ext_utils.task_manager import start_queue_processor
     from .helper.ext_utils.task_monitor import start_monitoring
 
     await gather(
@@ -137,8 +146,16 @@ async def main():
         rclone_serve_booter(),
     )
 
+    # Start background services immediately without delays
+    LOGGER.info("Starting background services...")
+
     # Start task monitoring system
+    LOGGER.info("Starting task monitoring system...")
     create_task(start_monitoring())  # noqa: RUF006
+
+    # Start queue processor to ensure tasks run even under high system resources
+    LOGGER.info("Starting queue processor...")
+    create_task(start_queue_processor())  # noqa: RUF006
 
     # Initialize auto-restart scheduler
     from .helper.ext_utils.auto_restart import init_auto_restart
@@ -151,12 +168,18 @@ async def main():
     LOGGER.info("Loading user data for limits tracking...")
     await _load_user_data()
 
-    # Initial garbage collection and memory usage logging
+    # Initial garbage collection and memory usage logging (less aggressive during startup)
     LOGGER.info("Performing initial garbage collection...")
     smart_garbage_collection(
-        aggressive=True
-    )  # Use aggressive mode for initial cleanup
+        aggressive=False  # Use less aggressive mode during startup to reduce resource usage
+    )
     log_memory_usage()
+
+    LOGGER.info("All background services initialized successfully")
+
+    # Adjust garbage collection thresholds for normal operation after startup
+    LOGGER.info("Adjusting garbage collection thresholds for normal operation...")
+    gc.set_threshold(700, 10, 10)  # More aggressive thresholds for normal operation
 
 
 bot_loop.run_until_complete(main())
@@ -205,6 +228,28 @@ def run_cleanup():
 
 
 atexit.register(run_cleanup)
+
+
+# Set up exception handler for unhandled task exceptions
+def handle_loop_exception(loop, context):
+    """Handle unhandled exceptions in the event loop"""
+    exception = context.get("exception")
+    if exception:
+        # Filter out common handler removal errors that are harmless
+        if isinstance(
+            exception, ValueError
+        ) and "list.remove(x): x not in list" in str(exception):
+            LOGGER.debug(f"Handler removal error (harmless): {exception}")
+        else:
+            LOGGER.error(f"Unhandled loop exception: {exception}")
+            LOGGER.error(f"Exception context: {context}")
+    else:
+        LOGGER.warning(f"Loop exception without exception object: {context}")
+
+
+# Set the exception handler for the event loop
+bot_loop.set_exception_handler(handle_loop_exception)
+asyncio.set_event_loop(bot_loop)
 
 # Run Bot
 LOGGER.info("Bot Started!")

@@ -242,6 +242,21 @@ If DEFAULT_UPLOAD is `gd` then you can pass up: `rc` to upload to RCLONE_PATH.
 If you want to add path or gdrive manually from your config/token (UPLOADED FROM USETTING) add mrcc: for rclone and mtp: before the path/gdrive_id without space.
 /cmd link -up mrcc:main:dump or -up mtp:gdrive_id <strong>or you can simply edit upload using owner/user token/config from usetting without adding mtp: or mrcc: before the upload path/id</strong>
 
+<b>YouTube Upload</b>: -up yt
+Upload videos directly to YouTube (requires setup):
+-up yt (upload with default settings: unlisted, People & Blogs category)
+-up yt:privacy:category:tags:title (custom settings with title)
+Examples:
+• -up yt:public:10:music,entertainment (public video in Music category)
+• -up yt:unlisted:22:tutorial,howto (unlisted video with tags)
+• -up yt:private:24::My Custom Title (private video with custom title)
+• -up yt:public:10:music:My Music Video (public with all custom settings)
+
+Privacy options: public, unlisted, private
+Common categories: 10=Music, 22=People & Blogs, 24=Entertainment, 27=Education
+Title: Custom title (leave empty to use template/filename)
+Note: Only video files will be uploaded to YouTube. Requires YouTube API setup.
+
 To add leech destination:
 -up id/@username/pm
 -up b:id/@username/pm (b: means leech by bot) (id or username of the chat or write pm means private message so bot will send the files in private to you)
@@ -1309,6 +1324,263 @@ STREAMRIP_HELP_DICT = {
     "Platforms": streamrip_platforms,
 }
 
+# Zotify help content
+zotify_main = """<b>🎵 Zotify Downloads</b>
+
+Download high-quality music directly from Spotify using your Premium account.
+
+<b>Commands:</b>
+• <code>/zm</code>, <code>/zotifymirror</code> - Mirror music to cloud storage
+• <code>/zl</code>, <code>/zotifyleech</code> - Leech music to Telegram
+• <code>/zs</code>, <code>/zotifysearch</code> - Search Spotify and download
+
+<b>Supported Content:</b>
+• <b>Tracks</b> - Individual songs with full metadata
+• <b>Albums</b> - Complete albums with artwork
+• <b>Playlists</b> - Public and private playlists
+• <b>Artists</b> - Artist discographies and top tracks
+• <b>Podcasts</b> - Episodes and complete shows
+• <b>Personal Collections</b> - Your liked tracks, saved playlists
+
+<b>Audio Quality:</b>
+• <b>OGG Vorbis</b> - Native Spotify format (320kbps)
+• <b>FLAC</b> - Lossless conversion (16-bit/44.1kHz)
+• <b>MP3</b> - Universal compatibility (320kbps)
+• <b>AAC</b> - High efficiency (256kbps)
+
+<b>Requirements:</b>
+• <b>Spotify Premium</b> account (mandatory)
+• Valid credentials uploaded to bot
+• Active internet connection
+
+<b>Authentication:</b>
+Upload credentials via: Bot Settings → Zotify → Authentication"""
+
+zotify_quality_flags = """<b>🎧 Quality & Format Flags</b>
+
+Control the audio quality and format of your downloads.
+
+<b>Quality Levels:</b>
+• <code>-q auto</code> - Automatic quality selection (default)
+• <code>-q normal</code> - Standard quality (96kbps)
+• <code>-q high</code> - High quality (160kbps)
+• <code>-q very_high</code> - Premium quality (320kbps)
+
+<b>Audio Formats:</b>
+• <code>-f vorbis</code> - OGG Vorbis (native Spotify format)
+• <code>-f mp3</code> - MP3 (universal compatibility)
+• <code>-f flac</code> - FLAC (lossless conversion)
+• <code>-f aac</code> - AAC (high efficiency)
+• <code>-f fdk_aac</code> - FDK-AAC (premium encoder)
+• <code>-f opus</code> - Opus (modern codec)
+• <code>-f wav</code> - WAV (uncompressed)
+• <code>-f wavpack</code> - WavPack (lossless compression)
+
+<b>Artwork Options:</b>
+• <code>-a small</code> - Small artwork (300x300)
+• <code>-a medium</code> - Medium artwork (640x640)
+• <code>-a large</code> - Large artwork (1280x1280, default)
+
+<b>Examples:</b>
+• <code>/zm url -q very_high -f flac -a large</code>
+• <code>/zl playlist -q high -f mp3</code>
+• <code>/zm artist -q auto -f vorbis</code>
+
+<b>Quality Notes:</b>
+• Premium account required for high/very_high quality
+• FLAC conversion maintains original quality
+• Vorbis provides best size/quality ratio"""
+
+zotify_download_flags = """<b>📁 Download Control Flags</b>
+
+Customize how your Spotify downloads are handled.
+
+<b>File Naming:</b>
+• <code>-n &lt;name&gt;</code> - Custom filename/folder name
+  - <code>/zm album -n "My Favorite Album"</code>
+  - <code>/zl playlist -n "Workout Mix 2024"</code>
+
+<b>Metadata Options:</b>
+• <code>-metadata</code> - Save metadata tags (default: enabled)
+• <code>-genre</code> - Include genre information
+• <code>-lyrics</code> - Download lyrics as .lrc files
+• <code>-lyrics-only</code> - Download only lyrics (no audio)
+
+<b>Download Behavior:</b>
+• <code>-real-time</code> - Download at playback speed (more stable)
+• <code>-replace</code> - Replace existing files
+• <code>-skip-dup</code> - Skip duplicate tracks
+• <code>-match</code> - Match existing files for skip functionality
+
+<b>Output Templates:</b>
+• <code>-output-single &lt;template&gt;</code> - Custom format for single tracks
+  - Variables: {artists}, {title}, {album}, {track_number}
+  - Example: <code>-output-single "{artists} - {title}"</code>
+
+<b>Special Features:</b>
+• <code>-ss</code> - Take screenshot of track/album
+• <code>-playlist-file</code> - Create .m3u playlist files
+
+<b>Examples:</b>
+• <code>/zm url -n "Jazz Collection" -metadata -genre</code>
+• <code>/zl playlist -lyrics -skip-dup</code>
+• <code>/zm album -real-time -replace</code>"""
+
+zotify_special_downloads = """<b>🎯 Special Downloads</b>
+
+Access your personal Spotify collections and special content.
+
+<b>Personal Collections:</b>
+• <code>liked-tracks</code> or <code>liked</code> - Your liked songs
+• <code>liked-episodes</code> or <code>episodes</code> - Your liked podcast episodes
+• <code>followed-artists</code> or <code>followed</code> - Your followed artists
+• <code>saved-playlists</code> or <code>playlists</code> - Your saved playlists
+
+<b>Artist Content:</b>
+• <code>artist:&lt;id&gt;</code> - Artist discography
+• <code>artist-top:&lt;id&gt;</code> - Artist top tracks
+• <code>artist-albums:&lt;id&gt;</code> - Artist albums only
+
+<b>Search Downloads:</b>
+• <code>/zm search query</code> - Auto-download first result
+• <code>/zl artist name</code> - Search and download artist
+• <code>/zm "exact song title"</code> - Precise search
+
+<b>URL Formats:</b>
+• <code>https://open.spotify.com/track/...</code>
+• <code>https://open.spotify.com/album/...</code>
+• <code>https://open.spotify.com/playlist/...</code>
+• <code>https://open.spotify.com/artist/...</code>
+• <code>https://open.spotify.com/show/...</code>
+• <code>spotify:track:...</code> (URI format)
+
+<b>Examples:</b>
+• <code>/zm liked-tracks -q very_high -f flac</code>
+• <code>/zl followed-artists -n "My Artists"</code>
+• <code>/zm saved-playlists -metadata -lyrics</code>
+• <code>/zl "Bohemian Rhapsody Queen"</code>
+
+<b>Batch Downloads:</b>
+• Upload a text file with multiple URLs/queries
+• Use <code>/zm</code> or <code>/zl</code> as reply to file
+• Each line processed as separate download"""
+
+zotify_examples = """<b>📋 Usage Examples</b>
+
+Real-world examples of Zotify commands for different scenarios.
+
+<b>🎵 Basic Downloads:</b>
+• <code>/zm https://open.spotify.com/album/xyz</code>
+• <code>/zl https://open.spotify.com/track/123</code>
+• <code>/zs Daft Punk Random Access Memories</code>
+
+<b>🎯 Quality-Focused Downloads:</b>
+• <code>/zm album -q very_high -f flac -a large</code>
+• <code>/zl track -q high -f mp3 -metadata</code>
+• <code>/zm playlist -q auto -f vorbis</code>
+
+<b>📁 Organized Downloads:</b>
+• <code>/zm album -n "Pink Floyd - Dark Side (1973)"</code>
+• <code>/zl playlist -n "Workout Mix" -skip-dup</code>
+
+<b>🎤 Personal Collections:</b>
+• <code>/zm liked-tracks -q very_high -f flac</code>
+• <code>/zl saved-playlists -metadata -lyrics</code>
+• <code>/zm followed-artists -n "My Artists"</code>
+
+<b>📚 Metadata & Lyrics:</b>
+• <code>/zm album -metadata -genre -lyrics</code>
+• <code>/zl track -lyrics-only</code>
+• <code>/zm playlist -lyrics -playlist-file</code>
+
+<b>🔄 Advanced Options:</b>
+• <code>/zm large-album -real-time -replace</code>
+• <code>/zl compilation -skip-dup -match</code>
+• <code>/zm artist -output-single "{artists} - {title}"</code>
+
+<b>📦 Batch Processing:</b>
+• Upload a text file with URLs and use:
+• <code>/zm -q very_high -f flac</code> (reply to file)
+• <code>/zl -metadata -lyrics</code> (reply to file)
+
+<b>🔍 Search & Download:</b>
+• <code>/zs Blinding Lights</code> (search and select)
+• <code>/zm "The Weeknd Blinding Lights"</code> (auto-download first)
+• <code>/zl artist:"Taylor Swift"</code> (artist search)
+
+<b>🎧 Podcast Downloads:</b>
+• <code>/zm https://open.spotify.com/show/xyz</code>
+• <code>/zl episode -metadata</code>
+• <code>/zm liked-episodes -n "My Podcasts"</code>
+
+<b>💡 Pro Tips:</b>
+• Use <code>-f flac</code> for archival quality
+• Use <code>-real-time</code> for large downloads
+• Use <code>-skip-dup</code> to avoid re-downloading
+• Use <code>-lyrics</code> for karaoke files"""
+
+zotify_troubleshooting = """<b>🔧 Troubleshooting & Tips</b>
+
+Common issues and solutions for Zotify downloads.
+
+<b>❌ Authentication Issues:</b>
+• <b>Problem:</b> "Zotify credentials not configured"
+• <b>Solution:</b> Upload credentials via Bot Settings → Zotify → Authentication
+• <b>Note:</b> Requires Spotify Premium account
+
+<b>❌ Download Failures:</b>
+• <b>Problem:</b> Downloads fail or timeout
+• <b>Solution:</b> Use <code>-real-time</code> flag for stability
+• <b>Alternative:</b> Try smaller batches or individual tracks
+
+<b>❌ Quality Issues:</b>
+• <b>Problem:</b> Low quality despite high settings
+• <b>Solution:</b> Ensure Spotify Premium subscription is active
+• <b>Check:</b> Account region and content availability
+
+<b>❌ Format Problems:</b>
+• <b>Problem:</b> Unsupported format error
+• <b>Solution:</b> Use supported formats: vorbis, mp3, flac, aac
+• <b>Note:</b> Some formats require transcoding (slower)
+
+<b>✅ Performance Tips:</b>
+• Use <code>-q auto</code> for fastest downloads
+• Use <code>-f vorbis</code> for best size/quality ratio
+• Use <code>-skip-dup</code> to avoid re-downloading
+• Use <code>-real-time</code> for large albums/playlists
+
+<b>✅ Quality Optimization:</b>
+• <code>-q very_high -f flac</code> for best quality
+• <code>-q high -f mp3</code> for compatibility
+• <code>-a large</code> for high-resolution artwork
+
+<b>✅ Organization Tips:</b>
+• Use descriptive names with <code>-n</code> flag
+• Include year/genre in custom names
+• Use <code>-metadata</code> for proper tagging
+• Use <code>-lyrics</code> for complete music library
+
+<b>🔒 Account Security:</b>
+• Keep credentials file secure
+• Don't share credentials with others
+• Regenerate credentials if compromised
+• Use dedicated Spotify account for bot if needed
+
+<b>📊 Content Limitations:</b>
+• Some content may be region-locked
+• Podcast availability varies by region
+• Premium-only content requires active subscription
+• Downloaded content for personal use only"""
+
+ZOTIFY_HELP_DICT = {
+    "main": zotify_main,
+    "Quality-Flags": zotify_quality_flags,
+    "Download-Flags": zotify_download_flags,
+    "Special-Downloads": zotify_special_downloads,
+    "Examples": zotify_examples,
+    "Troubleshooting": zotify_troubleshooting,
+}
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -1459,6 +1731,12 @@ Timeout: 60 sec""",
 When enabled, both your helper bots and the owner's helper bots will be used for downloads.
 When disabled, only the owner's helper bots will be used.
 Timeout: 60 sec""",
+    # YouTube Upload Settings
+    "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "Set default privacy setting for YouTube uploads. Options: public, unlisted, private.\n\nExample: unlisted - video won't appear in search but can be shared via link\nExample: public - video will be publicly visible\nExample: private - only you can see the video\n\nTimeout: 60 sec",
+    "YOUTUBE_UPLOAD_DEFAULT_CATEGORY": "Set default category ID for YouTube uploads. Common categories: 10 (Music), 22 (People & Blogs), 24 (Entertainment), 25 (News & Politics), 26 (Howto & Style).\n\nExample: 10 - Music category\nExample: 22 - People & Blogs category\nExample: 24 - Entertainment category\n\nTimeout: 60 sec",
+    "YOUTUBE_UPLOAD_DEFAULT_TAGS": "Set default tags for YouTube uploads. Separate multiple tags with commas.\n\nExample: music,entertainment,video - multiple tags\nExample: tutorial - single tag\nExample: (leave empty for no default tags)\n\nTimeout: 60 sec",
+    "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Set default description for YouTube uploads.\n\nExample: Uploaded via AimLeechBot - simple description\nExample: Check out this amazing content! - custom description\nExample: (leave empty for no default description)\n\nTimeout: 60 sec",
+    "YOUTUBE_UPLOAD_DEFAULT_TITLE": "Set default title template for YouTube uploads. Supports variables: {filename}, {date}, {time}, {size}.\n\nExample: {filename} - {date} - adds date to filename\nExample: My Channel - {filename} - adds channel prefix\nExample: (leave empty to use cleaned filename)\n\nVariables:\n{filename} - cleaned filename without extension\n{date} - current date (YYYY-MM-DD)\n{time} - current time (HH:MM:SS)\n{size} - file size (e.g., 1.2 GB)\n\nTimeout: 60 sec",
 }
 
 # Media tools help text dictionary with detailed examples and consistent formatting
@@ -1752,6 +2030,9 @@ download_commands = f"""
 /{BotCommands.StreamripMirrorCommand[0]} or /{BotCommands.StreamripMirrorCommand[1]}: Mirror music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud).
 /{BotCommands.StreamripLeechCommand[0]} or /{BotCommands.StreamripLeechCommand[1]}: Leech music from streaming platforms to Telegram.
 /{BotCommands.StreamripSearchCommand[0]} or /{BotCommands.StreamripSearchCommand[1]}: Search for music across streaming platforms.
+/{BotCommands.ZotifyMirrorCommand[0]} or /{BotCommands.ZotifyMirrorCommand[1]}: Mirror music from Spotify using Zotify. Supports URLs, search queries, and special downloads (liked-tracks, followed-artists, saved-playlists, liked-episodes).
+/{BotCommands.ZotifyLeechCommand[0]} or /{BotCommands.ZotifyLeechCommand[1]}: Leech music from Spotify to Telegram using Zotify. Supports URLs, search queries, and special downloads.
+/{BotCommands.ZotifySearchCommand[0]} or /{BotCommands.ZotifySearchCommand[1]}: Search for music on Spotify using Zotify.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
 """
 

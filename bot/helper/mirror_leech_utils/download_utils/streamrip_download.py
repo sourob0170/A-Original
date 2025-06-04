@@ -3,18 +3,15 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any
 
 from bot import (
     DOWNLOAD_DIR,
     LOGGER,
-    queue_dict_lock,
     task_dict,
     task_dict_lock,
 )
 from bot.core.config_manager import Config
-from bot.helper.ext_utils.limit_checker import limit_checker
-from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
+from bot.helper.ext_utils.task_manager import check_running_tasks
 from bot.helper.mirror_leech_utils.status_utils.streamrip_status import (
     StreamripDownloadStatus,
 )
@@ -29,7 +26,6 @@ try:
         SoundcloudClient,
         TidalClient,
     )
-    from streamrip.media import Album, Artist, Label, Playlist, Track
 
     STREAMRIP_AVAILABLE = True
 except ImportError:
@@ -51,7 +47,6 @@ class StreamripDownloadHelper:
         "m4a": "AAC",
         "aac": "AAC",
     }
-    TRACK_ESTIMATES = {"track": 1, "album": 12, "playlist": 25}
 
     # Pre-compiled regex patterns for better performance
     PLATFORM_PATTERNS = {
@@ -81,36 +76,24 @@ class StreamripDownloadHelper:
         "_cached_search_paths",
         "_client",
         "_codec",
-        "_completed_tracks",
         "_current_track",
         "_download_path",
         "_download_url",
-        "_eta",
         "_is_cancelled",
         "_is_downloading",
-        "_last_downloaded",
         "_media",
         "_quality",
-        "_size",
-        "_speed",
         "_start_time",
         "_temp_files",
-        "_total_tracks",
         "listener",
     )
 
     def __init__(self, listener):
         self.listener = listener
-        self._last_downloaded = 0
-        self._size = 0
         self._start_time = time.time()
         self._is_cancelled = False
         self._download_path = None
         self._current_track = ""
-        self._total_tracks = 0
-        self._completed_tracks = 0
-        self._speed = 0
-        self._eta = 0
         self._is_downloading = False
         # Cache frequently accessed values for O(1) access
         self._cached_config = None
@@ -122,36 +105,9 @@ class StreamripDownloadHelper:
         self._client = None
 
     @property
-    def speed(self):
-        """Get current download speed"""
-        return self._speed
-
-    @property
-    def processed_bytes(self):
-        """Get processed bytes"""
-        return self._last_downloaded
-
-    @property
-    def size(self):
-        """Get total size"""
-        return self._size
-
-    @property
-    def eta(self):
-        """Get estimated time of arrival"""
-        return self._eta
-
-    @property
     def current_track(self):
         """Get current track being downloaded"""
         return self._current_track
-
-    @property
-    def progress(self):
-        """Get download progress"""
-        if self._total_tracks > 0:
-            return (self._completed_tracks / self._total_tracks) * 100
-        return 0
 
     async def download(
         self, url: str, quality: int | None = None, codec: str | None = None
@@ -199,12 +155,9 @@ class StreamripDownloadHelper:
             # Skip client initialization and media object creation for CLI method
             # This avoids the streamrip 2.1.0 path division bug
 
-            # Initialize progress tracking
+            # Initialize download state
             self._is_downloading = True
             self._current_track = f"Downloading from {platform.title()}"
-
-            # Use cached track estimates
-            self._total_tracks = self.TRACK_ESTIMATES.get(media_type, 1)
 
             # Start download
             success = await self._perform_download()
@@ -310,14 +263,6 @@ class StreamripDownloadHelper:
                 LOGGER.error(f"Unsupported platform: {platform}")
                 return
 
-            # Get media info for progress tracking
-            if hasattr(self._media, "tracks"):
-                self._total_tracks = len(self._media.tracks)
-            elif hasattr(self._media, "track_count"):
-                self._total_tracks = self._media.track_count
-            else:
-                self._total_tracks = 1
-
         except Exception as e:
             LOGGER.error(f"❌ Failed to create media object: {e}")
             return
@@ -369,8 +314,6 @@ class StreamripDownloadHelper:
                 # Validate downloaded files
                 downloaded_files = await self._find_downloaded_files()
                 if downloaded_files:
-                    # Update final progress
-                    self._completed_tracks = self._total_tracks
                     return True
                 LOGGER.error("No files were downloaded")
                 return False
@@ -547,9 +490,6 @@ class StreamripDownloadHelper:
                 LOGGER.error(f"Failed to create subprocess: {proc_error}")
                 return False
 
-            # Start progress monitoring in background
-            progress_task = asyncio.create_task(self._start_progress_monitoring())
-
             try:
                 # Remove timeout restrictions for streamrip downloads (like Deezer)
 
@@ -562,13 +502,10 @@ class StreamripDownloadHelper:
                 stdout_text = stdout.decode() if stdout else ""
 
                 self._is_downloading = False
-                # Cancel progress monitoring
-                progress_task.cancel()
             except Exception as e:
                 # Handle any other errors
                 LOGGER.error(f"Streamrip process error: {e}")
                 self._is_downloading = False
-                progress_task.cancel()
                 try:
                     process.kill()
                     await process.wait()
@@ -1065,8 +1002,22 @@ class StreamripDownloadHelper:
                         streamrip_folder in file_path.parents
                         or file_path.parent == streamrip_folder
                     ):
-                        # Move to our target folder
-                        target_file = self._download_path / file_path.name
+                        # Preserve folder structure when moving files
+                        # Get the relative path from streamrip folder to maintain album/playlist structure
+                        try:
+                            relative_path = file_path.relative_to(streamrip_folder)
+                            target_file = self._download_path / relative_path
+                        except ValueError:
+                            # If relative_to fails, use the full structure from parent
+                            if file_path.parent != streamrip_folder:
+                                # File is in a subfolder, preserve the structure
+                                relative_path = file_path.relative_to(
+                                    file_path.parent.parent
+                                )
+                                target_file = self._download_path / relative_path
+                            else:
+                                # File is directly in streamrip folder
+                                target_file = self._download_path / file_path.name
 
                         # Ensure target directory exists
                         target_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1437,8 +1388,8 @@ fallback_source = "{lastfm_fallback_source}"
 [cli]
 # Print "Downloading Album name" etc. to screen
 text_output = {cli_text_output}
-# Show resolve, download progress bars
-progress_bars = {cli_progress_bars}
+# Show resolve, download progress bars (disabled for bot)
+progress_bars = false
 # The maximum number of search results to show in the interactive menu
 max_search_results = {cli_max_search_results}
 
@@ -1620,9 +1571,7 @@ check_for_updates = {misc_check_for_updates}
                 cli_text_output=str(
                     getattr(Config, "STREAMRIP_CLI_TEXT_OUTPUT", True)
                 ).lower(),
-                cli_progress_bars=str(
-                    getattr(Config, "STREAMRIP_CLI_PROGRESS_BARS", True)
-                ).lower(),
+                cli_progress_bars="false",
                 cli_max_search_results=getattr(
                     Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100
                 ),
@@ -1740,7 +1689,7 @@ fallback_source = "{getattr(Config, "STREAMRIP_LASTFM_FALLBACK_SOURCE", "")}"
 
 [cli]
 text_output = {str(getattr(Config, "STREAMRIP_CLI_TEXT_OUTPUT", True)).lower()}
-progress_bars = {str(getattr(Config, "STREAMRIP_CLI_PROGRESS_BARS", True)).lower()}
+progress_bars = false
 max_search_results = {getattr(Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100)}
 
 [misc]
@@ -1797,12 +1746,15 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
             qobuz_password = Config.STREAMRIP_QOBUZ_PASSWORD or ""
 
             # Only log warnings for missing credentials
-            if qobuz_email and qobuz_password:
-                if not (
+            if (
+                qobuz_email
+                and qobuz_password
+                and not (
                     qobuz_email in config_content
                     and qobuz_password in config_content
-                ):
-                    LOGGER.warning("⚠️ Qobuz credentials not found in config file")
+                )
+            ):
+                LOGGER.warning("⚠️ Qobuz credentials not found in config file")
 
             # Check for Deezer ARL
             deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
@@ -1813,12 +1765,15 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
             tidal_email = Config.STREAMRIP_TIDAL_EMAIL or ""
             tidal_password = Config.STREAMRIP_TIDAL_PASSWORD or ""
 
-            if tidal_email and tidal_password:
-                if not (
+            if (
+                tidal_email
+                and tidal_password
+                and not (
                     tidal_email in config_content
                     and tidal_password in config_content
-                ):
-                    LOGGER.warning("⚠️ Tidal credentials not found in config file")
+                )
+            ):
+                LOGGER.warning("⚠️ Tidal credentials not found in config file")
 
         except Exception as e:
             LOGGER.error(f"Error validating config credentials: {e}")
@@ -1916,9 +1871,7 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
                         "  /botsettings → Streamrip → Credential settings → Deezer arl"
                     )
                     return False
-                LOGGER.info(
-                    f"✅ Deezer authentication available: ***{deezer_arl[-10:]}"
-                )
+                LOGGER.info("✅ Deezer authentication available")
                 return True
 
             if "qobuz.com" in url_lower:
@@ -1945,7 +1898,7 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
                         "Consider using a permanent email address for better reliability"
                     )
 
-                LOGGER.info(f"✅ Qobuz authentication available: {qobuz_email}")
+                LOGGER.info("✅ Qobuz authentication available")
                 return True
 
             if "tidal.com" in url_lower:
@@ -1980,7 +1933,7 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
                     LOGGER.info("✅ Tidal token authentication available")
                     return True
                 if has_credentials:
-                    LOGGER.info(f"✅ Tidal email/password available: {tidal_email}")
+                    LOGGER.info("✅ Tidal email/password available")
                     LOGGER.warning(
                         "⚠️ Tidal authentication may require interactive token generation"
                     )
@@ -2017,9 +1970,7 @@ check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", Tru
                         "  /botsettings → Streamrip → Credential settings → SoundCloud"
                     )
                     return True  # Allow SoundCloud without client ID (like Deezer allows missing ARL)
-                LOGGER.info(
-                    f"✅ SoundCloud authentication available: ***{soundcloud_client_id[-10:]}"
-                )
+                LOGGER.info("✅ SoundCloud authentication available")
                 return True
 
             elif "last.fm" in url_lower or "lastfm" in url_lower:
@@ -2448,91 +2399,6 @@ except Exception as e:
             LOGGER.error(f"Failed to create manual config: {e}")
             # Don't fail the download if manual config creation fails
 
-    async def _start_progress_monitoring(self):
-        """Start progress monitoring for CLI download"""
-        try:
-            import asyncio
-
-            # Simulate progress updates since CLI doesn't provide real-time progress
-            total_steps = 10
-            for step in range(total_steps + 1):
-                if not self._is_downloading:
-                    break
-
-                # Update progress
-                progress = (step / total_steps) * 100
-                self._completed_tracks = (step / total_steps) * self._total_tracks
-
-                # Update current track name with progress
-                if step == 0:
-                    self._current_track = "Initializing download..."
-                elif step < 3:
-                    self._current_track = "Authenticating..."
-                elif step < 5:
-                    self._current_track = "Resolving URL..."
-                elif step < 8:
-                    self._current_track = "Downloading tracks..."
-                else:
-                    self._current_track = "Finalizing download..."
-
-                # Simulate speed calculation
-                elapsed = time.time() - self._start_time
-                if elapsed > 0:
-                    # Estimate speed based on progress
-                    estimated_total_size = 30 * 1024 * 1024  # 30MB estimate
-                    self._size = estimated_total_size
-                    self._last_downloaded = int(
-                        (progress / 100) * estimated_total_size
-                    )
-                    self._speed = (
-                        self._last_downloaded / elapsed if elapsed > 0 else 0
-                    )
-
-                    # Calculate ETA
-                    if self._speed > 0 and progress < 100:
-                        remaining_bytes = (
-                            estimated_total_size - self._last_downloaded
-                        )
-                        self._eta = remaining_bytes / self._speed
-
-                # Wait before next update
-                await asyncio.sleep(2)
-
-        except Exception as e:
-            LOGGER.error(f"Progress monitoring error: {e}")
-
-    async def _progress_callback(self, track_info: dict[str, Any]):
-        """Progress callback for download updates"""
-        try:
-            # Update current track info
-            if "title" in track_info:
-                self._current_track = track_info["title"]
-
-            if "artist" in track_info:
-                self._current_track += f" - {track_info['artist']}"
-
-            # Update progress
-            if "completed" in track_info:
-                self._completed_tracks = track_info["completed"]
-
-            if "total_size" in track_info:
-                self._size = track_info["total_size"]
-
-            if "downloaded" in track_info:
-                self._last_downloaded = track_info["downloaded"]
-
-            # Calculate speed and ETA
-            elapsed = time.time() - self._start_time
-            if elapsed > 0 and self._last_downloaded > 0:
-                self._speed = self._last_downloaded / elapsed
-
-                if self._speed > 0 and self._size > self._last_downloaded:
-                    remaining = self._size - self._last_downloaded
-                    self._eta = remaining / self._speed
-
-        except Exception as e:
-            LOGGER.error(f"Progress callback error: {e}")
-
     def cancel_download(self):
         """Cancel the download"""
         self._is_cancelled = True
@@ -2613,57 +2479,37 @@ async def add_streamrip_download(
             listener.platform = "Unknown"
             listener.media_type = "Unknown"
 
-    # Check streamrip limits
-    if Config.STREAMRIP_LIMIT > 0:
-        # For streamrip, we'll estimate size based on quality and track count
-        # This is approximate since we don't know exact size until download
-        estimated_size = await _estimate_streamrip_size(
-            url, quality or Config.STREAMRIP_DEFAULT_QUALITY
-        )
-
-        if estimated_size > 0:
-            limit_msg = await limit_checker(
-                estimated_size, listener, isStreamrip=True
-            )
-            if limit_msg:
-                return
-
     # Create download helper
     download_helper = StreamripDownloadHelper(listener)
 
-    # Set download info in listener so it has access to URL for error handling
-    listener.set_download_info(url, quality, codec)
-
-    # Set force flag in listener for CLI command generation
+    # Set streamrip-specific attributes on the listener
+    listener.url = url
+    listener.quality = quality
+    listener.codec = codec
     listener.force_download = force
 
-    # Add to task dict
+    # Check running tasks and queue management
+    add_to_queue, event = await check_running_tasks(listener)
+
+    # Add to task dict with proper status
     async with task_dict_lock:
         task_dict[listener.mid] = StreamripDownloadStatus(
-            listener, download_helper, url, quality, codec
+            listener, download_helper, queued=add_to_queue
         )
 
-    # Add to queue if needed
-    async with queue_dict_lock:
-        dl_count = len(
-            [k for k, v in task_dict.items() if v.status() == "Downloading"]
-        )
-
-        if dl_count >= Config.QUEUE_DOWNLOAD:
-            LOGGER.info(f"Added streamrip download to queue: {url}")
-            task_dict[listener.mid] = QueueStatus(listener, listener.mid, "dl")
-            await send_status_message(
-                listener.message, "⏳ Added to download queue!"
-            )
+    # Handle queuing
+    if add_to_queue:
+        LOGGER.info(f"Added streamrip download to queue: {url}")
+        await send_status_message(listener.message, "⏳ Added to download queue!")
+        await event.wait()
+        if listener.is_cancelled:
             return
+        LOGGER.info(f"Start from Queued/Download: {listener.name}")
 
-    # Start download immediately
-    LOGGER.info(f"Starting streamrip download: {url}")
-
-    # Add to task dict with StreamripDownloadStatus for status tracking
+    # Update task dict for active download
     async with task_dict_lock:
         task_dict[listener.mid] = StreamripDownloadStatus(
-            listener, download_helper, url, quality, codec
+            listener, download_helper, queued=False
         )
 
     # Send status message automatically when download starts (instead of initial download start message)
@@ -2675,6 +2521,9 @@ async def add_streamrip_download(
         # If download was successful, trigger the upload process
         if download_success:
             LOGGER.info("Streamrip download completed, triggering upload process...")
+            # Initialize media tools settings before upload (only for specialized listeners)
+            if hasattr(listener, "initialize_media_tools"):
+                await listener.initialize_media_tools()
             await listener.on_download_complete()
         else:
             LOGGER.error("Streamrip download failed")
@@ -2685,37 +2534,36 @@ async def add_streamrip_download(
 
         LOGGER.error(f"Traceback: {traceback.format_exc()}")
         await listener.on_download_error(f"Download error: {e}")
+    finally:
+        # Clean up any remaining aiohttp sessions
+        try:
+            from bot.helper.streamrip_utils.search_handler import (
+                cleanup_all_streamrip_sessions,
+            )
 
+            await cleanup_all_streamrip_sessions()
 
-async def _estimate_streamrip_size(url: str, quality: int) -> int:
-    """Estimate download size for streamrip content"""
-    try:
-        from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
+            # Additional cleanup for any remaining sessions
+            import gc
 
-        parsed = await parse_streamrip_url(url)
-        if not parsed:
-            return 0
+            import aiohttp
 
-        _, media_type, _ = parsed
+            # Force garbage collection to find unclosed sessions
+            gc.collect()
 
-        # Size estimates in MB per track based on quality
-        size_estimates = {
-            0: 4,  # 128 kbps
-            1: 10,  # 320 kbps
-            2: 35,  # CD Quality
-            3: 80,  # Hi-Res
-            4: 150,  # Hi-Res+
-        }
+            # Close any remaining aiohttp sessions
+            for obj in gc.get_objects():
+                if isinstance(obj, aiohttp.ClientSession | aiohttp.TCPConnector):
+                    try:
+                        if not obj.closed:
+                            await obj.close()
+                    except Exception:
+                        pass
 
-        track_size_mb = size_estimates.get(quality, 35)
+            # Final garbage collection
+            gc.collect()
 
-        # Use class constants for track count estimation
-        track_count = StreamripDownloadHelper.TRACK_ESTIMATES.get(media_type, 10)
-        if media_type == "artist":
-            track_count = 50  # Conservative estimate for artists
-
-        return track_count * track_size_mb * 1024 * 1024
-
-    except Exception as e:
-        LOGGER.error(f"Error estimating streamrip size: {e}")
-        return 0
+        except Exception as cleanup_error:
+            # Only log if it's not a common cleanup error
+            if "session" not in str(cleanup_error).lower():
+                LOGGER.warning(f"Session cleanup error: {cleanup_error}")

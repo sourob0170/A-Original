@@ -57,6 +57,14 @@ async def send_message(
     """
     parse_mode = enums.ParseMode.MARKDOWN if markdown else enums.ParseMode.HTML
 
+    # Ensure text is a string to avoid TypeError
+    if not isinstance(text, str):
+        if text is None:
+            text = "Error: Message content is None"
+        else:
+            # Convert any non-string object to string
+            text = str(text)
+
     # Validate and truncate message length if necessary
     max_length = 4096  # Telegram's message length limit
     if len(text) > max_length:
@@ -131,7 +139,8 @@ async def send_message(
     except FloodWait as f:
         if not block:
             return message
-        await sleep(f.value * 1.2)
+        # More aggressive backoff to prevent repeated FloodWait errors
+        await sleep(f.value * 1.5 + 2)  # Add extra buffer time
         return await send_message(
             message,
             text,
@@ -159,6 +168,14 @@ async def edit_message(
         return "Invalid message object"
 
     parse_mode = enums.ParseMode.MARKDOWN if markdown else enums.ParseMode.HTML
+
+    # Ensure text is a string to avoid TypeError
+    if not isinstance(text, str):
+        if text is None:
+            text = "Error: Message content is None"
+        else:
+            # Convert any non-string object to string
+            text = str(text)
 
     # Validate and truncate message length if necessary
     max_length = 4096  # Telegram's message length limit
@@ -206,7 +223,8 @@ async def edit_message(
     except FloodWait as f:
         if not block:
             return message
-        await sleep(f.value * 1.2)
+        # More aggressive backoff to prevent repeated FloodWait errors
+        await sleep(f.value * 1.5 + 2)  # Add extra buffer time
         return await edit_message(message, text, buttons, photo, markdown)
     except (MessageNotModified, MessageEmpty):
         # Message content hasn't changed or is empty, not an error
@@ -640,7 +658,10 @@ async def update_status_message(sid, force=False):
                 obj.cancel()
                 del intervals["status"][sid]
             return
-        if not force and get_time() - status_dict[sid]["time"] < 3:
+        # Stricter rate limiting to prevent FloodWait errors
+        time_since_last_update = get_time() - status_dict[sid]["time"]
+        min_interval = 5 if force else 3  # Longer interval for forced updates
+        if time_since_last_update < min_interval:
             return
         status_dict[sid]["time"] = get_time()
         page_no = status_dict[sid]["page_no"]
@@ -741,8 +762,10 @@ async def send_status_message(msg, user_id=0):
                 "is_user": is_user,
             }
         if not intervals["status"].get(sid) and not is_user:
+            # Use configurable status update interval (minimum 2 seconds to prevent FloodWait)
+            update_interval = max(Config.STATUS_UPDATE_INTERVAL, 2)
             intervals["status"][sid] = SetInterval(
-                1,
+                update_interval,
                 update_status_message,
                 sid,
             )
