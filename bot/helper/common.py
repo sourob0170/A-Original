@@ -51,12 +51,7 @@ from .ext_utils.files_utils import (
     is_first_archive_split,
     split_file,
 )
-from .ext_utils.links_utils import (
-    is_gdrive_id,
-    is_gdrive_link,
-    is_rclone_path,
-    is_telegram_link,
-)
+
 from .ext_utils.media_utils import (
     FFMpeg,
     apply_document_metadata,

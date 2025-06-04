@@ -32,7 +32,6 @@ from bot.helper.ext_utils.files_utils import (
     join_files,
     remove_excluded_files,
 )
-from bot.helper.ext_utils.links_utils import is_gdrive_id, is_rclone_path
 from bot.helper.ext_utils.status_utils import get_readable_file_size
 from bot.helper.ext_utils.task_manager import check_running_tasks, start_from_queued
 from bot.helper.mirror_leech_utils.gdrive_utils.upload import GoogleDriveUpload
@@ -545,48 +544,6 @@ class TaskListener(TaskConfig):
                         )
             # Don't delete the tg reference as we need it for cancellation
             # We'll keep the reference in self.telegram_uploader
-        elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
-            LOGGER.info(f"Gdrive Upload Name: {self.name}")
-            # If up_dest is "gd", use the configured GDRIVE_ID
-            if self.up_dest == "gd":
-                gdrive_id = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
-                if gdrive_id:
-                    self.up_dest = gdrive_id
-                else:
-                    LOGGER.warning(
-                        "DEFAULT_UPLOAD is 'gd' but no GDRIVE_ID configured, falling back to Rclone"
-                    )
-                    LOGGER.info(f"Rclone Upload Name: {self.name}")
-                    RCTransfer = RcloneTransferHelper(self)
-                    async with task_dict_lock:
-                        task_dict[self.mid] = RcloneStatus(
-                            self, RCTransfer, gid, "up"
-                        )
-                    await gather(
-                        update_status_message(self.message.chat.id),
-                        RCTransfer.upload(up_path),
-                    )
-                    del RCTransfer
-                    return
-
-            drive = GoogleDriveUpload(self, up_path)
-            async with task_dict_lock:
-                task_dict[self.mid] = GoogleDriveStatus(self, drive, gid, "up")
-            await gather(
-                update_status_message(self.message.chat.id),
-                sync_to_async(drive.upload),
-            )
-            del drive
-        else:
-            LOGGER.info(f"Rclone Upload Name: {self.name}")
-            RCTransfer = RcloneTransferHelper(self)
-            async with task_dict_lock:
-                task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
-            await gather(
-                update_status_message(self.message.chat.id),
-                RCTransfer.upload(up_path),
-            )
-            del RCTransfer
         return
 
     async def on_upload_complete(

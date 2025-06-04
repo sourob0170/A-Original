@@ -13,7 +13,6 @@ from bot.helper.mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
 
 from .bot_utils import get_telegraph_list, sync_to_async
 from .files_utils import get_base_name
-from .links_utils import is_gdrive_id
 
 
 async def stop_duplicate_check(listener):
@@ -21,7 +20,6 @@ async def stop_duplicate_check(listener):
         isinstance(listener.up_dest, int)
         or listener.is_leech
         or listener.select
-        or not is_gdrive_id(listener.up_dest)
         or (listener.up_dest.startswith("mtp:") and listener.stop_duplicate)
         or not listener.stop_duplicate
         or listener.same_dir
