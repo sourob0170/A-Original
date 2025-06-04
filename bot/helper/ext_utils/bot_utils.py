@@ -568,9 +568,6 @@ async def _load_user_data():
                             # Convert string keys back to integers
                             user_data[int(k)] = loaded_data[k]
 
-                        # Force garbage collection after each batch
-                        if (i + batch_size) < len(keys):
-
                     # Clear the loaded_data variable to free memory
                     del loaded_data
 
