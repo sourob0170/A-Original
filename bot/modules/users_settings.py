@@ -238,20 +238,21 @@ Stop Duplicate is <b>{sd_msg}</b>"""
             "Default Description",
             f"userset {user_id} menu YT_DEFAULT_DESCRIPTION",
         )
-        yt_description = user_dict.get("YT_DEFAULT_DESCRIPTION", "Uploaded by Aeon-MLTB.")
+        yt_description = user_dict.get(
+            "YT_DEFAULT_DESCRIPTION", "Uploaded by Aeon-MLTB."
+        )
 
         buttons.data_button(
-            "Folder Upload Mode", # New button
-            f"userset {user_id} menu YT_DEFAULT_FOLDER_MODE", # Points to the new menu
+            "Folder Upload Mode",  # New button
+            f"userset {user_id} menu YT_DEFAULT_FOLDER_MODE",  # Points to the new menu
         )
         yt_folder_mode = user_dict.get("YT_DEFAULT_FOLDER_MODE", "playlist")
 
         buttons.data_button(
-            "Add to Playlist ID", # New button
+            "Add to Playlist ID",  # New button
             f"userset {user_id} menu YT_ADD_TO_PLAYLIST_ID",
         )
         yt_add_to_playlist_id = user_dict.get("YT_ADD_TO_PLAYLIST_ID", "None")
-
 
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
@@ -262,10 +263,17 @@ Default Tags: <code>{yt_tags}</code>
 Default Description: <code>{yt_description}</code>
 Default Folder Upload Mode: <b>{yt_folder_mode.capitalize()}</b>
 Add to Playlist ID: <code>{yt_add_to_playlist_id}</code>"""
-    elif stype == "youtube_folder_mode_menu": # New state for folder mode selection
-        buttons.data_button("Playlist", f"userset {user_id} set_yt_folder_mode playlist")
-        buttons.data_button("Individual Videos", f"userset {user_id} set_yt_folder_mode individual")
-        buttons.data_button("Playlist & Individuals", f"userset {user_id} set_yt_folder_mode playlist_and_individual")
+    elif stype == "youtube_folder_mode_menu":  # New state for folder mode selection
+        buttons.data_button(
+            "Playlist", f"userset {user_id} set_yt_folder_mode playlist"
+        )
+        buttons.data_button(
+            "Individual Videos", f"userset {user_id} set_yt_folder_mode individual"
+        )
+        buttons.data_button(
+            "Playlist & Individuals",
+            f"userset {user_id} set_yt_folder_mode playlist_and_individual",
+        )
         buttons.data_button("Back", f"userset {user_id} youtube")
         buttons.data_button("Close", f"userset {user_id} close")
         text = f"<u>Set Default YouTube Folder Upload Mode for {name}</u>"
@@ -519,7 +527,13 @@ async def get_menu(option, message, user_id):
         back_to = "rclone"
     elif option in gdrive_options:
         back_to = "gdrive"
-    elif option in ["YT_DEFAULT_PRIVACY", "YT_DEFAULT_CATEGORY", "YT_DEFAULT_TAGS", "YT_DEFAULT_DESCRIPTION", "YT_ADD_TO_PLAYLIST_ID"]: # Added new option
+    elif option in [
+        "YT_DEFAULT_PRIVACY",
+        "YT_DEFAULT_CATEGORY",
+        "YT_DEFAULT_TAGS",
+        "YT_DEFAULT_DESCRIPTION",
+        "YT_ADD_TO_PLAYLIST_ID",
+    ]:  # Added new option
         back_to = "youtube"
     else:
         back_to = "back"
