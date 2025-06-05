@@ -60,6 +60,7 @@ from bot.helper.telegram_helper.message_utils import (
 class TaskListener(TaskConfig):
     def __init__(self):
         super().__init__()
+        self.youtube_upload_mode = "playlist" #Defaulting to playlist
 
     async def clean(self):
         try:
@@ -362,12 +363,22 @@ class TaskListener(TaskConfig):
             del tg
         elif upload_service == "yt":
             LOGGER.info(f"Uploading to YouTube: {self.name}")
-            yt = YouTubeUpload(self, up_path)
+
+            # Determine the final upload mode, prioritizing task-specific override
+            # upload_mode_to_pass = getattr(self, 'yt_override_mode', None) or self.youtube_upload_mode
+            # This is now handled by self.yt_final_mode which is resolved in before_start
+
+            yt = YouTubeUpload(self, up_path,
+                               final_privacy=self.yt_final_privacy,
+                               final_tags=self.yt_final_tags,
+                               final_category=self.yt_final_category,
+                               final_description=self.yt_final_description,
+                               final_playlist_id=self.yt_final_playlist_id) # Pass new playlist_id
             async with task_dict_lock:
                 task_dict[self.mid] = YtStatus(self, yt, gid)
             await gather(
                 update_status_message(self.message.chat.id),
-                sync_to_async(yt.upload),
+                sync_to_async(yt.upload, upload_mode=self.yt_final_mode), # Use resolved final_mode
             )
             del yt
         elif is_gdrive_id(self.up_dest):
@@ -393,10 +404,10 @@ class TaskListener(TaskConfig):
 
     async def on_upload_complete(
         self,
-        link,
+        upload_result, # Renamed from link
         files,
         folders,
-        mime_type,
+        upload_type, # Renamed from mime_type for clarity with YT uploads
         rclone_path="",
         dir_id="",
     ):
@@ -410,21 +421,21 @@ class TaskListener(TaskConfig):
         done_msg = f"{self.tag}\nYour task is complete\nPlease check your inbox."
         LOGGER.info(f"Task Done: {self.name}")
 
-        upload_service = (
+        upload_service_check = ( # Renamed to avoid conflict with other 'upload_service' var
             "yt" if self.raw_up_dest and self.raw_up_dest.startswith("yt") else ""
         )
 
-        if not upload_service:
-            upload_service = self.user_dict.get(
+        if not upload_service_check:
+            upload_service_check = self.user_dict.get(
                 "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
             )
 
         if self.is_leech:
             msg += f"\n<b>Total Files: </b>{folders}"
-            if mime_type != 0:
-                msg += f"\n<b>Corrupted Files: </b>{mime_type}"
+            if upload_type != 0: # Assuming this was for corrupted files count in leech
+                msg += f"\n<b>Corrupted Files: </b>{upload_type}"
             msg += f"\n<b>cc: </b>{self.tag}\n\n"
-            if not files:
+            if not files: # files here is the dictionary of file URLs for leech
                 await send_message(self.message, msg)
             else:
                 fmsg = ""
@@ -453,37 +464,111 @@ class TaskListener(TaskConfig):
                             f"{msg}<blockquote expandable>{fmsg}</blockquote>",
                         )
                 await send_message(self.message, done_msg)
-        elif upload_service == "yt":
-            msg += "\n<b>Type: </b>Video/Playlist"
-            if link:
-                msg += f"\n<b>Link: </b><a href='{link}'>Link</a>"
-            msg += f"\n\n<b>cc: </b>{self.tag}"
+        elif upload_service_check == "yt":
+            if upload_type == "Video":
+                video_url = upload_result.get("video_url")
+                msg += "\n<b>Type: </b>Video"
+                if video_url:
+                    msg += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+            elif upload_type == "Playlist":
+                playlist_url = upload_result.get("playlist_url")
+                msg += "\n<b>Type: </b>Playlist"
+                if playlist_url:
+                    msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+            elif upload_type == "Individual Videos":
+                individual_urls = upload_result.get("individual_video_urls", [])
+                msg += "\n<b>Type: </b>Individual Videos"
+                # Message splitting logic for individual_urls
+                base_message_for_user = msg + f"\n\n<b>Total Videos: </b>{files}"
+                if folders == 1:
+                    base_message_for_user += f"\n<b>Source: </b>Folder"
+                base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
 
-            await send_message(self.user_id, msg)
-            if Config.LOG_CHAT_ID:
-                await send_message(int(Config.LOG_CHAT_ID), msg)
+                await send_message(self.user_id, base_message_for_user)
+                if Config.LOG_CHAT_ID:
+                    await send_message(int(Config.LOG_CHAT_ID), base_message_for_user)
+
+                links_message_part = "\n<b>Individual Video Links:</b>"
+                if individual_urls:
+                    for i_url in individual_urls:
+                        link_line = f"\n - <a href='{i_url}'>Video Link</a>"
+                        if len(links_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                            await send_message(self.user_id, links_message_part)
+                            if Config.LOG_CHAT_ID:
+                                await send_message(int(Config.LOG_CHAT_ID), links_message_part)
+                            links_message_part = "<b>Individual Video Links (continued):</b>" + link_line
+                        else:
+                            links_message_part += link_line
+                    if links_message_part.strip() and links_message_part != "<b>Individual Video Links (continued):</b>": # Send remaining
+                        await send_message(self.user_id, links_message_part)
+                        if Config.LOG_CHAT_ID:
+                            await send_message(int(Config.LOG_CHAT_ID), links_message_part)
+                msg = "" # Base message already sent
+
+            elif upload_type == "Playlist and Individual Videos":
+                playlist_url = upload_result.get("playlist_url")
+                individual_urls = upload_result.get("individual_video_urls", [])
+                msg += "\n<b>Type: </b>Playlist and Individual Videos"
+                if playlist_url:
+                    msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+
+                base_message_for_user = msg + f"\n\n<b>Total Videos: </b>{files}"
+                if folders == 1:
+                    base_message_for_user += f"\n<b>Source: </b>Folder"
+                base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
+
+                await send_message(self.user_id, base_message_for_user)
+                if Config.LOG_CHAT_ID:
+                    await send_message(int(Config.LOG_CHAT_ID), base_message_for_user)
+
+                links_message_part = "\n<b>Individual Video Links:</b>"
+                if individual_urls:
+                    for i_url in individual_urls:
+                        link_line = f"\n - <a href='{i_url}'>Video Link</a>"
+                        if len(links_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                            await send_message(self.user_id, links_message_part)
+                            if Config.LOG_CHAT_ID:
+                                await send_message(int(Config.LOG_CHAT_ID), links_message_part)
+                            links_message_part = "<b>Individual Video Links (continued):</b>" + link_line
+                        else:
+                            links_message_part += link_line
+                    if links_message_part.strip() and links_message_part != "<b>Individual Video Links (continued):</b>": # Send remaining
+                        await send_message(self.user_id, links_message_part)
+                        if Config.LOG_CHAT_ID:
+                            await send_message(int(Config.LOG_CHAT_ID), links_message_part)
+                msg = "" # Base message with playlist link and other info already sent
+
+            else: # For "Video" and "Playlist" (when no individual links or not split)
+                msg += f"\n\n<b>Total Videos: </b>{files}"
+                if folders == 1 :
+                     msg += f"\n<b>Source: </b>Folder"
+                msg += f"\n\n<b>cc: </b>{self.tag}"
+                await send_message(self.user_id, msg)
+                if Config.LOG_CHAT_ID:
+                    await send_message(int(Config.LOG_CHAT_ID), msg)
+
             await send_message(
                 self.message,
-                f"{self.tag}\nYour video has been uploaded to YouTube successfully!",
+                f"{self.tag}\nYour YouTube upload is complete!",
             )
-        else:
-            msg += f"\n\n<b>Type: </b>{mime_type}"
-            if mime_type == "Folder":
+        else: # For GDrive, Rclone
+            msg += f"\n\n<b>Type: </b>{upload_type}" # upload_type here is the original mime_type for non-YT
+            if upload_type == "Folder":
                 msg += f"\n<b>SubFolders: </b>{folders}"
-                msg += f"\n<b>Files: </b>{files}"
-            if link or (
+                msg += f"\n<b>Files: </b>{files}" # files is count for non-YT uploads
+            if upload_result or ( # upload_result is the link for non-YT
                 rclone_path and Config.RCLONE_SERVE_URL and not self.private_link
             ):
                 buttons = ButtonMaker()
-                if link:
-                    buttons.url_button("☁️ Cloud Link", link)
+                if upload_result: # upload_result is the link for non-YT
+                    buttons.url_button("☁️ Cloud Link", upload_result)
                 else:
                     msg += f"\n\nPath: <code>{rclone_path}</code>"
                 if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
                     remote, rpath = rclone_path.split(":", 1)
                     url_path = rutils.quote(f"{rpath}")
                     share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
-                    if mime_type == "Folder":
+                    if upload_type == "Folder": # upload_type is the original mime_type for non-YT
                         share_url += "/"
                     buttons.url_button("🔗 Rclone Link", share_url)
                 if not rclone_path and dir_id:
@@ -495,7 +580,7 @@ class TaskListener(TaskConfig):
                     if INDEX_URL:
                         share_url = f"{INDEX_URL}findpath?id={dir_id}"
                         buttons.url_button("⚡ Index Link", share_url)
-                        if mime_type.startswith(("image", "video", "audio")):
+                        if upload_type.startswith(("image", "video", "audio")): # upload_type is the original mime_type for non-YT
                             share_urls = f"{INDEX_URL}findpath?id={dir_id}&view=true"
                             buttons.url_button("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)

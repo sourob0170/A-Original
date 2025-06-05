@@ -138,6 +138,23 @@ class TaskConfig:
         self.files_to_proceed = []
         self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
 
+        # YouTube specific settings, resolved later
+        self.yt_final_privacy = "unlisted"
+        self.yt_final_mode = "playlist"
+        self.yt_final_tags = None
+        self.yt_final_category = "22"
+        self.yt_final_description = "Uploaded by Aeon-MLTB."
+        self.yt_final_playlist_id = None
+
+        # Overrides from -up yt: (set by YtDlp/Mirror modules)
+        self.yt_override_privacy = None
+        self.yt_override_mode = None
+        self.yt_override_tags = None
+        self.yt_override_category = None
+        self.yt_override_description = None
+        self.yt_override_playlist_id = None # Placeholder for now
+
+
     def get_token_path(self, dest):
         if dest.startswith("mtp:"):
             return f"tokens/{self.user_id}.pickle"
@@ -360,6 +377,9 @@ class TaskConfig:
                 )
                 if not is_gdrive_id(self.up_dest):
                     raise ValueError(self.up_dest)
+
+            self.resolve_youtube_settings() # Resolve YT settings before this check
+
             elif self.is_clone:
                 if is_gdrive_link(self.link) and self.get_token_path(
                     self.link,
@@ -508,6 +528,61 @@ class TaskConfig:
                 self.thumb = (
                     await create_thumb(msg) if msg.photo or msg.document else ""
                 )
+
+    def resolve_youtube_settings(self):
+        """Resolves final YouTube settings based on overrides and user defaults."""
+        # Privacy
+        val_privacy = self.yt_override_privacy if self.yt_override_privacy is not None else self.user_dict.get("YT_DEFAULT_PRIVACY")
+        if val_privacy and val_privacy.strip().lower() in ["private", "public", "unlisted"]:
+            self.yt_final_privacy = val_privacy.strip().lower()
+        # else it keeps its initialized default from __init__
+
+        # Folder Upload Mode
+        val_mode = self.yt_override_mode if self.yt_override_mode is not None else self.user_dict.get("YT_DEFAULT_FOLDER_MODE")
+        if val_mode and val_mode.strip() in ["playlist", "individual", "playlist_and_individual"]:
+            self.yt_final_mode = val_mode.strip()
+        # else it keeps its initialized default
+
+        # Tags
+        tags_list = None
+        if self.yt_override_tags is not None: # Override present
+            if self.yt_override_tags.strip(): # Override is not empty string
+                tags_list = [t.strip() for t in self.yt_override_tags.split(',') if t.strip()]
+            else: # Override is empty string, means explicitly no tags from override
+                tags_list = []
+        elif "YT_DEFAULT_TAGS" in self.user_dict: # No override, try user settings
+            user_tags_str = self.user_dict["YT_DEFAULT_TAGS"]
+            if user_tags_str and user_tags_str.strip().lower() != 'none':
+                tags_list = [t.strip() for t in user_tags_str.split(',') if t.strip()]
+            elif user_tags_str and user_tags_str.strip().lower() == 'none': # User explicitly wants no default tags
+                tags_list = []
+
+        if tags_list is not None: # If override or user_dict provided a value (even empty list)
+            self.yt_final_tags = tags_list
+        # If tags_list is still None, self.yt_final_tags keeps its initialized value (None)
+        # Application default tags (like ["Aeon-MLTB"]) will be handled in YouTubeUpload if self.yt_final_tags is None
+
+
+        # Category
+        val_category = self.yt_override_category if self.yt_override_category is not None else self.user_dict.get("YT_DEFAULT_CATEGORY")
+        if val_category and val_category.strip().isdigit():
+            self.yt_final_category = val_category.strip()
+        # else it keeps its initialized default
+
+        # Description
+        val_description = self.yt_override_description if self.yt_override_description is not None else self.user_dict.get("YT_DEFAULT_DESCRIPTION")
+        if val_description and val_description.strip(): # Allow empty string from user_dict to override default if needed
+            self.yt_final_description = val_description.strip()
+        elif self.yt_override_description == "": # Explicit empty override
+             self.yt_final_description = ""
+        # else it keeps its initialized default
+
+        # Add to Playlist ID (Example, assuming YT_ADD_TO_PLAYLIST_ID might come from user_dict or override)
+        # For now, only override is handled as per plan. User setting for this can be added later.
+        val_playlist_id = self.yt_override_playlist_id # if self.yt_override_playlist_id is not None else self.user_dict.get("YT_ADD_TO_PLAYLIST_ID")
+        if val_playlist_id and val_playlist_id.strip():
+            self.yt_final_playlist_id = val_playlist_id.strip()
+        # else it keeps its initialized default (None)
 
     async def get_tag(self, text: list):
         if len(text) > 1 and text[1].startswith("Tag: "):

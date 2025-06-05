@@ -160,6 +160,37 @@ class Mirror(TaskListener):
         self.user_trans = args["-ut"]
         self.ffmpeg_cmds = args["-ff"]
 
+        # Initialize YouTube specific override attributes
+        self.yt_override_privacy = None
+        self.yt_override_mode = None
+        self.yt_override_tags = None
+        self.yt_override_category = None
+        self.yt_override_description = None
+
+        if self.up_dest and self.up_dest.startswith("yt:"):
+            self.raw_up_dest = "yt" # Ensure it's treated as a YouTube upload
+            parts = self.up_dest.split(":", 6)[1:] # Skip 'yt' prefix, max 6 parts
+
+            if len(parts) > 0 and parts[0]:
+                self.yt_override_privacy = parts[0]
+            if len(parts) > 1 and parts[1]:
+                mode_candidate = parts[1]
+                if mode_candidate in ["playlist", "individual", "playlist_and_individual"]:
+                    self.yt_override_mode = mode_candidate
+                elif mode_candidate: # If not empty but invalid
+                    LOGGER.warning(f"Invalid YouTube upload mode in -up: {mode_candidate}. Ignoring mode override.")
+            if len(parts) > 2 and parts[2]:
+                self.yt_override_tags = parts[2]
+            if len(parts) > 3 and parts[3]:
+                self.yt_override_category = parts[3]
+            if len(parts) > 4 and parts[4]:
+                self.yt_override_description = parts[4]
+            if len(parts) > 5 and parts[5]: # New part for playlist_id
+                self.yt_override_playlist_id = parts[5]
+            # As per previous logic, if -up starts with yt:, it's for YouTube.
+            # self.up_dest might need to be cleared or handled if it's not a path for rclone/gd.
+            # For now, self.raw_up_dest = "yt" will route it correctly in task_listener.
+
         headers = args["-h"]
         if headers:
             headers = headers.split("|")
