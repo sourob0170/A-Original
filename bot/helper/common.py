@@ -310,6 +310,8 @@ class TaskConfig:
             default_upload = (
                 self.user_dict.get("DEFAULT_UPLOAD", "") or Config.DEFAULT_UPLOAD
             )
+            self.resolve_youtube_settings() # Resolve YT settings before this check
+
             if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
                 self.up_dest = (
                     self.user_dict.get("RCLONE_PATH") or Config.RCLONE_PATH
@@ -377,8 +379,6 @@ class TaskConfig:
                 )
                 if not is_gdrive_id(self.up_dest):
                     raise ValueError(self.up_dest)
-
-            self.resolve_youtube_settings() # Resolve YT settings before this check
 
             elif self.is_clone:
                 if is_gdrive_link(self.link) and self.get_token_path(
