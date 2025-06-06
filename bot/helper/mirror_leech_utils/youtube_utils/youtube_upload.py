@@ -184,6 +184,7 @@ class YouTubeUpload(YouTubeHelper):
         self._updater = SetInterval(self.update_interval, self.progress)
         upload_result_url = None
         upload_type = None
+        upload_mode = self.upload_mode
         files_processed = 0
 
         try:
