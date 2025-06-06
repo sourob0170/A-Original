@@ -406,8 +406,8 @@ class TaskListener(TaskConfig):
         files,
         folders,
         mime_type,
-        upload_type = "playlist",
-        upload_result = "",
+        upload_type="playlist",
+        upload_result="",
         rclone_path="",
         dir_id="",
     ):
@@ -595,9 +595,7 @@ class TaskListener(TaskConfig):
             msg += f"\n\n<b>Type: </b>{mime_type}"
             if mime_type == "Folder":
                 msg += f"\n<b>SubFolders: </b>{folders}"
-                msg += (
-                    f"\n<b>Files: </b>{files}"
-                )
+                msg += f"\n<b>Files: </b>{files}"
             if link or (
                 rclone_path and Config.RCLONE_SERVE_URL and not self.private_link
             ):
@@ -610,9 +608,7 @@ class TaskListener(TaskConfig):
                     remote, rpath = rclone_path.split(":", 1)
                     url_path = rutils.quote(f"{rpath}")
                     share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
-                    if (
-                        mime_type == "Folder"
-                    ):
+                    if mime_type == "Folder":
                         share_url += "/"
                     buttons.url_button("Rclone Link", share_url)
                 if not rclone_path and dir_id:
@@ -624,9 +620,7 @@ class TaskListener(TaskConfig):
                     if INDEX_URL:
                         share_url = f"{INDEX_URL}findpath?id={dir_id}"
                         buttons.url_button("Index Link", share_url)
-                        if mime_type.startswith(
-                            ("image", "video", "audio")
-                        ):
+                        if mime_type.startswith(("image", "video", "audio")):
                             share_urls = f"{INDEX_URL}findpath?id={dir_id}&view=true"
                             buttons.url_button("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)

@@ -519,7 +519,7 @@ class TaskConfig:
                 self.thumb = (
                     await create_thumb(msg) if msg.photo or msg.document else ""
                 )
-    
+
     def resolve_youtube_settings(self):
         def get_cleaned_value(value, default, allowed=None, to_lower=False):
             val = value if value is not None else self.user_dict.get(default)
@@ -530,38 +530,65 @@ class TaskConfig:
                 if not allowed or val in allowed:
                     return val
             return None
-    
-        self.yt_privacy = get_cleaned_value(
-            self.yt_privacy, "YT_DEFAULT_PRIVACY",
-            allowed=["private", "public", "unlisted"],
-            to_lower=True
-        ) or self.yt_privacy
+
+        self.yt_privacy = (
+            get_cleaned_value(
+                self.yt_privacy,
+                "YT_DEFAULT_PRIVACY",
+                allowed=["private", "public", "unlisted"],
+                to_lower=True,
+            )
+            or self.yt_privacy
+        )
         if not self.yt_privacy:
             self.yt_privacy = "unlisted"
-    
-        self.yt_mode = get_cleaned_value(
-            self.yt_mode, "YT_DEFAULT_FOLDER_MODE",
-            allowed=["playlist", "individual", "playlist_and_individual"]
-        ) or self.yt_mode
+
+        self.yt_mode = (
+            get_cleaned_value(
+                self.yt_mode,
+                "YT_DEFAULT_FOLDER_MODE",
+                allowed=["playlist", "individual", "playlist_and_individual"],
+            )
+            or self.yt_mode
+        )
         if not self.yt_mode:
             self.yt_mode = "playlist"
-    
-        tags_str = self.yt_tags if self.yt_tags is not None else self.user_dict.get("YT_DEFAULT_TAGS")
+
+        tags_str = (
+            self.yt_tags
+            if self.yt_tags is not None
+            else self.user_dict.get("YT_DEFAULT_TAGS")
+        )
         if tags_str is not None:
             tags_str = tags_str.strip()
             if tags_str.lower() == "none":
                 self.yt_tags = []
             else:
                 self.yt_tags = [t.strip() for t in tags_str.split(",") if t.strip()]
-    
-        self.yt_category = get_cleaned_value(
-            self.yt_category, "YT_DEFAULT_CATEGORY",
-            allowed=None
-        ) if (get_cleaned_value(self.yt_category, "YT_DEFAULT_CATEGORY", allowed=None, to_lower=False) or '').isdigit() else self.yt_category
-    
-        description = self.yt_description if self.yt_description is not None else self.user_dict.get("YT_DEFAULT_DESCRIPTION")
-        self.yt_description = description.strip() if description is not None else self.yt_description
-    
+
+        self.yt_category = (
+            get_cleaned_value(self.yt_category, "YT_DEFAULT_CATEGORY", allowed=None)
+            if (
+                get_cleaned_value(
+                    self.yt_category,
+                    "YT_DEFAULT_CATEGORY",
+                    allowed=None,
+                    to_lower=False,
+                )
+                or ""
+            ).isdigit()
+            else self.yt_category
+        )
+
+        description = (
+            self.yt_description
+            if self.yt_description is not None
+            else self.user_dict.get("YT_DEFAULT_DESCRIPTION")
+        )
+        self.yt_description = (
+            description.strip() if description is not None else self.yt_description
+        )
+
         if self.yt_playlist_id and self.yt_playlist_id.strip():
             self.yt_playlist_id = self.yt_playlist_id.strip()
 

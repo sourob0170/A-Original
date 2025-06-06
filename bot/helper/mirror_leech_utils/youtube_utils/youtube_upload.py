@@ -28,7 +28,7 @@ class YouTubeUpload(YouTubeHelper):
         category=None,
         description=None,
         playlist_id=None,
-        upload_mode="playlist"
+        upload_mode="playlist",
     ):
         self.listener = listener
         self._updater = None
