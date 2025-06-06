@@ -23,21 +23,23 @@ class YouTubeUpload(YouTubeHelper):
         self,
         listener,
         path,
-        final_privacy=None,
-        final_tags=None,
-        final_category=None,
-        final_description=None,
-        final_playlist_id=None,
+        privacy=None,
+        tags=None,
+        category=None,
+        description=None,
+        playlist_id=None,
+        upload_mode="playlist"
     ):
         self.listener = listener
         self._updater = None
         self._path = path
         self._is_errored = False
-        self.final_privacy = final_privacy
-        self.final_tags = final_tags  # Expected to be a list or None
-        self.final_category = final_category
-        self.final_description = final_description
-        self.final_playlist_id = final_playlist_id
+        self.privacy = privacy
+        self.tags = tags
+        self.category = category
+        self.description = description
+        self.playlist_id = playlist_id
+        self.upload_mode = upload_mode
         super().__init__()
         self.is_uploading = True
 
@@ -164,7 +166,7 @@ class YouTubeUpload(YouTubeHelper):
         elif hasattr(self.listener, "user_id") and self.listener.user_id:
             self.token_path = f"tokens/{self.listener.user_id}.pickle"
 
-    def upload(self, upload_mode="playlist"):
+    def upload(self):
         """Main upload function"""
         self.user_setting()
         try:
@@ -331,10 +333,11 @@ class YouTubeUpload(YouTubeHelper):
 
         async_to_sync(
             self.listener.on_upload_complete,
-            upload_result_url,
-            files_processed,  # total_files (videos in playlist or 1 for single video)
-            1 if upload_type == "Playlist" else 0,  # total_folders
-            upload_type,  # mime_type ("Playlist" or "Video")
+            None,
+            None,
+            files_processed,  # count
+            upload_type=upload_type,  # mime_type ("Playlist" or "Video")
+            upload_result=upload_result_url,
         )
         return
 
@@ -350,17 +353,17 @@ class YouTubeUpload(YouTubeHelper):
         title = file_name
 
         # Use resolved final settings directly
-        privacy_status = self.final_privacy
-        category_id = self.final_category
+        privacy_status = self.privacy
+        category_id = self.category
 
-        # Description: base is final_description, append original filename
-        description_base = self.final_description
+        # Description: base is description, append original filename
+        description_base = self.description
         description = f"{description_base}\n\nOriginal filename: {file_name}"
 
-        # Tags: use final_tags (already a list or None)
-        # If final_tags is None, use application default tags.
-        # If final_tags is an empty list [], it means user/override explicitly wanted no tags.
-        tags_for_body = self.final_tags
+        # Tags: use tags (already a list or None)
+        # If tags is None, use application default tags.
+        # If tags is an empty list [], it means user/override explicitly wanted no tags.
+        tags_for_body = self.tags
         if (
             tags_for_body is None
         ):  # Neither override nor user setting provided tags (and it wasn't explicitly empty list)
@@ -441,14 +444,14 @@ class YouTubeUpload(YouTubeHelper):
             video_url = f"https://www.youtube.com/watch?v={video_id}"
             LOGGER.info(f"Video uploaded successfully: {video_url}")
 
-            if self.final_playlist_id:
+            if self.playlist_id:
                 LOGGER.info(
-                    f"Adding video ID {video_id} to specified playlist ID {self.final_playlist_id}"
+                    f"Adding video ID {video_id} to specified playlist ID {self.playlist_id}"
                 )
                 try:
                     playlist_item_request_body = {
                         "snippet": {
-                            "playlistId": self.final_playlist_id,
+                            "playlistId": self.playlist_id,
                             "resourceId": {
                                 "kind": "youtube#video",
                                 "videoId": video_id,
@@ -462,17 +465,17 @@ class YouTubeUpload(YouTubeHelper):
                     )
                     playlist_item_insert_request.execute()
                     LOGGER.info(
-                        f"Successfully added video ID {video_id} to playlist {self.final_playlist_id}"
+                        f"Successfully added video ID {video_id} to playlist {self.playlist_id}"
                     )
                 except HttpError as e:
                     LOGGER.error(
-                        f"Could not add video {video_id} to playlist {self.final_playlist_id}: {e}"
+                        f"Could not add video {video_id} to playlist {self.playlist_id}: {e}"
                     )
                     # Decide if this should be a task-failing error or just a warning.
                     # For now, log and continue. The video is uploaded, just not added to the specific playlist.
                 except Exception as e:
                     LOGGER.error(
-                        f"Unexpected error adding video {video_id} to playlist {self.final_playlist_id}: {e}"
+                        f"Unexpected error adding video {video_id} to playlist {self.playlist_id}: {e}"
                     )
 
             return video_url

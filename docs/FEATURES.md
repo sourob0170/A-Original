@@ -142,11 +142,7 @@
 - Automatically add watermark text to videos or images.
 - Customize caption format for uploaded files.
 
-## User Settings
-
-The bot allows users to customize various aspects of their experience and default behaviors. These settings can typically be accessed via a dedicated settings command (e.g., `/usersettings`).
-
-### YouTube Settings
+## YouTube Settings
 
 You can configure default settings for your YouTube uploads. Access these via the main settings menu, then select "YouTube".
 

@@ -348,11 +348,11 @@ class YtDlp(TaskListener):
         )
 
         # Initialize YouTube specific override attributes
-        self.yt_override_privacy = None
-        self.yt_override_mode = None
-        self.yt_override_tags = None
-        self.yt_override_category = None
-        self.yt_override_description = None
+        self.yt_privacy = None
+        self.yt_mode = None
+        self.yt_tags = None
+        self.yt_category = None
+        self.yt_description = None
 
         if self.up_dest and self.up_dest.startswith("yt:"):
             self.raw_up_dest = "yt"  # Ensure it's treated as a YouTube upload
@@ -361,22 +361,22 @@ class YtDlp(TaskListener):
             ]  # Skip 'yt' prefix, max 6 parts for overrides
 
             if len(parts) > 0 and parts[0]:
-                self.yt_override_privacy = parts[0]
+                self.yt_privacy = parts[0]
             if len(parts) > 1 and parts[1]:
                 if parts[1] in ["playlist", "individual", "playlist_and_individual"]:
-                    self.yt_override_mode = parts[1]
+                    self.yt_mode = parts[1]
                 elif parts[1]:  # If not empty and not valid, log warning
                     LOGGER.warning(
                         f"Invalid YouTube mode override '{parts[1]}' in -up. Ignoring mode override."
                     )
             if len(parts) > 2 and parts[2]:
-                self.yt_override_tags = parts[2]
+                self.yt_tags = parts[2]
             if len(parts) > 3 and parts[3]:
-                self.yt_override_category = parts[3]
+                self.yt_category = parts[3]
             if len(parts) > 4 and parts[4]:
-                self.yt_override_description = parts[4]
+                self.yt_description = parts[4]
             if len(parts) > 5 and parts[5]:  # New part for playlist_id
-                self.yt_override_playlist_id = parts[5]
+                self.yt_playlist_id = parts[5]
 
             # If -up was *only* for YT overrides (e.g., "yt:private"),
             # up_dest for path purposes should be considered empty or default.
