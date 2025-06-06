@@ -557,7 +557,7 @@ class TaskConfig:
         self.yt_category = get_cleaned_value(
             self.yt_category, "YT_DEFAULT_CATEGORY",
             allowed=None
-        ) if get_cleaned_value(self.yt_category, "YT_DEFAULT_CATEGORY", allowed=None, to_lower=False)?.isdigit() else self.yt_category
+        ) if (get_cleaned_value(self.yt_category, "YT_DEFAULT_CATEGORY", allowed=None, to_lower=False) or '').isdigit() else self.yt_category
     
         description = self.yt_description if self.yt_description is not None else self.user_dict.get("YT_DEFAULT_DESCRIPTION")
         self.yt_description = description.strip() if description is not None else self.yt_description
