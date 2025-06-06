@@ -337,6 +337,7 @@ class YouTubeUpload(YouTubeHelper):
             None,
             None,
             files_processed,  # count
+            upload_type,
             upload_type=upload_type,  # mime_type ("Playlist" or "Video")
             upload_result=upload_result_url,
         )
