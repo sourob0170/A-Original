@@ -466,24 +466,41 @@ class TaskListener(TaskConfig):
                 await send_message(self.message, done_msg)
         elif upload_service == "yt":
             if upload_type == "Video":
-                video_url = upload_result.get("video_url")
                 msg += "\n<b>Type: </b>Video"
-                if video_url:
-                    msg += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+                if isinstance(upload_result, dict):
+                    video_url = upload_result.get("video_url")
+                    if video_url:
+                        msg += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+                elif isinstance(upload_result, str):
+                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
             elif upload_type == "Playlist":
-                playlist_url = upload_result.get("playlist_url")
                 msg += "\n<b>Type: </b>Playlist"
-                if playlist_url:
-                    msg += (
-                        f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                    )
+                if isinstance(upload_result, dict):
+                    playlist_url = upload_result.get("playlist_url")
+                    if playlist_url:
+                        msg += (
+                            f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+                        )
+                    # Optionally, list individual URLs if available and desired for this message type
+                    # individual_urls = upload_result.get("individual_video_urls", [])
+                    # if individual_urls:
+                    #     msg += f"\n<b>({len(individual_urls)} videos processed)</b>"
+                elif isinstance(upload_result, str):
+                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
             elif upload_type == "Individual Videos":
-                individual_urls = upload_result.get("individual_video_urls", [])
                 msg += "\n<b>Type: </b>Individual Videos"
+                individual_urls = []
+                if isinstance(upload_result, dict):
+                    individual_urls = upload_result.get("individual_video_urls", [])
+                elif isinstance(upload_result, str):
+                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
                 # Message splitting logic for individual_urls
-                base_message_for_user = msg + f"\n\n<b>Total Videos: </b>{files}"
-                if folders == 1:
-                    base_message_for_user += "\n<b>Source: </b>Folder"
+                base_message_for_user = msg # msg already contains type and potential note
+                # Add total videos and source only if we have actual URLs to list, or it's not an error string case
+                if individual_urls or not isinstance(upload_result, str):
+                    base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
+                    if folders == 1:
+                        base_message_for_user += "\n<b>Source: </b>Folder"
                 base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
 
                 await send_message(self.user_id, base_message_for_user)
@@ -525,17 +542,25 @@ class TaskListener(TaskConfig):
                 msg = ""  # Base message already sent
 
             elif upload_type == "Playlist and Individual Videos":
-                playlist_url = upload_result.get("playlist_url")
-                individual_urls = upload_result.get("individual_video_urls", [])
                 msg += "\n<b>Type: </b>Playlist and Individual Videos"
-                if playlist_url:
-                    msg += (
-                        f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                    )
+                playlist_url = None
+                individual_urls = []
+                if isinstance(upload_result, dict):
+                    playlist_url = upload_result.get("playlist_url")
+                    individual_urls = upload_result.get("individual_video_urls", [])
+                    if playlist_url:
+                        msg += (
+                            f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+                        )
+                elif isinstance(upload_result, str):
+                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
 
-                base_message_for_user = msg + f"\n\n<b>Total Videos: </b>{files}"
-                if folders == 1:
-                    base_message_for_user += "\n<b>Source: </b>Folder"
+                base_message_for_user = msg # msg already contains type, playlist link, and potential note
+                # Add total videos and source only if we have actual URLs or it's not an error string case
+                if playlist_url or individual_urls or not isinstance(upload_result, str):
+                    base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
+                    if folders == 1:
+                        base_message_for_user += "\n<b>Source: </b>Folder"
                 base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
 
                 await send_message(self.user_id, base_message_for_user)

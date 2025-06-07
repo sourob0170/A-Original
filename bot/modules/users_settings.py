@@ -270,10 +270,6 @@ Add to Playlist ID: <code>{yt_add_to_playlist_id}</code>"""
         buttons.data_button(
             "Individual Videos", f"userset {user_id} set_yt_folder_mode individual"
         )
-        buttons.data_button(
-            "Playlist & Individuals",
-            f"userset {user_id} set_yt_folder_mode playlist_and_individual",
-        )
         buttons.data_button("Back", f"userset {user_id} youtube")
         buttons.data_button("Close", f"userset {user_id} close")
         text = f"<u>Set Default YouTube Folder Upload Mode for {name}</u>"
