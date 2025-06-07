@@ -466,13 +466,27 @@ class TaskListener(TaskConfig):
                 await send_message(self.message, done_msg)
         elif upload_service == "yt":
             # Determine messaging mode based on playlist_url
-            playlist_url = upload_result.get("playlist_url") if isinstance(upload_result, dict) else None
-            individual_video_urls = upload_result.get("individual_video_urls", []) if isinstance(upload_result, dict) else []
-            video_url = upload_result.get("video_url") if isinstance(upload_result, dict) else None # For single video uploads
+            playlist_url = (
+                upload_result.get("playlist_url")
+                if isinstance(upload_result, dict)
+                else None
+            )
+            individual_video_urls = (
+                upload_result.get("individual_video_urls", [])
+                if isinstance(upload_result, dict)
+                else []
+            )
+            video_url = (
+                upload_result.get("video_url")
+                if isinstance(upload_result, dict)
+                else None
+            )  # For single video uploads
 
             if playlist_url:  # 'Playlist' messaging mode
                 base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
-                base_msg_content += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+                base_msg_content += (
+                    f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
+                )
 
                 # Store parts of the message to be sent
                 messages_to_send = []
@@ -490,20 +504,26 @@ class TaskListener(TaskConfig):
                     current_message_part += links_header
                     for video_link in individual_video_urls:
                         link_line = f"\n- <a href='{video_link}'>Video Link</a>"
-                        if len(current_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                        if (
+                            len(current_message_part.encode("utf-8"))
+                            + len(link_line.encode("utf-8"))
+                            > 3900
+                        ):
                             messages_to_send.append(current_message_part)
-                            current_message_part = "<b>Video Links (continued):</b>" + link_line
+                            current_message_part = (
+                                "<b>Video Links (continued):</b>" + link_line
+                            )
                         else:
                             current_message_part += link_line
 
-                if current_message_part: # Append any remaining part
+                if current_message_part:  # Append any remaining part
                     messages_to_send.append(current_message_part)
 
                 for part in messages_to_send:
                     await send_message(self.user_id, part)
                     if Config.LOG_CHAT_ID:
                         await send_message(int(Config.LOG_CHAT_ID), part)
-                    await sleep(1) # Avoid flood waits
+                    await sleep(1)  # Avoid flood waits
 
             else:  # 'Individual' messaging mode
                 base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
@@ -511,8 +531,10 @@ class TaskListener(TaskConfig):
                 messages_to_send = []
                 current_message_part = base_msg_content
 
-                if video_url: # Single video upload (old upload_type == "Video")
-                     current_message_part += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+                if video_url:  # Single video upload (old upload_type == "Video")
+                    current_message_part += (
+                        f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+                    )
 
                 # Add total videos and source info to the first part if no individual links or if it's a single video link
                 # This ensures it's included before potentially splitting for many individual links.
@@ -521,24 +543,41 @@ class TaskListener(TaskConfig):
                     current_message_part += "\n<b>Source: </b>Folder"
                 current_message_part += f"\n<b>cc: </b>{self.tag}"
 
-                if individual_video_urls: # Multiple individual videos (old upload_type == "Individual Videos")
+                if individual_video_urls:  # Multiple individual videos (old upload_type == "Individual Videos")
                     links_header = "\n\n<b>Individual Video Links:</b>"
                     # Check if adding header exceeds limit for the first message part
-                    if len(current_message_part.encode("utf-8")) + len(links_header.encode("utf-8")) > 3900 and video_url:
+                    if (
+                        len(current_message_part.encode("utf-8"))
+                        + len(links_header.encode("utf-8"))
+                        > 3900
+                        and video_url
+                    ):
                         # If there was a single video_url, the base info is already in current_message_part
                         messages_to_send.append(current_message_part)
-                        current_message_part = links_header # Start new part with header
-                    elif len(current_message_part.encode("utf-8")) + len(links_header.encode("utf-8")) > 3900 :
-                         messages_to_send.append(current_message_part)
-                         current_message_part = links_header
+                        current_message_part = (
+                            links_header  # Start new part with header
+                        )
+                    elif (
+                        len(current_message_part.encode("utf-8"))
+                        + len(links_header.encode("utf-8"))
+                        > 3900
+                    ):
+                        messages_to_send.append(current_message_part)
+                        current_message_part = links_header
                     else:
                         current_message_part += links_header
 
                     for video_link in individual_video_urls:
                         link_line = f"\n- <a href='{video_link}'>Video Link</a>"
-                        if len(current_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                        if (
+                            len(current_message_part.encode("utf-8"))
+                            + len(link_line.encode("utf-8"))
+                            > 3900
+                        ):
                             messages_to_send.append(current_message_part)
-                            current_message_part = "<b>Video Links (continued):</b>" + link_line
+                            current_message_part = (
+                                "<b>Video Links (continued):</b>" + link_line
+                            )
                         else:
                             current_message_part += link_line
 
@@ -549,9 +588,9 @@ class TaskListener(TaskConfig):
                     await send_message(self.user_id, part)
                     if Config.LOG_CHAT_ID:
                         await send_message(int(Config.LOG_CHAT_ID), part)
-                    await sleep(1) # Avoid flood waits
+                    await sleep(1)  # Avoid flood waits
 
-            if isinstance(upload_result, str): # Handle error case from yt_uploader
+            if isinstance(upload_result, str):  # Handle error case from yt_uploader
                 error_message = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}\n\n<b>YT Upload Error: </b>{escape(upload_result)}\n\n<b>cc: </b>{self.tag}"
                 await send_message(self.user_id, error_message)
                 if Config.LOG_CHAT_ID:
