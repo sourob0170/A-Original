@@ -314,7 +314,7 @@ class YouTubeUpload(YouTubeHelper):
                                         )
                                     if video_result: # Store dict
                                         individual_video_urls.append(video_result)
-                                            processed_in_folder += 1
+                                        processed_in_folder += 1
                                     except Exception as e:
                                         LOGGER.error(
                                             f"Failed to upload {item_name} to playlist {original_playlist_id}: {e}"
