@@ -465,154 +465,97 @@ class TaskListener(TaskConfig):
                         )
                 await send_message(self.message, done_msg)
         elif upload_service == "yt":
-            if upload_type == "Video":
-                msg += "\n<b>Type: </b>Video"
-                if isinstance(upload_result, dict):
-                    video_url = upload_result.get("video_url")
-                    if video_url:
-                        msg += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
-                elif isinstance(upload_result, str):
-                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
-            elif upload_type == "Playlist":
-                msg += "\n<b>Type: </b>Playlist"
-                if isinstance(upload_result, dict):
-                    playlist_url = upload_result.get("playlist_url")
-                    if playlist_url:
-                        msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                    # Optionally, list individual URLs if available and desired for this message type
-                    # individual_urls = upload_result.get("individual_video_urls", [])
-                    # if individual_urls:
-                    #     msg += f"\n<b>({len(individual_urls)} videos processed)</b>"
-                elif isinstance(upload_result, str):
-                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
-            elif upload_type == "Individual Videos":
-                msg += "\n<b>Type: </b>Individual Videos"
-                individual_urls = []
-                if isinstance(upload_result, dict):
-                    individual_urls = upload_result.get("individual_video_urls", [])
-                elif isinstance(upload_result, str):
-                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
-                # Message splitting logic for individual_urls
-                base_message_for_user = (
-                    msg  # msg already contains type and potential note
-                )
-                # Add total videos and source only if we have actual URLs to list, or it's not an error string case
-                if individual_urls or not isinstance(upload_result, str):
-                    base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
-                    if folders == 1:
-                        base_message_for_user += "\n<b>Source: </b>Folder"
-                base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
+            # Determine messaging mode based on playlist_url
+            playlist_url = upload_result.get("playlist_url") if isinstance(upload_result, dict) else None
+            individual_video_urls = upload_result.get("individual_video_urls", []) if isinstance(upload_result, dict) else []
+            video_url = upload_result.get("video_url") if isinstance(upload_result, dict) else None # For single video uploads
 
-                await send_message(self.user_id, base_message_for_user)
-                if Config.LOG_CHAT_ID:
-                    await send_message(
-                        int(Config.LOG_CHAT_ID), base_message_for_user
-                    )
+            if playlist_url:  # 'Playlist' messaging mode
+                base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
+                base_msg_content += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
 
-                links_message_part = "\n<b>Individual Video Links:</b>"
-                if individual_urls:
-                    for i_url in individual_urls:
-                        link_line = f"\n - <a href='{i_url}'>Video Link</a>"
-                        if (
-                            len(links_message_part.encode("utf-8"))
-                            + len(link_line.encode("utf-8"))
-                            > 3900
-                        ):
-                            await send_message(self.user_id, links_message_part)
-                            if Config.LOG_CHAT_ID:
-                                await send_message(
-                                    int(Config.LOG_CHAT_ID), links_message_part
-                                )
-                            links_message_part = (
-                                "<b>Individual Video Links (continued):</b>"
-                                + link_line
-                            )
-                        else:
-                            links_message_part += link_line
-                    if (
-                        links_message_part.strip()
-                        and links_message_part
-                        != "<b>Individual Video Links (continued):</b>"
-                    ):  # Send remaining
-                        await send_message(self.user_id, links_message_part)
-                        if Config.LOG_CHAT_ID:
-                            await send_message(
-                                int(Config.LOG_CHAT_ID), links_message_part
-                            )
-                msg = ""  # Base message already sent
+                # Store parts of the message to be sent
+                messages_to_send = []
 
-            elif upload_type == "Playlist and Individual Videos":
-                msg += "\n<b>Type: </b>Playlist and Individual Videos"
-                playlist_url = None
-                individual_urls = []
-                if isinstance(upload_result, dict):
-                    playlist_url = upload_result.get("playlist_url")
-                    individual_urls = upload_result.get("individual_video_urls", [])
-                    if playlist_url:
-                        msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                elif isinstance(upload_result, str):
-                    msg += f"\n<b>Note: </b>{escape(upload_result)}"
-
-                base_message_for_user = msg  # msg already contains type, playlist link, and potential note
-                # Add total videos and source only if we have actual URLs or it's not an error string case
-                if (
-                    playlist_url
-                    or individual_urls
-                    or not isinstance(upload_result, str)
-                ):
-                    base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
-                    if folders == 1:
-                        base_message_for_user += "\n<b>Source: </b>Folder"
-                base_message_for_user += f"\n\n<b>cc: </b>{self.tag}"
-
-                await send_message(self.user_id, base_message_for_user)
-                if Config.LOG_CHAT_ID:
-                    await send_message(
-                        int(Config.LOG_CHAT_ID), base_message_for_user
-                    )
-
-                links_message_part = "\n<b>Individual Video Links:</b>"
-                if individual_urls:
-                    for i_url in individual_urls:
-                        link_line = f"\n - <a href='{i_url}'>Video Link</a>"
-                        if (
-                            len(links_message_part.encode("utf-8"))
-                            + len(link_line.encode("utf-8"))
-                            > 3900
-                        ):
-                            await send_message(self.user_id, links_message_part)
-                            if Config.LOG_CHAT_ID:
-                                await send_message(
-                                    int(Config.LOG_CHAT_ID), links_message_part
-                                )
-                            links_message_part = (
-                                "<b>Individual Video Links (continued):</b>"
-                                + link_line
-                            )
-                        else:
-                            links_message_part += link_line
-                    if (
-                        links_message_part.strip()
-                        and links_message_part
-                        != "<b>Individual Video Links (continued):</b>"
-                    ):  # Send remaining
-                        await send_message(self.user_id, links_message_part)
-                        if Config.LOG_CHAT_ID:
-                            await send_message(
-                                int(Config.LOG_CHAT_ID), links_message_part
-                            )
-                msg = (
-                    ""  # Base message with playlist link and other info already sent
-                )
-
-            else:  # For "Video" and "Playlist" (when no individual links or not split)
-                msg += f"\n\n<b>Total Videos: </b>{files}"
+                # Initial message part with playlist link and other info
+                current_message_part = base_msg_content
+                current_message_part += f"\n\n<b>Total Videos: </b>{files}"
                 if folders == 1:
-                    msg += "\n<b>Source: </b>Folder"
-                msg += f"\n\n<b>cc: </b>{self.tag}"
-                await send_message(self.user_id, msg)
+                    current_message_part += "\n<b>Source: </b>Folder"
+                current_message_part += f"\n<b>cc: </b>{self.tag}"
+
+                # Add individual video links, splitting if necessary
+                if individual_video_urls:
+                    links_header = "\n\n<b>Individual Video Links:</b>"
+                    current_message_part += links_header
+                    for video_link in individual_video_urls:
+                        link_line = f"\n- <a href='{video_link}'>Video Link</a>"
+                        if len(current_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                            messages_to_send.append(current_message_part)
+                            current_message_part = "<b>Video Links (continued):</b>" + link_line
+                        else:
+                            current_message_part += link_line
+
+                if current_message_part: # Append any remaining part
+                    messages_to_send.append(current_message_part)
+
+                for part in messages_to_send:
+                    await send_message(self.user_id, part)
+                    if Config.LOG_CHAT_ID:
+                        await send_message(int(Config.LOG_CHAT_ID), part)
+                    await sleep(1) # Avoid flood waits
+
+            else:  # 'Individual' messaging mode
+                base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
+
+                messages_to_send = []
+                current_message_part = base_msg_content
+
+                if video_url: # Single video upload (old upload_type == "Video")
+                     current_message_part += f"\n<b>Link: </b><a href='{video_url}'>Link</a>"
+
+                # Add total videos and source info to the first part if no individual links or if it's a single video link
+                # This ensures it's included before potentially splitting for many individual links.
+                current_message_part += f"\n\n<b>Total Videos: </b>{files}"
+                if folders == 1:
+                    current_message_part += "\n<b>Source: </b>Folder"
+                current_message_part += f"\n<b>cc: </b>{self.tag}"
+
+                if individual_video_urls: # Multiple individual videos (old upload_type == "Individual Videos")
+                    links_header = "\n\n<b>Individual Video Links:</b>"
+                    # Check if adding header exceeds limit for the first message part
+                    if len(current_message_part.encode("utf-8")) + len(links_header.encode("utf-8")) > 3900 and video_url:
+                        # If there was a single video_url, the base info is already in current_message_part
+                        messages_to_send.append(current_message_part)
+                        current_message_part = links_header # Start new part with header
+                    elif len(current_message_part.encode("utf-8")) + len(links_header.encode("utf-8")) > 3900 :
+                         messages_to_send.append(current_message_part)
+                         current_message_part = links_header
+                    else:
+                        current_message_part += links_header
+
+                    for video_link in individual_video_urls:
+                        link_line = f"\n- <a href='{video_link}'>Video Link</a>"
+                        if len(current_message_part.encode("utf-8")) + len(link_line.encode("utf-8")) > 3900:
+                            messages_to_send.append(current_message_part)
+                            current_message_part = "<b>Video Links (continued):</b>" + link_line
+                        else:
+                            current_message_part += link_line
+
+                if current_message_part:
+                    messages_to_send.append(current_message_part)
+
+                for part in messages_to_send:
+                    await send_message(self.user_id, part)
+                    if Config.LOG_CHAT_ID:
+                        await send_message(int(Config.LOG_CHAT_ID), part)
+                    await sleep(1) # Avoid flood waits
+
+            if isinstance(upload_result, str): # Handle error case from yt_uploader
+                error_message = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}\n\n<b>YT Upload Error: </b>{escape(upload_result)}\n\n<b>cc: </b>{self.tag}"
+                await send_message(self.user_id, error_message)
                 if Config.LOG_CHAT_ID:
-                    await send_message(int(Config.LOG_CHAT_ID), msg)
+                    await send_message(int(Config.LOG_CHAT_ID), error_message)
 
             await send_message(
                 self.message,
