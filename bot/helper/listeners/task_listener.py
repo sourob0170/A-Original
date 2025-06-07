@@ -478,9 +478,7 @@ class TaskListener(TaskConfig):
                 if isinstance(upload_result, dict):
                     playlist_url = upload_result.get("playlist_url")
                     if playlist_url:
-                        msg += (
-                            f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                        )
+                        msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
                     # Optionally, list individual URLs if available and desired for this message type
                     # individual_urls = upload_result.get("individual_video_urls", [])
                     # if individual_urls:
@@ -495,7 +493,9 @@ class TaskListener(TaskConfig):
                 elif isinstance(upload_result, str):
                     msg += f"\n<b>Note: </b>{escape(upload_result)}"
                 # Message splitting logic for individual_urls
-                base_message_for_user = msg # msg already contains type and potential note
+                base_message_for_user = (
+                    msg  # msg already contains type and potential note
+                )
                 # Add total videos and source only if we have actual URLs to list, or it's not an error string case
                 if individual_urls or not isinstance(upload_result, str):
                     base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
@@ -549,15 +549,17 @@ class TaskListener(TaskConfig):
                     playlist_url = upload_result.get("playlist_url")
                     individual_urls = upload_result.get("individual_video_urls", [])
                     if playlist_url:
-                        msg += (
-                            f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
-                        )
+                        msg += f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
                 elif isinstance(upload_result, str):
                     msg += f"\n<b>Note: </b>{escape(upload_result)}"
 
-                base_message_for_user = msg # msg already contains type, playlist link, and potential note
+                base_message_for_user = msg  # msg already contains type, playlist link, and potential note
                 # Add total videos and source only if we have actual URLs or it's not an error string case
-                if playlist_url or individual_urls or not isinstance(upload_result, str):
+                if (
+                    playlist_url
+                    or individual_urls
+                    or not isinstance(upload_result, str)
+                ):
                     base_message_for_user += f"\n\n<b>Total Videos: </b>{files}"
                     if folders == 1:
                         base_message_for_user += "\n<b>Source: </b>Folder"
