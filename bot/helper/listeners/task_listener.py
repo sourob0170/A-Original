@@ -363,13 +363,16 @@ class TaskListener(TaskConfig):
         elif upload_service == "yt":
             LOGGER.info(f"Uploading to YouTube: {self.name}")
 
-            playlist_id_to_use = self.yt_playlist_id # From -up command
-            if not playlist_id_to_use: # If not set by -up command
+            playlist_id_to_use = self.yt_playlist_id  # From -up command
+            if not playlist_id_to_use:  # If not set by -up command
                 user_playlist_id = self.user_dict.get("YT_ADD_TO_PLAYLIST_ID")
-                if user_playlist_id and user_playlist_id.strip().lower() not in ["none", ""]:
+                if user_playlist_id and user_playlist_id.strip().lower() not in [
+                    "none",
+                    "",
+                ]:
                     playlist_id_to_use = user_playlist_id.strip()
                 else:
-                    playlist_id_to_use = None # Explicitly set to None if user setting is "None" or empty
+                    playlist_id_to_use = None  # Explicitly set to None if user setting is "None" or empty
 
             yt = YouTubeUpload(
                 self,
@@ -378,7 +381,7 @@ class TaskListener(TaskConfig):
                 tags=self.yt_tags,
                 category=self.yt_category,
                 description=self.yt_description,
-                playlist_id=playlist_id_to_use, # Use the determined playlist_id
+                playlist_id=playlist_id_to_use,  # Use the determined playlist_id
                 upload_mode=self.yt_mode,
             )
             async with task_dict_lock:
@@ -502,8 +505,12 @@ class TaskListener(TaskConfig):
 
                 # Initial message part with playlist link and other info
                 current_message_part = base_msg_content
-                current_message_part += f"\n\n<b>Total Videos: </b>{folders}" # Changed files to folders
-                if folders == 1: # This condition might need re-evaluation if 'folders' now means file count
+                current_message_part += (
+                    f"\n\n<b>Total Videos: </b>{folders}"  # Changed files to folders
+                )
+                if (
+                    folders == 1
+                ):  # This condition might need re-evaluation if 'folders' now means file count
                     current_message_part += "\n<b>Source: </b>Folder"
                 current_message_part += f"\n<b>cc: </b>{self.tag}"
 
@@ -511,8 +518,10 @@ class TaskListener(TaskConfig):
                 if individual_video_urls:
                     links_header = "\n\n<b>Individual Video Links:</b>"
                     current_message_part += links_header
-                    for video_entry in individual_video_urls: # Iterate through list of dicts
-                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>" # Use name and url from dict
+                    for (
+                        video_entry
+                    ) in individual_video_urls:  # Iterate through list of dicts
+                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"  # Use name and url from dict
                         if (
                             len(current_message_part.encode("utf-8"))
                             + len(link_line.encode("utf-8"))
@@ -541,12 +550,16 @@ class TaskListener(TaskConfig):
                 current_message_part = base_msg_content
 
                 if video_url:  # Single video upload (now video_url is a dict)
-                    current_message_part += f"\n<b>Link: </b><a href='{video_url['url']}'>{escape(video_url['name'])}</a>" # Use name and url
+                    current_message_part += f"\n<b>Link: </b><a href='{video_url['url']}'>{escape(video_url['name'])}</a>"  # Use name and url
 
                 # Add total videos and source info to the first part if no individual links or if it's a single video link
                 # This ensures it's included before potentially splitting for many individual links.
-                current_message_part += f"\n\n<b>Total Videos: </b>{folders}" # Changed files to folders
-                if folders == 1: # This condition might need re-evaluation if 'folders' now means file count
+                current_message_part += (
+                    f"\n\n<b>Total Videos: </b>{folders}"  # Changed files to folders
+                )
+                if (
+                    folders == 1
+                ):  # This condition might need re-evaluation if 'folders' now means file count
                     current_message_part += "\n<b>Source: </b>Folder"
                 current_message_part += f"\n<b>cc: </b>{self.tag}"
 
@@ -574,8 +587,10 @@ class TaskListener(TaskConfig):
                     else:
                         current_message_part += links_header
 
-                    for video_entry in individual_video_urls: # Iterate through list of dicts
-                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>" # Use name and url from dict
+                    for (
+                        video_entry
+                    ) in individual_video_urls:  # Iterate through list of dicts
+                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"  # Use name and url from dict
                         if (
                             len(current_message_part.encode("utf-8"))
                             + len(link_line.encode("utf-8"))
