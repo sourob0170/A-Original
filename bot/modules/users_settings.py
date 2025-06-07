@@ -243,7 +243,7 @@ Stop Duplicate is <b>{sd_msg}</b>"""
         )
 
         buttons.data_button(
-            "Folder Upload Mode",  # New button
+            "Upload Mode",  # New button
             f"userset {user_id} menu YT_DEFAULT_FOLDER_MODE",  # Points to the new menu
         )
         yt_folder_mode = user_dict.get("YT_DEFAULT_FOLDER_MODE", "playlist")
@@ -268,7 +268,7 @@ Add to Playlist ID: <code>{yt_add_to_playlist_id}</code>"""
             "Playlist", f"userset {user_id} set_yt_folder_mode playlist"
         )
         buttons.data_button(
-            "Individual Videos", f"userset {user_id} set_yt_folder_mode individual"
+            "Individual", f"userset {user_id} set_yt_folder_mode individual"
         )
         buttons.data_button("Back", f"userset {user_id} youtube")
         buttons.data_button("Close", f"userset {user_id} close")

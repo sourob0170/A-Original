@@ -325,7 +325,6 @@ class YouTubeUpload(YouTubeHelper):
                             if os.path.isfile(os.path.join(self._path, item_name))
                             and get_mime_type(
                                 os.path.join(self._path, item_name),
-                                exit_on_error=False,
                             ).startswith("video/")
                         )
 
@@ -393,7 +392,7 @@ class YouTubeUpload(YouTubeHelper):
                         for item_name in items
                         if os.path.isfile(os.path.join(self._path, item_name))
                         and get_mime_type(
-                            os.path.join(self._path, item_name), exit_on_error=False
+                            os.path.join(self._path, item_name)
                         ).startswith("video/")
                     )
 
