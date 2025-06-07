@@ -347,11 +347,14 @@ class TaskListener(TaskConfig):
                 self.same_dir[self.folder_name]["total"] -= 1
 
     async def on_download_start(self):
-        if (
-            self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
-            and Config.DATABASE_URL
-        ):
+        # Check if is_super_chat is a valid boolean attribute
+        is_super_chat = (
+            hasattr(self, "is_super_chat")
+            and not callable(getattr(self, "is_super_chat", None))
+            and self.is_super_chat
+        )
+
+        if is_super_chat and Config.INCOMPLETE_TASK_NOTIFIER and Config.DATABASE_URL:
             await database.add_incomplete_task(
                 self.message.chat.id,
                 self.message.link,
@@ -472,7 +475,27 @@ class TaskListener(TaskConfig):
         if not await aiopath.exists(f"{self.dir}/{self.name}"):
             try:
                 # Check if directory exists before listing
+                # Skip directory check for clone operations (they don't create local directories)
                 if not await aiopath.exists(self.dir):
+                    # Check if this is a clone operation by looking at the task type
+                    is_clone_operation = hasattr(self, "is_clone") and self.is_clone
+                    if not is_clone_operation:
+                        # Also check if the name suggests it's a clone operation
+                        is_clone_operation = (
+                            hasattr(self, "name")
+                            and self.name
+                            and (
+                                "MEGA_File" in self.name
+                                or "clone" in str(self.name).lower()
+                            )
+                        )
+
+                    if is_clone_operation:
+                        LOGGER.info(
+                            f"Skipping directory check for clone operation: {self.name}"
+                        )
+                        # For clone operations, we don't need local files, so skip to upload phase
+                        return
                     LOGGER.error(f"Directory does not exist: {self.dir}")
                     await self.on_upload_error(
                         f"Directory does not exist: {self.dir}"
@@ -853,6 +876,27 @@ class TaskListener(TaskConfig):
                 sync_to_async(youtube_upload.upload),
             )
             del youtube_upload
+        elif self.up_dest == "mg":
+            # Import here to avoid circular imports
+            from bot.helper.mirror_leech_utils.mega_utils.upload import (
+                add_mega_upload,
+            )
+
+            # Check if MEGA upload is enabled
+            if not Config.MEGA_UPLOAD_ENABLED:
+                await self.on_upload_error(
+                    "❌ MEGA upload is disabled by the administrator."
+                )
+                return
+
+            # Check if MEGA credentials are configured
+            if not Config.MEGA_EMAIL or not Config.MEGA_PASSWORD:
+                await self.on_upload_error(
+                    "❌ MEGA credentials not configured. Please set MEGA_EMAIL and MEGA_PASSWORD."
+                )
+                return
+
+            await add_mega_upload(self, up_path)
         elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             # If up_dest is "gd", use the configured GDRIVE_ID
@@ -906,11 +950,14 @@ class TaskListener(TaskConfig):
         rclone_path="",
         dir_id="",
     ):
-        if (
-            self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
-            and Config.DATABASE_URL
-        ):
+        # Check if is_super_chat is a valid boolean attribute
+        is_super_chat = (
+            hasattr(self, "is_super_chat")
+            and not callable(getattr(self, "is_super_chat", None))
+            and self.is_super_chat
+        )
+
+        if is_super_chat and Config.INCOMPLETE_TASK_NOTIFIER and Config.DATABASE_URL:
             await database.rm_complete_task(self.message.link)
 
         # Use the most up-to-date name (which may have been modified by leech filename template)
@@ -1230,11 +1277,15 @@ class TaskListener(TaskConfig):
             def is_youtube_destination(dest):
                 return dest == "yt" or dest.startswith("yt:")
 
+            def is_mega_destination(dest):
+                return dest == "mg" or dest.startswith("mg:")
+
             if (
                 self.up_dest
                 and not is_gdrive_id(self.up_dest)
                 and not is_rclone_path(self.up_dest)
                 and not is_youtube_destination(self.up_dest)
+                and not is_mega_destination(self.up_dest)
             ):
                 # If user specified a destination with -up flag, it takes precedence
                 try:
@@ -1306,9 +1357,6 @@ class TaskListener(TaskConfig):
                 buttons.url_button("Checkout Inbox", f"https://t.me/{TgClient.NAME}")
                 button = buttons.build_menu(1)
 
-                LOGGER.info(
-                    f"Sending mirror completion message to original chat {self.message.chat.id}"
-                )
                 await send_message(self.message, done_msg, button)
 
         # For leech operations, send simple completion message to groups/supergroups
@@ -1321,9 +1369,6 @@ class TaskListener(TaskConfig):
             buttons.url_button("Checkout Inbox", f"https://t.me/{TgClient.NAME}")
             button = buttons.build_menu(1)
 
-            LOGGER.info(
-                f"Sending leech completion message to original chat {self.message.chat.id}"
-            )
             await send_message(self.message, done_msg, button)
         # We don't need to delete command messages here
         # They are already being deleted in the on_download_complete method
@@ -1489,11 +1534,14 @@ class TaskListener(TaskConfig):
         else:
             await update_status_message(self.message.chat.id)
 
-        if (
-            self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
-            and Config.DATABASE_URL
-        ):
+        # Check if is_super_chat is a valid boolean attribute
+        is_super_chat = (
+            hasattr(self, "is_super_chat")
+            and not callable(getattr(self, "is_super_chat", None))
+            and self.is_super_chat
+        )
+
+        if is_super_chat and Config.INCOMPLETE_TASK_NOTIFIER and Config.DATABASE_URL:
             await database.rm_complete_task(self.message.link)
 
         async with queue_dict_lock:

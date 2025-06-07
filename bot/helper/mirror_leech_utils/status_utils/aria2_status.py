@@ -14,6 +14,10 @@ async def get_download(gid, old_info=None):
         res = await TorrentManager.aria2.tellStatus(gid)
         return res or old_info
     except Exception as e:
+        # Handle transport closing errors more gracefully
+        if "closing transport" in str(e).lower():
+            # Return old info silently for transport closing errors
+            return old_info
         LOGGER.error(f"{e}: Aria2c, Error while getting torrent info")
         return old_info
 
@@ -111,8 +115,20 @@ class Aria2Status:
 
     async def cancel_task(self):
         self.listener.is_cancelled = True
-        await self.update()
-        await TorrentManager.aria2_remove(self._download)
+        try:
+            await self.update()
+        except Exception as e:
+            # Handle transport closing errors during update
+            if "closing transport" not in str(e).lower():
+                LOGGER.warning(f"Error updating aria2 status during cancel: {e}")
+
+        try:
+            await TorrentManager.aria2_remove(self._download)
+        except Exception as e:
+            # Handle transport closing errors during removal
+            if "closing transport" not in str(e).lower():
+                LOGGER.warning(f"Error removing aria2 download during cancel: {e}")
+
         if self._download.get("seeder", "") == "true" and self.seeding:
             LOGGER.info(f"Cancelling Seed: {self.name()}")
             await self.listener.on_upload_error(

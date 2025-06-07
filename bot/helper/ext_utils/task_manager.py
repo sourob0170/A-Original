@@ -9,7 +9,6 @@ from bot import (
     queued_dl,
     queued_up,
 )
-from bot.core.config_manager import Config
 from bot.helper.mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
 
 from .bot_utils import get_telegraph_list, sync_to_async
@@ -63,45 +62,50 @@ async def stop_duplicate_check(listener):
 
 
 async def check_running_tasks(listener, state="dl"):
+    from bot.core.config_manager import Config
+
     all_limit = Config.QUEUE_ALL
     state_limit = Config.QUEUE_DOWNLOAD if state == "dl" else Config.QUEUE_UPLOAD
     event = None
     is_over_limit = False
 
     # Check system resources before allowing new tasks using shared resource manager
+    # Only apply resource constraints if task monitoring is enabled
     try:
+        from bot.core.config_manager import Config
         from bot.helper.ext_utils.gc_utils import smart_garbage_collection
         from bot.helper.ext_utils.task_monitor import resource_manager
 
-        should_queue, reason = resource_manager.should_force_queue_task()
+        if Config.TASK_MONITOR_ENABLED:
+            should_queue, reason = resource_manager.should_force_queue()
 
-        if should_queue:
-            # Get detailed analysis for consolidated logging when resources are extremely critical
-            cpu_percent, memory_percent = resource_manager.get_resource_usage()
-            if memory_percent > 95 or cpu_percent > 98:
-                detailed_analysis = _get_task_manager_resource_analysis()
-                disk_info = _get_disk_usage_info()
-                LOGGER.warning(
-                    f"🚨 EXTREMELY CRITICAL RESOURCES - {disk_info} {reason} Forcing task {listener.mid} to queue. "
-                    f"Will start only 1 task to prevent system overload. "
-                    f"📊 DETAILS: {detailed_analysis}"
-                )
-            else:
-                LOGGER.warning(f"{reason} Forcing task {listener.mid} to queue.")
-
-            # Force garbage collection to try to free up resources
-            startup_phase = resource_manager.is_startup_phase()
-            smart_garbage_collection(aggressive=not startup_phase)
-
-            # Create event for queuing
-            event = Event()
-            async with queue_dict_lock:
-                if state == "dl":
-                    queued_dl[listener.mid] = event
+            if should_queue:
+                # Get detailed analysis for consolidated logging when resources are extremely critical
+                cpu_percent, memory_percent = resource_manager.get_resource_usage()
+                if memory_percent > 95 or cpu_percent > 98:
+                    detailed_analysis = _get_task_manager_resource_analysis()
+                    disk_info = _get_disk_usage_info()
+                    LOGGER.warning(
+                        f"🚨 EXTREMELY CRITICAL RESOURCES - {disk_info} {reason} Forcing task {listener.mid} to queue. "
+                        f"Will start only 1 task to prevent system overload. "
+                        f"📊 DETAILS: {detailed_analysis}"
+                    )
                 else:
-                    queued_up[listener.mid] = event
+                    LOGGER.warning(f"{reason} Forcing task {listener.mid} to queue.")
 
-            return True, event
+                # Force garbage collection to try to free up resources
+                startup_phase = resource_manager.is_startup_phase()
+                smart_garbage_collection(aggressive=not startup_phase)
+
+                # Create event for queuing
+                event = Event()
+                async with queue_dict_lock:
+                    if state == "dl":
+                        queued_dl[listener.mid] = event
+                    else:
+                        queued_up[listener.mid] = event
+
+                return True, event
     except ImportError:
         # If psutil is not available, continue with normal limit checks
         pass
@@ -152,27 +156,35 @@ async def start_up_from_queued(mid: int):
 
 async def start_from_queued():
     # Check system resources before starting queued tasks using shared resource manager
+    # Only apply resource constraints if task monitoring is enabled
+    resource_constraint = "normal"  # Default to normal if monitoring disabled
+
     try:
+        from bot.core.config_manager import Config
         from bot.helper.ext_utils.gc_utils import smart_garbage_collection
         from bot.helper.ext_utils.task_monitor import (
             ResourceConstraint,
             resource_manager,
         )
 
-        resource_constraint = resource_manager.get_resource_constraint()
-        cpu_percent, memory_percent = resource_manager.get_resource_usage()
+        if Config.TASK_MONITOR_ENABLED:
+            resource_constraint = resource_manager.get_constraint_level()
+            cpu_percent, memory_percent = resource_manager.get_resource_usage()
 
-        if resource_constraint == ResourceConstraint.CRITICAL:
-            # Only log here if we haven't already logged in check_running_tasks
-            # This prevents duplicate logging when both functions detect critical resources
+            if resource_constraint == ResourceConstraint.CRITICAL:
+                # Only log here if we haven't already logged in check_running_tasks
+                # This prevents duplicate logging when both functions detect critical resources
 
-            # Force garbage collection to try to free up resources
-            smart_garbage_collection(aggressive=True)
-        elif resource_constraint == ResourceConstraint.MODERATE:
-            LOGGER.info(
-                f"System resources moderately high: Memory {memory_percent:.1f}%, CPU {cpu_percent:.1f}%. "
-                f"Will start at most 2 tasks."
-            )
+                # Force garbage collection to try to free up resources
+                smart_garbage_collection(aggressive=True)
+            elif resource_constraint == ResourceConstraint.MODERATE:
+                LOGGER.info(
+                    f"System resources moderately high: Memory {memory_percent:.1f}%, CPU {cpu_percent:.1f}%. "
+                    f"Will start at most 2 tasks."
+                )
+        else:
+            # Task monitoring disabled - use normal resource constraint
+            resource_constraint = "normal"
     except ImportError:
         # If psutil is not available, assume no resource constraints
         resource_constraint = "normal"  # Use string fallback
@@ -188,20 +200,24 @@ async def start_from_queued():
                 f_tasks = all_limit - all_
 
                 # Apply resource constraints using shared resource manager
-                try:
-                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+                # Only apply if task monitoring is enabled
+                if Config.TASK_MONITOR_ENABLED:
+                    try:
+                        from bot.helper.ext_utils.task_monitor import (
+                            ResourceConstraint,
+                        )
 
-                    max_tasks = resource_manager.get_max_tasks_for_constraint(
-                        resource_constraint
-                    )
-                    if max_tasks != float("inf"):
-                        f_tasks = min(f_tasks, max_tasks)
-                except ImportError:
-                    # Fallback to old logic if import fails
-                    if resource_constraint == ResourceConstraint.CRITICAL:
-                        f_tasks = min(f_tasks, 1)
-                    elif resource_constraint == ResourceConstraint.MODERATE:
-                        f_tasks = min(f_tasks, 2)
+                        max_tasks = resource_manager.get_max_tasks(
+                            resource_constraint
+                        )
+                        if max_tasks != float("inf"):
+                            f_tasks = min(f_tasks, max_tasks)
+                    except ImportError:
+                        # Fallback to old logic if import fails
+                        if resource_constraint == ResourceConstraint.CRITICAL:
+                            f_tasks = min(f_tasks, 1)
+                        elif resource_constraint == ResourceConstraint.MODERATE:
+                            f_tasks = min(f_tasks, 2)
 
                 if queued_up and (not up_limit or up < up_limit):
                     for index, mid in enumerate(list(queued_up.keys()), start=1):
@@ -224,20 +240,24 @@ async def start_from_queued():
                 f_tasks = up_limit - up
 
                 # Apply resource constraints using shared resource manager
-                try:
-                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+                # Only apply if task monitoring is enabled
+                if Config.TASK_MONITOR_ENABLED:
+                    try:
+                        from bot.helper.ext_utils.task_monitor import (
+                            ResourceConstraint,
+                        )
 
-                    max_tasks = resource_manager.get_max_tasks_for_constraint(
-                        resource_constraint
-                    )
-                    if max_tasks != float("inf"):
-                        f_tasks = min(f_tasks, max_tasks)
-                except ImportError:
-                    # Fallback to old logic if import fails
-                    if resource_constraint == ResourceConstraint.CRITICAL:
-                        f_tasks = min(f_tasks, 1)
-                    elif resource_constraint == ResourceConstraint.MODERATE:
-                        f_tasks = min(f_tasks, 2)
+                        max_tasks = resource_manager.get_max_tasks(
+                            resource_constraint
+                        )
+                        if max_tasks != float("inf"):
+                            f_tasks = min(f_tasks, max_tasks)
+                    except ImportError:
+                        # Fallback to old logic if import fails
+                        if resource_constraint == ResourceConstraint.CRITICAL:
+                            f_tasks = min(f_tasks, 1)
+                        elif resource_constraint == ResourceConstraint.MODERATE:
+                            f_tasks = min(f_tasks, 2)
 
                 for index, mid in enumerate(list(queued_up.keys()), start=1):
                     await start_up_from_queued(mid)
@@ -246,41 +266,52 @@ async def start_from_queued():
     else:
         async with queue_dict_lock:
             if queued_up:
-                # Even without upload limits, respect resource constraints
-                try:
-                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+                # Even without upload limits, respect resource constraints if task monitoring is enabled
+                if Config.TASK_MONITOR_ENABLED:
+                    try:
+                        from bot.helper.ext_utils.task_monitor import (
+                            ResourceConstraint,
+                        )
 
-                    max_tasks = resource_manager.get_max_tasks_for_constraint(
-                        resource_constraint
-                    )
+                        max_tasks = resource_manager.get_max_tasks(
+                            resource_constraint
+                        )
 
-                    if max_tasks == 1:
-                        # Start only 1 upload task under critical conditions
-                        mid = next(iter(queued_up.keys()))
+                        if max_tasks == 1:
+                            # Start only 1 upload task under critical conditions
+                            mid = next(iter(queued_up.keys()))
+                            await start_up_from_queued(mid)
+                        elif max_tasks == 2:
+                            # Start at most 2 upload tasks under moderate conditions
+                            for index, mid in enumerate(
+                                list(queued_up.keys()), start=1
+                            ):
+                                await start_up_from_queued(mid)
+                                if index >= 2:
+                                    break
+                        else:
+                            # No resource constraints, start all queued uploads
+                            for mid in list(queued_up.keys()):
+                                await start_up_from_queued(mid)
+                    except ImportError:
+                        # Fallback to old logic if import fails
+                        if resource_constraint == ResourceConstraint.CRITICAL:
+                            mid = next(iter(queued_up.keys()))
+                            await start_up_from_queued(mid)
+                        elif resource_constraint == ResourceConstraint.MODERATE:
+                            for index, mid in enumerate(
+                                list(queued_up.keys()), start=1
+                            ):
+                                await start_up_from_queued(mid)
+                                if index >= 2:
+                                    break
+                        else:
+                            for mid in list(queued_up.keys()):
+                                await start_up_from_queued(mid)
+                else:
+                    # Task monitoring disabled - start all queued uploads without resource constraints
+                    for mid in list(queued_up.keys()):
                         await start_up_from_queued(mid)
-                    elif max_tasks == 2:
-                        # Start at most 2 upload tasks under moderate conditions
-                        for index, mid in enumerate(list(queued_up.keys()), start=1):
-                            await start_up_from_queued(mid)
-                            if index >= 2:
-                                break
-                    else:
-                        # No resource constraints, start all queued uploads
-                        for mid in list(queued_up.keys()):
-                            await start_up_from_queued(mid)
-                except ImportError:
-                    # Fallback to old logic if import fails
-                    if resource_constraint == ResourceConstraint.CRITICAL:
-                        mid = next(iter(queued_up.keys()))
-                        await start_up_from_queued(mid)
-                    elif resource_constraint == ResourceConstraint.MODERATE:
-                        for index, mid in enumerate(list(queued_up.keys()), start=1):
-                            await start_up_from_queued(mid)
-                            if index >= 2:
-                                break
-                    else:
-                        for mid in list(queued_up.keys()):
-                            await start_up_from_queued(mid)
 
     if dl_limit := Config.QUEUE_DOWNLOAD:
         async with queue_dict_lock:
@@ -289,20 +320,24 @@ async def start_from_queued():
                 f_tasks = dl_limit - dl
 
                 # Apply resource constraints using shared resource manager
-                try:
-                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+                # Only apply if task monitoring is enabled
+                if Config.TASK_MONITOR_ENABLED:
+                    try:
+                        from bot.helper.ext_utils.task_monitor import (
+                            ResourceConstraint,
+                        )
 
-                    max_tasks = resource_manager.get_max_tasks_for_constraint(
-                        resource_constraint
-                    )
-                    if max_tasks != float("inf"):
-                        f_tasks = min(f_tasks, max_tasks)
-                except ImportError:
-                    # Fallback to old logic if import fails
-                    if resource_constraint == ResourceConstraint.CRITICAL:
-                        f_tasks = min(f_tasks, 1)
-                    elif resource_constraint == ResourceConstraint.MODERATE:
-                        f_tasks = min(f_tasks, 2)
+                        max_tasks = resource_manager.get_max_tasks(
+                            resource_constraint
+                        )
+                        if max_tasks != float("inf"):
+                            f_tasks = min(f_tasks, max_tasks)
+                    except ImportError:
+                        # Fallback to old logic if import fails
+                        if resource_constraint == ResourceConstraint.CRITICAL:
+                            f_tasks = min(f_tasks, 1)
+                        elif resource_constraint == ResourceConstraint.MODERATE:
+                            f_tasks = min(f_tasks, 2)
 
                 for index, mid in enumerate(list(queued_dl.keys()), start=1):
                     await start_dl_from_queued(mid)
@@ -311,141 +346,147 @@ async def start_from_queued():
     else:
         async with queue_dict_lock:
             if queued_dl:
-                # Even without download limits, respect resource constraints
-                try:
-                    from bot.helper.ext_utils.task_monitor import ResourceConstraint
+                # Even without download limits, respect resource constraints if task monitoring is enabled
+                if Config.TASK_MONITOR_ENABLED:
+                    try:
+                        from bot.helper.ext_utils.task_monitor import (
+                            ResourceConstraint,
+                        )
 
-                    max_tasks = resource_manager.get_max_tasks_for_constraint(
-                        resource_constraint
-                    )
+                        max_tasks = resource_manager.get_max_tasks(
+                            resource_constraint
+                        )
 
-                    if max_tasks == 1:
-                        # Start only 1 download task under critical conditions
-                        mid = next(iter(queued_dl.keys()))
+                        if max_tasks == 1:
+                            # Start only 1 download task under critical conditions
+                            mid = next(iter(queued_dl.keys()))
+                            await start_dl_from_queued(mid)
+                        elif max_tasks == 2:
+                            # Start at most 2 download tasks under moderate conditions
+                            for index, mid in enumerate(
+                                list(queued_dl.keys()), start=1
+                            ):
+                                await start_dl_from_queued(mid)
+                                if index >= 2:
+                                    break
+                        else:
+                            # No resource constraints, start all queued downloads
+                            for mid in list(queued_dl.keys()):
+                                await start_dl_from_queued(mid)
+                    except ImportError:
+                        # Fallback to old logic if import fails
+                        if resource_constraint == ResourceConstraint.CRITICAL:
+                            mid = next(iter(queued_dl.keys()))
+                            await start_dl_from_queued(mid)
+                        elif resource_constraint == ResourceConstraint.MODERATE:
+                            for index, mid in enumerate(
+                                list(queued_dl.keys()), start=1
+                            ):
+                                await start_dl_from_queued(mid)
+                                if index >= 2:
+                                    break
+                        else:
+                            for mid in list(queued_dl.keys()):
+                                await start_dl_from_queued(mid)
+                else:
+                    # Task monitoring disabled - start all queued downloads without resource constraints
+                    for mid in list(queued_dl.keys()):
                         await start_dl_from_queued(mid)
-                    elif max_tasks == 2:
-                        # Start at most 2 download tasks under moderate conditions
-                        for index, mid in enumerate(list(queued_dl.keys()), start=1):
-                            await start_dl_from_queued(mid)
-                            if index >= 2:
-                                break
-                    else:
-                        # No resource constraints, start all queued downloads
-                        for mid in list(queued_dl.keys()):
-                            await start_dl_from_queued(mid)
-                except ImportError:
-                    # Fallback to old logic if import fails
-                    if resource_constraint == ResourceConstraint.CRITICAL:
-                        mid = next(iter(queued_dl.keys()))
-                        await start_dl_from_queued(mid)
-                    elif resource_constraint == ResourceConstraint.MODERATE:
-                        for index, mid in enumerate(list(queued_dl.keys()), start=1):
-                            await start_dl_from_queued(mid)
-                            if index >= 2:
-                                break
-                    else:
-                        for mid in list(queued_dl.keys()):
-                            await start_dl_from_queued(mid)
 
 
 async def start_queue_processor():
     """
-    Periodic queue processor that ensures at least one task runs even under high system resources.
-    This addresses the issue where tasks get stuck in queue when system resources are high.
+    Optimized queue processor with minimal resource usage.
+    Only runs when task monitoring is enabled.
     """
     import asyncio
 
     from bot import LOGGER
+    from bot.core.config_manager import Config
 
-    LOGGER.info("Queue processor started - ensuring continuous task execution")
+    LOGGER.info("Starting optimized queue processor")
 
-    # Start processing immediately without waiting
+    # Cache imports to avoid repeated imports
+    resource_manager = None
+    ResourceLevel = None
+
+    if Config.TASK_MONITOR_ENABLED:
+        try:
+            from bot.helper.ext_utils.task_monitor import (
+                ResourceLevel,
+                resource_manager,
+            )
+        except ImportError:
+            LOGGER.warning(
+                "Task monitor not available, using basic queue processing"
+            )
 
     while True:
+        # Exit if task monitoring is disabled
+        if not Config.TASK_MONITOR_ENABLED:
+            LOGGER.info("Task monitoring disabled - stopping queue processor")
+            break
+
         try:
-            # Check if there are any queued tasks and no running tasks
-            async with queue_dict_lock:
-                has_queued_tasks = bool(queued_dl or queued_up)
-                running_tasks_count = len(non_queued_dl) + len(non_queued_up)
+            # Quick check for queued tasks - O(1)
+            has_queued = bool(queued_dl or queued_up)
+            if not has_queued:
+                await asyncio.sleep(60)  # No queued tasks, sleep longer
+                continue
 
-            if has_queued_tasks:
-                # Get current resource constraint
-                try:
-                    from bot.helper.ext_utils.task_monitor import (
-                        ResourceConstraint,
-                        resource_manager,
-                    )
+            # Count running tasks - O(1)
+            running_count = len(non_queued_dl) + len(non_queued_up)
+            should_start = False
+            reason = ""
 
-                    constraint = resource_manager.get_resource_constraint()
-                    cpu_percent, memory_percent = (
-                        resource_manager.get_resource_usage()
-                    )
+            if Config.TASK_MONITOR_ENABLED and resource_manager:
+                # Use resource-aware logic
+                level = resource_manager.get_constraint_level()
 
-                    # Determine if we should force start a task
-                    should_force_start = False
+                if running_count == 0:
+                    should_start = True
+                    reason = "No tasks running"
+                elif level == ResourceLevel.CRITICAL and running_count < 1:
+                    should_start = True
+                    reason = "Critical resources - ensuring minimum 1 task"
+                elif level == ResourceLevel.MODERATE and running_count < 2:
+                    should_start = True
+                    reason = "Moderate resources - allowing up to 2 tasks"
+                elif level == ResourceLevel.NORMAL:
+                    should_start = True
+                    reason = "Normal resources - processing queue"
+            # Fallback: start if no tasks running
+            elif running_count == 0:
+                should_start = True
+                reason = "No tasks running (basic mode)"
 
-                    if running_tasks_count == 0:
-                        # No tasks running at all - always start at least one
-                        should_force_start = True
-                        reason = "No tasks running"
-                    elif (
-                        constraint == ResourceConstraint.CRITICAL
-                        and running_tasks_count < 1
-                    ):
-                        # Critical resources but less than 1 task - ensure at least 1 runs
-                        should_force_start = True
-                        reason = f"Critical resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) but ensuring minimum 1 task"
-                    elif (
-                        constraint == ResourceConstraint.MODERATE
-                        and running_tasks_count < 2
-                    ):
-                        # Moderate resources but less than 2 tasks - can run up to 2
-                        should_force_start = True
-                        reason = f"Moderate resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) allowing up to 2 tasks"
-                    elif constraint == ResourceConstraint.NORMAL:
-                        # Normal resources - start queued tasks normally
-                        should_force_start = True
-                        reason = f"Normal resources (CPU: {cpu_percent:.1f}%, Memory: {memory_percent:.1f}%) processing queue"
+            if should_start:
+                LOGGER.info(f"Queue processor: {reason}")
+                await start_from_queued()
 
-                    if should_force_start:
-                        LOGGER.info(
-                            f"Queue processor: {reason} - starting queued tasks"
-                        )
-                        await start_from_queued()
-
-                        # Force garbage collection after starting tasks to free up memory
+                # Minimal garbage collection only when needed
+                if Config.TASK_MONITOR_ENABLED and resource_manager:
+                    level = resource_manager.get_constraint_level()
+                    if level == ResourceLevel.CRITICAL:
                         from bot.helper.ext_utils.gc_utils import (
                             smart_garbage_collection,
                         )
 
-                        smart_garbage_collection(
-                            aggressive=(constraint == ResourceConstraint.CRITICAL)
-                        )
+                        smart_garbage_collection(aggressive=True)
 
-                except ImportError:
-                    # Fallback if resource manager is not available
-                    if running_tasks_count == 0:
-                        LOGGER.info(
-                            "Queue processor: No tasks running - starting queued tasks (fallback mode)"
-                        )
-                        await start_from_queued()
-
-            # Adjust sleep interval based on system load and queue status
-            if has_queued_tasks and running_tasks_count == 0:
-                # Urgent: No tasks running but have queued tasks
-                sleep_interval = 10  # Check every 10 seconds
-            elif has_queued_tasks:
-                # Normal: Have queued tasks and some running
-                sleep_interval = 30  # Check every 30 seconds
+            # Adaptive sleep intervals
+            if running_count == 0 and has_queued:
+                sleep_time = 15  # Urgent
+            elif has_queued:
+                sleep_time = 45  # Normal
             else:
-                # Idle: No queued tasks
-                sleep_interval = 60  # Check every minute
+                sleep_time = 60  # Idle
 
-            await asyncio.sleep(sleep_interval)
+            await asyncio.sleep(sleep_time)
 
         except Exception as e:
-            LOGGER.error(f"Error in queue processor: {e}")
-            await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+            LOGGER.error(f"Queue processor error: {e}")
+            await asyncio.sleep(60)
 
 
 def _get_task_manager_resource_analysis() -> str:
@@ -737,7 +778,7 @@ def _get_disk_usage_info() -> str:
         import shutil
 
         from bot import DOWNLOAD_DIR
-        from bot.helper.ext_utils.bot_utils import get_readable_file_size
+        from bot.helper.ext_utils.status_utils import get_readable_file_size
 
         # Get disk usage statistics
         usage = shutil.disk_usage(DOWNLOAD_DIR)

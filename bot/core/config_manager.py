@@ -28,6 +28,32 @@ class Config:
     IMDB_TEMPLATE: str = ""
     JD_EMAIL: str = ""
     JD_PASS: str = ""
+
+    # Mega.nz Settings
+    MEGA_ENABLED: bool = True
+    MEGA_EMAIL: str = ""
+    MEGA_PASSWORD: str = ""
+
+    # MEGA Upload Settings
+    MEGA_UPLOAD_ENABLED: bool = True
+    MEGA_UPLOAD_FOLDER: str = ""  # Default upload folder path in MEGA account
+    MEGA_UPLOAD_PUBLIC: bool = True  # Generate public links by default
+    MEGA_UPLOAD_PRIVATE: bool = False  # Generate private links
+    MEGA_UPLOAD_UNLISTED: bool = False  # Generate unlisted links
+    MEGA_UPLOAD_EXPIRY_DAYS: int = 0  # Link expiry in days (0 = no expiry)
+    MEGA_UPLOAD_PASSWORD: str = ""  # Password protection for uploads
+    MEGA_UPLOAD_ENCRYPTION_KEY: str = ""  # Custom encryption key for uploads
+    MEGA_UPLOAD_THUMBNAIL: bool = True  # Generate thumbnails for videos using FFmpeg
+    MEGA_UPLOAD_DELETE_AFTER: bool = False  # Delete local files after upload
+
+    # MEGA Clone Settings
+    MEGA_CLONE_ENABLED: bool = True
+    MEGA_CLONE_TO_FOLDER: str = ""  # Default folder for cloned files
+    MEGA_CLONE_PRESERVE_STRUCTURE: bool = (
+        True  # Preserve folder structure when cloning
+    )
+    MEGA_CLONE_OVERWRITE: bool = False  # Overwrite existing files when cloning
+
     IS_TEAM_DRIVE: bool = False
     LEECH_DUMP_CHAT: ClassVar[list[str]] = []
     LEECH_FILENAME_PREFIX: str = ""
@@ -746,7 +772,7 @@ class Config:
     BULK_ENABLED: bool = True  # Enable/disable bulk operations (-b flag)
 
     # Task Monitoring Settings
-    TASK_MONITOR_ENABLED: bool = True
+    TASK_MONITOR_ENABLED: bool = False
     TASK_MONITOR_INTERVAL: int = 60  # in seconds
     TASK_MONITOR_CONSECUTIVE_CHECKS: int = 20
     TASK_MONITOR_SPEED_THRESHOLD: int = 50  # in KB/s
@@ -1025,8 +1051,8 @@ class Config:
         if isinstance(value, str):
             value = value.strip()
 
-        if key == "DEFAULT_UPLOAD" and value != "gd":
-            return "rc"
+        if key == "DEFAULT_UPLOAD" and value not in ["gd", "yt", "mg", "rc"]:
+            return "gd"
 
         if key in {"BASE_URL", "RCLONE_SERVE_URL", "INDEX_URL"}:
             return value.strip("/")

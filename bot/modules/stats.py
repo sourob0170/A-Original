@@ -1,4 +1,4 @@
-from asyncio import create_task, gather
+from asyncio import create_task, gather, sleep
 from re import search as research
 from time import time
 
@@ -35,6 +35,14 @@ commands = {
     "yt-dlp": (["yt-dlp", "--version"], r"([\d.]+)"),
     "xtra": (["xtra", "-version"], r"ffmpeg version ([\d.\w-]+)"),
     "7z": (["7z", "i"], r"7-Zip ([\d.]+)"),
+    "mega": (
+        [
+            "python3",
+            "-c",
+            "try:\n    import mega\n    api = mega.MegaApi('test')\n    print(f'v{api.getVersion()}')\nexcept ImportError as e:\n    print(f'ImportError: {e}')\nexcept Exception as e:\n    print(f'Error: {e}')",
+        ],
+        r"([\d.\w-]+|ImportError.*|Error.*)",
+    ),
     "streamrip": (
         ["python3", "-c", "import streamrip; print(streamrip.__version__)"],
         r"([\d.\w-]+)",
@@ -116,6 +124,66 @@ async def bot_stats(_, message):
 <b>User Time Interval:</b> {format_limit(Config.USER_TIME_INTERVAL, unit="seconds")}
 """
 
+    # MEGA account information
+    mega_info = ""
+    if Config.MEGA_ENABLED and Config.MEGA_EMAIL and Config.MEGA_PASSWORD:
+        try:
+            from mega import MegaApi, MegaListener
+
+            # Get MEGA account details
+            api = MegaApi(None, None, None, "aimleechbot")
+
+            class StatsListener(MegaListener):
+                def __init__(self):
+                    super().__init__()
+                    self.account_details = None
+                    self.finished = False
+
+                def onRequestFinish(self, api, request, error):
+                    if request.getType() == request.TYPE_ACCOUNT_DETAILS:
+                        if error.getErrorCode() == 0:
+                            self.account_details = request.getMegaAccountDetails()
+                        self.finished = True
+
+            listener = StatsListener()
+            api.addListener(listener)
+
+            # Login and get account details
+            api.login(Config.MEGA_EMAIL, Config.MEGA_PASSWORD)
+
+            # Wait for login to complete (simplified for stats)
+            timeout = 10
+            start_time = time()
+            while not listener.finished and (time() - start_time) < timeout:
+                await sleep(0.1)
+
+            if listener.account_details:
+                details = listener.account_details
+                storage_used = get_readable_file_size(details.getStorageUsed())
+                storage_max = get_readable_file_size(details.getStorageMax())
+                transfer_used = get_readable_file_size(details.getTransferUsed())
+                transfer_max = get_readable_file_size(details.getTransferMax())
+
+                account_type = "Premium" if details.getProLevel() > 0 else "Free"
+
+                mega_info = f"""
+<b>☁️ MEGA Account Info:</b>
+<b>Type:</b> {account_type}
+<b>Storage:</b> {storage_used} / {storage_max}
+<b>Transfer:</b> {transfer_used} / {transfer_max}
+"""
+
+            api.removeListener(listener)
+
+        except Exception as e:
+            mega_info = f"""
+<b>☁️ MEGA:</b> Error getting account info ({str(e)[:50]}...)
+"""
+    elif Config.MEGA_ENABLED:
+        mega_info = """
+<b>☁️ MEGA:</b> Enabled (No credentials configured)
+"""
+
     # Versions section
     versions_stats = f"""
 <b>python:</b> {commands["python"]}
@@ -124,6 +192,7 @@ async def bot_stats(_, message):
 <b>SABnzbd+:</b> {commands["SABnzbd+"]}
 <b>rclone:</b> {commands["rclone"]}
 <b>yt-dlp:</b> {commands["yt-dlp"]}
+<b>mega:</b> {commands["mega"]}
 <b>streamrip:</b> {commands["streamrip"]}
 <b>zotify:</b> {commands["zotify"]}
 <b>xtra:</b> {commands["xtra"]}
@@ -131,7 +200,7 @@ async def bot_stats(_, message):
 """
 
     # Combine all sections
-    stats = system_stats + limits_stats + versions_stats
+    stats = system_stats + limits_stats + mega_info + versions_stats
 
     # Delete the /stats command message immediately
     await delete_links(message)

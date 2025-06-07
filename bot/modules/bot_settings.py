@@ -519,7 +519,7 @@ DEFAULT_VALUES = {
     # Media Tools Settings
     "MEDIAINFO_ENABLED": False,
     # Task Monitoring Settings
-    "TASK_MONITOR_ENABLED": True,
+    "TASK_MONITOR_ENABLED": False,
     "TASK_MONITOR_INTERVAL": 60,
     "TASK_MONITOR_CONSECUTIVE_CHECKS": 3,
     "TASK_MONITOR_SPEED_THRESHOLD": 50,
@@ -598,6 +598,14 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         # Only show Zotify Settings button if Zotify is enabled
         if Config.ZOTIFY_ENABLED:
             buttons.data_button("🎧 Zotify", "botset zotify")
+
+        # Only show YouTube API Settings button if YouTube upload is enabled
+        if Config.YOUTUBE_UPLOAD_ENABLED:
+            buttons.data_button("📺 YouTube API", "botset youtube")
+
+        # Only show MEGA Settings button if MEGA is enabled
+        if Config.MEGA_ENABLED:
+            buttons.data_button("☁️ MEGA", "botset mega")
 
         buttons.data_button("❌ Close", "botset close")
         msg = "<b>Bot Settings</b>\nSelect a category to configure:"
@@ -1321,6 +1329,8 @@ Send one of the following position options:
                         "DEEPSEEK_",
                         "STREAMRIP_",  # Added STREAMRIP_ to exclude streamrip configs from main config menu
                         "ZOTIFY_",  # Added ZOTIFY_ to exclude zotify configs from main config menu
+                        "YOUTUBE_UPLOAD_",  # Added YOUTUBE_UPLOAD_ to exclude youtube upload configs from main config menu
+                        "MEGA_",  # Added MEGA_ to exclude mega configs from main config menu
                     )
                 )
                 or k
@@ -1329,6 +1339,10 @@ Send one of the following position options:
                     "FILTER_COMPLEX_ENABLED",
                     "DEFAULT_AI_PROVIDER",
                     "MEDIA_TOOLS_ENABLED",  # Added MEDIA_TOOLS_ENABLED to exclude it from Config menu
+                    "YOUTUBE_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
+                    "MEGA_ENABLED",  # Keep only the enabled toggle in operations menu
+                    "MEGA_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
+                    "MEGA_CLONE_ENABLED",  # Keep only the enabled toggle in operations menu
                 ]
             )
         ]
@@ -1459,6 +1473,7 @@ Send one of the following position options:
 Send any of these files:
 • config.py
 • token.pickle
+• youtube_token.pickle
 • rclone.conf
 • accounts.zip
 • list_drives.txt
@@ -1475,6 +1490,7 @@ Send only the file name as text message.
 • Changing .netrc will not take effect for aria2c until restart.
 • streamrip_config.toml will be used for custom streamrip configuration.
 • zotify_credentials.json will be used for Spotify authentication.
+• youtube_token.pickle will be used for YouTube uploads.
 
 <i>Timeout: 60 seconds</i>"""
     elif key == "aria":
@@ -3185,6 +3201,237 @@ These settings control what additional information is saved with downloaded cont
 <b>Note:</b>
 These are advanced settings that should only be modified if you understand their implications. The default values work for most users."""
 
+    elif key == "youtube":
+        # YouTube API Settings section
+        buttons.data_button("⚙️ General Settings", "botset youtube_general")
+        buttons.data_button("📹 Upload Settings", "botset youtube_upload")
+        buttons.data_button("🔐 Authentication", "botset youtube_auth")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+        msg = "<b>📺 YouTube API Settings</b>\nSelect a category to configure:"
+
+    elif key == "youtube_general":
+        # YouTube General Settings
+        general_settings = [
+            "YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+            "YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+            "YOUTUBE_UPLOAD_DEFAULT_TAGS",
+            "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+        ]
+
+        for setting in general_settings:
+            display_name = (
+                setting.replace("YOUTUBE_UPLOAD_DEFAULT_", "")
+                .replace("_", " ")
+                .title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit youtube_general", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view youtube_general", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_youtube_general", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset youtube", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current general settings
+        privacy = Config.YOUTUBE_UPLOAD_DEFAULT_PRIVACY or "unlisted (Default)"
+        category = Config.YOUTUBE_UPLOAD_DEFAULT_CATEGORY or "22 (Default)"
+        tags = Config.YOUTUBE_UPLOAD_DEFAULT_TAGS or "None (Default)"
+        description = (
+            Config.YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION or "Uploaded by AIM (Default)"
+        )
+
+        msg = f"""<b>📺 YouTube General Settings</b> | State: {state}
+
+<b>Default Privacy:</b> <code>{privacy}</code>
+<b>Default Category:</b> <code>{category}</code>
+<b>Default Tags:</b> <code>{tags}</code>
+<b>Default Description:</b> <code>{description}</code>
+
+<b>Description:</b>
+• <b>Privacy:</b> Default privacy setting for uploads (public, unlisted, private)
+• <b>Category:</b> Default YouTube category ID for uploads
+• <b>Tags:</b> Default tags to add to uploads (comma-separated)
+• <b>Description:</b> Default description text for uploads
+
+<b>Note:</b>
+These are the basic YouTube upload settings that will be used by default."""
+
+    elif key == "youtube_upload":
+        # YouTube Upload Settings (Advanced)
+        upload_settings = [
+            "YOUTUBE_UPLOAD_DEFAULT_TITLE",
+            "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE",
+            "YOUTUBE_UPLOAD_DEFAULT_LICENSE",
+            "YOUTUBE_UPLOAD_EMBEDDABLE",
+            "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+            "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+            "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+            "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+            "YOUTUBE_UPLOAD_RECORDING_DATE",
+            "YOUTUBE_UPLOAD_AUTO_LEVELS",
+            "YOUTUBE_UPLOAD_STABILIZE",
+        ]
+
+        for setting in upload_settings:
+            display_name = (
+                setting.replace("YOUTUBE_UPLOAD_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "YOUTUBE_UPLOAD_EMBEDDABLE",
+                "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+                "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+                "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+                "YOUTUBE_UPLOAD_AUTO_LEVELS",
+                "YOUTUBE_UPLOAD_STABILIZE",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit youtube_upload", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view youtube_upload", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_youtube_upload", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset youtube", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current upload settings
+        title = Config.YOUTUBE_UPLOAD_DEFAULT_TITLE or "Auto-generated (Default)"
+        language = Config.YOUTUBE_UPLOAD_DEFAULT_LANGUAGE or "en (Default)"
+        license_type = Config.YOUTUBE_UPLOAD_DEFAULT_LICENSE or "youtube (Default)"
+        embeddable = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_EMBEDDABLE", True)
+            else "❌ Disabled"
+        )
+        public_stats = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE", True)
+            else "❌ Disabled"
+        )
+        made_for_kids = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_MADE_FOR_KIDS", False)
+            else "❌ Disabled"
+        )
+        notify_subscribers = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS", True)
+            else "❌ Disabled"
+        )
+        location = Config.YOUTUBE_UPLOAD_LOCATION_DESCRIPTION or "None (Default)"
+        recording_date = Config.YOUTUBE_UPLOAD_RECORDING_DATE or "Auto (Default)"
+        auto_levels = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_AUTO_LEVELS", False)
+            else "❌ Disabled"
+        )
+        stabilize = (
+            "✅ Enabled"
+            if getattr(Config, "YOUTUBE_UPLOAD_STABILIZE", False)
+            else "❌ Disabled"
+        )
+
+        msg = f"""<b>📺 YouTube Upload Settings</b> | State: {state}
+
+<b>Default Title:</b> <code>{title}</code>
+<b>Default Language:</b> <code>{language}</code>
+<b>Default License:</b> <code>{license_type}</code>
+<b>Embeddable:</b> {embeddable}
+<b>Public Stats Viewable:</b> {public_stats}
+<b>Made For Kids:</b> {made_for_kids}
+<b>Notify Subscribers:</b> {notify_subscribers}
+<b>Location Description:</b> <code>{location}</code>
+<b>Recording Date:</b> <code>{recording_date}</code>
+<b>Auto Levels:</b> {auto_levels}
+<b>Stabilize:</b> {stabilize}
+
+<b>Description:</b>
+• <b>Title:</b> Default title template for uploads
+• <b>Language:</b> Default language code for uploads
+• <b>License:</b> Default license type for uploads
+• <b>Embeddable:</b> Allow videos to be embedded on other websites
+• <b>Public Stats Viewable:</b> Allow public viewing of video statistics
+• <b>Made For Kids:</b> Mark videos as made for kids (COPPA compliance)
+• <b>Notify Subscribers:</b> Send notifications to subscribers when uploading
+• <b>Location:</b> Default location description for uploads
+• <b>Recording Date:</b> Default recording date for uploads
+• <b>Auto Levels:</b> Apply automatic color correction
+• <b>Stabilize:</b> Apply automatic video stabilization
+
+<b>Note:</b>
+These are advanced YouTube upload settings for fine-tuning video properties."""
+
+    elif key == "youtube_auth":
+        # YouTube Authentication Settings
+        auth_settings = []
+
+        # Add authentication management buttons
+        buttons.data_button("📤 Upload Token", "botset upload_youtube_token")
+        buttons.data_button("🗑️ Clear Token", "botset clear_youtube_token")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit youtube_auth", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view youtube_auth", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_youtube_auth", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset youtube", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Check if YouTube token exists
+        import os
+
+        youtube_token_path = "youtube_token.pickle"
+        token_exists = os.path.exists(youtube_token_path)
+        token_status = "✅ Available" if token_exists else "❌ Not Found"
+
+        msg = f"""<b>📺 YouTube Authentication Settings</b> | State: {state}
+
+<b>Token Status:</b> {token_status}
+
+<b>Authentication Methods:</b>
+• <b>OAuth2 Token:</b> Upload a pre-generated youtube_token.pickle file
+• <b>Interactive:</b> Generate token interactively when needed (fallback)
+
+<b>Token Management:</b>
+• <b>Upload Token:</b> Upload a pre-saved YouTube OAuth2 token file
+• <b>Clear Token:</b> Remove existing token (will require re-authentication)
+
+<b>Note:</b>
+YouTube uploads require OAuth2 authentication. The bot will handle authentication automatically using the configured method.
+To generate a token, use the /dev/generate_yt_drive_token.py script."""
+
+    elif key == "mega":
+        # MEGA Settings section
+        buttons.data_button("⚙️ General Settings", "botset mega_general")
+        buttons.data_button("📤 Upload Settings", "botset mega_upload")
+        buttons.data_button("🔄 Clone Settings", "botset mega_clone")
+        buttons.data_button("🔐 Security Settings", "botset mega_security")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+        msg = "<b>☁️ MEGA Settings</b>\nSelect a category to configure:"
+
     elif key == "operations":
         # Operations settings
 
@@ -3207,6 +3454,7 @@ These are advanced settings that should only be modified if you understand their
             "STREAMRIP_ENABLED",
             "ZOTIFY_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
+            "MEGA_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
@@ -3263,6 +3511,7 @@ These are advanced settings that should only be modified if you understand their
         youtube_upload_enabled = (
             "✅ Enabled" if Config.YOUTUBE_UPLOAD_ENABLED else "❌ Disabled"
         )
+        mega_enabled = "✅ Enabled" if Config.MEGA_ENABLED else "❌ Disabled"
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
         )
@@ -3341,6 +3590,10 @@ These are advanced settings that should only be modified if you understand their
             f"botset toggle YOUTUBE_UPLOAD_ENABLED {not Config.YOUTUBE_UPLOAD_ENABLED}",
         )
         buttons.data_button(
+            f"☁️ MEGA Operations: {mega_enabled}",
+            f"botset toggle MEGA_ENABLED {not Config.MEGA_ENABLED}",
+        )
+        buttons.data_button(
             f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
             f"botset toggle WRONG_CMD_WARNINGS_ENABLED {not Config.WRONG_CMD_WARNINGS_ENABLED}",
         )
@@ -3375,6 +3628,7 @@ These are advanced settings that should only be modified if you understand their
 <b>Streamrip Downloads:</b> {streamrip_enabled}
 <b>Zotify Downloads:</b> {zotify_enabled}
 <b>YouTube Upload:</b> {youtube_upload_enabled}
+<b>MEGA Operations:</b> {mega_enabled}
 <b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
 <b>VirusTotal Scan:</b> {virustotal_enabled}
 <b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
@@ -3499,6 +3753,263 @@ Task Monitor automatically manages downloads based on performance metrics.
 • Slow downloads below speed threshold will be warned and potentially cancelled
 • Tasks exceeding time thresholds will be flagged for attention
 • System resource monitoring helps prevent overloading"""
+
+    elif key == "mega_general":
+        # MEGA General Settings
+        general_settings = [
+            "MEGA_EMAIL",
+            "MEGA_PASSWORD",
+            "MEGA_LIMIT",
+        ]
+
+        for setting in general_settings:
+            display_name = setting.replace("MEGA_", "").replace("_", " ").title()
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mega_general", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view mega_general", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_mega_general", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset mega", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current general settings
+        email = Config.MEGA_EMAIL or "Not configured"
+        password = "Configured" if Config.MEGA_PASSWORD else "Not configured"
+        limit = f"{Config.MEGA_LIMIT} GB" if Config.MEGA_LIMIT > 0 else "No limit"
+
+        msg = f"""<b>☁️ MEGA General Settings</b> | State: {state}
+
+<b>Email:</b> <code>{email}</code>
+<b>Password:</b> <code>{password}</code>
+<b>Download Limit:</b> <code>{limit}</code>
+
+<b>Description:</b>
+• <b>Email:</b> Your MEGA.nz account email address
+• <b>Password:</b> Your MEGA.nz account password
+• <b>Download Limit:</b> Maximum size for MEGA downloads in GB (0 = unlimited)
+
+<b>Note:</b>
+These credentials are required for MEGA upload and clone operations."""
+
+    elif key == "mega_upload":
+        # MEGA Upload Settings
+        upload_settings = [
+            "MEGA_UPLOAD_ENABLED",
+            "MEGA_UPLOAD_FOLDER",
+            "MEGA_UPLOAD_PUBLIC",
+            "MEGA_UPLOAD_PRIVATE",
+            "MEGA_UPLOAD_UNLISTED",
+            "MEGA_UPLOAD_EXPIRY_DAYS",
+            "MEGA_UPLOAD_PASSWORD",
+            "MEGA_UPLOAD_ENCRYPTION_KEY",
+            "MEGA_UPLOAD_THUMBNAIL",
+            "MEGA_UPLOAD_DELETE_AFTER",
+        ]
+
+        for setting in upload_settings:
+            display_name = (
+                setting.replace("MEGA_UPLOAD_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "MEGA_UPLOAD_ENABLED",
+                "MEGA_UPLOAD_PUBLIC",
+                "MEGA_UPLOAD_PRIVATE",
+                "MEGA_UPLOAD_UNLISTED",
+                "MEGA_UPLOAD_THUMBNAIL",
+                "MEGA_UPLOAD_DELETE_AFTER",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mega_upload", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view mega_upload", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_mega_upload", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset mega", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current upload settings
+        enabled = "✅ Enabled" if Config.MEGA_UPLOAD_ENABLED else "❌ Disabled"
+        folder = Config.MEGA_UPLOAD_FOLDER or "Root folder (Default)"
+        public = "✅ Enabled" if Config.MEGA_UPLOAD_PUBLIC else "❌ Disabled"
+        private = "✅ Enabled" if Config.MEGA_UPLOAD_PRIVATE else "❌ Disabled"
+        unlisted = "✅ Enabled" if Config.MEGA_UPLOAD_UNLISTED else "❌ Disabled"
+        expiry = (
+            f"{Config.MEGA_UPLOAD_EXPIRY_DAYS} days"
+            if Config.MEGA_UPLOAD_EXPIRY_DAYS > 0
+            else "No expiry (Default)"
+        )
+        password = "Set" if Config.MEGA_UPLOAD_PASSWORD else "Not set (Default)"
+        encryption = (
+            "Set" if Config.MEGA_UPLOAD_ENCRYPTION_KEY else "Not set (Default)"
+        )
+        thumbnail = "✅ Enabled" if Config.MEGA_UPLOAD_THUMBNAIL else "❌ Disabled"
+        delete_after = (
+            "✅ Enabled" if Config.MEGA_UPLOAD_DELETE_AFTER else "❌ Disabled"
+        )
+
+        msg = f"""<b>☁️ MEGA Upload Settings</b> | State: {state}
+
+<b>Status:</b> {enabled}
+<b>Upload Folder:</b> <code>{folder}</code>
+<b>Generate Public Links:</b> {public}
+<b>Generate Private Links:</b> {private}
+<b>Generate Unlisted Links:</b> {unlisted}
+<b>Link Expiry:</b> <code>{expiry}</code>
+<b>Password Protection:</b> <code>{password}</code>
+<b>Custom Encryption:</b> <code>{encryption}</code>
+<b>Generate Thumbnails:</b> {thumbnail}
+<b>Delete After Upload:</b> {delete_after}
+
+<b>Description:</b>
+• <b>Enabled:</b> Master toggle for MEGA upload functionality
+• <b>Upload Folder:</b> Default folder path in MEGA account for uploads
+• <b>Public/Private/Unlisted:</b> Link generation preferences
+• <b>Link Expiry:</b> Automatic link expiration (0 = no expiry)
+• <b>Password Protection:</b> Add password protection to uploads
+• <b>Custom Encryption:</b> Use custom encryption keys
+• <b>Generate Thumbnails:</b> Create video thumbnails using FFmpeg
+• <b>Delete After Upload:</b> Remove local files after successful upload"""
+
+    elif key == "mega_clone":
+        # MEGA Clone Settings
+        clone_settings = [
+            "MEGA_CLONE_ENABLED",
+            "MEGA_CLONE_TO_FOLDER",
+            "MEGA_CLONE_PRESERVE_STRUCTURE",
+            "MEGA_CLONE_OVERWRITE",
+        ]
+
+        for setting in clone_settings:
+            display_name = (
+                setting.replace("MEGA_CLONE_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "MEGA_CLONE_ENABLED",
+                "MEGA_CLONE_PRESERVE_STRUCTURE",
+                "MEGA_CLONE_OVERWRITE",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mega_clone", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view mega_clone", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_mega_clone", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset mega", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current clone settings
+        enabled = "✅ Enabled" if Config.MEGA_CLONE_ENABLED else "❌ Disabled"
+        folder = Config.MEGA_CLONE_TO_FOLDER or "Root folder (Default)"
+        preserve = (
+            "✅ Enabled" if Config.MEGA_CLONE_PRESERVE_STRUCTURE else "❌ Disabled"
+        )
+        overwrite = "✅ Enabled" if Config.MEGA_CLONE_OVERWRITE else "❌ Disabled"
+
+        msg = f"""<b>☁️ MEGA Clone Settings</b> | State: {state}
+
+<b>Status:</b> {enabled}
+<b>Clone To Folder:</b> <code>{folder}</code>
+<b>Preserve Structure:</b> {preserve}
+<b>Overwrite Existing:</b> {overwrite}
+
+<b>Description:</b>
+• <b>Enabled:</b> Master toggle for MEGA clone functionality
+• <b>Clone To Folder:</b> Default destination folder for cloned files
+• <b>Preserve Structure:</b> Maintain original folder structure when cloning
+• <b>Overwrite Existing:</b> Replace existing files when cloning
+
+<b>Note:</b>
+Clone operations copy files directly between MEGA accounts without downloading locally."""
+
+    elif key == "mega_security":
+        # MEGA Security Settings (advanced encryption and security options)
+        security_settings = [
+            "MEGA_UPLOAD_PASSWORD",
+            "MEGA_UPLOAD_ENCRYPTION_KEY",
+            "MEGA_UPLOAD_EXPIRY_DAYS",
+        ]
+
+        for setting in security_settings:
+            display_name = (
+                setting.replace("MEGA_UPLOAD_", "").replace("_", " ").title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mega_security", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view mega_security", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_mega_security", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset mega", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current security settings
+        password = "Set" if Config.MEGA_UPLOAD_PASSWORD else "Not set (Default)"
+        encryption = (
+            "Set" if Config.MEGA_UPLOAD_ENCRYPTION_KEY else "Not set (Default)"
+        )
+        expiry = (
+            f"{Config.MEGA_UPLOAD_EXPIRY_DAYS} days"
+            if Config.MEGA_UPLOAD_EXPIRY_DAYS > 0
+            else "No expiry (Default)"
+        )
+
+        msg = f"""<b>☁️ MEGA Security Settings</b> | State: {state}
+
+<b>Password Protection:</b> <code>{password}</code>
+<b>Custom Encryption Key:</b> <code>{encryption}</code>
+<b>Link Expiry:</b> <code>{expiry}</code>
+
+<b>Description:</b>
+• <b>Password Protection:</b> Add password protection to uploaded files
+• <b>Custom Encryption Key:</b> Use custom encryption keys for enhanced security
+• <b>Link Expiry:</b> Automatically expire download links after specified days
+
+<b>Security Features:</b>
+• Password-protected shares require the password to access
+• Custom encryption keys provide additional security layer
+• Expiring links automatically become invalid after the set time
+• All uploads use MEGA's end-to-end encryption by default
+
+<b>Note:</b>
+These are advanced security features. Leave empty for standard MEGA encryption."""
+
     elif key == "mediatools_watermark":
         # Add buttons for each watermark setting in a 2-column layout
         # Main watermark settings
@@ -6499,6 +7010,102 @@ async def update_buttons(message, key=None, edit_type=None, page=0):
     await edit_message(message, msg, button)
 
 
+async def _process_zotify_credentials_upload(
+    credentials_content: str,
+    user_id: int,
+    file_name: str = "zotify_credentials.json",
+) -> tuple[bool, str]:
+    """
+    Process zotify credentials upload with validation and database storage.
+
+    Args:
+        credentials_content: The JSON credentials content as string
+        user_id: The user ID for database storage
+        file_name: The original file name (for logging)
+
+    Returns:
+        tuple[bool, str]: (success, error_message)
+    """
+    try:
+        # Validate JSON format
+        try:
+            import json
+
+            credentials_data = json.loads(credentials_content)
+
+            # Basic validation - check if it looks like Spotify credentials
+            if not isinstance(credentials_data, dict):
+                raise ValueError("Credentials must be a JSON object")
+
+        except Exception as e:
+            return False, f"Invalid JSON format: {e}"
+
+        # Save credentials to database and file using the zotify config helper
+        from bot.helper.zotify_utils.zotify_config import zotify_config
+
+        success = await zotify_config.save_credentials(credentials_data, user_id)
+
+        if success:
+            LOGGER.info(
+                f"Zotify credentials from {file_name} uploaded and applied successfully for user {user_id}"
+            )
+            return True, ""
+
+        error_msg = "Failed to save Zotify credentials to database"
+        LOGGER.error(error_msg)
+        return False, error_msg
+
+    except Exception as e:
+        error_msg = f"Error processing Zotify credentials: {e}"
+        LOGGER.error(error_msg)
+        return False, error_msg
+
+
+async def _process_streamrip_config_upload(
+    config_content: str, file_name: str = "streamrip_config.toml"
+) -> tuple[bool, str]:
+    """
+    Process streamrip config upload with validation and database storage.
+
+    Args:
+        config_content: The TOML config content as string
+        file_name: The original file name (for logging)
+
+    Returns:
+        tuple[bool, str]: (success, error_message)
+    """
+    try:
+        # Validate TOML format
+        try:
+            import toml
+
+            toml.loads(config_content)
+        except Exception as e:
+            return False, f"Invalid TOML format: {e}"
+
+        # Save to database using streamrip config helper
+        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+        success = await streamrip_config.save_custom_config_to_db(config_content)
+
+        if success:
+            # Reinitialize streamrip config to use the new custom config
+            await streamrip_config.initialize()
+            LOGGER.info(
+                f"Streamrip custom config from {file_name} uploaded and applied successfully"
+            )
+            return True, ""
+
+        error_msg = "Failed to save streamrip config to database"
+        LOGGER.error(error_msg)
+        return False, error_msg
+
+    except Exception as e:
+        error_msg = f"Error processing streamrip config: {e}"
+        LOGGER.error(error_msg)
+        return False, error_msg
+
+
 async def _generate_current_config_content() -> str:
     """Generate current streamrip config content based on bot settings"""
     try:
@@ -6665,28 +7272,12 @@ async def handle_streamrip_config_upload(_, message, pre_message):
         async with aiopen(temp_path, encoding="utf-8") as f:
             config_content = await f.read()
 
-        # Validate TOML format
-        try:
-            import toml
-
-            toml.loads(config_content)
-        except Exception as e:
-            await send_message(
-                message,
-                "<b>❌ Invalid TOML Format</b>\n\n"
-                f"The uploaded file is not a valid TOML configuration:\n<code>{e}</code>",
-            )
-            return
-
-        # Save to database using streamrip config helper
-        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
-
-        success = await streamrip_config.save_custom_config_to_db(config_content)
+        # Use the unified processing function
+        success, error_msg = await _process_streamrip_config_upload(
+            config_content, file_name
+        )
 
         if success:
-            # Reinitialize streamrip config to use the new custom config
-            await streamrip_config.initialize()
-
             await send_message(
                 message,
                 "<b>✅ Config Upload Successful</b>\n\n"
@@ -6701,7 +7292,7 @@ async def handle_streamrip_config_upload(_, message, pre_message):
             await send_message(
                 message,
                 "<b>❌ Upload Failed</b>\n\n"
-                "Failed to save streamrip configuration to database. Please try again.",
+                f"Failed to process streamrip configuration: {error_msg}",
             )
 
     except Exception as e:
@@ -6768,28 +7359,10 @@ async def handle_zotify_credentials_upload(_, message, pre_message):
         async with aiopen(temp_path, encoding="utf-8") as f:
             credentials_content = await f.read()
 
-        # Validate JSON format
-        try:
-            import json
-
-            credentials_data = json.loads(credentials_content)
-
-            # Basic validation - check if it looks like Spotify credentials
-            if not isinstance(credentials_data, dict):
-                raise ValueError("Credentials must be a JSON object")
-
-        except Exception as e:
-            await send_message(
-                message,
-                "<b>❌ Invalid JSON Format</b>\n\n"
-                f"The uploaded file is not a valid JSON credentials file:\n<code>{e}</code>",
-            )
-            return
-
-        # Save credentials to database and file using the new method
-        from bot.helper.zotify_utils.zotify_config import zotify_config
-
-        success = await zotify_config.save_credentials(credentials_data, user_id)
+        # Use the unified processing function
+        success, error_msg = await _process_zotify_credentials_upload(
+            credentials_content, user_id, file_name
+        )
 
         if success:
             await send_message(
@@ -6806,8 +7379,8 @@ async def handle_zotify_credentials_upload(_, message, pre_message):
         else:
             await send_message(
                 message,
-                "<b>❌ Save Failed</b>\n\n"
-                "Failed to save Zotify credentials. Please try again or check the logs for more details.",
+                "<b>❌ Upload Failed</b>\n\n"
+                f"Failed to process Zotify credentials: {error_msg}",
             )
 
     except Exception as e:
@@ -7973,7 +8546,7 @@ async def update_private_file(_, message, pre_message):
                 await create_subprocess_exec("cp", ".netrc", "/root/.netrc")
             ).wait()
         elif file_name == "streamrip_config.toml":
-            # Handle streamrip config deletion
+            # Handle streamrip config deletion - use same logic as dedicated streamrip config reset
             try:
                 from bot.helper.streamrip_utils.streamrip_config import (
                     streamrip_config,
@@ -7993,11 +8566,29 @@ async def update_private_file(_, message, pre_message):
             except Exception as e:
                 LOGGER.error(f"Error handling streamrip config deletion: {e}")
         elif file_name == "zotify_credentials.json":
-            # Handle zotify credentials deletion
+            # Handle zotify credentials deletion - use same logic as dedicated clear credentials
             try:
                 from pathlib import Path
 
-                # Get credentials path from config
+                # Get user_id (use owner ID for private files)
+                user_id = getattr(Config, "OWNER_ID", 0)
+                credentials_cleared = False
+
+                # Clear credentials from database
+                if database.db is not None:
+                    try:
+                        result = await database.db.users.update_one(
+                            {"_id": user_id},
+                            {"$unset": {"ZOTIFY_CREDENTIALS": ""}},
+                        )
+                        if result.modified_count > 0:
+                            credentials_cleared = True
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error clearing Zotify credentials from database: {e}"
+                        )
+
+                # Clear credentials file
                 credentials_path = (
                     Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
                 )
@@ -8005,9 +8596,14 @@ async def update_private_file(_, message, pre_message):
 
                 if creds_file.exists():
                     creds_file.unlink()
-                    LOGGER.info("Zotify credentials deleted successfully")
+                    credentials_cleared = True
+
+                if credentials_cleared:
+                    LOGGER.info(
+                        "Zotify credentials deleted successfully (database and file)"
+                    )
                 else:
-                    LOGGER.info("No Zotify credentials file found to delete")
+                    LOGGER.info("No Zotify credentials found to delete")
 
             except Exception as e:
                 LOGGER.error(f"Error handling Zotify credentials deletion: {e}")
@@ -8065,29 +8661,34 @@ async def update_private_file(_, message, pre_message):
         elif file_name == "config.py":
             await load_config()
         elif file_name == "streamrip_config.toml":
-            # Handle streamrip config upload
+            # Handle streamrip config upload - use same logic as dedicated streamrip config upload
             try:
+                # Validate file extension (should already be .toml but double-check)
+                if not file_name.lower().endswith(".toml"):
+                    LOGGER.error("Invalid streamrip config file extension")
+                    if await aiopath.exists(file_name):
+                        await remove(file_name)
+                    return
+
+                # Check file size (5MB limit)
+                if await aiopath.exists(file_name):
+                    file_stat = await aiopath.stat(file_name)
+                    if file_stat.st_size > 5 * 1024 * 1024:
+                        LOGGER.error("Streamrip config file too large (>5MB)")
+                        await remove(file_name)
+                        return
+
                 # Read the uploaded config file
-                async with aiopen(file_name) as f:
+                async with aiopen(file_name, encoding="utf-8") as f:
                     config_content = await f.read()
 
-                # Save to database using streamrip config helper
-                from bot.helper.streamrip_utils.streamrip_config import (
-                    streamrip_config,
+                # Use the unified processing function
+                success, error_msg = await _process_streamrip_config_upload(
+                    config_content, file_name
                 )
 
-                success = await streamrip_config.save_custom_config_to_db(
-                    config_content
-                )
-
-                if success:
-                    # Reinitialize streamrip config to use the new custom config
-                    await streamrip_config.initialize()
-                    LOGGER.info(
-                        "Streamrip custom config uploaded and applied successfully"
-                    )
-                else:
-                    LOGGER.error("Failed to save streamrip config to database")
+                if not success:
+                    LOGGER.error(f"Streamrip config upload failed: {error_msg}")
 
                 # Clean up the temporary file
                 if await aiopath.exists(file_name):
@@ -8098,46 +8699,37 @@ async def update_private_file(_, message, pre_message):
                 if await aiopath.exists(file_name):
                     await remove(file_name)
         elif file_name == "zotify_credentials.json":
-            # Handle zotify credentials upload
+            # Handle zotify credentials upload - use same logic as dedicated zotify credentials upload
             try:
-                # Read the uploaded credentials file
-                async with aiopen(file_name) as f:
-                    credentials_content = await f.read()
-
-                # Validate JSON format
-                import json
-
-                try:
-                    credentials_data = json.loads(credentials_content)
-
-                    # Basic validation - check if it looks like Spotify credentials
-                    if not isinstance(credentials_data, dict):
-                        raise ValueError("Credentials must be a JSON object")
-
-                except Exception as e:
-                    LOGGER.error(f"Invalid Zotify credentials JSON: {e}")
+                # Validate file extension (should already be .json but double-check)
+                if not file_name.lower().endswith(".json"):
+                    LOGGER.error("Invalid zotify credentials file extension")
                     if await aiopath.exists(file_name):
                         await remove(file_name)
                     return
 
-                # Save credentials to the configured path
-                from pathlib import Path
+                # Check file size (5MB limit)
+                if await aiopath.exists(file_name):
+                    file_stat = await aiopath.stat(file_name)
+                    if file_stat.st_size > 5 * 1024 * 1024:
+                        LOGGER.error("Zotify credentials file too large (>5MB)")
+                        await remove(file_name)
+                        return
 
-                credentials_path = (
-                    Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
+                # Read the uploaded credentials file
+                async with aiopen(file_name, encoding="utf-8") as f:
+                    credentials_content = await f.read()
+
+                # Get user_id from the message context (use owner ID for private files)
+                user_id = getattr(Config, "OWNER_ID", 0)
+
+                # Use the unified processing function
+                success, error_msg = await _process_zotify_credentials_upload(
+                    credentials_content, user_id, file_name
                 )
-                creds_file = Path(credentials_path)
 
-                # Ensure the directory exists
-                creds_file.parent.mkdir(parents=True, exist_ok=True)
-
-                # Write the credentials file
-                async with aiopen(credentials_path, "w", encoding="utf-8") as f:
-                    await f.write(credentials_content)
-
-                LOGGER.info(
-                    f"Zotify credentials uploaded and saved to {credentials_path}"
-                )
+                if not success:
+                    LOGGER.error(f"Zotify credentials upload failed: {error_msg}")
 
                 # Clean up the temporary file
                 if await aiopath.exists(file_name):
@@ -8421,6 +9013,36 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "zotify")
 
+    elif data[1] == "youtube":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if YouTube upload is enabled
+        if not Config.YOUTUBE_UPLOAD_ENABLED:
+            await query.answer(
+                "YouTube upload is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "youtube")
+
+    elif data[1] == "mega":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if MEGA is enabled
+        if not Config.MEGA_ENABLED:
+            await query.answer("MEGA is disabled by the bot owner.", show_alert=True)
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mega")
+
     elif data[1] in [
         "streamrip_general",
         "streamrip_quality",
@@ -8468,6 +9090,45 @@ async def edit_bot_settings(client, query):
             await query.answer(
                 "Zotify is disabled by the bot owner.", show_alert=True
             )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, data[1])
+
+    elif data[1] in [
+        "youtube_general",
+        "youtube_upload",
+        "youtube_auth",
+    ]:
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if YouTube upload is enabled
+        if not Config.YOUTUBE_UPLOAD_ENABLED:
+            await query.answer(
+                "YouTube upload is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, data[1])
+
+    elif data[1] in [
+        "mega_general",
+        "mega_upload",
+        "mega_clone",
+        "mega_security",
+    ]:
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if MEGA is enabled
+        if not Config.MEGA_ENABLED:
+            await query.answer("MEGA is disabled by the bot owner.", show_alert=True)
             return
 
         # Set the state back to what it was
@@ -10865,6 +11526,169 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "ai")
 
+    elif data[1] == "default_youtube_general":
+        await query.answer("Resetting YouTube general settings to default...")
+        # Reset YouTube general settings to default
+        Config.YOUTUBE_UPLOAD_DEFAULT_PRIVACY = "unlisted"
+        Config.YOUTUBE_UPLOAD_DEFAULT_CATEGORY = "22"
+        Config.YOUTUBE_UPLOAD_DEFAULT_TAGS = ""
+        Config.YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION = "Uploaded by AIM"
+
+        # Update the database
+        await database.update_config(
+            {
+                "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "unlisted",
+                "YOUTUBE_UPLOAD_DEFAULT_CATEGORY": "22",
+                "YOUTUBE_UPLOAD_DEFAULT_TAGS": "",
+                "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Uploaded by AIM",
+            }
+        )
+        # Update the UI - go back to YouTube main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "youtube")
+
+    elif data[1] == "default_youtube_upload":
+        await query.answer("Resetting YouTube upload settings to default...")
+        # Reset YouTube upload settings to default
+        Config.YOUTUBE_UPLOAD_DEFAULT_TITLE = ""
+        Config.YOUTUBE_UPLOAD_DEFAULT_LANGUAGE = "en"
+        Config.YOUTUBE_UPLOAD_DEFAULT_LICENSE = "youtube"
+        Config.YOUTUBE_UPLOAD_EMBEDDABLE = True
+        Config.YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE = True
+        Config.YOUTUBE_UPLOAD_MADE_FOR_KIDS = False
+        Config.YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS = True
+        Config.YOUTUBE_UPLOAD_LOCATION_DESCRIPTION = ""
+        Config.YOUTUBE_UPLOAD_RECORDING_DATE = ""
+        Config.YOUTUBE_UPLOAD_AUTO_LEVELS = False
+        Config.YOUTUBE_UPLOAD_STABILIZE = False
+
+        # Update the database
+        await database.update_config(
+            {
+                "YOUTUBE_UPLOAD_DEFAULT_TITLE": "",
+                "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE": "en",
+                "YOUTUBE_UPLOAD_DEFAULT_LICENSE": "youtube",
+                "YOUTUBE_UPLOAD_EMBEDDABLE": True,
+                "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE": True,
+                "YOUTUBE_UPLOAD_MADE_FOR_KIDS": False,
+                "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS": True,
+                "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION": "",
+                "YOUTUBE_UPLOAD_RECORDING_DATE": "",
+                "YOUTUBE_UPLOAD_AUTO_LEVELS": False,
+                "YOUTUBE_UPLOAD_STABILIZE": False,
+            }
+        )
+        # Update the UI - go back to YouTube main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "youtube")
+
+    elif data[1] == "default_youtube_auth":
+        await query.answer("Resetting YouTube authentication settings to default...")
+        # Reset YouTube authentication settings to default
+        # Note: We don't reset the actual token file, just clear any config references
+        # The token file management is handled separately
+
+        # Update the UI - go back to YouTube main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "youtube")
+
+    elif data[1] == "default_mega_general":
+        await query.answer("Resetting MEGA general settings to default...")
+        # Reset MEGA general settings to default
+        Config.MEGA_EMAIL = ""
+        Config.MEGA_PASSWORD = ""
+
+        # Update the database
+        await database.update_config(
+            {
+                "MEGA_EMAIL": "",
+                "MEGA_PASSWORD": "",
+            }
+        )
+        # Update the UI - go back to MEGA main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "mega")
+
+    elif data[1] == "default_mega_upload":
+        await query.answer("Resetting MEGA upload settings to default...")
+        # Reset MEGA upload settings to default
+        Config.MEGA_UPLOAD_ENABLED = True
+        Config.MEGA_UPLOAD_FOLDER = ""
+        Config.MEGA_UPLOAD_PUBLIC = True
+        Config.MEGA_UPLOAD_PRIVATE = False
+        Config.MEGA_UPLOAD_UNLISTED = False
+        Config.MEGA_UPLOAD_EXPIRY_DAYS = 0
+        Config.MEGA_UPLOAD_PASSWORD = ""
+        Config.MEGA_UPLOAD_ENCRYPTION_KEY = ""
+        Config.MEGA_UPLOAD_THUMBNAIL = True
+        Config.MEGA_UPLOAD_DELETE_AFTER = False
+
+        # Update the database
+        await database.update_config(
+            {
+                "MEGA_UPLOAD_ENABLED": True,
+                "MEGA_UPLOAD_FOLDER": "",
+                "MEGA_UPLOAD_PUBLIC": True,
+                "MEGA_UPLOAD_PRIVATE": False,
+                "MEGA_UPLOAD_UNLISTED": False,
+                "MEGA_UPLOAD_EXPIRY_DAYS": 0,
+                "MEGA_UPLOAD_PASSWORD": "",
+                "MEGA_UPLOAD_ENCRYPTION_KEY": "",
+                "MEGA_UPLOAD_THUMBNAIL": True,
+                "MEGA_UPLOAD_DELETE_AFTER": False,
+            }
+        )
+        # Update the UI - go back to MEGA main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "mega")
+
+    elif data[1] == "default_mega_clone":
+        await query.answer("Resetting MEGA clone settings to default...")
+        # Reset MEGA clone settings to default
+        Config.MEGA_CLONE_ENABLED = True
+        Config.MEGA_CLONE_TO_FOLDER = ""
+        Config.MEGA_CLONE_PRESERVE_STRUCTURE = True
+        Config.MEGA_CLONE_OVERWRITE = False
+
+        # Update the database
+        await database.update_config(
+            {
+                "MEGA_CLONE_ENABLED": True,
+                "MEGA_CLONE_TO_FOLDER": "",
+                "MEGA_CLONE_PRESERVE_STRUCTURE": True,
+                "MEGA_CLONE_OVERWRITE": False,
+            }
+        )
+        # Update the UI - go back to MEGA main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "mega")
+
+    elif data[1] == "default_mega_security":
+        await query.answer("Resetting MEGA security settings to default...")
+        # Reset MEGA security settings to default
+        Config.MEGA_UPLOAD_PASSWORD = ""
+        Config.MEGA_UPLOAD_ENCRYPTION_KEY = ""
+        Config.MEGA_UPLOAD_EXPIRY_DAYS = 0
+
+        # Update the database
+        await database.update_config(
+            {
+                "MEGA_UPLOAD_PASSWORD": "",
+                "MEGA_UPLOAD_ENCRYPTION_KEY": "",
+                "MEGA_UPLOAD_EXPIRY_DAYS": 0,
+            }
+        )
+        # Update the UI - go back to MEGA main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "mega")
+
     elif data[1] == "default_taskmonitor":
         await query.answer("Resetting all task monitoring settings to default...")
         # Reset all task monitoring settings to default
@@ -11060,6 +11884,15 @@ async def edit_bot_settings(client, query):
         "mediatools_extract",
         "mediatools_add",
         "ai",
+        "mega",
+        "youtube",
+        "youtube_general",
+        "youtube_upload",
+        "youtube_auth",
+        "mega_general",
+        "mega_upload",
+        "mega_clone",
+        "mega_security",
     ]:
         await query.answer()
         # Set the global state to edit mode
@@ -11087,6 +11920,19 @@ async def edit_bot_settings(client, query):
             await update_buttons(message, "ai")
         elif data[2] == "taskmonitor":
             await update_buttons(message, "taskmonitor")
+        elif data[2] in [
+            "youtube",
+            "youtube_general",
+            "youtube_upload",
+            "youtube_auth",
+        ] or data[2] in [
+            "mega",
+            "mega_general",
+            "mega_upload",
+            "mega_clone",
+            "mega_security",
+        ]:
+            await update_buttons(message, data[2])
         else:
             await update_buttons(message, data[2])
     elif data[1] == "view" and data[2] in [
@@ -11100,6 +11946,15 @@ async def edit_bot_settings(client, query):
         "mediatools_extract",
         "mediatools_add",
         "ai",
+        "youtube",
+        "youtube_general",
+        "youtube_upload",
+        "youtube_auth",
+        "mega",
+        "mega_general",
+        "mega_upload",
+        "mega_clone",
+        "mega_security",
     ]:
         await query.answer()
         # Set the global state to view mode
@@ -11124,6 +11979,19 @@ async def edit_bot_settings(client, query):
             await update_buttons(message, "mediatools_add")
         elif data[2] == "ai":
             await update_buttons(message, "ai")
+        elif data[2] in [
+            "youtube",
+            "youtube_general",
+            "youtube_upload",
+            "youtube_auth",
+        ] or data[2] in [
+            "mega",
+            "mega_general",
+            "mega_upload",
+            "mega_clone",
+            "mega_security",
+        ]:
+            await update_buttons(message, data[2])
         else:
             await update_buttons(message, data[2])
 
@@ -11149,6 +12017,8 @@ async def edit_bot_settings(client, query):
             ]
             and not data[2].startswith("STREAMRIP_")
             and not data[2].startswith("ZOTIFY_")
+            and not data[2].startswith("YOUTUBE_UPLOAD_")
+            and not data[2].startswith("MEGA_")
         ):
             # In view mode, show the current value in a popup
             value = f"{Config.get(data[2])}"
@@ -11198,6 +12068,8 @@ async def edit_bot_settings(client, query):
             )
             or data[2].startswith("STREAMRIP_")
             or data[2].startswith("ZOTIFY_")
+            or data[2].startswith("YOUTUBE_UPLOAD_")
+            or data[2].startswith("MEGA_")
         ):
             # Get the current state before making changes
             current_state = globals()["state"]
@@ -11402,6 +12274,62 @@ async def edit_bot_settings(client, query):
                     back_menu = "zotify_advanced"
                 else:
                     back_menu = "zotify"
+            elif data[2].startswith("YOUTUBE_UPLOAD_"):
+                # For YouTube upload settings, determine which submenu to return to
+                if data[2] in [
+                    "YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+                    "YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+                    "YOUTUBE_UPLOAD_DEFAULT_TAGS",
+                    "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+                ]:
+                    back_menu = "youtube_general"
+                elif data[2] in [
+                    "YOUTUBE_UPLOAD_DEFAULT_TITLE",
+                    "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE",
+                    "YOUTUBE_UPLOAD_DEFAULT_LICENSE",
+                    "YOUTUBE_UPLOAD_EMBEDDABLE",
+                    "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+                    "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+                    "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+                    "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+                    "YOUTUBE_UPLOAD_RECORDING_DATE",
+                    "YOUTUBE_UPLOAD_AUTO_LEVELS",
+                    "YOUTUBE_UPLOAD_STABILIZE",
+                ]:
+                    back_menu = "youtube_upload"
+                else:
+                    back_menu = "youtube"
+            elif data[2].startswith("MEGA_"):
+                # For MEGA settings, determine which submenu to return to
+                if data[2] in ["MEGA_EMAIL", "MEGA_PASSWORD", "MEGA_LIMIT"]:
+                    back_menu = "mega_general"
+                elif data[2] in [
+                    "MEGA_UPLOAD_ENABLED",
+                    "MEGA_UPLOAD_FOLDER",
+                    "MEGA_UPLOAD_PUBLIC",
+                    "MEGA_UPLOAD_PRIVATE",
+                    "MEGA_UPLOAD_UNLISTED",
+                    "MEGA_UPLOAD_EXPIRY_DAYS",
+                    "MEGA_UPLOAD_PASSWORD",
+                    "MEGA_UPLOAD_ENCRYPTION_KEY",
+                    "MEGA_UPLOAD_THUMBNAIL",
+                    "MEGA_UPLOAD_DELETE_AFTER",
+                ]:
+                    back_menu = "mega_upload"
+                elif data[2] in [
+                    "MEGA_CLONE_ENABLED",
+                    "MEGA_CLONE_TO_FOLDER",
+                    "MEGA_CLONE_PRESERVE_STRUCTURE",
+                    "MEGA_CLONE_OVERWRITE",
+                ]:
+                    back_menu = "mega_clone"
+                elif data[2] in [
+                    "MEGA_UPLOAD_PASSWORD",
+                    "MEGA_UPLOAD_ENCRYPTION_KEY",
+                ]:
+                    back_menu = "mega_security"
+                else:
+                    back_menu = "mega"
 
             buttons.data_button("⬅️ Back", f"botset {back_menu}", "footer")
             if data[2] not in [
@@ -13910,6 +14838,64 @@ async def edit_bot_settings(client, query):
                 # YouTube upload operations enabled without logging
                 pass
 
+        # Special handling for MEGA_ENABLED
+        elif key == "MEGA_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database
+            await database.update_config({key: value})
+            if not value:
+                # If MEGA is being disabled, reset all MEGA-related configs
+                from bot.helper.ext_utils.config_utils import reset_mega_configs
+
+                await reset_mega_configs(database)
+            else:
+                # MEGA operations enabled without logging
+                pass
+
+        # Special handling for MEGA upload privacy settings - mutual exclusion
+        elif key == "MEGA_UPLOAD_PUBLIC" and value:
+            # If public is being turned on, turn off private and unlisted
+            Config.set("MEGA_UPLOAD_PUBLIC", True)
+            Config.set("MEGA_UPLOAD_PRIVATE", False)
+            Config.set("MEGA_UPLOAD_UNLISTED", False)
+            # Update all three settings in the database
+            await database.update_config(
+                {
+                    "MEGA_UPLOAD_PUBLIC": True,
+                    "MEGA_UPLOAD_PRIVATE": False,
+                    "MEGA_UPLOAD_UNLISTED": False,
+                }
+            )
+
+        elif key == "MEGA_UPLOAD_PRIVATE" and value:
+            # If private is being turned on, turn off public and unlisted
+            Config.set("MEGA_UPLOAD_PRIVATE", True)
+            Config.set("MEGA_UPLOAD_PUBLIC", False)
+            Config.set("MEGA_UPLOAD_UNLISTED", False)
+            # Update all three settings in the database
+            await database.update_config(
+                {
+                    "MEGA_UPLOAD_PRIVATE": True,
+                    "MEGA_UPLOAD_PUBLIC": False,
+                    "MEGA_UPLOAD_UNLISTED": False,
+                }
+            )
+
+        elif key == "MEGA_UPLOAD_UNLISTED" and value:
+            # If unlisted is being turned on, turn off public and private
+            Config.set("MEGA_UPLOAD_UNLISTED", True)
+            Config.set("MEGA_UPLOAD_PUBLIC", False)
+            Config.set("MEGA_UPLOAD_PRIVATE", False)
+            # Update all three settings in the database
+            await database.update_config(
+                {
+                    "MEGA_UPLOAD_UNLISTED": True,
+                    "MEGA_UPLOAD_PUBLIC": False,
+                    "MEGA_UPLOAD_PRIVATE": False,
+                }
+            )
+
         # Special handling for TORRENT_SEARCH_ENABLED
         elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
             "HYPERDL_ENABLED",
@@ -14105,6 +15091,59 @@ async def edit_bot_settings(client, query):
                 return_menu = "streamrip_advanced"
             else:
                 return_menu = "streamrip"
+        elif key.startswith("YOUTUBE_UPLOAD_") and key != "YOUTUBE_UPLOAD_ENABLED":
+            # For YouTube upload settings (except YOUTUBE_UPLOAD_ENABLED which is handled in operations), determine which submenu to return to
+            if key in [
+                "YOUTUBE_UPLOAD_DEFAULT_PRIVACY",
+                "YOUTUBE_UPLOAD_DEFAULT_CATEGORY",
+                "YOUTUBE_UPLOAD_DEFAULT_TAGS",
+                "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION",
+            ]:
+                return_menu = "youtube_general"
+            elif key in [
+                "YOUTUBE_UPLOAD_DEFAULT_TITLE",
+                "YOUTUBE_UPLOAD_DEFAULT_LANGUAGE",
+                "YOUTUBE_UPLOAD_DEFAULT_LICENSE",
+                "YOUTUBE_UPLOAD_EMBEDDABLE",
+                "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
+                "YOUTUBE_UPLOAD_MADE_FOR_KIDS",
+                "YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS",
+                "YOUTUBE_UPLOAD_LOCATION_DESCRIPTION",
+                "YOUTUBE_UPLOAD_RECORDING_DATE",
+                "YOUTUBE_UPLOAD_AUTO_LEVELS",
+                "YOUTUBE_UPLOAD_STABILIZE",
+            ]:
+                return_menu = "youtube_upload"
+            else:
+                return_menu = "youtube"
+        elif key.startswith("MEGA_") and key != "MEGA_ENABLED":
+            # For MEGA settings (except MEGA_ENABLED which is handled in operations), determine which submenu to return to
+            if key in ["MEGA_EMAIL", "MEGA_PASSWORD", "MEGA_LIMIT"]:
+                return_menu = "mega_general"
+            elif key in [
+                "MEGA_UPLOAD_ENABLED",
+                "MEGA_UPLOAD_FOLDER",
+                "MEGA_UPLOAD_PUBLIC",
+                "MEGA_UPLOAD_PRIVATE",
+                "MEGA_UPLOAD_UNLISTED",
+                "MEGA_UPLOAD_EXPIRY_DAYS",
+                "MEGA_UPLOAD_PASSWORD",
+                "MEGA_UPLOAD_ENCRYPTION_KEY",
+                "MEGA_UPLOAD_THUMBNAIL",
+                "MEGA_UPLOAD_DELETE_AFTER",
+            ]:
+                return_menu = "mega_upload"
+            elif key in [
+                "MEGA_CLONE_ENABLED",
+                "MEGA_CLONE_TO_FOLDER",
+                "MEGA_CLONE_PRESERVE_STRUCTURE",
+                "MEGA_CLONE_OVERWRITE",
+            ]:
+                return_menu = "mega_clone"
+            elif key in ["MEGA_UPLOAD_PASSWORD", "MEGA_UPLOAD_ENCRYPTION_KEY"]:
+                return_menu = "mega_security"
+            else:
+                return_menu = "mega"
         elif key in {
             "BULK_ENABLED",
             "MULTI_LINK_ENABLED",
@@ -14123,6 +15162,7 @@ async def edit_bot_settings(client, query):
             "STREAMRIP_ENABLED",
             "ZOTIFY_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
+            "MEGA_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",

@@ -15,6 +15,7 @@ class BotCommands:
     NzbLeechCommand = [f"nzbleech{i}", f"nl{i}"]
     YtdlLeechCommand = [f"ytdlleech{i}", f"yl{i}"]
     CloneCommand = f"clone{i}"
+    MegaCloneCommand = [f"megaclone{i}", f"mc{i}"]
     MediaInfoCommand = [f"mediainfo{i}", f"mi{i}"]
     CountCommand = f"count{i}"
     DeleteCommand = f"del{i}"
@@ -63,3 +64,4 @@ class BotCommands:
     ZotifyMirrorCommand = [f"zotifymirror{i}", f"zmirror{i}", f"zm{i}"]
     ZotifyLeechCommand = [f"zotifyleech{i}", f"zleech{i}", f"zl{i}"]
     ZotifySearchCommand = [f"zotifysearch{i}", f"zsearch{i}", f"zs{i}"]
+    MegaSearchCommand = [f"megasearch{i}", f"mgs{i}"]

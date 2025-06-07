@@ -42,6 +42,7 @@ from .media_search import (
 from .media_tools import edit_media_tools_settings, media_tools_settings
 from .media_tools_help import media_tools_help_cmd
 from .mediainfo import mediainfo
+from .megaclone import mega_clone
 from .mirror_leech import (
     jd_leech,
     jd_mirror,
@@ -136,6 +137,7 @@ __all__ = [
     "media_tools_help_cmd",
     "media_tools_settings",
     "mediainfo",
+    "mega_clone",
     "mirror",
     "nzb_leech",
     "nzb_mirror",

@@ -285,7 +285,27 @@ class TaskConfig:
         self.thumb = None
         self.excluded_extensions = []
         self.files_to_proceed = []
-        self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
+        # Set is_super_chat with better error handling
+        try:
+            if hasattr(self.message, "chat") and hasattr(self.message.chat, "type"):
+                chat_type = self.message.chat.type
+                # Handle both enum and string types
+                if hasattr(chat_type, "name"):
+                    self.is_super_chat = chat_type.name in ["SUPERGROUP", "CHANNEL"]
+                elif hasattr(chat_type, "value"):
+                    self.is_super_chat = chat_type.value in ["supergroup", "channel"]
+                else:
+                    # Fallback: treat as string
+                    self.is_super_chat = str(chat_type).lower() in [
+                        "supergroup",
+                        "channel",
+                    ]
+            else:
+                self.is_super_chat = False
+        except Exception as e:
+            LOGGER.warning(f"Error setting is_super_chat: {e}, defaulting to False")
+            self.is_super_chat = False
+
         # Set client attribute for Telegram operations
         self.client = TgClient.bot
 
@@ -3390,6 +3410,16 @@ class TaskConfig:
                 not self.up_dest and default_upload == "gd"
             ) or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
+            elif (
+                not self.up_dest and default_upload == "mg"
+            ) or self.up_dest == "mg":
+                # MEGA upload destination
+                self.up_dest = "mg"
+            elif (
+                not self.up_dest and default_upload == "yt"
+            ) or self.up_dest == "yt":
+                # YouTube upload destination
+                self.up_dest = "yt"
 
             # Check YouTube upload as fallback when no upload destination is set
             if not self.up_dest and getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
@@ -3427,6 +3457,12 @@ class TaskConfig:
                 # YouTube upload destination - validate that YouTube upload is enabled
                 if not getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
                     raise ValueError("YouTube upload is disabled!")
+            elif self.up_dest == "mg" or self.up_dest.startswith("mg:"):
+                # MEGA upload destination - validate that MEGA upload is enabled
+                if not getattr(Config, "MEGA_ENABLED", False):
+                    raise ValueError("MEGA upload is disabled!")
+                if not getattr(Config, "MEGA_UPLOAD_ENABLED", False):
+                    raise ValueError("MEGA upload is disabled!")
             else:
                 raise ValueError("Wrong Upload Destination!")
 
@@ -3576,9 +3612,11 @@ class TaskConfig:
                                 raise ValueError(
                                     "Start the bot and try again!",
                                 ) from None
-            elif (
-                self.user_transmission or self.hybrid_leech
-            ) and not self.is_super_chat:
+            elif (self.user_transmission or self.hybrid_leech) and not (
+                hasattr(self, "is_super_chat")
+                and not callable(getattr(self, "is_super_chat", None))
+                and self.is_super_chat
+            ):
                 self.user_transmission = False
                 self.hybrid_leech = False
             # Calculate max split size based on owner's session only

@@ -37,6 +37,9 @@ from bot.helper.mirror_leech_utils.download_utils.direct_link_generator import (
 )
 from bot.helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
 from bot.helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
+from bot.helper.mirror_leech_utils.download_utils.mega_download import (
+    add_mega_download,
+)
 from bot.helper.mirror_leech_utils.download_utils.nzb_downloader import add_nzb
 from bot.helper.mirror_leech_utils.download_utils.qbit_download import add_qb_torrent
 from bot.helper.mirror_leech_utils.download_utils.rclone_download import (
@@ -247,6 +250,93 @@ class Mirror(TaskListener):
         self.seed = args["-d"]
         self.name = args["-n"]
         self.up_dest = args["-up"]
+
+        # Handle DEFAULT_UPLOAD and -up flag for various upload destinations
+        if not self.is_leech:
+            # Check user's DEFAULT_UPLOAD setting first, then fall back to global setting
+            user_default_upload = self.user_dict.get(
+                "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
+            )
+            if user_default_upload == "mg" and not self.up_dest:
+                self.up_dest = "mg"
+            elif user_default_upload == "yt" and not self.up_dest:
+                self.up_dest = "yt"
+
+            if self.up_dest == "mg":
+                # Validate MEGA configuration
+                if not Config.MEGA_ENABLED:
+                    await send_message(
+                        self.message,
+                        "❌ MEGA.nz operations are disabled by the administrator.",
+                    )
+                    return None
+                if not Config.MEGA_UPLOAD_ENABLED:
+                    await send_message(
+                        self.message,
+                        "❌ MEGA upload is disabled by the administrator.",
+                    )
+                    return None
+
+                # Check for user MEGA credentials first, then fall back to owner credentials
+                user_mega_email = self.user_dict.get("MEGA_EMAIL")
+                user_mega_password = self.user_dict.get("MEGA_PASSWORD")
+
+                has_user_credentials = user_mega_email and user_mega_password
+                has_owner_credentials = Config.MEGA_EMAIL and Config.MEGA_PASSWORD
+
+                if not has_user_credentials and not has_owner_credentials:
+                    await send_message(
+                        self.message,
+                        "❌ MEGA credentials not configured. Please set your MEGA credentials in user settings or contact the administrator.",
+                    )
+                    return None
+
+                # Determine which account will be used and check if folder selection is needed
+                will_use_user_account = has_user_credentials
+                will_use_owner_account = (
+                    not has_user_credentials and has_owner_credentials
+                )
+
+                show_folder_selection = False
+                if will_use_user_account and not self.user_dict.get(
+                    "MEGA_UPLOAD_FOLDER"
+                ):
+                    # User account will be used but user hasn't set upload folder
+                    show_folder_selection = True
+                elif will_use_owner_account and not Config.MEGA_UPLOAD_FOLDER:
+                    # Owner account will be used but owner hasn't set upload folder
+                    show_folder_selection = True
+
+                # Show MEGA folder selection if needed for the account that will be used
+                if show_folder_selection:
+                    from bot.helper.mega_utils.folder_selector import (
+                        MegaFolderSelector,
+                    )
+
+                    folder_selector = MegaFolderSelector(self)
+                    selected_path = await folder_selector.get_mega_path()
+
+                    if selected_path is None:
+                        # User cancelled
+                        await self.remove_from_same_dir()
+                        return None
+                    if isinstance(selected_path, str) and selected_path.startswith(
+                        "❌"
+                    ):
+                        # Error occurred
+                        await send_message(self.message, selected_path)
+                        await self.remove_from_same_dir()
+                        return None
+                    # Store selected path for this upload
+                    self.mega_upload_path = selected_path
+            elif self.up_dest == "yt":
+                # Validate YouTube configuration
+                if not Config.YOUTUBE_UPLOAD_ENABLED:
+                    await send_message(
+                        self.message,
+                        "❌ YouTube upload is disabled by the administrator.",
+                    )
+                    return None
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
@@ -784,14 +874,7 @@ class Mirror(TaskListener):
             await delete_links(self.message)
             return await auto_delete_message(x, time=300)
 
-        if len(self.link) > 0:
-            # Check if it's a Mega link but not using jdleech or jdmirror command
-            if is_mega_link(self.link) and not self.is_jd:
-                error_msg = "⚠️ For Mega links, please use /jdleech or /jdmirror command instead."
-                x = await send_message(self.message, error_msg)
-                await self.remove_from_same_dir()
-                await delete_links(self.message)
-                return await auto_delete_message(x, time=300)
+        # Mega links are now supported natively, no need to force JDownloader
 
         # Check if media tools flag is set
         if self.media_tools:
@@ -927,6 +1010,17 @@ class Mirror(TaskListener):
             create_task(add_rclone_download(self, f"{path}/"))
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             create_task(add_gd_download(self, path))
+        elif is_mega_link(self.link):
+            # Check if this is a MEGA-to-MEGA clone operation
+            if not self.is_leech and self.up_dest == "mg":
+                # Import here to avoid circular imports
+                from bot.helper.mirror_leech_utils.download_utils.mega_clone import (
+                    add_mega_clone,
+                )
+
+                create_task(add_mega_clone(self, self.link))
+            else:
+                create_task(add_mega_download(self, path))
         elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
             # Handle streamrip downloads
             create_task(add_streamrip_download(self, self.link))

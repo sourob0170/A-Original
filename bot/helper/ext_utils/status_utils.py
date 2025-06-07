@@ -14,8 +14,11 @@ SIZE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
 
 class MirrorStatus:
     STATUS_UPLOAD = "Upload"
+    STATUS_UPLOADING = "Uploading"
     STATUS_DOWNLOAD = "Download"
+    STATUS_DOWNLOADING = "Downloading"
     STATUS_CLONE = "Clone"
+    STATUS_CLONING = "Cloning"
     STATUS_QUEUEDL = "QueueDl"
     STATUS_QUEUEUP = "QueueUp"
     STATUS_PAUSED = "Pause"
@@ -39,13 +42,16 @@ class MirrorStatus:
 STATUSES = {
     "ALL": "All",
     "DL": MirrorStatus.STATUS_DOWNLOAD,
+    "DLG": MirrorStatus.STATUS_DOWNLOADING,
     "UP": MirrorStatus.STATUS_UPLOAD,
+    "UPG": MirrorStatus.STATUS_UPLOADING,
     "QD": MirrorStatus.STATUS_QUEUEDL,
     "QU": MirrorStatus.STATUS_QUEUEUP,
     "AR": MirrorStatus.STATUS_ARCHIVE,
     "EX": MirrorStatus.STATUS_EXTRACT,
     "SD": MirrorStatus.STATUS_SEED,
     "CL": MirrorStatus.STATUS_CLONE,
+    "CLG": MirrorStatus.STATUS_CLONING,
     "CM": MirrorStatus.STATUS_CONVERT,
     "SP": MirrorStatus.STATUS_SPLIT,
     "SV": MirrorStatus.STATUS_SAMVID,
@@ -264,7 +270,14 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         if len(task_name) > 50:
             task_name = task_name[:47] + "..."
 
-        if task.listener.is_super_chat:
+        # Check if is_super_chat is a valid boolean attribute
+        is_super_chat = (
+            hasattr(task.listener, "is_super_chat")
+            and not callable(getattr(task.listener, "is_super_chat", None))
+            and task.listener.is_super_chat
+        )
+
+        if is_super_chat:
             task_msg += f"<b>{index + start_position}. <a href='{task.listener.message.link}'>{tstatus}</a>: </b>"
         else:
             task_msg += f"<b>{index + start_position}. {tstatus}: </b>"

@@ -234,6 +234,75 @@ async def reset_jd_configs(database):
     # JDownloader operations disabled without logging
 
 
+async def reset_mega_configs(database):
+    """Reset all MEGA-related configurations to their default values when MEGA is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific MEGA configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # MEGA-related keys to reset
+        mega_keys = [
+            "MEGA_EMAIL",
+            "MEGA_PASSWORD",
+            "MEGA_UPLOAD_ENABLED",
+            "DEFAULT_UPLOAD",  # Reset if set to MEGA
+        ]
+
+        # Reset each MEGA-related key
+        for key in mega_keys:
+            if key in user_dict:
+                # Special handling for DEFAULT_UPLOAD
+                if key == "DEFAULT_UPLOAD" and user_dict[key] == "mg":
+                    user_dict[key] = "gd"  # Reset to Google Drive
+                    user_configs_to_reset = True
+                elif key != "DEFAULT_UPLOAD":
+                    user_dict.pop(key, None)
+                    user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Reset owner MEGA configurations to default values
+    from bot.core.config_manager import Config
+
+    # Get default values for MEGA settings
+    default_values = {
+        "MEGA_ENABLED": True,
+        "MEGA_EMAIL": "",
+        "MEGA_PASSWORD": "",
+        "MEGA_UPLOAD_ENABLED": True,
+        "MEGA_UPLOAD_FOLDER": "",
+        "MEGA_UPLOAD_PUBLIC": True,
+        "MEGA_UPLOAD_PRIVATE": False,
+        "MEGA_UPLOAD_UNLISTED": False,
+        "MEGA_UPLOAD_EXPIRY_DAYS": 0,
+        "MEGA_UPLOAD_PASSWORD": "",
+        "MEGA_UPLOAD_ENCRYPTION_KEY": "",
+        "MEGA_UPLOAD_THUMBNAIL": True,
+        "MEGA_UPLOAD_DELETE_AFTER": False,
+        "MEGA_CLONE_ENABLED": True,
+        "MEGA_CLONE_TO_FOLDER": "",
+        "MEGA_CLONE_PRESERVE_STRUCTURE": True,
+        "MEGA_CLONE_OVERWRITE": False,
+    }
+
+    # Reset owner configurations
+    configs_to_reset = {}
+    for key, default_value in default_values.items():
+        if key != "MEGA_ENABLED":  # Don't reset the main toggle
+            configs_to_reset[key] = default_value
+            Config.set(key, default_value)
+
+    # Update the database if there are configurations to reset
+    if configs_to_reset:
+        await database.update_config(configs_to_reset)
+
+
 async def reset_bulk_configs(database):
     """Reset all bulk-related configurations to their default values when bulk is disabled.
 

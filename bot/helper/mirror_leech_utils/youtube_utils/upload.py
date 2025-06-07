@@ -143,8 +143,20 @@ class YouTubeUpload:
         if user_tokens_enabled:
             # When USER_TOKENS is enabled, only use user's personal token
             if ospath.exists(token_path):
-                with open(token_path, "rb") as token:
-                    credentials = pickle.load(token)
+                try:
+                    with open(token_path, "rb") as token:
+                        credentials = pickle.load(token)
+                except (EOFError, pickle.UnpicklingError, pickle.PickleError) as e:
+                    raise FileNotFoundError(
+                        f"❌ YouTube Token Corrupted!\n\n"
+                        f"The user's YouTube token file is corrupted or incomplete.\n"
+                        f"Token path: {token_path}\n\n"
+                        f"🔧 How to fix:\n"
+                        f"1. Go to User Settings → YouTube API → 🔑 YouTube Token\n"
+                        f"2. Remove the corrupted token\n"
+                        f"3. Upload a new valid YouTube token pickle file\n\n"
+                        f"📋 Technical details: {e}"
+                    ) from e
             else:
                 raise FileNotFoundError(
                     f"USER_TOKENS is enabled but user's YouTube token not found at {token_path}. "
@@ -152,12 +164,62 @@ class YouTubeUpload:
                 )
         elif ospath.exists(token_path):
             # When USER_TOKENS is disabled, check user token first
-            with open(token_path, "rb") as token:
-                credentials = pickle.load(token)
+            try:
+                with open(token_path, "rb") as token:
+                    credentials = pickle.load(token)
+            except (EOFError, pickle.UnpicklingError, pickle.PickleError) as e:
+                LOGGER.warning(
+                    f"User's YouTube token is corrupted: {e}. Trying owner's token..."
+                )
+                # Try owner's token as fallback
+                if ospath.exists("youtube_token.pickle"):
+                    try:
+                        with open("youtube_token.pickle", "rb") as token:
+                            credentials = pickle.load(token)
+                    except (
+                        EOFError,
+                        pickle.UnpicklingError,
+                        pickle.PickleError,
+                    ) as owner_e:
+                        raise FileNotFoundError(
+                            f"❌ All YouTube Tokens Corrupted!\n\n"
+                            f"Both user and owner YouTube tokens are corrupted.\n\n"
+                            f"🔧 How to fix:\n"
+                            f"1. For user token: Go to User Settings → YouTube API → 🔑 YouTube Token\n"
+                            f"2. For owner token: Go to Bot Settings → 🔒 Private Files\n"
+                            f"3. Remove corrupted tokens and upload new valid ones\n\n"
+                            f"📋 Technical details:\n"
+                            f"• User token error: {e}\n"
+                            f"• Owner token error: {owner_e}"
+                        ) from owner_e
+                else:
+                    raise FileNotFoundError(
+                        f"❌ YouTube Token Corrupted!\n\n"
+                        f"The user's YouTube token is corrupted and no owner token is available.\n\n"
+                        f"🔧 How to fix:\n"
+                        f"1. Go to User Settings → YouTube API → 🔑 YouTube Token\n"
+                        f"2. Remove the corrupted token\n"
+                        f"3. Upload a new valid YouTube token pickle file\n"
+                        f"OR\n"
+                        f"4. Ask the bot owner to upload a global YouTube token\n\n"
+                        f"📋 Technical details: {e}"
+                    ) from e
         elif ospath.exists("youtube_token.pickle"):
             # Fallback to default token
-            with open("youtube_token.pickle", "rb") as token:
-                credentials = pickle.load(token)
+            try:
+                with open("youtube_token.pickle", "rb") as token:
+                    credentials = pickle.load(token)
+            except (EOFError, pickle.UnpicklingError, pickle.PickleError) as e:
+                raise FileNotFoundError(
+                    f"❌ Owner's YouTube Token Corrupted!\n\n"
+                    f"The owner's YouTube token file is corrupted or incomplete.\n\n"
+                    f"🔧 How to fix (for bot owner):\n"
+                    f"1. Go to Bot Settings → 🔒 Private Files\n"
+                    f"2. Upload a new valid youtube_token.pickle file\n"
+                    f"OR\n"
+                    f"3. Users can upload their personal tokens via User Settings\n\n"
+                    f"📋 Technical details: {e}"
+                ) from e
         else:
             raise FileNotFoundError(
                 "No YouTube token found. Please add youtube_token.pickle to the bot directory "

@@ -214,6 +214,7 @@ class TelegramDownloadHelper:
             elif (
                 self._listener.user_transmission
                 and hasattr(self._listener, "is_super_chat")
+                and callable(getattr(self._listener, "is_super_chat", None)) is False
                 and self._listener.is_super_chat
             ):
                 self.session = TgClient.user

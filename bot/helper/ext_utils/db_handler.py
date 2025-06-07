@@ -441,9 +441,16 @@ class DbManager:
     async def add_incomplete_task(self, cid, link, tag):
         if self._return:
             return
-        await self.db.tasks[TgClient.ID].insert_one(
-            {"_id": link, "cid": cid, "tag": tag},
-        )
+        try:
+            await self.db.tasks[TgClient.ID].update_one(
+                {"_id": link},
+                {"$set": {"cid": cid, "tag": tag}},
+                upsert=True,
+            )
+        except Exception as e:
+            # Log the error but don't fail the operation
+            LOGGER.warning(f"Failed to add incomplete task to database: {e}")
+            # Continue with the operation even if database update fails
 
     async def get_pm_uids(self):
         if self._return:
@@ -522,7 +529,12 @@ class DbManager:
     async def rm_complete_task(self, link):
         if self._return:
             return
-        await self.db.tasks[TgClient.ID].delete_one({"_id": link})
+        try:
+            await self.db.tasks[TgClient.ID].delete_one({"_id": link})
+        except Exception as e:
+            # Log the error but don't fail the operation
+            LOGGER.warning(f"Failed to remove completed task from database: {e}")
+            # Continue with the operation even if database update fails
 
     async def get_incomplete_tasks(self):
         notifier_dict = {}

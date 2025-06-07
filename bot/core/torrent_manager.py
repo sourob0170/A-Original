@@ -157,41 +157,63 @@ class TorrentManager:
 
     @classmethod
     async def overall_speed(cls):
-        s1, s2 = await gather(
-            cls.qbittorrent.transfer.info(),
-            cls.aria2.getGlobalStat(),
-        )
-        download_speed = s1.dl_info_speed + int(s2.get("downloadSpeed", "0"))
-        upload_speed = s1.up_info_speed + int(s2.get("uploadSpeed", "0"))
-        return download_speed, upload_speed
+        try:
+            s1, s2 = await gather(
+                cls.qbittorrent.transfer.info(),
+                cls.aria2.getGlobalStat(),
+            )
+            download_speed = s1.dl_info_speed + int(s2.get("downloadSpeed", "0"))
+            upload_speed = s1.up_info_speed + int(s2.get("uploadSpeed", "0"))
+            return download_speed, upload_speed
+        except Exception as e:
+            # Handle transport closing errors gracefully
+            if "closing transport" in str(e).lower():
+                # Return zero speeds for transport closing errors
+                return 0, 0
+            LOGGER.warning(f"Error getting overall speeds: {e}")
+            return 0, 0
 
     @classmethod
     async def pause_all(cls):
-        await gather(cls.aria2.forcePauseAll(), cls.qbittorrent.torrents.stop("all"))
+        try:
+            await gather(
+                cls.aria2.forcePauseAll(), cls.qbittorrent.torrents.stop("all")
+            )
+        except Exception as e:
+            # Handle transport closing errors gracefully
+            if "closing transport" not in str(e).lower():
+                LOGGER.warning(f"Error pausing all torrents: {e}")
 
     @classmethod
     async def change_aria2_option(cls, key, value):
-        downloads = []
-        results = await gather(
-            cls.aria2.tellActive(),
-            cls.aria2.tellWaiting(0, 1000),
-        )
-        for res in results:
-            downloads.extend(res)
-        tasks = [
-            cls.aria2.changeOption(download.get("gid"), {key: value})
-            for download in downloads
-            if download.get("status", "") != "complete"
-        ]
-        if tasks:
-            try:
-                await gather(*tasks)
-            except Exception as e:
-                LOGGER.error(e)
+        try:
+            downloads = []
+            results = await gather(
+                cls.aria2.tellActive(),
+                cls.aria2.tellWaiting(0, 1000),
+            )
+            for res in results:
+                downloads.extend(res)
+            tasks = [
+                cls.aria2.changeOption(download.get("gid"), {key: value})
+                for download in downloads
+                if download.get("status", "") != "complete"
+            ]
+            if tasks:
+                try:
+                    await gather(*tasks)
+                except Exception as e:
+                    # Handle transport closing errors gracefully
+                    if "closing transport" not in str(e).lower():
+                        LOGGER.error(e)
 
-        if key not in ["checksum", "index-out", "out", "pause", "select-file"]:
-            await cls.aria2.changeGlobalOption({key: value})
-            aria2_options[key] = value
+            if key not in ["checksum", "index-out", "out", "pause", "select-file"]:
+                await cls.aria2.changeGlobalOption({key: value})
+                aria2_options[key] = value
+        except Exception as e:
+            # Handle transport closing errors at the method level
+            if "closing transport" not in str(e).lower():
+                LOGGER.error(f"Error changing aria2 option {key}: {e}")
 
 
 def aria2_name(download_info):

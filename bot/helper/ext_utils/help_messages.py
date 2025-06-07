@@ -265,6 +265,12 @@ when you should use b:(leech by bot)? When your default settings is leech by use
 -up h:id/@username(hybrid leech) h: to upload files by bot and user based on file size.
 -up id/@username|topic_id(leech in specific chat and topic) add | without space and write topic id after chat id or username.
 
+To upload to cloud storage (Mirror only):
+-up gd (Upload to Google Drive)
+-up rc (Upload to Rclone)
+-up yt (Upload to YouTube)
+-up mg (Upload to MEGA.nz)
+
 In case you want to specify whether using token.pickle or service accounts you can add tp:gdrive_id (using token.pickle) or sa:gdrive_id (using service accounts) or mtp:gdrive_id (using token.pickle uploaded from usetting).
 DEFAULT_UPLOAD doesn't affect on leech cmds.
 """
@@ -1105,7 +1111,11 @@ Customize how your music downloads are handled.
   - <code>/srleech url -n "Artist - Album (Year)"</code>
 
 <b>Upload Control (Mirror only):</b>
-• <code>-up &lt;path&gt;</code> - Custom upload path
+• <code>-up gd</code> - Upload to Google Drive
+• <code>-up rc</code> - Upload to Rclone cloud storage
+• <code>-up yt</code> - Upload to YouTube (video files only)
+• <code>-up mg</code> - Upload to MEGA.nz cloud storage
+• <code>-up &lt;path&gt;</code> - Custom upload path for Rclone
 • <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
 • <code>-sync</code> - Sync with cloud storage
 
@@ -1122,6 +1132,11 @@ Customize how your music downloads are handled.
 <b>Upload Type:</b>
 • <code>-doc</code> - Upload as document
 • <code>-med</code> - Upload as media
+
+<b>MEGA Upload Examples:</b>
+• <code>/mirror https://example.com/file.zip -up mg</code> - Upload to MEGA.nz
+• <code>/leech https://example.com/video.mp4</code> - Download to Telegram
+• <code>/mirror magnet:?xt=... -up mg</code> - Mirror torrent to MEGA.nz
 
 <b>Headers & Authentication:</b>
 • <code>-h &lt;headers&gt;</code> - Custom headers (key:value|key1:value1)
@@ -1618,6 +1633,24 @@ user_settings_text = {
     "DEFAULT_AI_PROVIDER": "Select the default AI provider to use with the /ask command. Options: mistral, deepseek. Timeout: 60 sec",
     "MISTRAL_API_URL": "Send your custom Mistral AI API URL. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
     "DEEPSEEK_API_URL": "Send your custom DeepSeek AI API URL. Leave empty to use the bot owner's API URL. Timeout: 60 sec",
+    # MEGA Settings
+    "MEGA_EMAIL": "Send your MEGA.nz account email address. This will be used for MEGA uploads when 'My Token/Config' is enabled. Leave empty to use the bot owner's credentials. Timeout: 60 sec",
+    "MEGA_PASSWORD": "Send your MEGA.nz account password. This will be used for MEGA uploads when 'My Token/Config' is enabled. Leave empty to use the bot owner's credentials. Timeout: 60 sec",
+    # MEGA Upload Settings
+    "MEGA_UPLOAD_FOLDER": "Send the default folder path in your MEGA account for uploads. Leave empty to upload to root folder.\n\nExample: /MyBot/Uploads - upload to specific folder\nExample: (leave empty) - upload to root folder\n\nTimeout: 60 sec",
+    "MEGA_UPLOAD_EXPIRY_DAYS": "Send the number of days after which MEGA links should expire. Set to 0 for no expiry.\n\nExample: 30 - links expire after 30 days\nExample: 7 - links expire after 1 week\nExample: 0 - links never expire\n\nTimeout: 60 sec",
+    "MEGA_UPLOAD_PASSWORD": "Send a password to protect MEGA uploads. Leave empty for no password protection.\n\nExample: mySecurePassword123 - protect with password\nExample: (leave empty) - no password protection\n\nTimeout: 60 sec",
+    "MEGA_UPLOAD_ENCRYPTION_KEY": "Send a custom encryption key for MEGA uploads. Leave empty to use default encryption.\n\nExample: myCustomKey123 - use custom encryption\nExample: (leave empty) - use default encryption\n\nTimeout: 60 sec",
+    # MEGA Clone Settings
+    "MEGA_CLONE_TO_FOLDER": "Send the default folder path in your MEGA account for cloned files. Leave empty to clone to root folder.\n\nExample: /MyBot/Cloned - clone to specific folder\nExample: (leave empty) - clone to root folder\n\nTimeout: 60 sec",
+    # Additional MEGA settings (these are toggle settings, no text input needed)
+    "MEGA_UPLOAD_PUBLIC": "Toggle to enable/disable generating public MEGA links for uploads.",
+    "MEGA_UPLOAD_PRIVATE": "Toggle to enable/disable generating private MEGA links for uploads.",
+    "MEGA_UPLOAD_UNLISTED": "Toggle to enable/disable generating unlisted MEGA links for uploads.",
+    "MEGA_UPLOAD_THUMBNAIL": "Toggle to enable/disable generating thumbnails for MEGA uploads.",
+    "MEGA_UPLOAD_DELETE_AFTER": "Toggle to enable/disable deleting files after successful MEGA upload.",
+    "MEGA_CLONE_PRESERVE_STRUCTURE": "Toggle to enable/disable preserving folder structure when cloning from MEGA.",
+    "MEGA_CLONE_OVERWRITE": "Toggle to enable/disable overwriting existing files when cloning to MEGA.",
     # Metadata Settings
     "METADATA_KEY": "Set legacy metadata key for backward compatibility.\n\nExample: title=My Video,author=John Doe - set title and author\nExample: none - don't use legacy metadata\n\nThis is a legacy option, consider using the specific metadata options instead.\n\nTimeout: 60 sec",
     "METADATA_ALL": "Set metadata text to be used for all metadata fields (title, author, comment) for all track types.\n\nExample: My Project - apply to all metadata fields\nExample: none - don't set global metadata\n\nThis takes priority over all other metadata settings.\n\nTimeout: 60 sec",
@@ -2034,6 +2067,8 @@ download_commands = f"""
 /{BotCommands.ZotifyLeechCommand[0]} or /{BotCommands.ZotifyLeechCommand[1]}: Leech music from Spotify to Telegram using Zotify. Supports URLs, search queries, and special downloads.
 /{BotCommands.ZotifySearchCommand[0]} or /{BotCommands.ZotifySearchCommand[1]}: Search for music on Spotify using Zotify.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
+/{BotCommands.MegaCloneCommand[0]} or /{BotCommands.MegaCloneCommand[1]} [mega_url]: Clone file/folder directly from MEGA to MEGA account.
+/{BotCommands.MegaSearchCommand[0]} or /{BotCommands.MegaSearchCommand[1]} [query]: Search through MEGA drive for files and folders.
 """
 
 # Status & Management page

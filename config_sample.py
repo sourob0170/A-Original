@@ -70,6 +70,7 @@ TORRENT_ENABLED = True  # Enable/disable torrent feature
 TORRENT_SEARCH_ENABLED = True  # Enable/disable torrent search feature
 NZB_ENABLED = True  # Enable/disable NZB feature
 JD_ENABLED = True  # Enable/disable JDownloader feature
+MEGA_ENABLED = True  # Enable/disable Mega.nz downloads
 RCLONE_ENABLED = True  # Enable/disable Rclone feature
 ARCHIVE_FLAGS_ENABLED = True  # Enable/disable archive operation flags
 MULTI_LINK_ENABLED = True  # Enable/disable multi-link feature
@@ -94,6 +95,28 @@ RCLONE_SERVE_PASS = ""  # Password for rclone serve
 # JDownloader
 JD_EMAIL = ""  # JDownloader email/username
 JD_PASS = ""  # JDownloader password
+
+# Mega.nz Settings
+MEGA_EMAIL = ""  # Mega.nz account email (optional, for premium features)
+MEGA_PASSWORD = ""  # Mega.nz account password (optional, for premium features)
+
+# MEGA Upload Settings
+MEGA_UPLOAD_ENABLED = True  # Enable MEGA upload functionality
+MEGA_UPLOAD_FOLDER = ""  # Default upload folder path in MEGA account (empty = root)
+MEGA_UPLOAD_PUBLIC = True  # Generate public links by default
+MEGA_UPLOAD_PRIVATE = False  # Generate private links
+MEGA_UPLOAD_UNLISTED = False  # Generate unlisted links
+MEGA_UPLOAD_EXPIRY_DAYS = 0  # Link expiry in days (0 = no expiry)
+MEGA_UPLOAD_PASSWORD = ""  # Password protection for uploads
+MEGA_UPLOAD_ENCRYPTION_KEY = ""  # Custom encryption key for uploads
+MEGA_UPLOAD_THUMBNAIL = True  # Generate thumbnails for videos using FFmpeg
+MEGA_UPLOAD_DELETE_AFTER = False  # Delete local files after upload
+
+# MEGA Clone Settings
+MEGA_CLONE_ENABLED = True  # Enable MEGA clone functionality
+MEGA_CLONE_TO_FOLDER = ""  # Default folder for cloned files (empty = root)
+MEGA_CLONE_PRESERVE_STRUCTURE = True  # Preserve folder structure when cloning
+MEGA_CLONE_OVERWRITE = False  # Overwrite existing files when cloning
 
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links

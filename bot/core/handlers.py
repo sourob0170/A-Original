@@ -417,6 +417,27 @@ def add_handlers():
         # Add zotify handlers to command_filters
         command_filters.update(zotify_handlers)
 
+    # Add MEGA handlers if MEGA is enabled
+    if Config.MEGA_ENABLED:
+        from bot.modules.mega_search import mega_search_command
+        from bot.modules.megaclone import mega_clone
+
+        mega_handlers = {
+            "mega_clone": (
+                mega_clone,
+                BotCommands.MegaCloneCommand,
+                CustomFilters.authorized,
+            ),
+            "mega_search": (
+                mega_search_command,
+                BotCommands.MegaSearchCommand,
+                CustomFilters.authorized,
+            ),
+        }
+
+        # Add MEGA handlers to command_filters
+        command_filters.update(mega_handlers)
+
     for handler_func, command_name, custom_filter in command_filters.values():
         if custom_filter:
             filters_to_apply = (
@@ -478,6 +499,13 @@ def add_handlers():
                 await ZotifyQualitySelector._handle_callback(client, query, selector)
 
         public_regex_filters["^zq"] = handle_zotify_quality_callback
+
+    # Add MEGA callback handlers if enabled
+    if Config.MEGA_ENABLED:
+        from bot.helper.mega_utils.folder_selector import mega_folder_callback
+
+        # MEGA search now uses Telegraph (no pagination callbacks needed)
+        public_regex_filters["^mgq"] = mega_folder_callback
 
     # Add handlers for callbacks that don't need authorization (accessible to all users)
     # These have higher priority (group=-1) to ensure they're processed first

@@ -35,6 +35,8 @@ COMMANDS = {
     "ZotifyLeechCommand": "- Leech music from Spotify",
     "ZotifySearchCommand": "- Search music on Spotify",
     "CloneCommand": "- Copy file/folder to Drive",
+    "MegaCloneCommand": "- Clone MEGA files/folders to MEGA account",
+    "MegaSearchCommand": "- Search MEGA drive for files/folders",
     "MediaInfoCommand": "- Get mediainfo",
     "SoxCommand": "- Get audio spectrum",
     "ForceStartCommand": "- Start task from queue",
@@ -149,13 +151,18 @@ async def main():
     # Start background services immediately without delays
     LOGGER.info("Starting background services...")
 
-    # Start task monitoring system
-    LOGGER.info("Starting task monitoring system...")
-    create_task(start_monitoring())  # noqa: RUF006
+    # Start task monitoring system and queue processor only if task monitoring is enabled
+    if Config.TASK_MONITOR_ENABLED:
+        LOGGER.info("Starting task monitoring system...")
+        create_task(start_monitoring())  # noqa: RUF006
 
-    # Start queue processor to ensure tasks run even under high system resources
-    LOGGER.info("Starting queue processor...")
-    create_task(start_queue_processor())  # noqa: RUF006
+        # Start queue processor to ensure tasks run even under high system resources
+        LOGGER.info("Starting queue processor...")
+        create_task(start_queue_processor())  # noqa: RUF006
+    else:
+        LOGGER.info(
+            "Task monitoring is disabled - skipping task monitor and queue processor"
+        )
 
     # Initialize auto-restart scheduler
     from .helper.ext_utils.auto_restart import init_auto_restart

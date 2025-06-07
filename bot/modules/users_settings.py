@@ -93,6 +93,22 @@ youtube_options = [
     "YOUTUBE_UPLOAD_AUTO_LEVELS",
     "YOUTUBE_UPLOAD_STABILIZE",
 ]
+mega_options = [
+    "MEGA_EMAIL",
+    "MEGA_PASSWORD",
+    "MEGA_UPLOAD_FOLDER",
+    "MEGA_UPLOAD_PUBLIC",
+    "MEGA_UPLOAD_PRIVATE",
+    "MEGA_UPLOAD_UNLISTED",
+    "MEGA_UPLOAD_EXPIRY_DAYS",
+    "MEGA_UPLOAD_PASSWORD",
+    "MEGA_UPLOAD_ENCRYPTION_KEY",
+    "MEGA_UPLOAD_THUMBNAIL",
+    "MEGA_UPLOAD_DELETE_AFTER",
+    "MEGA_CLONE_TO_FOLDER",
+    "MEGA_CLONE_PRESERVE_STRUCTURE",
+    "MEGA_CLONE_OVERWRITE",
+]
 yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES", "FFMPEG_CMDS"]
 
 
@@ -107,6 +123,14 @@ async def get_user_settings(from_user, stype="main"):
     thumbpath = f"thumbnails/{user_id}.jpg"
     user_dict = user_data.get(user_id, {})
     thumbnail = thumbpath if await aiopath.exists(thumbpath) else no_thumb
+
+    # Helper function to get MEGA settings with user priority
+    def get_mega_setting(setting_name, default_value=None, is_bool=False):
+        user_value = user_dict.get(setting_name, None)
+        if user_value is not None:
+            return user_value, "User"
+        owner_value = getattr(Config, setting_name, default_value)
+        return owner_value, "Owner"
 
     if stype == "leech":
         buttons.data_button("Thumbnail", f"userset {user_id} menu THUMBNAIL")
@@ -610,6 +634,203 @@ async def get_user_settings(from_user, stype="main"):
 <i>Use /ask command to chat with the default AI provider.</i>
 """
 
+    elif stype == "mega":
+        # Check if user has their own token/config enabled
+        user_tokens = user_dict.get("USER_TOKENS", False)
+
+        # Get MEGA settings with priority: User > Owner
+        mega_email = user_dict.get("MEGA_EMAIL", None)
+        mega_password = user_dict.get("MEGA_PASSWORD", None)
+
+        # Determine source and values for credentials
+        if mega_email is not None:
+            email_source = "User"
+            email_value = mega_email or "Not configured"
+        else:
+            email_source = "Owner"
+            email_value = Config.MEGA_EMAIL or "Not configured"
+
+        if mega_password is not None:
+            password_source = "User"
+            password_value = "✅ Set" if mega_password else "❌ Not set"
+        else:
+            password_source = "Owner"
+            password_value = "✅ Set" if Config.MEGA_PASSWORD else "❌ Not set"
+
+        # User credential settings - always available for MEGA
+        buttons.data_button("📧 Email", f"userset {user_id} var MEGA_EMAIL")
+        buttons.data_button("🔑 Password", f"userset {user_id} var MEGA_PASSWORD")
+
+        # Reset and Remove buttons for MEGA credentials - show if user has set any credentials
+        user_has_mega_credentials = (
+            mega_email is not None or mega_password is not None
+        )
+        if user_has_mega_credentials:
+            buttons.data_button(
+                "🔄 Reset Credentials", f"userset {user_id} reset mega_credentials"
+            )
+
+        # Individual remove buttons - show only if that specific credential is set by user
+        if mega_email is not None:
+            buttons.data_button(
+                "🗑️ Remove Email", f"userset {user_id} remove MEGA_EMAIL"
+            )
+        if mega_password is not None:
+            buttons.data_button(
+                "🗑️ Remove Password", f"userset {user_id} remove MEGA_PASSWORD"
+            )
+
+        # Upload Settings
+        buttons.data_button(
+            "📤 Upload Folder", f"userset {user_id} menu MEGA_UPLOAD_FOLDER"
+        )
+        buttons.data_button(
+            "⏰ Link Expiry Days", f"userset {user_id} menu MEGA_UPLOAD_EXPIRY_DAYS"
+        )
+        buttons.data_button(
+            "🔐 Upload Password", f"userset {user_id} menu MEGA_UPLOAD_PASSWORD"
+        )
+        buttons.data_button(
+            "🔑 Encryption Key", f"userset {user_id} menu MEGA_UPLOAD_ENCRYPTION_KEY"
+        )
+
+        # Toggle buttons for boolean settings
+        public_links, public_links_source = get_mega_setting(
+            "MEGA_UPLOAD_PUBLIC", False, True
+        )
+        private_links, private_links_source = get_mega_setting(
+            "MEGA_UPLOAD_PRIVATE", False, True
+        )
+        unlisted_links, unlisted_links_source = get_mega_setting(
+            "MEGA_UPLOAD_UNLISTED", False, True
+        )
+        thumbnails, thumbnails_source = get_mega_setting(
+            "MEGA_UPLOAD_THUMBNAIL", False, True
+        )
+        delete_after, delete_after_source = get_mega_setting(
+            "MEGA_UPLOAD_DELETE_AFTER", False, True
+        )
+
+        buttons.data_button(
+            f"🔗 Public Links: {'✅ ON' if public_links else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_UPLOAD_PUBLIC {'f' if public_links else 't'}",
+        )
+        buttons.data_button(
+            f"🔒 Private Links: {'✅ ON' if private_links else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_UPLOAD_PRIVATE {'f' if private_links else 't'}",
+        )
+        buttons.data_button(
+            f"🔓 Unlisted Links: {'✅ ON' if unlisted_links else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_UPLOAD_UNLISTED {'f' if unlisted_links else 't'}",
+        )
+        buttons.data_button(
+            f"🖼️ Thumbnails: {'✅ ON' if thumbnails else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_UPLOAD_THUMBNAIL {'f' if thumbnails else 't'}",
+        )
+        buttons.data_button(
+            f"🗑️ Delete After: {'✅ ON' if delete_after else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_UPLOAD_DELETE_AFTER {'f' if delete_after else 't'}",
+        )
+
+        # Clone Settings
+        buttons.data_button(
+            "📁 Clone To Folder", f"userset {user_id} menu MEGA_CLONE_TO_FOLDER"
+        )
+
+        preserve_structure, preserve_structure_source = get_mega_setting(
+            "MEGA_CLONE_PRESERVE_STRUCTURE", True, True
+        )
+        overwrite_files, overwrite_files_source = get_mega_setting(
+            "MEGA_CLONE_OVERWRITE", False, True
+        )
+
+        buttons.data_button(
+            f"🏗️ Preserve Structure: {'✅ ON' if preserve_structure else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_CLONE_PRESERVE_STRUCTURE {'f' if preserve_structure else 't'}",
+        )
+        buttons.data_button(
+            f"♻️ Overwrite Files: {'✅ ON' if overwrite_files else '❌ OFF'}",
+            f"userset {user_id} tog MEGA_CLONE_OVERWRITE {'f' if overwrite_files else 't'}",
+        )
+
+        buttons.data_button("Back", f"userset {user_id} back")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Upload settings
+        upload_folder, upload_folder_source = get_mega_setting(
+            "MEGA_UPLOAD_FOLDER", "Root folder"
+        )
+        public_links, public_links_source = get_mega_setting(
+            "MEGA_UPLOAD_PUBLIC", False, True
+        )
+        private_links, private_links_source = get_mega_setting(
+            "MEGA_UPLOAD_PRIVATE", False, True
+        )
+        unlisted_links, unlisted_links_source = get_mega_setting(
+            "MEGA_UPLOAD_UNLISTED", False, True
+        )
+        expiry_days, expiry_days_source = get_mega_setting(
+            "MEGA_UPLOAD_EXPIRY_DAYS", 0
+        )
+        upload_password, upload_password_source = get_mega_setting(
+            "MEGA_UPLOAD_PASSWORD", ""
+        )
+        encryption_key, encryption_key_source = get_mega_setting(
+            "MEGA_UPLOAD_ENCRYPTION_KEY", ""
+        )
+        thumbnails, thumbnails_source = get_mega_setting(
+            "MEGA_UPLOAD_THUMBNAIL", False, True
+        )
+        delete_after, delete_after_source = get_mega_setting(
+            "MEGA_UPLOAD_DELETE_AFTER", False, True
+        )
+
+        # Clone settings
+        clone_folder, clone_folder_source = get_mega_setting(
+            "MEGA_CLONE_TO_FOLDER", "Root folder"
+        )
+        preserve_structure, preserve_structure_source = get_mega_setting(
+            "MEGA_CLONE_PRESERVE_STRUCTURE", True, True
+        )
+        overwrite_files, overwrite_files_source = get_mega_setting(
+            "MEGA_CLONE_OVERWRITE", False, True
+        )
+
+        # Format display values
+        upload_folder_display = upload_folder or "Root folder"
+        expiry_display = f"{expiry_days} days" if expiry_days > 0 else "No expiry"
+        password_display = "Set" if upload_password else "Not set"
+        encryption_display = "Set" if encryption_key else "Not set"
+        clone_folder_display = clone_folder or "Root folder"
+
+        # Hide email for privacy - only show if it's set or not
+        email_display = (
+            "✅ Set"
+            if email_value not in ["Not configured", "Not set"]
+            else "❌ Not set"
+        )
+
+        text = f"""<u><b>☁️ MEGA Settings for {name}</b></u>
+
+<b>🔐 Credentials:</b>
+Email: <code>{email_display}</code> ({email_source})
+Password: <code>{password_value}</code> ({password_source})
+
+<b>📤 Upload:</b>
+Folder: <code>{upload_folder_display}</code> ({upload_folder_source})
+Public: <b>{"✅" if public_links else "❌"}</b> | Private: <b>{"✅" if private_links else "❌"}</b> | Unlisted: <b>{"✅" if unlisted_links else "❌"}</b>
+Expiry: <code>{expiry_display}</code> ({expiry_days_source})
+Password: <code>{password_display}</code> ({upload_password_source})
+Encryption: <code>{encryption_display}</code> ({encryption_key_source})
+Thumbnails: <b>{"✅" if thumbnails else "❌"}</b> | Delete After: <b>{"✅" if delete_after else "❌"}</b>
+
+<b>🔄 Clone:</b>
+Folder: <code>{clone_folder_display}</code> ({clone_folder_source})
+Preserve Structure: <b>{"✅" if preserve_structure else "❌"}</b> | Overwrite: <b>{"✅" if overwrite_files else "❌"}</b>
+
+<i>Your settings override owner settings. Set your own MEGA credentials to use your account.</i>
+"""
+
     elif stype == "convert":
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
@@ -732,6 +953,9 @@ Please use /mediatools command to configure convert settings.
         # Only show YouTube API button if YouTube upload is enabled
         if Config.YOUTUBE_UPLOAD_ENABLED:
             buttons.data_button("YouTube API", f"userset {user_id} youtube")
+        # Only show MEGA Settings button if MEGA is enabled
+        if Config.MEGA_ENABLED:
+            buttons.data_button("☁️ MEGA", f"userset {user_id} mega")
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
             buttons.data_button("AI Settings", f"userset {user_id} ai")
@@ -767,10 +991,18 @@ Please use /mediatools command to configure convert settings.
             # Update the user's settings
             update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
 
+        # If MEGA is disabled and default upload is set to MEGA, change it to Gdrive
+        if not Config.MEGA_ENABLED and default_upload == "mg":
+            default_upload = "gd"
+            # Update the user's settings
+            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
+
         if default_upload == "gd":
             du = "Gdrive API"
         elif default_upload == "yt":
             du = "YouTube"
+        elif default_upload == "mg":
+            du = "MEGA"
         else:
             du = "Rclone"
 
@@ -782,6 +1014,8 @@ Please use /mediatools command to configure convert settings.
             available_uploads.append(("rc", "Rclone"))
         if Config.YOUTUBE_UPLOAD_ENABLED:
             available_uploads.append(("yt", "YouTube"))
+        if Config.MEGA_ENABLED:
+            available_uploads.append(("mg", "MEGA"))
 
         # Only show toggle if there are multiple upload options
         if len(available_uploads) > 1:
@@ -1338,6 +1572,9 @@ async def get_menu(option, message, user_id):
     elif option in youtube_options:
         # If YouTube upload is disabled, go back to main menu
         back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
+    elif option in mega_options:
+        # If MEGA is disabled, go back to main menu
+        back_to = "mega" if Config.MEGA_ENABLED else "back"
     elif option in metadata_options:
         back_to = "metadata"
     # Convert options have been moved to Media Tools settings
@@ -1480,6 +1717,7 @@ async def edit_user_settings(client, query):
         "gdrive",
         "rclone",
         "youtube",
+        "mega",
         "metadata",
         "convert",
         "ai",
@@ -1491,6 +1729,7 @@ async def edit_user_settings(client, query):
         if (
             (data[2] == "leech" and not Config.LEECH_ENABLED)
             or (data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED)
+            or (data[2] == "mega" and not Config.MEGA_ENABLED)
             or (
                 data[2] in ["youtube", "youtube_basic", "youtube_advanced"]
                 and not Config.YOUTUBE_UPLOAD_ENABLED
@@ -1509,6 +1748,16 @@ async def edit_user_settings(client, query):
             back_to = "gdrive"
         elif data[3] == "USER_TOKENS" or data[3] == "MEDIAINFO_ENABLED":
             back_to = "main"
+        elif data[3] in [
+            "MEGA_UPLOAD_PUBLIC",
+            "MEGA_UPLOAD_PRIVATE",
+            "MEGA_UPLOAD_UNLISTED",
+            "MEGA_UPLOAD_THUMBNAIL",
+            "MEGA_UPLOAD_DELETE_AFTER",
+            "MEGA_CLONE_PRESERVE_STRUCTURE",
+            "MEGA_CLONE_OVERWRITE",
+        ]:
+            back_to = "mega"
         elif data[3] in [
             "YOUTUBE_UPLOAD_EMBEDDABLE",
             "YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE",
@@ -1578,6 +1827,42 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await database.update_user_data(user_id)
         # Update the UI
         await update_user_settings(query, "ai")
+    elif data[2] == "var":
+        await query.answer()
+        buttons = ButtonMaker()
+        if data[3] in user_settings_text:
+            text = user_settings_text[data[3]]
+            func = set_option
+
+            # Determine the correct back destination based on the option
+            if data[3] in mega_options:
+                back_to = "mega" if Config.MEGA_ENABLED else "back"
+            elif data[3] in youtube_options:
+                back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
+            elif data[3] in leech_options:
+                back_to = "leech" if Config.LEECH_ENABLED else "back"
+            elif data[3] in gdrive_options:
+                back_to = "gdrive" if Config.MIRROR_ENABLED else "back"
+            elif data[3] in rclone_options:
+                back_to = "rclone" if Config.MIRROR_ENABLED else "back"
+            elif data[3] in metadata_options:
+                back_to = "metadata"
+            elif data[3] in ai_options:
+                back_to = "ai"
+            else:
+                back_to = "back"
+
+            buttons.data_button("Back", f"userset {user_id} {back_to}")
+            buttons.data_button("Close", f"userset {user_id} close")
+            edit_msg = await edit_message(message, text, buttons.build_menu(1))
+            create_task(  # noqa: RUF006
+                auto_delete_message(edit_msg, time=300),
+            )  # Auto delete edit stage after 5 minutes
+            pfunc = partial(func, option=data[3])
+            await event_handler(client, query, pfunc)
+            await update_user_settings(query, back_to)
+        else:
+            await update_user_settings(query, "back")
     elif data[2] in ["set", "addone", "rmone"]:
         # Special handling for DEFAULT_AI_PROVIDER
         if data[2] == "set" and data[3] == "DEFAULT_AI_PROVIDER":
@@ -1661,6 +1946,13 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 if key in user_dict:
                     user_dict.pop(key, None)
             await update_user_settings(query, "metadata")
+        elif data[3] == "mega_credentials":
+            # Reset MEGA credentials
+            mega_keys = ["MEGA_EMAIL", "MEGA_PASSWORD"]
+            for key in mega_keys:
+                if key in user_dict:
+                    user_dict.pop(key, None)
+            await update_user_settings(query, "mega")
 
         # Convert settings have been moved to Media Tools settings
         elif data[3] == "MEDIAINFO_ENABLED":
@@ -1681,6 +1973,16 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 ]:
                     del user_dict[k]
             await update_user_settings(query)
+        await database.update_user_data(user_id)
+    elif data[2] == "remove":
+        await query.answer("Removed!", show_alert=True)
+        if data[3] in user_dict:
+            user_dict.pop(data[3], None)
+            # Update the appropriate settings page based on the removed setting
+            if data[3].startswith("MEGA_"):
+                await update_user_settings(query, "mega")
+            else:
+                await update_user_settings(query)
         await database.update_user_data(user_id)
     elif data[2] == "view":
         await query.answer()
@@ -1736,7 +2038,7 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 create_task(  # noqa: RUF006
                     auto_delete_message(msg, time=10),
                 )  # Delete after 10 seconds
-    elif data[2] in ["gd", "rc", "yt"]:
+    elif data[2] in ["gd", "rc", "yt", "mg"]:
         await query.answer()
         # Cycle through available upload options
         available_uploads = []
@@ -1746,6 +2048,8 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
             available_uploads.append("rc")
         if Config.YOUTUBE_UPLOAD_ENABLED:
             available_uploads.append("yt")
+        if Config.MEGA_ENABLED:
+            available_uploads.append("mg")
 
         # Find current index and get next option
         current_index = (

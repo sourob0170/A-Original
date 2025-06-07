@@ -151,19 +151,35 @@ async def load_settings():
                 or {}
             )
 
+            # Find new variables that don't exist in runtime config
             new_vars = {
                 k: v
                 for k, v in current_deploy_config.items()
                 if k not in runtime_config
             }
-            if new_vars:
+
+            # Find changed variables that exist in both but have different values
+            changed_vars = {
+                k: v
+                for k, v in current_deploy_config.items()
+                if k in runtime_config and runtime_config[k] != v
+            }
+
+            # Update runtime config with both new and changed variables
+            if new_vars or changed_vars:
                 runtime_config.update(new_vars)
+                runtime_config.update(changed_vars)
                 await database.db.settings.config.replace_one(
                     {"_id": BOT_ID},
                     runtime_config,
                     upsert=True,
                 )
-                LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
+                if new_vars:
+                    LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
+                if changed_vars:
+                    LOGGER.info(
+                        f"Updated changed variables: {list(changed_vars.keys())}"
+                    )
 
             await database.db.settings.deployConfig.replace_one(
                 {"_id": BOT_ID},
@@ -241,9 +257,16 @@ async def load_settings():
                     row["TOKEN_PICKLE"] = token_path
                 # Load YouTube token pickle if available
                 if row.get("YOUTUBE_TOKEN_PICKLE"):
-                    async with aiopen(youtube_token_path, "wb+") as f:
-                        await f.write(row["YOUTUBE_TOKEN_PICKLE"])
-                    row["YOUTUBE_TOKEN_PICKLE"] = youtube_token_path
+                    try:
+                        async with aiopen(youtube_token_path, "wb+") as f:
+                            await f.write(row["YOUTUBE_TOKEN_PICKLE"])
+                        row["YOUTUBE_TOKEN_PICKLE"] = youtube_token_path
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Failed to write YouTube token for user {uid}: {e}"
+                        )
+                        # Remove corrupted token data from user data
+                        row.pop("YOUTUBE_TOKEN_PICKLE", None)
                 # Load user cookies if available
                 cookies_path = f"cookies/{uid}.txt"
                 if row.get("USER_COOKIES"):
@@ -282,12 +305,22 @@ async def load_settings():
 async def save_settings():
     if database.db is None:
         return
-    config_dict = Config.get_all()
-    await database.db.settings.config.replace_one(
+
+    # Check if runtime config already exists (meaning it was updated during startup)
+    existing_runtime_config = await database.db.settings.config.find_one(
         {"_id": TgClient.ID},
-        config_dict,
-        upsert=True,
+        {"_id": 0},
     )
+
+    # Only save if runtime config doesn't exist (first time setup)
+    # If it exists, it means load_settings() already updated it with the correct values
+    if existing_runtime_config is None:
+        config_dict = Config.get_all()
+        await database.db.settings.config.replace_one(
+            {"_id": TgClient.ID},
+            config_dict,
+            upsert=True,
+        )
     if await database.db.settings.aria2c.find_one({"_id": TgClient.ID}) is None:
         await database.db.settings.aria2c.update_one(
             {"_id": TgClient.ID},

@@ -30,11 +30,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.amd64_only == false) || (github.event_name == 'schedule' && vars.AMD64_ONLY != 'true') }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.amd64_only == false) || (github.event_name == 'schedule' && vars.AMD64_ONLY != 'true') }}
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker.io
@@ -52,8 +50,8 @@ jobs:
 
       - name: Prepare Docker Build Files
         run: |
-          cp dev/Dockerfile .
           cp dev/Aeon .
+          cp dev/megasdk-4.8.0-py2.py3-none-any.whl .
           chmod +x Aeon
 
       - name: Build and Push
@@ -63,8 +61,8 @@ jobs:
           no-cache: true
           provenance: false
           context: .
-          file: ./Dockerfile
-          platforms: ${{ (github.event_name == 'workflow_dispatch' && inputs.amd64_only == true) || (github.event_name == 'schedule' && vars.AMD64_ONLY == 'true') && 'linux/amd64' || 'linux/arm64,linux/amd64' }}
+          file: ./dev/Dockerfile
+          platforms: ${{ ((github.event_name == 'workflow_dispatch' && inputs.amd64_only == true) || (github.event_name == 'schedule' && vars.AMD64_ONLY == 'true')) && 'linux/amd64' || 'linux/arm64,linux/amd64' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
