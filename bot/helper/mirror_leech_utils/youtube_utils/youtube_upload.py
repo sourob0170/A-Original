@@ -306,7 +306,6 @@ class YouTubeUpload(YouTubeHelper):
                             if os.path.isfile(item_path):
                                 mime_type = get_mime_type(item_path)
                                 if mime_type and mime_type.startswith("video/"):
-                                    try:
                                     video_result = self._upload_video( # Changed from video_url
                                             item_path,
                                             item_name,
@@ -324,7 +323,7 @@ class YouTubeUpload(YouTubeHelper):
                             return
                         upload_result_dict = {
                             "playlist_url": f"https://www.youtube.com/playlist?list={original_playlist_id}",
-                        "individual_video_urls": individual_video_urls, # List of dicts
+                            "individual_video_urls": individual_video_urls, # List of dicts
                         }
                         files_processed = processed_in_folder
                         LOGGER.info(
