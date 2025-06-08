@@ -247,6 +247,18 @@ def handle_loop_exception(loop, context):
             exception, ValueError
         ) and "list.remove(x): x not in list" in str(exception):
             LOGGER.debug(f"Handler removal error (harmless): {exception}")
+        # Filter out aria2 RPC exceptions for missing GIDs (these are expected during rapid downloads)
+        elif "Aria2rpcException" in str(type(exception)) and "is not found" in str(
+            exception
+        ):
+            LOGGER.debug(
+                f"Aria2 GID not found (expected during rapid downloads): {exception}"
+            )
+        # Filter out transport closing errors that are harmless during shutdown
+        elif "closing transport" in str(exception).lower():
+            LOGGER.debug(
+                f"Transport closing error (harmless during shutdown): {exception}"
+            )
         else:
             LOGGER.error(f"Unhandled loop exception: {exception}")
             LOGGER.error(f"Exception context: {context}")

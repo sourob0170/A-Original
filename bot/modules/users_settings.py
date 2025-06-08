@@ -6,6 +6,7 @@ from os import getcwd
 from re import findall
 from time import time
 
+import aiofiles
 from pyrogram.filters import create
 from pyrogram.handlers import MessageHandler
 
@@ -33,6 +34,190 @@ from bot.helper.telegram_helper.message_utils import (
 
 handler_dict = {}
 no_thumb = Config.OWNER_THUMB
+
+
+async def count_user_cookies(user_id):
+    """Count the number of cookie files for a user (both file system and database)"""
+    # Count from database first
+    db_count = await database.count_user_cookies_db(user_id)
+
+    # Also count from file system for backward compatibility
+    cookies_dir = "cookies/"
+    file_count = 0
+    if await aiopath.exists(cookies_dir):
+        try:
+            import os
+
+            for filename in os.listdir(cookies_dir):
+                if filename.startswith(f"{user_id}_") and filename.endswith(".txt"):
+                    file_count += 1
+        except Exception:
+            pass
+
+    # Return the maximum count (in case of migration scenarios)
+    return max(db_count, file_count)
+
+
+async def get_user_cookies_list(user_id):
+    """Get list of all cookie files for a user with their creation times (from both DB and filesystem)"""
+    cookies_list = []
+
+    # Get cookies from database first
+    try:
+        db_cookies = await database.get_user_cookies(user_id)
+        for cookie in db_cookies:
+            import time
+
+            created_time = time.strftime(
+                "%Y-%m-%d %H:%M", time.localtime(cookie.get("created_at", 0))
+            )
+            cookies_list.append(
+                {
+                    "filename": f"{user_id}_{cookie['number']}.txt",
+                    "filepath": f"cookies/{user_id}_{cookie['number']}.txt",
+                    "number": str(cookie["number"]),
+                    "created": created_time,
+                    "source": "database",
+                }
+            )
+    except Exception as e:
+        LOGGER.error(f"Error getting cookies from database for user {user_id}: {e}")
+
+    # Also get cookies from file system for backward compatibility
+    cookies_dir = "cookies/"
+    if await aiopath.exists(cookies_dir):
+        try:
+            import os
+            import time
+
+            for filename in os.listdir(cookies_dir):
+                if filename.startswith(f"{user_id}_") and filename.endswith(".txt"):
+                    filepath = f"{cookies_dir}{filename}"
+                    try:
+                        # Get file creation/modification time
+                        stat = os.stat(filepath)
+                        created_time = time.strftime(
+                            "%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)
+                        )
+
+                        # Extract cookie number from filename
+                        cookie_num = filename.replace(f"{user_id}_", "").replace(
+                            ".txt", ""
+                        )
+
+                        # Check if this cookie is already in the list from database
+                        if not any(c["number"] == cookie_num for c in cookies_list):
+                            cookies_list.append(
+                                {
+                                    "filename": filename,
+                                    "filepath": filepath,
+                                    "number": cookie_num,
+                                    "created": created_time,
+                                    "source": "filesystem",
+                                }
+                            )
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+    # Sort by cookie number
+    cookies_list.sort(
+        key=lambda x: int(x["number"]) if x["number"].isdigit() else 999
+    )
+
+    return cookies_list
+
+
+async def get_next_cookie_number(user_id):
+    """Get the next available cookie number for a user (checking both DB and filesystem)"""
+    used_numbers = set()
+
+    # Get used numbers from database
+    try:
+        db_cookies = await database.get_user_cookies(user_id)
+        for cookie in db_cookies:
+            used_numbers.add(int(cookie["number"]))
+    except Exception as e:
+        LOGGER.error(
+            f"Error getting cookie numbers from database for user {user_id}: {e}"
+        )
+
+    # Also check file system for backward compatibility
+    cookies_dir = "cookies/"
+    if await aiopath.exists(cookies_dir):
+        try:
+            import os
+
+            for filename in os.listdir(cookies_dir):
+                if filename.startswith(f"{user_id}_") and filename.endswith(".txt"):
+                    cookie_num = filename.replace(f"{user_id}_", "").replace(
+                        ".txt", ""
+                    )
+                    if cookie_num.isdigit():
+                        used_numbers.add(int(cookie_num))
+        except Exception:
+            pass
+
+    # Find the next available number
+    next_num = 1
+    while next_num in used_numbers:
+        next_num += 1
+
+    return next_num
+
+
+async def migrate_user_cookies_to_db(user_id):
+    """Migrate existing user cookies from filesystem to database"""
+    cookies_dir = "cookies/"
+    if not await aiopath.exists(cookies_dir):
+        return 0
+
+    migrated_count = 0
+    try:
+        import os
+
+        for filename in os.listdir(cookies_dir):
+            if filename.startswith(f"{user_id}_") and filename.endswith(".txt"):
+                filepath = f"{cookies_dir}{filename}"
+                try:
+                    # Extract cookie number from filename
+                    cookie_num = filename.replace(f"{user_id}_", "").replace(
+                        ".txt", ""
+                    )
+                    if not cookie_num.isdigit():
+                        continue
+
+                    cookie_num = int(cookie_num)
+
+                    # Check if this cookie is already in database
+                    db_cookies = await database.get_user_cookies(user_id)
+                    if any(c["number"] == cookie_num for c in db_cookies):
+                        continue  # Already migrated
+
+                    # Read cookie file content
+                    async with aiofiles.open(filepath, "rb") as f:
+                        cookie_data = await f.read()
+
+                    # Store in database
+                    if await database.store_user_cookie(
+                        user_id, cookie_num, cookie_data
+                    ):
+                        migrated_count += 1
+                        LOGGER.info(
+                            f"Migrated cookie #{cookie_num} for user {user_id} to database"
+                        )
+
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error migrating cookie {filename} for user {user_id}: {e}"
+                    )
+                    continue
+    except Exception as e:
+        LOGGER.error(f"Error during cookie migration for user {user_id}: {e}")
+
+    return migrated_count
+
 
 leech_options = [
     "THUMBNAIL",
@@ -635,6 +820,27 @@ async def get_user_settings(from_user, stype="main"):
 """
 
     elif stype == "mega":
+        # Check if MEGA operations are enabled
+        if not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED:
+            buttons.data_button("Back", f"userset {user_id} back")
+            buttons.data_button("Close", f"userset {user_id} close")
+
+            disabled_reason = []
+            if not Config.MEGA_ENABLED:
+                disabled_reason.append("MEGA operations")
+            if not Config.MEGA_UPLOAD_ENABLED:
+                disabled_reason.append("MEGA upload")
+
+            text = f"""<u><b>☁️ MEGA Settings for {name}</b></u>
+
+❌ <b>MEGA Settings Disabled</b>
+
+{" and ".join(disabled_reason)} {"is" if len(disabled_reason) == 1 else "are"} disabled by the administrator.
+
+Please contact the administrator to enable MEGA functionality.
+"""
+            return text, buttons.build_menu(2), thumbnail
+
         # Check if user has their own token/config enabled
         user_tokens = user_dict.get("USER_TOKENS", False)
 
@@ -657,28 +863,9 @@ async def get_user_settings(from_user, stype="main"):
             password_source = "Owner"
             password_value = "✅ Set" if Config.MEGA_PASSWORD else "❌ Not set"
 
-        # User credential settings - always available for MEGA
-        buttons.data_button("📧 Email", f"userset {user_id} var MEGA_EMAIL")
-        buttons.data_button("🔑 Password", f"userset {user_id} var MEGA_PASSWORD")
-
-        # Reset and Remove buttons for MEGA credentials - show if user has set any credentials
-        user_has_mega_credentials = (
-            mega_email is not None or mega_password is not None
-        )
-        if user_has_mega_credentials:
-            buttons.data_button(
-                "🔄 Reset Credentials", f"userset {user_id} reset mega_credentials"
-            )
-
-        # Individual remove buttons - show only if that specific credential is set by user
-        if mega_email is not None:
-            buttons.data_button(
-                "🗑️ Remove Email", f"userset {user_id} remove MEGA_EMAIL"
-            )
-        if mega_password is not None:
-            buttons.data_button(
-                "🗑️ Remove Password", f"userset {user_id} remove MEGA_PASSWORD"
-            )
+        # User credential settings - use menu action for consistent reset/remove buttons
+        buttons.data_button("📧 Email", f"userset {user_id} menu MEGA_EMAIL")
+        buttons.data_button("🔑 Password", f"userset {user_id} menu MEGA_PASSWORD")
 
         # Upload Settings
         buttons.data_button(
@@ -840,6 +1027,95 @@ Convert settings have been moved to Media Tools settings.
 Please use /mediatools command to configure convert settings.
 """
 
+    elif stype == "cookies_main":
+        # User Cookies Management
+        # First, migrate any existing cookies to database
+        try:
+            migrated = await migrate_user_cookies_to_db(user_id)
+            if migrated > 0:
+                LOGGER.info(
+                    f"Migrated {migrated} cookies to database for user {user_id}"
+                )
+        except Exception as e:
+            LOGGER.error(f"Error during cookie migration for user {user_id}: {e}")
+
+        cookies_list = await get_user_cookies_list(user_id)
+
+        buttons.data_button("➕ Add New Cookie", f"userset {user_id} cookies_add")
+
+        if cookies_list:
+            buttons.data_button(
+                "🗑️ Remove All", f"userset {user_id} cookies_remove_all"
+            )
+
+            # Show individual cookies
+            for cookie in cookies_list[:10]:  # Limit to 10 cookies for UI
+                cookie_name = f"Cookie #{cookie['number']}"
+                buttons.data_button(
+                    f"🍪 {cookie_name}",
+                    f"userset {user_id} cookies_manage {cookie['number']}",
+                )
+
+        buttons.data_button("ℹ️ Help", f"userset {user_id} cookies_help")
+        buttons.data_button("Back", f"userset {user_id} back")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        cookies_count = len(cookies_list)
+
+        # Build the base text first
+        base_text = f"""<u><b>🍪 User Cookies Management for {name}</b></u>
+
+<b>Total Cookies:</b> {cookies_count}
+
+<b>Your Cookies:</b>
+"""
+
+        footer_text = """
+<i>💡 You can upload unlimited cookies. When downloading, the bot will try each cookie until one works.</i>
+<i>🔒 Only you can access your cookies - they are completely private.</i>"""
+
+        # Calculate available space for cookies list (Telegram limit is 1024 chars)
+        available_space = (
+            1024 - len(base_text) - len(footer_text) - 50
+        )  # 50 chars buffer
+
+        if cookies_count > 0:
+            cookies_info = ""
+            cookies_shown = 0
+
+            for cookie in cookies_list:
+                cookie_line = f"🍪 <b>Cookie #{cookie['number']}</b> - Added: {cookie['created']}\n"
+
+                # Check if adding this line would exceed the limit
+                if len(cookies_info + cookie_line) > available_space:
+                    break
+
+                cookies_info += cookie_line
+                cookies_shown += 1
+
+            # Remove trailing newline
+            cookies_info = cookies_info.rstrip("\n")
+
+            # Add "and X more" if we couldn't show all cookies
+            if cookies_shown < cookies_count:
+                remaining = cookies_count - cookies_shown
+                more_text = f"\n... and {remaining} more"
+
+                # Check if we have space for the "more" text
+                if len(cookies_info + more_text) <= available_space:
+                    cookies_info += more_text
+                # If not enough space, remove the last cookie and add "more" text
+                elif cookies_shown > 0:
+                    lines = cookies_info.split("\n")
+                    lines = lines[:-1]  # Remove last line
+                    cookies_info = "\n".join(lines)
+                    remaining = cookies_count - (cookies_shown - 1)
+                    cookies_info += f"\n... and {remaining} more"
+        else:
+            cookies_info = "No cookies uploaded yet."
+
+        text = base_text + cookies_info + footer_text
+
     elif stype == "metadata":
         # Global metadata settings
         buttons.data_button("Metadata All", f"userset {user_id} menu METADATA_ALL")
@@ -953,8 +1229,8 @@ Please use /mediatools command to configure convert settings.
         # Only show YouTube API button if YouTube upload is enabled
         if Config.YOUTUBE_UPLOAD_ENABLED:
             buttons.data_button("YouTube API", f"userset {user_id} youtube")
-        # Only show MEGA Settings button if MEGA is enabled
-        if Config.MEGA_ENABLED:
+        # Only show MEGA Settings button if MEGA and MEGA upload are enabled
+        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
             buttons.data_button("☁️ MEGA", f"userset {user_id} mega")
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
@@ -991,8 +1267,10 @@ Please use /mediatools command to configure convert settings.
             # Update the user's settings
             update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
 
-        # If MEGA is disabled and default upload is set to MEGA, change it to Gdrive
-        if not Config.MEGA_ENABLED and default_upload == "mg":
+        # If MEGA is disabled or MEGA upload is disabled and default upload is set to MEGA, change it to Gdrive
+        if (
+            not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED
+        ) and default_upload == "mg":
             default_upload = "gd"
             # Update the user's settings
             update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
@@ -1014,7 +1292,7 @@ Please use /mediatools command to configure convert settings.
             available_uploads.append(("rc", "Rclone"))
         if Config.YOUTUBE_UPLOAD_ENABLED:
             available_uploads.append(("yt", "YouTube"))
-        if Config.MEGA_ENABLED:
+        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
             available_uploads.append(("mg", "MEGA"))
 
         # Only show toggle if there are multiple upload options
@@ -1081,10 +1359,11 @@ Please use /mediatools command to configure convert settings.
         if Config.YTDLP_ENABLED:
             buttons.data_button(
                 "User Cookies",
-                f"userset {user_id} menu USER_COOKIES",
+                f"userset {user_id} cookies_main",
             )
-        cookies_path = f"cookies/{user_id}.txt"
-        cookies_status = "Added" if await aiopath.exists(cookies_path) else "None"
+        # Count user cookies
+        cookies_count = await count_user_cookies(user_id)
+        cookies_status = f"{cookies_count} cookies" if cookies_count > 0 else "None"
 
         # Only show Metadata button if metadata tool is enabled
 
@@ -1275,8 +1554,26 @@ async def add_file(_, message, ftype):
         elif ftype == "USER_COOKIES":
             cpath = f"{getcwd()}/cookies/"
             await makedirs(cpath, exist_ok=True)
-            des_dir = f"{cpath}{user_id}.txt"
+            # Get next available cookie number
+            cookie_num = await get_next_cookie_number(user_id)
+            des_dir = f"{cpath}{user_id}_{cookie_num}.txt"
             await message.download(file_name=des_dir)
+
+            # Also store in database
+            try:
+                # Read the cookie file content
+                async with aiofiles.open(des_dir, "rb") as f:
+                    cookie_data = await f.read()
+
+                # Store in database
+                await database.store_user_cookie(user_id, cookie_num, cookie_data)
+                LOGGER.info(
+                    f"Stored cookie #{cookie_num} for user {user_id} in database"
+                )
+            except Exception as e:
+                LOGGER.error(
+                    f"Error storing cookie #{cookie_num} in database for user {user_id}: {e}"
+                )
     except Exception as e:
         error_msg = await send_message(message, f"❌ Error downloading file: {e!s}")
         create_task(
@@ -1291,7 +1588,7 @@ async def add_file(_, message, ftype):
             # Set secure permissions for the cookies file
             await (await create_subprocess_exec("chmod", "600", des_dir)).wait()
             LOGGER.info(
-                f"Set secure permissions for cookies file of user ID: {user_id}"
+                f"Set secure permissions for cookies file #{cookie_num} of user ID: {user_id}"
             )
 
             # Check if the cookies file contains YouTube authentication cookies
@@ -1328,15 +1625,18 @@ async def add_file(_, message, ftype):
                     auto_delete_message(error_msg, time=300)
                 )  # Auto-delete after 5 minutes
 
+            # Count total cookies after upload
+            total_cookies = await count_user_cookies(user_id)
+
             if has_youtube_auth:
                 success_msg = await send_message(
                     message.chat.id,
-                    "✅ Cookies file uploaded successfully! YouTube authentication cookies detected. Your cookies will be used for YouTube and other yt-dlp downloads.",
+                    f"✅ <b>Cookie #{cookie_num} uploaded successfully!</b>\n\n🍪 <b>Total Cookies:</b> {total_cookies}\n\n🔐 YouTube authentication cookies detected! Your cookies will be tried automatically during downloads.\n\n⚠️ <b>Security:</b> Only you can access your cookies.",
                 )
             else:
                 success_msg = await send_message(
                     message.chat.id,
-                    "✅ Cookies file uploaded successfully! Your cookies will be used for YouTube and other yt-dlp downloads. Note: No YouTube authentication cookies detected, which might limit access to restricted content.",
+                    f"✅ <b>Cookie #{cookie_num} uploaded successfully!</b>\n\n🍪 <b>Total Cookies:</b> {total_cookies}\n\n⚠️ No YouTube authentication cookies detected - may limit access to restricted content.\n\n🔒 <b>Security:</b> Only you can access your cookies.",
                 )
             create_task(
                 auto_delete_message(success_msg, time=60)
@@ -1573,8 +1873,12 @@ async def get_menu(option, message, user_id):
         # If YouTube upload is disabled, go back to main menu
         back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
     elif option in mega_options:
-        # If MEGA is disabled, go back to main menu
-        back_to = "mega" if Config.MEGA_ENABLED else "back"
+        # If MEGA or MEGA upload is disabled, go back to main menu
+        back_to = (
+            "mega"
+            if (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+            else "back"
+        )
     elif option in metadata_options:
         back_to = "metadata"
     # Convert options have been moved to Media Tools settings
@@ -1723,13 +2027,17 @@ async def edit_user_settings(client, query):
         "ai",
         "youtube_basic",
         "youtube_advanced",
+        "cookies_main",
     ]:
         await query.answer()
         # Redirect to main menu if trying to access disabled features
         if (
             (data[2] == "leech" and not Config.LEECH_ENABLED)
             or (data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED)
-            or (data[2] == "mega" and not Config.MEGA_ENABLED)
+            or (
+                data[2] == "mega"
+                and (not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED)
+            )
             or (
                 data[2] in ["youtube", "youtube_basic", "youtube_advanced"]
                 and not Config.YOUTUBE_UPLOAD_ENABLED
@@ -1738,6 +2046,139 @@ async def edit_user_settings(client, query):
             await update_user_settings(query, "main")
         else:
             await update_user_settings(query, data[2])
+    elif data[2] == "cookies_add":
+        await query.answer()
+        buttons = ButtonMaker()
+        text = "Send your cookies.txt file. The bot will automatically assign it a number and store it securely.\n\n⏰ Timeout: 60 seconds"
+        buttons.data_button("Back", f"userset {user_id} cookies_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(message, text, buttons.build_menu(2))
+        pfunc = partial(add_file, ftype="USER_COOKIES")
+        await event_handler(client, query, pfunc, document=True)
+        await update_user_settings(query, "cookies_main")
+    elif data[2] == "cookies_help":
+        await query.answer()
+        buttons = ButtonMaker()
+        text = """<b>🍪 User Cookies Help</b>
+
+<b>What are cookies?</b>
+Cookies allow you to access restricted YouTube content and other sites that require authentication.
+
+<b>How to get cookies:</b>
+1. Install browser extension "Get cookies.txt" or "EditThisCookie"
+2. Login to YouTube/site in your browser
+3. Use extension to export cookies as .txt file
+4. Upload the file here
+
+<b>Multiple Cookies:</b>
+• Upload unlimited cookies
+• Bot tries each cookie until one works
+• Each cookie gets a unique number
+• Only you can access your cookies
+
+<b>Security:</b>
+• Cookies are stored with restricted permissions
+• Each user's cookies are completely isolated
+• Files are automatically secured on upload"""
+        buttons.data_button("Back", f"userset {user_id} cookies_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(message, text, buttons.build_menu(1))
+    elif data[2] == "cookies_remove_all":
+        await query.answer()
+        buttons = ButtonMaker()
+        cookies_count = await count_user_cookies(user_id)
+        text = f"⚠️ <b>Remove All Cookies</b>\n\nAre you sure you want to remove all {cookies_count} cookies?\n\n<b>This action cannot be undone!</b>"
+        buttons.data_button(
+            "✅ Yes, Remove All", f"userset {user_id} cookies_confirm_remove_all"
+        )
+        buttons.data_button("❌ Cancel", f"userset {user_id} cookies_main")
+        await edit_message(message, text, buttons.build_menu(1))
+    elif data[2] == "cookies_confirm_remove_all":
+        await query.answer()
+        # Remove all user cookies from both database and filesystem
+        cookies_list = await get_user_cookies_list(user_id)
+        removed_count = 0
+
+        # Remove from filesystem
+        for cookie in cookies_list:
+            try:
+                if await aiopath.exists(cookie["filepath"]):
+                    await remove(cookie["filepath"])
+                    removed_count += 1
+            except Exception as e:
+                LOGGER.error(f"Error removing cookie file {cookie['filename']}: {e}")
+
+        # Remove from database
+        try:
+            db_removed = await database.delete_all_user_cookies(user_id)
+            LOGGER.info(
+                f"Removed {db_removed} cookies from database for user {user_id}"
+            )
+        except Exception as e:
+            LOGGER.error(
+                f"Error removing cookies from database for user {user_id}: {e}"
+            )
+
+        buttons = ButtonMaker()
+        text = f"✅ <b>Removed {removed_count} cookies successfully!</b>"
+        buttons.data_button("Back", f"userset {user_id} back")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(message, text, buttons.build_menu(2))
+    elif data[2] == "cookies_manage" and len(data) > 3:
+        await query.answer()
+        cookie_num = data[3]
+        cookie_path = f"cookies/{user_id}_{cookie_num}.txt"
+
+        if not await aiopath.exists(cookie_path):
+            buttons = ButtonMaker()
+            text = f"❌ Cookie #{cookie_num} not found!"
+            buttons.data_button("Back", f"userset {user_id} cookies_main")
+            buttons.data_button("Close", f"userset {user_id} close")
+            await edit_message(message, text, buttons.build_menu(2))
+            return
+
+        buttons = ButtonMaker()
+        text = f"<b>🍪 Cookie #{cookie_num} Management</b>\n\nWhat would you like to do with this cookie?"
+        buttons.data_button(
+            "🗑️ Remove Cookie", f"userset {user_id} cookies_remove {cookie_num}"
+        )
+        buttons.data_button("Back", f"userset {user_id} cookies_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(message, text, buttons.build_menu(1))
+    elif data[2] == "cookies_remove" and len(data) > 3:
+        await query.answer()
+        cookie_num = data[3]
+        cookie_path = f"cookies/{user_id}_{cookie_num}.txt"
+
+        removed_file = False
+        removed_db = False
+
+        # Remove from filesystem
+        try:
+            if await aiopath.exists(cookie_path):
+                await remove(cookie_path)
+                removed_file = True
+                LOGGER.info(f"Removed cookie file #{cookie_num} for user {user_id}")
+        except Exception as e:
+            LOGGER.error(f"Error removing cookie file {cookie_path}: {e}")
+
+        # Remove from database
+        try:
+            removed_db = await database.delete_user_cookie(user_id, int(cookie_num))
+        except Exception as e:
+            LOGGER.error(
+                f"Error removing cookie #{cookie_num} from database for user {user_id}: {e}"
+            )
+
+        if removed_file or removed_db:
+            text = f"✅ <b>Cookie #{cookie_num} removed successfully!</b>"
+        else:
+            text = f"❌ Cookie #{cookie_num} not found!"
+
+        buttons = ButtonMaker()
+        buttons.data_button("Back", f"userset {user_id} cookies_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(message, text, buttons.build_menu(2))
     elif data[2] == "menu":
         await query.answer()
         await get_menu(data[3], message, user_id)
@@ -1836,7 +2277,11 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
 
             # Determine the correct back destination based on the option
             if data[3] in mega_options:
-                back_to = "mega" if Config.MEGA_ENABLED else "back"
+                back_to = (
+                    "mega"
+                    if (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+                    else "back"
+                )
             elif data[3] in youtube_options:
                 back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
             elif data[3] in leech_options:
@@ -1920,12 +2365,34 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
             elif data[3] == "RCLONE_CONFIG":
                 fpath = rclone_conf
             elif data[3] == "USER_COOKIES":
-                fpath = f"cookies/{user_id}.txt"
+                # Remove all user cookies from both database and filesystem
+                cookies_list = await get_user_cookies_list(user_id)
+                for cookie in cookies_list:
+                    try:
+                        if await aiopath.exists(cookie["filepath"]):
+                            await remove(cookie["filepath"])
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error removing cookie file {cookie['filename']}: {e}"
+                        )
+
+                # Also remove from database
+                try:
+                    await database.delete_all_user_cookies(user_id)
+                    LOGGER.info(
+                        f"Removed all cookies from database for user {user_id}"
+                    )
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing cookies from database for user {user_id}: {e}"
+                    )
+
+                fpath = None  # Set to None since we handled removal above
             elif data[3] == "YOUTUBE_TOKEN_PICKLE":
                 fpath = f"tokens/{user_id}_youtube.pickle"
             else:
                 fpath = token_pickle
-            if await aiopath.exists(fpath):
+            if fpath and await aiopath.exists(fpath):
                 await remove(fpath)
             user_dict.pop(data[3], None)
             await database.update_user_doc(user_id, data[3])
@@ -2048,7 +2515,7 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
             available_uploads.append("rc")
         if Config.YOUTUBE_UPLOAD_ENABLED:
             available_uploads.append("yt")
-        if Config.MEGA_ENABLED:
+        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
             available_uploads.append("mg")
 
         # Find current index and get next option

@@ -118,6 +118,9 @@ MEGA_CLONE_TO_FOLDER = ""  # Default folder for cloned files (empty = root)
 MEGA_CLONE_PRESERVE_STRUCTURE = True  # Preserve folder structure when cloning
 MEGA_CLONE_OVERWRITE = False  # Overwrite existing files when cloning
 
+# MEGA Search Settings
+MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
+
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
 HYDRA_API_KEY = ""  # Hydra API key for direct links

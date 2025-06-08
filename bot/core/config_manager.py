@@ -54,6 +54,9 @@ class Config:
     )
     MEGA_CLONE_OVERWRITE: bool = False  # Overwrite existing files when cloning
 
+    # MEGA Search Settings
+    MEGA_SEARCH_ENABLED: bool = True  # Enable/disable MEGA search functionality
+
     IS_TEAM_DRIVE: bool = False
     LEECH_DUMP_CHAT: ClassVar[list[str]] = []
     LEECH_FILENAME_PREFIX: str = ""

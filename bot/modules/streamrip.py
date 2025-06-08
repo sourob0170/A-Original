@@ -192,6 +192,11 @@ class StreamripCommands:
                 if not parsed:
                     continue
 
+                # Safely unpack the parsed result
+                if not isinstance(parsed, tuple | list) or len(parsed) != 3:
+                    LOGGER.warning(f"Invalid parsed result from URL {url}: {parsed}")
+                    continue
+
                 platform, media_type, _ = parsed
 
                 # Create proper streamrip listener for each download
@@ -567,6 +572,11 @@ async def _extract_streamrip_metadata_name(
 
         parsed = await parse_streamrip_url(url)
         if not parsed:
+            return None
+
+        # Safely unpack the parsed result
+        if not isinstance(parsed, tuple | list) or len(parsed) != 3:
+            LOGGER.warning(f"Invalid parsed result from URL {url}: {parsed}")
             return None
 
         platform, media_type, media_id = parsed

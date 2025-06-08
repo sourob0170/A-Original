@@ -120,11 +120,24 @@ class TorrentManager:
 
     @classmethod
     async def aria2_remove(cls, download):
-        if download.get("status", "") in ["active", "paused", "waiting"]:
-            await cls.aria2.forceRemove(download.get("gid", ""))
-        else:
-            with contextlib.suppress(Exception):
-                await cls.aria2.removeDownloadResult(download.get("gid", ""))
+        gid = download.get("gid", "")
+        if not gid:
+            LOGGER.warning("aria2_remove: No GID provided in download object")
+            return
+
+        try:
+            if download.get("status", "") in ["active", "paused", "waiting"]:
+                await cls.aria2.forceRemove(gid)
+            else:
+                await cls.aria2.removeDownloadResult(gid)
+        except Exception as e:
+            # Handle expected errors gracefully
+            if "is not found" in str(e):
+                LOGGER.debug(f"aria2_remove: GID {gid} not found (already removed)")
+            elif "closing transport" in str(e).lower():
+                LOGGER.debug(f"aria2_remove: Transport closing error for GID {gid}")
+            else:
+                LOGGER.error(f"aria2_remove: Error removing GID {gid}: {e}")
 
     @classmethod
     async def remove_all(cls):

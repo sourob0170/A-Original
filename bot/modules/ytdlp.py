@@ -1107,7 +1107,11 @@ class YtDlp(TaskListener):
         else:
             cookies_file = "cookies.txt"
 
-        options = {"usenetrc": True, "cookiefile": cookies_file}
+        options = {
+            "usenetrc": True,
+            "cookiefile": cookies_file,
+            "ffmpeg_location": "/usr/bin/xtra",
+        }
         if opt:
             for key, value in opt.items():
                 if key in ["postprocessors", "download_ranges"]:
@@ -1165,25 +1169,34 @@ class YtDlp(TaskListener):
             # Log which client is being used for YouTube
             elif "youtube.com" in self.link or "youtu.be" in self.link:
                 LOGGER.info("Extracting YouTube video info with TV client")
-                # Add YouTube TV client settings to help with SSAP experiment issues
+                # Add minimal YouTube TV client settings for initial extraction
                 if "extractor_args" not in options:
                     options["extractor_args"] = {
                         "youtube": {
                             "player_client": ["tv"],
-                            "player_skip": ["webpage"],
-                            "max_comments": [0],
-                            "skip_webpage": [True],
                         }
                     }
                 elif "youtube" not in options["extractor_args"]:
                     options["extractor_args"]["youtube"] = {
                         "player_client": ["tv"],
-                        "player_skip": ["webpage"],
-                        "max_comments": [0],
-                        "skip_webpage": [True],
                     }
+                else:
+                    # Ensure TV client is used even if extractor_args already exist
+                    options["extractor_args"]["youtube"]["player_client"] = ["tv"]
 
             result = await sync_to_async(extract_info, self.link, options)
+
+            # Debug: Log the extracted title and set it in the listener
+            if result and result.get("title"):
+                LOGGER.info(f"Successfully extracted title: {result['title']}")
+                # Set the title in the listener so YoutubeDLHelper can use it
+                if not self.name:
+                    self.name = result["title"]
+                    LOGGER.info(f"Set listener name to extracted title: {self.name}")
+            else:
+                LOGGER.warning(
+                    f"Title extraction failed. Available keys: {list(result.keys()) if result else 'None'}"
+                )
         except Exception as e:
             msg = str(e).replace("<", " ").replace(">", " ")
 

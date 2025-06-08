@@ -286,6 +286,14 @@ class MegaSearchHandler:
             )
             return
 
+        # Check if MEGA search is enabled
+        if not Config.MEGA_SEARCH_ENABLED:
+            await send_message(
+                self.message,
+                "❌ MEGA search is disabled by the administrator.",
+            )
+            return
+
         # Check if MEGA SDK is available
         if not MEGA_SDK_AVAILABLE:
             error_msg = (
@@ -607,6 +615,13 @@ async def mega_search_command(_, message):
     if not Config.MEGA_ENABLED:
         await send_message(
             message, "❌ MEGA.nz operations are disabled by the administrator."
+        )
+        return
+
+    # Check if MEGA search is enabled
+    if not Config.MEGA_SEARCH_ENABLED:
+        await send_message(
+            message, "❌ MEGA search is disabled by the administrator."
         )
         return
 

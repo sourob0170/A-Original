@@ -114,6 +114,7 @@ DEFAULT_VALUES = {
     "ARCHIVE_FLAGS_ENABLED": True,
     "AD_BROADCASTER_ENABLED": False,
     "STREAMRIP_ENABLED": True,
+    "MEGA_SEARCH_ENABLED": True,
     # Streamrip Settings
     "STREAMRIP_CONCURRENT_DOWNLOADS": 4,
     "STREAMRIP_MAX_SEARCH_RESULTS": 20,
@@ -1343,6 +1344,7 @@ Send one of the following position options:
                     "MEGA_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_CLONE_ENABLED",  # Keep only the enabled toggle in operations menu
+                    "MEGA_SEARCH_ENABLED",  # Keep only the enabled toggle in mega menu
                 ]
             )
         ]
@@ -3428,6 +3430,16 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         buttons.data_button("📤 Upload Settings", "botset mega_upload")
         buttons.data_button("🔄 Clone Settings", "botset mega_clone")
         buttons.data_button("🔐 Security Settings", "botset mega_security")
+
+        # Add MEGA Search toggle
+        search_enabled = (
+            "✅ Enabled" if Config.MEGA_SEARCH_ENABLED else "❌ Disabled"
+        )
+        buttons.data_button(
+            f"🔍 MEGA Search: {search_enabled}",
+            f"botset toggle MEGA_SEARCH_ENABLED {not Config.MEGA_SEARCH_ENABLED}",
+        )
+
         buttons.data_button("⬅️ Back", "botset back", "footer")
         buttons.data_button("❌ Close", "botset close", "footer")
         msg = "<b>☁️ MEGA Settings</b>\nSelect a category to configure:"
@@ -12328,6 +12340,8 @@ async def edit_bot_settings(client, query):
                     "MEGA_UPLOAD_ENCRYPTION_KEY",
                 ]:
                     back_menu = "mega_security"
+                elif data[2] == "MEGA_SEARCH_ENABLED":
+                    back_menu = "mega"
                 else:
                     back_menu = "mega"
 
@@ -14900,13 +14914,14 @@ async def edit_bot_settings(client, query):
         elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
             "HYPERDL_ENABLED",
             "MEDIA_SEARCH_ENABLED",
+            "MEGA_SEARCH_ENABLED",
         }:
             # Set the value in Config
             Config.set(key, value)
             # Update the database with the new setting
             await database.update_config({key: value})
 
-            # Media search toggle without logging
+            # Search toggle without logging
 
         else:
             # For all other toggles, just set the value directly
@@ -15142,6 +15157,8 @@ async def edit_bot_settings(client, query):
                 return_menu = "mega_clone"
             elif key in ["MEGA_UPLOAD_PASSWORD", "MEGA_UPLOAD_ENCRYPTION_KEY"]:
                 return_menu = "mega_security"
+            elif key == "MEGA_SEARCH_ENABLED":
+                return_menu = "mega"
             else:
                 return_menu = "mega"
         elif key in {

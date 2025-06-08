@@ -137,6 +137,11 @@ class StreamripDownloadHelper:
                 LOGGER.error(f"Failed to parse streamrip URL: {url}")
                 return False
 
+            # Safely unpack the parsed result
+            if not isinstance(parsed, tuple | list) or len(parsed) != 3:
+                LOGGER.error(f"Invalid parsed result from URL {url}: {parsed}")
+                return False
+
             platform, media_type, media_id = parsed
 
             # Set download path using existing DOWNLOAD_DIR pattern
@@ -1647,12 +1652,12 @@ async def add_streamrip_download(
     if not hasattr(listener, "platform") or not hasattr(listener, "media_type"):
         try:
             parsed = await parse_streamrip_url(url)
-            if parsed:
+            if parsed and isinstance(parsed, tuple | list) and len(parsed) == 3:
                 platform, media_type, _ = parsed
                 listener.platform = platform
                 listener.media_type = media_type
             else:
-                # Fallback values if parsing fails
+                # Fallback values if parsing fails or returns invalid result
                 listener.platform = "Unknown"
                 listener.media_type = "Unknown"
         except Exception as e:

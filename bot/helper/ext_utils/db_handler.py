@@ -157,9 +157,15 @@ class DbManager:
         if not await self.ensure_connection():
             return
         try:
+            # Add timestamp to track when runtime config was manually updated
+            from time import time
+
+            dict_with_timestamp = dict_.copy()
+            dict_with_timestamp["_runtime_timestamp"] = time()
+
             await self.db.settings.config.update_one(
                 {"_id": TgClient.ID},
-                {"$set": dict_},
+                {"$set": dict_with_timestamp},
                 upsert=True,
             )
         except PyMongoError as e:
@@ -757,6 +763,102 @@ class DbManager:
                         )
 
         return result
+
+    async def store_user_cookie(self, user_id, cookie_number, cookie_data):
+        """Store a user cookie in the database with a specific number"""
+        if self._return:
+            return False
+
+        try:
+            from time import time
+
+            await self.db.user_cookies.update_one(
+                {"user_id": user_id, "cookie_number": cookie_number},
+                {
+                    "$set": {
+                        "cookie_data": cookie_data,
+                        "created_at": int(time()),
+                        "updated_at": int(time()),
+                    }
+                },
+                upsert=True,
+            )
+            LOGGER.info(
+                f"Stored cookie #{cookie_number} for user {user_id} in database"
+            )
+            return True
+        except Exception as e:
+            LOGGER.error(
+                f"Error storing cookie #{cookie_number} for user {user_id}: {e}"
+            )
+            return False
+
+    async def get_user_cookies(self, user_id):
+        """Get all cookies for a user from the database"""
+        if self._return:
+            return []
+
+        try:
+            cookies = []
+            cursor = self.db.user_cookies.find({"user_id": user_id}).sort(
+                "cookie_number", 1
+            )
+            async for doc in cursor:
+                cookies.append(
+                    {
+                        "number": doc["cookie_number"],
+                        "data": doc["cookie_data"],
+                        "created_at": doc.get("created_at", 0),
+                        "updated_at": doc.get("updated_at", 0),
+                    }
+                )
+            return cookies
+        except Exception as e:
+            LOGGER.error(f"Error getting cookies for user {user_id}: {e}")
+            return []
+
+    async def delete_user_cookie(self, user_id, cookie_number):
+        """Delete a specific cookie for a user"""
+        if self._return:
+            return False
+
+        try:
+            result = await self.db.user_cookies.delete_one(
+                {"user_id": user_id, "cookie_number": cookie_number}
+            )
+            if result.deleted_count > 0:
+                LOGGER.info(f"Deleted cookie #{cookie_number} for user {user_id}")
+                return True
+            return False
+        except Exception as e:
+            LOGGER.error(
+                f"Error deleting cookie #{cookie_number} for user {user_id}: {e}"
+            )
+            return False
+
+    async def delete_all_user_cookies(self, user_id):
+        """Delete all cookies for a user"""
+        if self._return:
+            return 0
+
+        try:
+            result = await self.db.user_cookies.delete_many({"user_id": user_id})
+            LOGGER.info(f"Deleted {result.deleted_count} cookies for user {user_id}")
+            return result.deleted_count
+        except Exception as e:
+            LOGGER.error(f"Error deleting all cookies for user {user_id}: {e}")
+            return 0
+
+    async def count_user_cookies_db(self, user_id):
+        """Count the number of cookies for a user in the database"""
+        if self._return:
+            return 0
+
+        try:
+            return await self.db.user_cookies.count_documents({"user_id": user_id})
+        except Exception as e:
+            LOGGER.error(f"Error counting cookies for user {user_id}: {e}")
+            return 0
 
 
 class DatabaseManager(DbManager):

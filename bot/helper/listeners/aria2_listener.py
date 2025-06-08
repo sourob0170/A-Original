@@ -20,40 +20,94 @@ from bot.helper.telegram_helper.message_utils import (
 
 
 async def _on_download_started(api, data):
-    gid = data["params"][0]["gid"]
-    download = await api.tellStatus(gid)
-    options = await api.getOption(gid)
-    if options.get("follow-torrent", "") == "false":
-        return
-    if is_metadata(download):
-        LOGGER.info(f"onDownloadStarted: {gid} METADATA")
-        await sleep(1)
-        if task := await get_task_by_gid(gid):
-            task.listener.is_torrent = True
-            if task.listener.select:
-                metamsg = "Downloading Metadata, wait then you can select files. Use torrent file to avoid this wait."
-                meta = await send_message(task.listener.message, metamsg)
-                while True:
-                    await sleep(0.5)
-                    if download.get("status", "") == "removed" or download.get(
-                        "followedBy",
-                        [],
-                    ):
-                        await delete_message(meta)
-                        break
-                    download = await api.tellStatus(gid)
-        return
-    LOGGER.info(f"onDownloadStarted: {aria2_name(download)} - Gid: {gid}")
-    await sleep(1)
+    try:
+        gid = data["params"][0]["gid"]
 
-    await sleep(2)
-    if task := await get_task_by_gid(gid):
-        download = await api.tellStatus(gid)
-        task.listener.name = aria2_name(download)
-        msg, button = await stop_duplicate_check(task.listener)
-        if msg:
-            await TorrentManager.aria2_remove(download)
-            await task.listener.on_download_error(msg, button)
+        # Try to get download info with error handling
+        try:
+            download = await api.tellStatus(gid)
+            options = await api.getOption(gid)
+        except Exception as e:
+            # If we can't get download info, the download might have been removed already
+            if "is not found" in str(e):
+                LOGGER.debug(
+                    f"onDownloadStarted: GID {gid} not found, download might have completed quickly"
+                )
+                return
+            # For other errors, log and return
+            LOGGER.error(
+                f"onDownloadStarted: Error getting download info for {gid}: {e}"
+            )
+            return
+
+        if options.get("follow-torrent", "") == "false":
+            return
+
+        if is_metadata(download):
+            LOGGER.info(f"onDownloadStarted: {gid} METADATA")
+            await sleep(1)
+            if task := await get_task_by_gid(gid):
+                task.listener.is_torrent = True
+                if task.listener.select:
+                    metamsg = "Downloading Metadata, wait then you can select files. Use torrent file to avoid this wait."
+                    meta = await send_message(task.listener.message, metamsg)
+                    while True:
+                        await sleep(0.5)
+                        if download.get("status", "") == "removed" or download.get(
+                            "followedBy",
+                            [],
+                        ):
+                            await delete_message(meta)
+                            break
+                        # Try to get updated download status with error handling
+                        try:
+                            download = await api.tellStatus(gid)
+                        except Exception as e:
+                            if "is not found" in str(e):
+                                LOGGER.debug(
+                                    f"onDownloadStarted: GID {gid} not found during metadata check"
+                                )
+                                await delete_message(meta)
+                                break
+                            LOGGER.error(
+                                f"Error getting download status during metadata check: {e}"
+                            )
+                            await delete_message(meta)
+                            break
+            return
+
+        LOGGER.info(f"onDownloadStarted: {aria2_name(download)} - Gid: {gid}")
+        await sleep(1)
+
+        await sleep(2)
+        if task := await get_task_by_gid(gid):
+            # Try to get updated download status with error handling
+            try:
+                download = await api.tellStatus(gid)
+            except Exception as e:
+                if "is not found" in str(e):
+                    LOGGER.debug(
+                        f"onDownloadStarted: GID {gid} not found during duplicate check"
+                    )
+                    return
+                LOGGER.error(
+                    f"Error getting download status for duplicate check: {e}"
+                )
+                return
+
+            task.listener.name = aria2_name(download)
+            msg, button = await stop_duplicate_check(task.listener)
+            if msg:
+                await TorrentManager.aria2_remove(download)
+                await task.listener.on_download_error(msg, button)
+    except Exception as e:
+        LOGGER.error(f"Error in onDownloadStarted handler: {e}")
+        # Try to handle any remaining task cleanup if possible
+        try:
+            if gid and (task := await get_task_by_gid(gid)):
+                await task.listener.on_download_error(f"Download start error: {e}")
+        except Exception as inner_e:
+            LOGGER.error(f"Failed to handle download start error: {inner_e}")
 
 
 async def _on_download_complete(api, data):

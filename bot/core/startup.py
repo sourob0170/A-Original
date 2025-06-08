@@ -137,6 +137,8 @@ async def load_settings():
         )
 
         if old_deploy_config is None:
+            # First time setup - add timestamp to deploy config
+            current_deploy_config["_deploy_timestamp"] = time()
             await database.db.settings.deployConfig.replace_one(
                 {"_id": BOT_ID},
                 current_deploy_config,
@@ -151,36 +153,76 @@ async def load_settings():
                 or {}
             )
 
-            # Find new variables that don't exist in runtime config
-            new_vars = {
-                k: v
-                for k, v in current_deploy_config.items()
-                if k not in runtime_config
-            }
+            # Get timestamps to determine which config is newer
+            deploy_timestamp = old_deploy_config.get("_deploy_timestamp", 0)
+            runtime_timestamp = runtime_config.get("_runtime_timestamp", 0)
+            current_time = time()
 
-            # Find changed variables that exist in both but have different values
-            changed_vars = {
-                k: v
-                for k, v in current_deploy_config.items()
-                if k in runtime_config and runtime_config[k] != v
-            }
+            # Add timestamp to current deploy config
+            current_deploy_config["_deploy_timestamp"] = current_time
 
-            # Update runtime config with both new and changed variables
-            if new_vars or changed_vars:
-                runtime_config.update(new_vars)
-                runtime_config.update(changed_vars)
-                await database.db.settings.config.replace_one(
-                    {"_id": BOT_ID},
-                    runtime_config,
-                    upsert=True,
-                )
-                if new_vars:
-                    LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
-                if changed_vars:
-                    LOGGER.info(
-                        f"Updated changed variables: {list(changed_vars.keys())}"
+            # Only update runtime config if deploy config is newer than runtime config
+            # This preserves manual changes made to runtime config
+            if (
+                deploy_timestamp == 0
+                or runtime_timestamp == 0
+                or current_time > runtime_timestamp
+            ):
+                # Deploy config is newer or timestamps are missing - proceed with update
+
+                # Remove timestamp fields from comparison (they're metadata, not config)
+                deploy_config_for_comparison = {
+                    k: v
+                    for k, v in current_deploy_config.items()
+                    if not k.startswith("_")
+                }
+                runtime_config_for_comparison = {
+                    k: v for k, v in runtime_config.items() if not k.startswith("_")
+                }
+
+                # Find new variables that don't exist in runtime config
+                new_vars = {
+                    k: v
+                    for k, v in deploy_config_for_comparison.items()
+                    if k not in runtime_config_for_comparison
+                }
+
+                # Find changed variables that exist in both but have different values
+                changed_vars = {
+                    k: v
+                    for k, v in deploy_config_for_comparison.items()
+                    if k in runtime_config_for_comparison
+                    and runtime_config_for_comparison[k] != v
+                }
+
+                # Update runtime config with both new and changed variables
+                if new_vars or changed_vars:
+                    runtime_config.update(new_vars)
+                    runtime_config.update(changed_vars)
+                    # Update runtime timestamp
+                    runtime_config["_runtime_timestamp"] = current_time
+                    await database.db.settings.config.replace_one(
+                        {"_id": BOT_ID},
+                        runtime_config,
+                        upsert=True,
                     )
+                    if new_vars:
+                        LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
+                    if changed_vars:
+                        LOGGER.info(
+                            f"Updated changed variables: {list(changed_vars.keys())}"
+                        )
+                else:
+                    LOGGER.info(
+                        "Deploy config changed but no runtime config updates needed"
+                    )
+            else:
+                # Runtime config is newer - preserve manual changes
+                LOGGER.info(
+                    "Runtime config is newer than deploy config - preserving manual changes"
+                )
 
+            # Always update deploy config with current values and timestamp
             await database.db.settings.deployConfig.replace_one(
                 {"_id": BOT_ID},
                 current_deploy_config,
@@ -192,7 +234,11 @@ async def load_settings():
             {"_id": 0},
         )
         if runtime_config:
-            Config.load_dict(runtime_config)
+            # Filter out timestamp metadata before loading into Config class
+            config_values_only = {
+                k: v for k, v in runtime_config.items() if not k.startswith("_")
+            }
+            Config.load_dict(config_values_only)
 
         if pf_dict := await database.db.settings.files.find_one(
             {"_id": BOT_ID},
@@ -316,6 +362,8 @@ async def save_settings():
     # If it exists, it means load_settings() already updated it with the correct values
     if existing_runtime_config is None:
         config_dict = Config.get_all()
+        # Add initial runtime timestamp for first-time setup
+        config_dict["_runtime_timestamp"] = time()
         await database.db.settings.config.replace_one(
             {"_id": TgClient.ID},
             config_dict,

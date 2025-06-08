@@ -1220,6 +1220,38 @@ class StreamripSearchHandler:
             self._cached_all_results = []
             for results in self.search_results.values():
                 self._cached_all_results.extend(results)
+
+            # Sort by relevance (same algorithm as inline search)
+            query_lower = self.query.lower()
+
+            def relevance_score(result):
+                score = 0
+                title = result.get("title", "").lower()
+                artist = result.get("artist", "").lower()
+                platform = result.get("platform", "").lower()
+
+                # Text relevance scoring
+                if query_lower in title:
+                    score += 10
+                if query_lower in artist:
+                    score += 5
+                if any(word in title for word in query_lower.split()):
+                    score += 3
+                if any(word in artist for word in query_lower.split()):
+                    score += 2
+
+                # Platform quality bias (prefer higher quality platforms)
+                platform_quality_bonus = {
+                    "qobuz": 3,  # Hi-Res FLAC - highest quality
+                    "tidal": 2,  # MQA/Hi-Res - high quality
+                    "deezer": 1,  # CD Quality - good quality
+                    "soundcloud": 0,  # MP3 320kbps - lowest quality
+                }
+                score += platform_quality_bonus.get(platform, 0)
+
+                return score
+
+            self._cached_all_results.sort(key=relevance_score, reverse=True)
         all_results = self._cached_all_results
 
         # Check if we have any results
@@ -1385,6 +1417,38 @@ class StreamripSearchHandler:
                 obj._cached_all_results = []
                 for results in obj.search_results.values():
                     obj._cached_all_results.extend(results)
+
+                # Sort by relevance (same algorithm as inline search)
+                query_lower = obj.query.lower()
+
+                def relevance_score(result):
+                    score = 0
+                    title = result.get("title", "").lower()
+                    artist = result.get("artist", "").lower()
+                    platform = result.get("platform", "").lower()
+
+                    # Text relevance scoring
+                    if query_lower in title:
+                        score += 10
+                    if query_lower in artist:
+                        score += 5
+                    if any(word in title for word in query_lower.split()):
+                        score += 3
+                    if any(word in artist for word in query_lower.split()):
+                        score += 2
+
+                    # Platform quality bias (prefer higher quality platforms)
+                    platform_quality_bonus = {
+                        "qobuz": 3,  # Hi-Res FLAC - highest quality
+                        "tidal": 2,  # MQA/Hi-Res - high quality
+                        "deezer": 1,  # CD Quality - good quality
+                        "soundcloud": 0,  # MP3 320kbps - lowest quality
+                    }
+                    score += platform_quality_bonus.get(platform, 0)
+
+                    return score
+
+                obj._cached_all_results.sort(key=relevance_score, reverse=True)
             all_results = obj._cached_all_results
 
             if 0 <= result_idx < len(all_results):
@@ -1502,7 +1566,39 @@ async def search_music_auto_first(
             asyncio.create_task(auto_delete_message(no_results_msg, time=300))
             return None
 
-        # Return first result
+        # Sort by relevance (same algorithm as inline search) to get the best first result
+        query_lower = query.lower()
+
+        def relevance_score(result):
+            score = 0
+            title = result.get("title", "").lower()
+            artist = result.get("artist", "").lower()
+            platform = result.get("platform", "").lower()
+
+            # Text relevance scoring
+            if query_lower in title:
+                score += 10
+            if query_lower in artist:
+                score += 5
+            if any(word in title for word in query_lower.split()):
+                score += 3
+            if any(word in artist for word in query_lower.split()):
+                score += 2
+
+            # Platform quality bias (prefer higher quality platforms)
+            platform_quality_bonus = {
+                "qobuz": 3,  # Hi-Res FLAC - highest quality
+                "tidal": 2,  # MQA/Hi-Res - high quality
+                "deezer": 1,  # CD Quality - good quality
+                "soundcloud": 0,  # MP3 320kbps - lowest quality
+            }
+            score += platform_quality_bonus.get(platform, 0)
+
+            return score
+
+        all_results.sort(key=relevance_score, reverse=True)
+
+        # Return first result (now the most relevant)
         first_result = all_results[0]
 
         # Show auto-selection message with beautiful HTML formatting
@@ -1987,7 +2083,9 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             score = 0
             title = result.get("title", "").lower()
             artist = result.get("artist", "").lower()
+            platform = result.get("platform", "").lower()
 
+            # Text relevance scoring
             if query_lower in title:
                 score += 10
             if query_lower in artist:
@@ -1996,6 +2094,16 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
                 score += 3
             if any(word in artist for word in query_lower.split()):
                 score += 2
+
+            # Platform quality bias (prefer higher quality platforms)
+            platform_quality_bonus = {
+                "qobuz": 3,  # Hi-Res FLAC - highest quality
+                "tidal": 2,  # MQA/Hi-Res - high quality
+                "deezer": 1,  # CD Quality - good quality
+                "soundcloud": 0,  # MP3 320kbps - lowest quality
+            }
+            score += platform_quality_bonus.get(platform, 0)
+
             return score
 
         all_results.sort(key=relevance_score, reverse=True)
@@ -3356,6 +3464,98 @@ async def handle_streamrip_callback(_, callback_query):
                 )
 
             fake_message.reply = fake_reply
+
+            # Add media reply methods for telegram uploader compatibility
+            async def fake_reply_audio(
+                audio,
+                quote=None,
+                caption=None,
+                duration=None,
+                performer=None,
+                title=None,
+                thumb=None,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_audio method that sends audio to user's private chat"""
+                return await TgClient.bot.send_audio(
+                    chat_id=callback_query.from_user.id,
+                    audio=audio,
+                    caption=caption,
+                    duration=duration,
+                    performer=performer,
+                    title=title,
+                    thumb=thumb,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_video(
+                video,
+                quote=None,
+                caption=None,
+                duration=None,
+                width=None,
+                height=None,
+                thumb=None,
+                supports_streaming=True,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_video method that sends video to user's private chat"""
+                return await TgClient.bot.send_video(
+                    chat_id=callback_query.from_user.id,
+                    video=video,
+                    caption=caption,
+                    duration=duration,
+                    width=width,
+                    height=height,
+                    thumb=thumb,
+                    supports_streaming=supports_streaming,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_document(
+                document,
+                quote=None,
+                thumb=None,
+                caption=None,
+                force_document=True,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_document method that sends document to user's private chat"""
+                return await TgClient.bot.send_document(
+                    chat_id=callback_query.from_user.id,
+                    document=document,
+                    thumb=thumb,
+                    caption=caption,
+                    force_document=force_document,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_photo(
+                photo,
+                quote=None,
+                caption=None,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_photo method that sends photo to user's private chat"""
+                return await TgClient.bot.send_photo(
+                    chat_id=callback_query.from_user.id,
+                    photo=photo,
+                    caption=caption,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            fake_message.reply_audio = fake_reply_audio
+            fake_message.reply_video = fake_reply_video
+            fake_message.reply_document = fake_reply_document
+            fake_message.reply_photo = fake_reply_photo
             message_for_listener = fake_message
 
         else:

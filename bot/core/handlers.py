@@ -419,7 +419,6 @@ def add_handlers():
 
     # Add MEGA handlers if MEGA is enabled
     if Config.MEGA_ENABLED:
-        from bot.modules.mega_search import mega_search_command
         from bot.modules.megaclone import mega_clone
 
         mega_handlers = {
@@ -428,12 +427,17 @@ def add_handlers():
                 BotCommands.MegaCloneCommand,
                 CustomFilters.authorized,
             ),
-            "mega_search": (
+        }
+
+        # Add MEGA search handler if MEGA search is enabled
+        if Config.MEGA_SEARCH_ENABLED:
+            from bot.modules.mega_search import mega_search_command
+
+            mega_handlers["mega_search"] = (
                 mega_search_command,
                 BotCommands.MegaSearchCommand,
                 CustomFilters.authorized,
-            ),
-        }
+            )
 
         # Add MEGA handlers to command_filters
         command_filters.update(mega_handlers)

@@ -1863,6 +1863,98 @@ async def handle_zotify_callback(_, callback_query):
 
             fake_message.delete = fake_delete
 
+            # Add media reply methods for telegram uploader compatibility
+            async def fake_reply_audio(
+                audio,
+                quote=None,
+                caption=None,
+                duration=None,
+                performer=None,
+                title=None,
+                thumb=None,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_audio method that sends audio to user's private chat"""
+                return await TgClient.bot.send_audio(
+                    chat_id=callback_query.from_user.id,
+                    audio=audio,
+                    caption=caption,
+                    duration=duration,
+                    performer=performer,
+                    title=title,
+                    thumb=thumb,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_video(
+                video,
+                quote=None,
+                caption=None,
+                duration=None,
+                width=None,
+                height=None,
+                thumb=None,
+                supports_streaming=True,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_video method that sends video to user's private chat"""
+                return await TgClient.bot.send_video(
+                    chat_id=callback_query.from_user.id,
+                    video=video,
+                    caption=caption,
+                    duration=duration,
+                    width=width,
+                    height=height,
+                    thumb=thumb,
+                    supports_streaming=supports_streaming,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_document(
+                document,
+                quote=None,
+                thumb=None,
+                caption=None,
+                force_document=True,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_document method that sends document to user's private chat"""
+                return await TgClient.bot.send_document(
+                    chat_id=callback_query.from_user.id,
+                    document=document,
+                    thumb=thumb,
+                    caption=caption,
+                    force_document=force_document,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            async def fake_reply_photo(
+                photo,
+                quote=None,
+                caption=None,
+                disable_notification=True,
+                progress=None,
+            ):
+                """Fake reply_photo method that sends photo to user's private chat"""
+                return await TgClient.bot.send_photo(
+                    chat_id=callback_query.from_user.id,
+                    photo=photo,
+                    caption=caption,
+                    disable_notification=disable_notification,
+                    progress=progress,
+                )
+
+            fake_message.reply_audio = fake_reply_audio
+            fake_message.reply_video = fake_reply_video
+            fake_message.reply_document = fake_reply_document
+            fake_message.reply_photo = fake_reply_photo
+
             # Add reply method
             async def fake_reply(
                 text,

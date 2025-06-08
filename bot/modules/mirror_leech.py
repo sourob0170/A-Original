@@ -1022,8 +1022,8 @@ class Mirror(TaskListener):
             else:
                 create_task(add_mega_download(self, path))
         elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
-            # Handle streamrip downloads
-            create_task(add_streamrip_download(self, self.link))
+            # Handle streamrip downloads with quality selection
+            await self._handle_streamrip_download()
         elif Config.ZOTIFY_ENABLED and await is_zotify_url(self.link):
             # Handle zotify downloads
             create_task(add_zotify_download(self, self.link))
@@ -1040,6 +1040,44 @@ class Mirror(TaskListener):
             create_task(add_aria2_download(self, path, headers, ratio, seed_time))
         await delete_links(self.message)
         return None
+
+    async def _handle_streamrip_download(self):
+        """Handle streamrip downloads with quality selection"""
+        from bot.helper.streamrip_utils.quality_selector import show_quality_selector
+        from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
+
+        try:
+            # Parse URL to get platform and media info
+            parsed = await parse_streamrip_url(self.link)
+            if not parsed:
+                await self.on_download_error("❌ Failed to parse streamrip URL!")
+                return
+
+            platform, media_type, _ = parsed
+
+            # Set platform and media_type attributes for quality selector
+            self.platform = platform
+            self.media_type = media_type
+
+            # Show quality selector
+            selection = await show_quality_selector(self, platform, media_type)
+
+            if not selection:
+                # User cancelled or timeout
+                await self.remove_from_same_dir()
+                return
+
+            quality = selection["quality"]
+            codec = selection["codec"]
+
+            # Start streamrip download with selected quality and codec
+            create_task(
+                add_streamrip_download(self, self.link, quality, codec, False)
+            )
+
+        except Exception as e:
+            LOGGER.error(f"Error in streamrip download handling: {e}")
+            await self.on_download_error(f"❌ Streamrip download error: {e}")
 
 
 async def mirror(client, message):

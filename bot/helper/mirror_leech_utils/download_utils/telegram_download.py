@@ -147,28 +147,22 @@ class TelegramDownloadHelper:
                             "Message doesn't contain any downloadable media"
                         )
 
-                    LOGGER.info(f"Using hyper download for {self._listener.name}")
                     download = await HyperTGDownload().download_media(
                         message,
                         file_name=path,
                         progress=self._on_download_progress,
                         dump_chat=Config.LEECH_DUMP_CHAT,
                     )
-                except ValueError as e:
-                    # This is a configuration or media error, log it as a warning
-                    LOGGER.warning(
-                        f"Hyper download error: {e!s}, falling back to normal download"
-                    )
+
+                except ValueError:
+                    # This is a configuration or media error, fall back to normal download
                     self._hyper_dl = False
                     download = await message.download(
                         file_name=path,
                         progress=self._on_download_progress,
                     )
-                except Exception as e:
-                    # This is an unexpected error
-                    LOGGER.warning(
-                        f"Hyper download failed: {e!s}, falling back to normal download"
-                    )
+                except Exception:
+                    # This is an unexpected error, fall back to normal download
                     download = await message.download(
                         file_name=path,
                         progress=self._on_download_progress,
@@ -210,7 +204,6 @@ class TelegramDownloadHelper:
         if not self.session:
             if self._hyper_dl:
                 self.session = "hbots"
-                LOGGER.info(f"Using helper bots for download: {self._listener.name}")
             elif (
                 self._listener.user_transmission
                 and hasattr(self._listener, "is_super_chat")
@@ -312,7 +305,6 @@ class TelegramDownloadHelper:
 
                 add_to_queue, event = await check_running_tasks(self._listener)
                 if add_to_queue:
-                    LOGGER.info(f"Added to Queue/Download: {self._listener.name}")
                     async with task_dict_lock:
                         task_dict[self._listener.mid] = QueueStatus(
                             self._listener,
@@ -337,15 +329,10 @@ class TelegramDownloadHelper:
 
                 # Check if helper bots are available and LEECH_DUMP_CHAT is set before starting download
                 if self._hyper_dl:
-                    if not TgClient.are_helper_bots_available():
-                        LOGGER.warning(
-                            "Helper bots not available, falling back to normal download"
-                        )
-                        self._hyper_dl = False
-                    elif not Config.LEECH_DUMP_CHAT:
-                        LOGGER.warning(
-                            "LEECH_DUMP_CHAT not set, falling back to normal download"
-                        )
+                    if (
+                        not TgClient.are_helper_bots_available()
+                        or not Config.LEECH_DUMP_CHAT
+                    ):
                         self._hyper_dl = False
 
                 await self._download(message, path)
@@ -357,9 +344,5 @@ class TelegramDownloadHelper:
             )
 
     async def cancel_task(self):
-        global LOGGER  # Ensure LOGGER is treated as global
         self._listener.is_cancelled = True
-        LOGGER.info(
-            f"Cancelling download on user request: name: {self._listener.name} id: {self._id}",
-        )
         await self._on_download_error("Stopped by user!")

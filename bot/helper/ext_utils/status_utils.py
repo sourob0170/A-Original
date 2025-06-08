@@ -272,7 +272,8 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
 
         # Check if is_super_chat is a valid boolean attribute
         is_super_chat = (
-            hasattr(task.listener, "is_super_chat")
+            task.listener
+            and hasattr(task.listener, "is_super_chat")
             and not callable(getattr(task.listener, "is_super_chat", None))
             and task.listener.is_super_chat
         )
@@ -284,21 +285,33 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         task_msg += f"[<code>{escape(task_name)}</code>]"
 
         # Truncate subname if too long
-        if task.listener.subname:
+        if (
+            task.listener
+            and hasattr(task.listener, "subname")
+            and task.listener.subname
+        ):
             subname = task.listener.subname
             if len(subname) > 40:
                 subname = subname[:37] + "..."
             task_msg += f"\n<i>{subname}</i>"
-        task_msg += f"\nby <b>{source(task.listener)}</b>"
+        if task.listener:
+            task_msg += f"\nby <b>{source(task.listener)}</b>"
+        else:
+            task_msg += "\nby <b>Unknown</b>"
         if (
             tstatus not in [MirrorStatus.STATUS_SEED, MirrorStatus.STATUS_QUEUEUP]
+            and task.listener
             and task.listener.progress
         ):
             progress = task.progress()
             task_msg += (
                 f"\n<blockquote>{get_progress_bar_string(progress)} {progress}"
             )
-            if task.listener.subname:
+            if (
+                task.listener
+                and hasattr(task.listener, "subname")
+                and task.listener.subname
+            ):
                 subsize = f"/{get_readable_file_size(task.listener.subsize)}"
                 # Check if files_to_proceed exists and has items
                 if (
@@ -319,9 +332,13 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             task_msg += f"\n<b>Size:</b> {task.size()}"
             task_msg += f"\n<b>Speed:</b> {task.speed()}"
             task_msg += f"\n<b>Estimated:</b> {task.eta()}"
-            if (
-                tstatus == MirrorStatus.STATUS_DOWNLOAD and task.listener.is_torrent
-            ) or task.listener.is_qbit:
+            if task.listener and (
+                (
+                    tstatus == MirrorStatus.STATUS_DOWNLOAD
+                    and task.listener.is_torrent
+                )
+                or task.listener.is_qbit
+            ):
                 with contextlib.suppress(Exception):
                     task_msg += f"\n<b>Seeders:</b> {task.seeders_num()} | <b>Leechers:</b> {task.leechers_num()}"
         elif tstatus == MirrorStatus.STATUS_SEED:
@@ -333,7 +350,10 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         else:
             task_msg += f"\n<blockquote><b>Size: </b>{task.size()}"
         task_msg += f"\n<b>Tool:</b> {task.tool}"
-        task_msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - task.listener.message.date.timestamp())}</blockquote>"
+        if task.listener and task.listener.message:
+            task_msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - task.listener.message.date.timestamp())}</blockquote>"
+        else:
+            task_msg += "\n<b>Elapsed: </b>Unknown</blockquote>"
         task_gid = str(task.gid())  # Ensure task_gid is a string
         short_gid = task_gid[-8:] if task_gid.startswith("SABnzbd") else task_gid[:8]
         task_msg += f"\n<blockquote>/stop_{short_gid}</blockquote>\n\n"

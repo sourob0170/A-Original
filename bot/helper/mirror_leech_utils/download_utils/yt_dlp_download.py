@@ -72,14 +72,7 @@ class MyLogger:
     @staticmethod
     def error(msg):
         if msg != "ERROR: Cancelling...":
-            # Don't log postprocessing errors related to output files
-            if "Postprocessing: Error opening output files" in msg:
-                pass
-            # Log preprocessing errors with more details
-            elif "Preprocessing: Error splitting the argument list" in msg:
-                LOGGER.error(f"E: {msg}")
-            else:
-                LOGGER.error(msg)
+            LOGGER.error(msg)
 
 
 class YoutubeDLHelper:
@@ -94,15 +87,17 @@ class YoutubeDLHelper:
         self._ext = ""
         self.is_playlist = False
 
-        # Check for user-specific cookies
+        # Check for user-specific cookies (multiple cookies support)
         user_id = listener.user_id
-        user_cookies_path = f"cookies/{user_id}.txt"
+        self.user_cookies_list = self._get_user_cookies_list(user_id)
 
-        # Security check: Only use user's own cookies or the default cookies
-        if ospath.exists(user_cookies_path):
-            cookies_file = user_cookies_path
+        # Use first available cookie or default
+        if self.user_cookies_list:
+            cookies_file = self.user_cookies_list[0]
+            self.current_cookie_index = 0
         else:
             cookies_file = "cookies.txt"
+            self.current_cookie_index = -1
 
         self.opts = {
             "progress_hooks": [self._on_download_progress],
@@ -131,18 +126,158 @@ class YoutubeDLHelper:
             "extractor_args": {
                 "youtube": {
                     "player_client": ["tv"],
-                    "player_skip": ["webpage"],
                     "max_comments": [0],
-                    "skip_webpage": [True],
                 }
             },
         }
 
         # Log which cookies file is being used
-        if cookies_file == user_cookies_path:
-            LOGGER.info(f"Using user-specific cookies for user ID: {user_id}")
+        if self.user_cookies_list:
+            cookie_num = (
+                ospath.basename(cookies_file)
+                .replace(f"{user_id}_", "")
+                .replace(".txt", "")
+            )
+            LOGGER.info(
+                f"Using user cookie #{cookie_num} for user ID: {user_id} (Total: {len(self.user_cookies_list)} cookies)"
+            )
         else:
             LOGGER.info("Using default cookies.txt file")
+
+    def _get_user_cookies_list(self, user_id):
+        """Get list of all cookie files for a user (from both database and filesystem)"""
+        cookies_list = []
+
+        # First, try to get cookies from database and create temporary files
+        try:
+            import asyncio
+
+            from bot.helper.ext_utils.db_handler import database
+
+            # Get cookies from database
+            db_cookies = asyncio.run(database.get_user_cookies(user_id))
+
+            for cookie in db_cookies:
+                cookie_num = cookie["number"]
+                cookie_data = cookie["data"]
+
+                # Create temporary file for this cookie
+                temp_cookie_path = f"cookies/{user_id}_{cookie_num}.txt"
+
+                # Ensure cookies directory exists
+                import os
+
+                os.makedirs("cookies", exist_ok=True)
+
+                # Write cookie data to temporary file if it doesn't exist
+                if not ospath.exists(temp_cookie_path):
+                    try:
+                        with open(temp_cookie_path, "wb") as f:
+                            f.write(cookie_data)
+                        LOGGER.info(
+                            f"Created temporary cookie file #{cookie_num} for user {user_id}"
+                        )
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error creating temporary cookie file #{cookie_num}: {e}"
+                        )
+                        continue
+
+                cookies_list.append(temp_cookie_path)
+
+        except Exception as e:
+            LOGGER.error(
+                f"Error getting cookies from database for user {user_id}: {e}"
+            )
+
+        # Also check for existing files in filesystem
+        cookies_dir = "cookies/"
+        if ospath.exists(cookies_dir):
+            try:
+                import os
+
+                for filename in os.listdir(cookies_dir):
+                    if filename.startswith(f"{user_id}_") and filename.endswith(
+                        ".txt"
+                    ):
+                        filepath = f"{cookies_dir}{filename}"
+                        if ospath.exists(filepath) and filepath not in cookies_list:
+                            cookies_list.append(filepath)
+            except Exception as e:
+                LOGGER.error(f"Error getting user cookies from filesystem: {e}")
+
+        # Sort by cookie number
+        try:
+            cookies_list.sort(
+                key=lambda x: int(
+                    ospath.basename(x).replace(f"{user_id}_", "").replace(".txt", "")
+                )
+                if ospath.basename(x)
+                .replace(f"{user_id}_", "")
+                .replace(".txt", "")
+                .isdigit()
+                else 999
+            )
+        except Exception as e:
+            LOGGER.error(f"Error sorting cookies list: {e}")
+
+        return cookies_list
+
+    def _try_next_cookie(self):
+        """Try the next available cookie for the user"""
+        if (
+            not self.user_cookies_list
+            or self.current_cookie_index >= len(self.user_cookies_list) - 1
+        ):
+            return False
+
+        self.current_cookie_index += 1
+        new_cookie = self.user_cookies_list[self.current_cookie_index]
+
+        # Update the cookiefile in opts
+        self.opts["cookiefile"] = new_cookie
+
+        cookie_num = (
+            ospath.basename(new_cookie)
+            .replace(f"{self._listener.user_id}_", "")
+            .replace(".txt", "")
+        )
+        LOGGER.info(
+            f"Trying next cookie #{cookie_num} for user ID: {self._listener.user_id}"
+        )
+
+        return True
+
+    def _should_try_next_cookie(self, error_str):
+        """Check if the error indicates we should try the next cookie"""
+        cookie_related_errors = [
+            "sign in to confirm",
+            "this video is unavailable",
+            "private video",
+            "members-only content",
+            "requires authentication",
+            "login required",
+            "access denied",
+            "forbidden",
+            "unauthorized",
+            "premium content",
+            "subscription required",
+            "age-restricted",
+            "not available in your country",
+            "geo-blocked",
+            "region blocked",
+            "unable to extract video data",
+            "video unavailable",
+            "cookies",
+            "authentication",
+            "401",
+            "403",
+        ]
+
+        error_lower = error_str.lower()
+        return any(
+            error_phrase in error_lower for error_phrase in cookie_related_errors
+        )
 
     @property
     def download_speed(self):
@@ -265,8 +400,6 @@ class YoutubeDLHelper:
             ]
             # Skip comments to reduce memory usage
             self.opts["extractor_args"]["youtube"]["max_comments"] = [0]
-            # Skip webpage parsing for better performance
-            self.opts["extractor_args"]["youtube"]["skip_webpage"] = [True]
 
             LOGGER.info(
                 f"Using YouTube client: {self.youtube_clients[self.current_client_index]}"
@@ -344,7 +477,45 @@ class YoutubeDLHelper:
                     except Exception:
                         pass
 
-                    # 2. Try to extract title from webpage_url
+                    # 2. Try alternative extraction methods
+                    if not result.get("title"):
+                        try:
+                            # Try using different output templates
+                            alternative_templates = [
+                                "%(fulltitle)s",
+                                "%(alt_title)s",
+                                "%(display_id)s",
+                                "%(uploader)s - %(id)s",
+                            ]
+
+                            for template in alternative_templates:
+                                try:
+                                    with YoutubeDL(
+                                        {
+                                            **self.opts,
+                                            "quiet": True,
+                                            "skip_download": True,
+                                        }
+                                    ) as temp_ydl:
+                                        temp_name = temp_ydl.prepare_filename(
+                                            result, outtmpl=template
+                                        )
+                                        if (
+                                            temp_name
+                                            and temp_name != "NA"
+                                            and temp_name.strip()
+                                        ):
+                                            result["title"] = temp_name.strip()
+                                            LOGGER.info(
+                                                f"Successfully extracted title using template {template}: {temp_name}"
+                                            )
+                                            break
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
+
+                    # 3. Try to extract title from webpage_url
                     if not result.get("title") and result.get("webpage_url"):
                         try:
                             # Extract video ID from URL
@@ -374,6 +545,16 @@ class YoutubeDLHelper:
                                 )
                         except Exception:
                             pass
+
+                # 4. Try to extract from other metadata if title is still missing
+                if not result.get("title"):
+                    # Try to get title from various metadata fields
+                    title_fields = ["fulltitle", "alt_title", "display_id"]
+                    for field in title_fields:
+                        if result.get(field) and result[field] != "NA":
+                            result["title"] = result[field]
+                            LOGGER.info(f"Using {field} as title: {result['title']}")
+                            break
 
                 # If title is still missing and no name is set, try fallbacks
                 if (
@@ -465,7 +646,50 @@ class YoutubeDLHelper:
                         )
 
             except Exception as e:
-                return self._on_download_error(str(e))
+                error_str = str(e)
+                # Check if this is a cookie/authentication related error
+                if self._should_try_next_cookie(error_str):
+                    if self._try_next_cookie():
+                        LOGGER.info("Retrying with next cookie...")
+                        # Retry the extraction with the new cookie
+                        try:
+                            with YoutubeDL(self.opts) as ydl:
+                                result = ydl.extract_info(
+                                    self._listener.link, download=False
+                                )
+                                if result is None:
+                                    raise ValueError("Info result is None")
+                                # Continue with the rest of the extraction logic...
+                                # (The rest of the code will handle the result)
+                        except Exception as retry_e:
+                            # If retry also fails, check if we can try another cookie
+                            if (
+                                self._should_try_next_cookie(str(retry_e))
+                                and self._try_next_cookie()
+                            ):
+                                LOGGER.info("Retrying with another cookie...")
+                                # One more retry attempt
+                                try:
+                                    with YoutubeDL(self.opts) as ydl:
+                                        result = ydl.extract_info(
+                                            self._listener.link, download=False
+                                        )
+                                        if result is None:
+                                            raise ValueError("Info result is None")
+                                except Exception:
+                                    return self._on_download_error(
+                                        f"All cookies failed. Last error: {retry_e!s}"
+                                    )
+                            else:
+                                return self._on_download_error(
+                                    f"Cookie retry failed: {retry_e!s}"
+                                )
+                    else:
+                        return self._on_download_error(
+                            f"No more cookies to try. Error: {error_str}"
+                        )
+                else:
+                    return self._on_download_error(error_str)
             if "entries" in result:
                 for entry in result["entries"]:
                     if not entry:
@@ -902,6 +1126,34 @@ class YoutubeDLHelper:
                     self._on_download_error(
                         "Error: The extractor failed to initialize properly. The URL might be invalid or unsupported."
                     )
+            # Check if this is a cookie-related error and we have more cookies to try
+            elif self._should_try_next_cookie(error_str) and self._try_next_cookie():
+                LOGGER.info(
+                    "Download failed with current cookie, retrying with next cookie..."
+                )
+                # Retry the entire download with the new cookie
+                try:
+                    self._download(path)
+                    return  # If successful, exit here
+                except Exception as retry_e:
+                    retry_error_str = str(retry_e)
+                    # If retry also fails, check if we can try another cookie
+                    if (
+                        self._should_try_next_cookie(retry_error_str)
+                        and self._try_next_cookie()
+                    ):
+                        LOGGER.info("Retrying with another cookie...")
+                        try:
+                            self._download(path)
+                            return  # If successful, exit here
+                        except Exception:
+                            self._on_download_error(
+                                f"All cookies failed. Last error: {retry_error_str}"
+                            )
+                    else:
+                        self._on_download_error(
+                            f"Cookie retry failed: {retry_error_str}"
+                        )
             else:
                 self._on_download_error(f"Download error: {error_str}")
         return

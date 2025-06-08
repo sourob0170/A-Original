@@ -21,41 +21,32 @@ from aioshutil import move
 
 from bot.helper.ext_utils.aiofiles_compat import makedirs, remove
 
-# Import from pyrogram/electrogram (they are compatible)
 try:
-    # Try electrogram first
-    from electrogram import raw, utils
-    from electrogram.errors import AuthBytesInvalid, FloodWait
-    from electrogram.errors import StopTransmissionError as StopTransmission
-    from electrogram.file_id import PHOTO_TYPES, FileId, FileType, ThumbnailSource
-    from electrogram.session import Auth, Session
-    from electrogram.session.internals import MsgId
-except ImportError:
+    # Fall back to pyrogram
+    from pyrogram import raw, utils
+
     try:
-        # Fall back to pyrogram
-        from pyrogram import raw, utils
-
-        try:
-            # Try to import from pyrogram directly (older versions)
-            from pyrogram import StopTransmission
-        except ImportError:
-            try:
-                # In newer versions, it's called StopTransmissionError
-                from pyrogram.errors import StopTransmissionError as StopTransmission
-            except ImportError:
-                # If neither is available, define a custom exception
-                class StopTransmission(Exception):
-                    """Custom exception to handle stop transmission"""
-
-        from pyrogram.errors import AuthBytesInvalid, FloodWait
-        from pyrogram.file_id import PHOTO_TYPES, FileId, FileType, ThumbnailSource
-        from pyrogram.session import Auth, Session
-        from pyrogram.session.internals import MsgId
+        # Try to import from pyrogram directly (older versions)
+        from pyrogram import StopTransmission
     except ImportError:
-        # If all imports fail, raise a clear error
-        raise ImportError(
-            "Failed to import required modules from either electrogram or pyrogram. Please check your installation."
-        )
+        try:
+            # In newer versions, it's called StopTransmissionError
+            from pyrogram.errors import StopTransmissionError as StopTransmission
+        except ImportError:
+            # If neither is available, define a custom exception
+            class StopTransmission(Exception):
+                """Custom exception to handle stop transmission"""
+
+    from pyrogram.errors import AuthBytesInvalid, FloodWait
+    from pyrogram.file_id import PHOTO_TYPES, FileId, FileType, ThumbnailSource
+    from pyrogram.session import Auth, Session
+    from pyrogram.session.internals import MsgId
+except ImportError:
+    # If all imports fail, raise a clear error
+    raise ImportError(
+        "Failed to import required modules from either electrogram or pyrogram. Please check your installation."
+    )
+
 
 from bot import LOGGER
 from bot.core.aeon_client import TgClient
@@ -89,6 +80,80 @@ class HyperTGDownload:
         if hasattr(self, "_clean_task") and not self._clean_task.done():
             self._clean_task.cancel()
 
+    async def _check_helper_bot_access(self, chat_id):
+        """Check if at least one helper bot has access to the specified chat"""
+        for _i, client in enumerate(self.clients):
+            try:
+                # Try to get chat info to verify access
+                await client.get_chat(chat_id)
+                return True
+            except Exception:
+                continue
+
+        return False
+
+    async def _refresh_bot_session(self):
+        """Refresh bot session to ensure latest permissions"""
+        try:
+            # Get bot info to refresh session
+            await TgClient.bot.get_me()
+
+            # Also try to get chat info to refresh chat-specific permissions
+            try:
+                if hasattr(self, "dump_chat") and self.dump_chat:
+                    dump_chat_id = (
+                        self.dump_chat[0]
+                        if isinstance(self.dump_chat, list)
+                        else self.dump_chat
+                    )
+                    await TgClient.bot.get_chat(dump_chat_id)
+            except Exception:
+                pass
+
+            return True
+        except Exception:
+            return False
+
+    async def _try_alternative_forwarding_method(self, message, chat_id, attempt):
+        """Try alternative forwarding methods that might work better"""
+        try:
+            # Method 1: Try with different parameters
+            if attempt == 1:
+                return await TgClient.bot.forward_messages(
+                    chat_id=chat_id,
+                    from_chat_id=message.chat.id,
+                    message_ids=message.id,
+                )
+
+            # Method 2: Try using user client if available
+            if attempt == 2 and TgClient.user:
+                return await TgClient.user.forward_messages(
+                    chat_id=chat_id,
+                    from_chat_id=message.chat.id,
+                    message_ids=message.id,
+                    disable_notification=True,
+                )
+
+            # Method 3: Try copying with user client
+            if attempt == 3 and TgClient.user:
+                return await TgClient.user.copy_message(
+                    chat_id=chat_id,
+                    from_chat_id=message.chat.id,
+                    message_id=message.id,
+                    disable_notification=True,
+                )
+
+            # Fallback to original method
+            return await TgClient.bot.forward_messages(
+                chat_id=chat_id,
+                from_chat_id=message.chat.id,
+                message_ids=message.id,
+                disable_notification=True,
+            )
+
+        except Exception:
+            raise
+
     @staticmethod
     async def get_media_type(message):
         if not message:
@@ -120,9 +185,6 @@ class HyperTGDownload:
                     return getattr(message.media, attr)
 
         # If we get here, no media was found
-        LOGGER.error(
-            f"No downloadable media found in message ID: {getattr(message, 'id', 'unknown')}"
-        )
         raise ValueError("This message doesn't contain any downloadable media")
 
     def _update_cache(self, index, file_ref):
@@ -162,17 +224,17 @@ class HyperTGDownload:
                     else:
                         raise
 
-                return FileId.decode(
-                    getattr(await self.get_media_type(media), "file_id", "")
+                file_id_str = getattr(
+                    await self.get_media_type(media), "file_id", ""
                 )
+                return FileId.decode(file_id_str)
+
             except Exception as e:
                 last_error = e
                 retries += 1
-                await sleep(1 * retries)
+                if retries < max_retries:
+                    await sleep(1 * retries)
 
-        LOGGER.error(
-            f"Failed to get message {mid} from {chat_id} with Client {client.me.username}"
-        )
         raise ValueError(
             f"Bot needs Admin access in Chat or message may be deleted. Error: {last_error}"
         )
@@ -183,23 +245,26 @@ class HyperTGDownload:
             self._update_cache(index, file_ref)
         else:
             self.cache_last_access[index] = time()
+
         return self.cache_file_ref[index]
 
     async def _clean_cache(self):
         while True:
-            await sleep(15 * 60)
+            await sleep(15 * 60)  # Clean every 15 minutes
+
             current_time = time()
             expired_keys = [
                 k
                 for k, v in self.cache_last_access.items()
-                if current_time - v > 45 * 60
+                if current_time - v > 45 * 60  # Remove entries older than 45 minutes
             ]
 
-            for key in expired_keys:
-                if key in self.cache_file_ref:
-                    del self.cache_file_ref[key]
-                if key in self.cache_last_access:
-                    del self.cache_last_access[key]
+            if expired_keys:
+                for key in expired_keys:
+                    if key in self.cache_file_ref:
+                        del self.cache_file_ref[key]
+                    if key in self.cache_last_access:
+                        del self.cache_last_access[key]
 
     async def generate_media_session(self, client, file_id, index, max_retries=3):
         session_key = (index, file_id.dc_id)
@@ -210,7 +275,9 @@ class HyperTGDownload:
         retries = 0
         while retries < max_retries:
             try:
-                if file_id.dc_id != await client.storage.dc_id():
+                client_dc_id = await client.storage.dc_id()
+
+                if file_id.dc_id != client_dc_id:
                     media_session = Session(
                         client,
                         file_id.dc_id,
@@ -222,7 +289,7 @@ class HyperTGDownload:
                     )
                     await media_session.start()
 
-                    for _ in range(6):
+                    for attempt in range(6):
                         exported_auth = await client.invoke(
                             raw.functions.auth.ExportAuthorization(
                                 dc_id=file_id.dc_id
@@ -237,8 +304,14 @@ class HyperTGDownload:
                             )
                             break
                         except AuthBytesInvalid:
+                            LOGGER.warning(
+                                f"Auth bytes invalid on attempt {attempt + 1}, retrying..."
+                            )
                             await sleep(1)
                     else:
+                        LOGGER.error(
+                            "Failed to import authorization after 6 attempts"
+                        )
                         await media_session.stop()
                         raise AuthBytesInvalid
                 else:
@@ -256,7 +329,8 @@ class HyperTGDownload:
 
             except Exception:
                 retries += 1
-                await sleep(1)
+                if retries < max_retries:
+                    await sleep(1)
 
         raise ValueError(
             f"Failed to create media session after {max_retries} attempts"
@@ -286,6 +360,7 @@ class HyperTGDownload:
                 local_id=file_id.local_id,
                 big=file_id.thumbnail_source == ThumbnailSource.CHAT_PHOTO_BIG,
             )
+
         if file_type == FileType.PHOTO:
             return raw.types.InputPhotoFileLocation(
                 id=file_id.media_id,
@@ -293,6 +368,7 @@ class HyperTGDownload:
                 file_reference=file_id.file_reference,
                 thumb_size=file_id.thumbnail_size,
             )
+
         return raw.types.InputDocumentFileLocation(
             id=file_id.media_id,
             access_hash=file_id.access_hash,
@@ -308,8 +384,10 @@ class HyperTGDownload:
         part_count: int,
         max_retries=5,
     ):
+        # Select client with minimum workload
         index = min(self.work_loads, key=self.work_loads.get)
         client = self.clients[index]
+        getattr(client.me, "username", f"client_{index}")
 
         self.work_loads[index] += 1
         current_retry = 0
@@ -318,6 +396,7 @@ class HyperTGDownload:
             while current_retry < max_retries:
                 try:
                     if self._cancel_event.is_set():
+                        LOGGER.info("Download cancelled by user")
                         raise CancelledError("Download cancelled")
 
                     file_id = await self.get_file_id(client, index)
@@ -328,9 +407,11 @@ class HyperTGDownload:
 
                     current_part = 1
                     current_offset = offset_bytes
+                    total_bytes_downloaded = 0
 
                     while current_part <= part_count:
                         if self._cancel_event.is_set():
+                            LOGGER.info("Download cancelled during part download")
                             raise CancelledError("Download cancelled")
 
                         try:
@@ -347,6 +428,8 @@ class HyperTGDownload:
 
                             if isinstance(r, raw.types.upload.File):
                                 chunk = r.bytes
+                                chunk_size = len(chunk)
+                                total_bytes_downloaded += chunk_size
 
                                 if not chunk:
                                     break
@@ -362,8 +445,9 @@ class HyperTGDownload:
 
                                 current_part += 1
                                 current_offset += self.chunk_size
-                                self._processed_bytes += len(chunk)
+                                self._processed_bytes += chunk_size
                             else:
+                                LOGGER.error(f"Unexpected response type: {type(r)}")
                                 raise ValueError(f"Unexpected response: {r}")
 
                         except FloodWait as e:
@@ -374,16 +458,18 @@ class HyperTGDownload:
                             continue
 
                     if current_part <= part_count:
-                        raise ValueError(
-                            f"Incomplete download: got {current_part - 1} of {part_count} parts"
-                        )
+                        error_msg = f"Incomplete download: got {current_part - 1} of {part_count} parts"
+                        LOGGER.error(error_msg)
+                        raise ValueError(error_msg)
+
                     break
 
                 except (TimeoutError, ConnectionError, AttributeError):
                     current_retry += 1
                     if current_retry >= max_retries:
                         raise
-                    await sleep(current_retry * 2)
+                    sleep_time = current_retry * 2
+                    await sleep(sleep_time)
 
         finally:
             self.work_loads[index] -= 1
@@ -392,21 +478,29 @@ class HyperTGDownload:
         if not progress:
             return
 
+        progress_count = 0
+
         while not self._cancel_event.is_set():
             try:
                 if callable(progress):
+                    progress_count += 1
                     await progress(
                         self._processed_bytes, self.file_size, *progress_args
                     )
                 await sleep(1)
             except (CancelledError, StopTransmission):
-                # Handle cancellation
+                # Download was cancelled, stop progress callback silently
                 break
             except Exception:
+                # If there's an error and cancellation is set, stop silently
+                if self._cancel_event.is_set():
+                    break
+                # Otherwise continue with a short delay
                 await sleep(1)
 
     async def single_part(self, start, end, part_index, max_retries=3):
         until_bytes, from_bytes = min(end, self.file_size - 1), start
+        until_bytes - from_bytes + 1
 
         offset = from_bytes - (from_bytes % self.chunk_size)
         first_part_cut = from_bytes - offset
@@ -421,6 +515,8 @@ class HyperTGDownload:
 
         for attempt in range(max_retries):
             try:
+                bytes_written = 0
+
                 async with aiopen(part_file_path, "wb") as f:
                     async for chunk in self.get_file(
                         offset, first_part_cut, last_part_cut, part_count
@@ -428,11 +524,15 @@ class HyperTGDownload:
                         if self._cancel_event.is_set():
                             raise CancelledError("Download cancelled")
                         await f.write(chunk)
+                        bytes_written += len(chunk)
+
                 return part_index, part_file_path
+
             except (TimeoutError, ConnectionError):
                 if attempt == max_retries - 1:
                     raise
-                await sleep((attempt + 1) * 2)
+                sleep_time = (attempt + 1) * 2
+                await sleep(sleep_time)
                 self._processed_bytes = 0
 
         # If we reach here, all attempts failed
@@ -441,9 +541,10 @@ class HyperTGDownload:
         )
 
     async def handle_download(self, progress, progress_args):
+        download_start_time = time()
         self._cancel_event.clear()
-
         await makedirs(self.directory, exist_ok=True)
+
         temp_file_path = (
             ospath.abspath(
                 sub("\\\\", "/", ospath.join(self.directory, self.file_name))
@@ -451,6 +552,7 @@ class HyperTGDownload:
             + ".temp"
         )
 
+        # Calculate optimal number of parts
         num_parts = min(self.num_parts, max(1, self.file_size // (10 * 1024 * 1024)))
 
         if self.file_size < 10 * 1024 * 1024:
@@ -467,7 +569,8 @@ class HyperTGDownload:
 
         try:
             for i, (start, end) in enumerate(ranges):
-                tasks.append(create_task(self.single_part(start, end, i)))
+                task = create_task(self.single_part(start, end, i))
+                tasks.append(task)
 
             if progress:
                 prog_task = create_task(
@@ -476,20 +579,27 @@ class HyperTGDownload:
 
             results = await gather(*tasks)
 
+            total_bytes_combined = 0
+
             async with aiopen(temp_file_path, "wb") as temp_file:
-                for _, part_file_path in sorted(results, key=lambda x: x[0]):
+                for _part_index, part_file_path in sorted(
+                    results, key=lambda x: x[0]
+                ):
                     try:
+                        part_bytes = 0
+
                         async with aiopen(part_file_path, "rb") as part_file:
                             while True:
                                 chunk = await part_file.read(8 * 1024 * 1024)
                                 if not chunk:
                                     break
                                 await temp_file.write(chunk)
+                                part_bytes += len(chunk)
+                                total_bytes_combined += len(chunk)
+
                         await remove(part_file_path)
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error processing part file {part_file_path}: {e}"
-                        )
+
+                    except Exception:
                         raise
 
             if prog_task and not prog_task.done():
@@ -503,13 +613,12 @@ class HyperTGDownload:
         except FloodWait as fw:
             raise fw
         except (CancelledError, StopTransmission):
-            # Download was cancelled
             return None
-        except Exception as e:
-            LOGGER.error(f"HyperDL Error: {e}")
+        except Exception:
             return None
         finally:
             self._cancel_event.set()
+
             if prog_task and not prog_task.done():
                 prog_task.cancel()
 
@@ -517,7 +626,8 @@ class HyperTGDownload:
                 if not task.done():
                     task.cancel()
 
-            for i in range(len(ranges)):
+            # Clean up temporary part files
+            for i in range(len(ranges) if "ranges" in locals() else 0):
                 part_path = ospath.join(
                     self.directory, f"{self.file_name}.temp.{i:02d}"
                 )
@@ -537,17 +647,18 @@ class HyperTGDownload:
             if extension:
                 return extension
 
-        if file_type == FileType.VOICE:
-            return ".ogg"
-        if file_type in (FileType.VIDEO, FileType.ANIMATION, FileType.VIDEO_NOTE):
-            return ".mp4"
-        if file_type == FileType.DOCUMENT:
-            return ".bin"
-        if file_type == FileType.STICKER:
-            return ".webp"
-        if file_type == FileType.AUDIO:
-            return ".mp3"
-        return ".bin"
+        # Fallback based on file type
+        extension_map = {
+            FileType.VOICE: ".ogg",
+            FileType.VIDEO: ".mp4",
+            FileType.ANIMATION: ".mp4",
+            FileType.VIDEO_NOTE: ".mp4",
+            FileType.DOCUMENT: ".bin",
+            FileType.STICKER: ".webp",
+            FileType.AUDIO: ".mp3",
+        }
+
+        return extension_map.get(file_type, ".bin")
 
     async def download_media(
         self,
@@ -576,24 +687,21 @@ class HyperTGDownload:
                         "Original message doesn't contain any downloadable media"
                     )
 
-                # Media found, no need to log it now that the feature is working
-
-            except ValueError as e:
+            except ValueError:
                 # This is a specific error we're expecting
-                LOGGER.error(f"Media verification error: {e}")
                 raise
             except Exception as e:
                 # This is an unexpected error
-                LOGGER.error(
-                    f"Unexpected error checking original message media: {e}"
-                )
                 raise ValueError("Failed to verify original message media") from e
 
             if dump_chat:
+                message_forwarded = False
+
+                # Try multiple times with different strategies to match leech success
+                max_attempts = 3
+
                 try:
-                    # For media messages, we need to forward them instead of copying
-                    # as copy_message might not preserve all media attributes
-                    try:
+                    for attempt in range(max_attempts):
                         # Handle case where dump_chat is a list - use the first item
                         chat_id = (
                             dump_chat[0]
@@ -601,69 +709,93 @@ class HyperTGDownload:
                             else dump_chat
                         )
 
-                        forwarded_msg = await TgClient.bot.forward_messages(
-                            chat_id=chat_id,
-                            from_chat_id=message.chat.id,
-                            message_ids=message.id,
-                            disable_notification=True,
-                        )
+                        # Add small delay and session refresh between attempts
+                        if attempt > 0:
+                            await sleep(1)
+                            # Refresh bot session to get latest permissions
+                            await self._refresh_bot_session()
 
-                        # Handle case where forward_messages returns a list
-                        if isinstance(forwarded_msg, list) and forwarded_msg:
-                            self.message = forwarded_msg[0]
-                        elif forwarded_msg:
-                            self.message = forwarded_msg
-                        else:
+                        # Try forwarding first (this works for leech)
+                        try:
+                            # Try alternative forwarding methods for different attempts
+                            forwarded_msg = (
+                                await self._try_alternative_forwarding_method(
+                                    message, chat_id, attempt + 1
+                                )
+                            )
+
+                            # Handle case where forward_messages returns a list
+                            if isinstance(forwarded_msg, list) and forwarded_msg:
+                                self.message = forwarded_msg[0]
+                                message_forwarded = True
+                                break
+                            if forwarded_msg:
+                                self.message = forwarded_msg
+                                message_forwarded = True
+                                break
                             # If forwarding returns empty result, try copying
                             raise ValueError("Forward returned empty result")
-                    except Exception as e:
-                        LOGGER.warning(
-                            f"Forwarding failed: {e}, trying copy_message instead"
-                        )
-                        # If forwarding fails, try copying
-                        # Handle case where dump_chat is a list - use the first item
-                        chat_id = (
-                            dump_chat[0]
-                            if isinstance(dump_chat, list)
-                            else dump_chat
-                        )
 
-                        self.message = await TgClient.bot.copy_message(
-                            chat_id=chat_id,
-                            from_chat_id=message.chat.id,
-                            message_id=message.id,
-                            disable_notification=True,
-                        )
+                        except Exception:
+                            # Try copying as fallback
+                            try:
+                                copied_msg = await TgClient.bot.copy_message(
+                                    chat_id=chat_id,
+                                    from_chat_id=message.chat.id,
+                                    message_id=message.id,
+                                    disable_notification=True,
+                                )
+
+                                if copied_msg and hasattr(copied_msg, "id"):
+                                    self.message = copied_msg
+                                    message_forwarded = True
+                                    break
+                                raise ValueError(
+                                    "Copy message returned None or invalid result"
+                                )
+
+                            except Exception:
+                                if attempt == max_attempts - 1:
+                                    # Last attempt failed
+                                    break
+                                # Continue to next attempt
+                                continue
 
                     # Verify that the forwarded/copied message has downloadable media
-                    try:
-                        await self.get_media_type(self.message)
-                    except Exception:
-                        # Fall back to using the original message
-                        LOGGER.warning(
-                            "Using original message as forwarded message has no media"
-                        )
-                        self.message = message
+                    if message_forwarded:
+                        try:
+                            await self.get_media_type(self.message)
+                        except Exception:
+                            # Fall back to using the original message
+                            self.message = message
+                            message_forwarded = False
 
-                except Exception as e:
-                    LOGGER.warning(
-                        f"Error forwarding/copying message to dump chat: {e}"
-                    )
+                except Exception:
                     # Fall back to using the original message
                     self.message = message
-                    # If we can't copy the message to the dump chat, we can't use hyper download
-                    if not self.clients:
+                    message_forwarded = False
+
+                # If we couldn't forward/copy the message, check if we can still use HyperDL
+                if not message_forwarded:
+                    # Check if helper bots have access to the original chat
+                    if not await self._check_helper_bot_access(message.chat.id):
                         raise ValueError(
-                            "No helper bots available for hyper download"
-                        ) from e
+                            "HyperDL requires helper bots to have access to the message chat. "
+                            "Either add helper bots to the source chat or ensure dump chat forwarding works."
+                        )
+
             else:
                 self.message = message
+                message_forwarded = False
 
             # Handle case where dump_chat is a list
-            if dump_chat:
+            if dump_chat and message_forwarded:
+                # Only use dump_chat if we successfully forwarded/copied the message
                 self.dump_chat = dump_chat
             else:
+                # Use original chat if no dump chat or if we're using original message
                 self.dump_chat = message.chat.id
+
             media = await self.get_media_type(self.message)
 
             file_id_str = media if isinstance(media, str) else media.file_id
@@ -689,6 +821,5 @@ class HyperTGDownload:
 
             return await self.handle_download(progress, progress_args)
 
-        except Exception as e:
-            LOGGER.error(f"Download media error: {e}")
+        except Exception:
             raise
