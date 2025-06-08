@@ -7,7 +7,7 @@ TELEGRAM_HASH = "208bf560e644253ff8a50a94b46fe517"  # Get this from my.telegram.
 DATABASE_URL = "mongodb+srv://rotbut457:bAL9JXScaytVmSCX@cluster0.p6uxmcm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 TORRENT_TIMEOUT = 4000  # Timeout for torrent downloads in seconds (0 = no timeout)
-BASE_URL = ""  # Base URL for web server
+BASE_URL = "https://azone-e6bb7c6957e0.herokuapp.com/"  # Base URL for web server
 BASE_URL_PORT = 80  # Port for web server (0 to disable)
 WEB_PINCODE = True  # Enable pincode protection for web server
 
