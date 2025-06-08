@@ -2,17 +2,16 @@ BOT_TOKEN = "7502625914:AAF3GtYhEuXt4QnBwbTV16ktrLOj9I7fmTA"
 OWNER_ID = 6307223516  # Your Telegram User ID (not username) as an integer
 TELEGRAM_API = 9028935  # Get this from my.telegram.org
 TELEGRAM_HASH = "208bf560e644253ff8a50a94b46fe517"  # Get this from my.telegram.org
-
-# SEMI-REQUIRED, WE SUGGEST TO FILL IT FROM MONGODB
 DATABASE_URL = "mongodb+srv://rotbut457:bAL9JXScaytVmSCX@cluster0.p6uxmcm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
-TORRENT_TIMEOUT = 4000  # Timeout for torrent downloads in seconds (0 = no timeout)
 BASE_URL = "https://azone-e6bb7c6957e0.herokuapp.com/"  # Base URL for web server
+UPSTREAM_REPO = "https://github.com/pompomxyz/Aeon-MLTB"  # Repository URL for updates
+UPSTREAM_BRANCH = "extended"  # Branch to use for updates
+TORRENT_TIMEOUT = 4000  # Timeout for torrent downloads in seconds (0 = no timeout)
+
+
 BASE_URL_PORT = 80  # Port for web server (0 to disable)
 WEB_PINCODE = True  # Enable pincode protection for web server
 
-UPSTREAM_REPO = "https://github.com/pompomxyz/Aeon-MLTB"  # Repository URL for updates
-UPSTREAM_BRANCH = "extended"  # Branch to use for updates
 
 # OPTIONAL CONFIG
 TG_PROXY = {}  # Proxy for Telegram connection, format: {'addr': 'ip:port', 'username': 'username', 'password': 'password'}
@@ -99,8 +98,8 @@ RCLONE_SERVE_PORT = 8080  # Port for rclone serve
 RCLONE_SERVE_USER = ""  # Username for rclone serve
 RCLONE_SERVE_PASS = ""  # Password for rclone serve
 # JDownloader
-JD_EMAIL = "duotwo393@honeys.be"  # JDownloader email/username
-JD_PASS = "Hehe@2580"  # JDownloader password
+JD_EMAIL = ""  # JDownloader email/username
+JD_PASS = ""  # JDownloader password
 
 # Mega.nz Settings
 MEGA_EMAIL = ""  # Mega.nz account email (optional, for premium features)
@@ -155,7 +154,7 @@ USENET_SERVERS = [  # List of Usenet servers for NZB downloads
 LEECH_SPLIT_SIZE = 0  # Size of split files in bytes, 0 means no split
 AS_DOCUMENT = False  # Send files as documents instead of media
 MEDIA_GROUP = False  # Group media files together when sending
-USER_TRANSMISSION = True  # Use transmission for torrents
+USER_TRANSMISSION = False  # Use transmission for torrents
 HYBRID_LEECH = False  # Enable hybrid leech (both document and media)
 LEECH_FILENAME_PREFIX = ""  # Prefix to add to leeched filenames
 LEECH_SUFFIX = ""  # Suffix to add to leeched files
@@ -167,11 +166,6 @@ LEECH_FILENAME_CAPTION = (
 LEECH_DUMP_CHAT = []  # Chat IDs ["-100123456789", "b:@mychannel", "u:-100987654321", "h:@mygroup|123456"] where leeched files will be sent
 THUMBNAIL_LAYOUT = ""  # Layout for thumbnails: empty, top, bottom, or custom
 EQUAL_SPLITS = False  # Create equal-sized parts when splitting files
-
-# Hyper Download Settings
-HYPERDL_ENABLED = True  # Enable/disable hyper download feature
-HELPER_TOKENS = "8041921643:AAEE5ml209y54-_idV-sUrjWhqKsnT796us 7554544860:AAH2k6pqreeprVCw4tXPuiGAT3Syir3-HRk 8073240863:AAGHrY8jkuLAuMXQGumNbW-d8T1gFgPvtF4"  # Bot tokens for helper bots, separated by space. Format: "token1 token2 token3"
-HYPER_THREADS = 3  # Number of threads for hyper download (0 = auto-detect based on number of helper bots)
 
 # Queueing system
 QUEUE_ALL = 20  # Maximum number of concurrent tasks (0 = unlimited)
@@ -191,7 +185,7 @@ RSS_SIZE_LIMIT = 0  # Maximum size for RSS downloads in bytes (0 = unlimited)
 PIL_MEMORY_LIMIT = 2048  # Memory limit for PIL image processing in MB
 
 # Auto Restart Settings
-AUTO_RESTART_ENABLED = True  # Enable automatic bot restart
+AUTO_RESTART_ENABLED = False  # Enable automatic bot restart
 AUTO_RESTART_INTERVAL = 24  # Restart interval in hours
 
 # Limits Settings
@@ -225,7 +219,7 @@ STATUS_LIMIT = 7  # Number of tasks to display in status message (recommended: 4
 SEARCH_LIMIT = 20  # Maximum number of search results to display (0 = unlimited)
 
 # Task Monitoring Settings
-TASK_MONITOR_ENABLED = True  # Master switch to enable/disable task monitoring
+TASK_MONITOR_ENABLED = False  # Master switch to enable/disable task monitoring
 TASK_MONITOR_INTERVAL = 60  # Interval between task monitoring checks in seconds
 TASK_MONITOR_CONSECUTIVE_CHECKS = 20  # Number of consecutive checks for monitoring
 TASK_MONITOR_SPEED_THRESHOLD = 50  # Speed threshold in KB/s
@@ -246,9 +240,9 @@ TASK_MONITOR_MEMORY_LOW = 60  # Low memory usage threshold percentage
 ENABLE_EXTRA_MODULES = True  # Enable additional modules and features
 
 # Security Tools Settings
-VT_API_KEY = "21f7e3e7057f1974163ccdc12c30bb0b03e0dd33c59f30edd378ae10a0184e57"  # VirusTotal API key for malware scanning
+VT_API_KEY = ""  # VirusTotal API key for malware scanning
 VT_API_TIMEOUT = 600  # VirusTotal API timeout in seconds
-VT_ENABLED = True  # Enable/disable VirusTotal functionality
+VT_ENABLED = False  # Enable/disable VirusTotal functionality
 VT_MAX_FILE_SIZE = (
     33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
 )
@@ -767,14 +761,14 @@ COMPRESSION_ARCHIVE_PASSWORD = (
 COMPRESSION_ARCHIVE_ALGORITHM = "none"  # Archive algorithm: none, 7z, zip, etc.
 
 # Trim Settings
-TRIM_ENABLED = True  # Master switch to enable/disable trim feature
+TRIM_ENABLED = False  # Master switch to enable/disable trim feature
 TRIM_PRIORITY = 5  # Processing priority in pipeline (lower numbers run earlier)
 TRIM_START_TIME = "00:00:00"  # Start time for trimming in HH:MM:SS format
 TRIM_END_TIME = ""  # End time for trimming in HH:MM:SS format (empty = end of file)
 TRIM_DELETE_ORIGINAL = False  # Delete original files after successful trimming
 
 # Video Trim Settings
-TRIM_VIDEO_ENABLED = True # Enable/disable video trimming
+TRIM_VIDEO_ENABLED = False # Enable/disable video trimming
 TRIM_VIDEO_CODEC = (
     "none"  # Video codec: none, copy (fastest), libx264, libx265, etc.
 )
@@ -784,23 +778,23 @@ TRIM_VIDEO_PRESET = (
 TRIM_VIDEO_FORMAT = "none"  # Output format: none, mp4, mkv, avi, etc.
 
 # Audio Trim Settings
-TRIM_AUDIO_ENABLED = True  # Enable/disable audio trimming
+TRIM_AUDIO_ENABLED = False  # Enable/disable audio trimming
 TRIM_AUDIO_CODEC = "none"  # Audio codec: none, copy (fastest), aac, mp3, etc.
 TRIM_AUDIO_PRESET = "none"  # Encoding preset: none, fast, medium, slow
 TRIM_AUDIO_FORMAT = "none"  # Output format: none, mp3, m4a, flac, etc.
 
 # Image Trim Settings
-TRIM_IMAGE_ENABLED = True  # Enable/disable image trimming (crop)
+TRIM_IMAGE_ENABLED = False  # Enable/disable image trimming (crop)
 TRIM_IMAGE_QUALITY = 90  # Image quality: 0-100 (higher is better quality)
 TRIM_IMAGE_FORMAT = "none"  # Output format: none, jpg, png, webp, etc.
 
 # Document Trim Settings
-TRIM_DOCUMENT_ENABLED = True  # Enable/disable document trimming (page range)
+TRIM_DOCUMENT_ENABLED = False  # Enable/disable document trimming (page range)
 TRIM_DOCUMENT_QUALITY = 90  # Document quality: 0-100 (higher is better quality)
 TRIM_DOCUMENT_FORMAT = "none"  # Output format: none, pdf, docx, etc.
 
 # Subtitle Trim Settings
-TRIM_SUBTITLE_ENABLED = True  # Enable/disable subtitle trimming (time range)
+TRIM_SUBTITLE_ENABLED = False  # Enable/disable subtitle trimming (time range)
 TRIM_SUBTITLE_ENCODING = "none"  # Character encoding: none, utf-8, utf-16, etc.
 TRIM_SUBTITLE_FORMAT = "none"  # Output format: none, srt, ass, vtt, etc.
 
@@ -809,12 +803,12 @@ TRIM_ARCHIVE_ENABLED = False  # Enable/disable archive trimming (file selection)
 TRIM_ARCHIVE_FORMAT = "none"  # Output format: none, zip, 7z, tar.gz, etc.
 
 # Extract Settings
-EXTRACT_ENABLED = True  # Master switch to enable/disable extract feature
+EXTRACT_ENABLED = False  # Master switch to enable/disable extract feature
 EXTRACT_PRIORITY = 6  # Processing priority in pipeline (lower numbers run earlier)
 EXTRACT_DELETE_ORIGINAL = True  # Delete original files after successful extraction
 
 # Video Extract Settings
-EXTRACT_VIDEO_ENABLED = True  # Enable/disable video stream extraction
+EXTRACT_VIDEO_ENABLED = False  # Enable/disable video stream extraction
 EXTRACT_VIDEO_CODEC = (
     "none"  # Video codec: none, copy (fastest), libx264, libx265, etc.
 )
@@ -831,7 +825,7 @@ EXTRACT_VIDEO_RESOLUTION = (
 EXTRACT_VIDEO_FPS = "none"  # Frame rate: none, 30, 60, etc.
 
 # Audio Extract Settings
-EXTRACT_AUDIO_ENABLED = True  # Enable/disable audio stream extraction
+EXTRACT_AUDIO_ENABLED = False  # Enable/disable audio stream extraction
 EXTRACT_AUDIO_CODEC = "none"  # Audio codec: none, copy (fastest), aac, mp3, etc.
 EXTRACT_AUDIO_FORMAT = "none"  # Output format: none, mp3, m4a, flac, etc.
 EXTRACT_AUDIO_INDEX = None  # Stream index to extract: None (all), 0, 1, 2, etc.
@@ -855,7 +849,7 @@ EXTRACT_SUBTITLE_FONT = (
 EXTRACT_SUBTITLE_FONT_SIZE = "none"  # Font size: none, 12, 16, etc.
 
 # Attachment Extract Settings
-EXTRACT_ATTACHMENT_ENABLED = True  # Enable/disable attachment extraction
+EXTRACT_ATTACHMENT_ENABLED = False # Enable/disable attachment extraction
 EXTRACT_ATTACHMENT_FORMAT = "none"  # Output format: none, original, etc.
 EXTRACT_ATTACHMENT_INDEX = (
     None  # Attachment index to extract: None (all), 0, 1, 2, etc.
