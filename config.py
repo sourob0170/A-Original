@@ -4,10 +4,10 @@ TELEGRAM_API = 9028935  # Get this from my.telegram.org
 TELEGRAM_HASH = "208bf560e644253ff8a50a94b46fe517"  # Get this from my.telegram.org
 
 # SEMI-REQUIRED, WE SUGGEST TO FILL IT FROM MONGODB
-DATABASE_URL = "mongodb+srv://ajcmarbcg:KAzGUnvu0az4qyeP@cluster0.0xwlapc.mongodb.net/?retryWrites=true&w=majority"  # MongoDB URI for storing user data and preferences
+DATABASE_URL = "mongodb+srv://rotbut457:bAL9JXScaytVmSCX@cluster0.p6uxmcm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 TORRENT_TIMEOUT = 4000  # Timeout for torrent downloads in seconds (0 = no timeout)
-BASE_URL = "https://azon-e91873c6cfa7.herokuapp.com/"  # Base URL for web server
+BASE_URL = ""  # Base URL for web server
 BASE_URL_PORT = 80  # Port for web server (0 to disable)
 WEB_PINCODE = True  # Enable pincode protection for web server
 
