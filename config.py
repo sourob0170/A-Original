@@ -211,7 +211,7 @@ USER_MAX_TASKS = 5  # Maximum concurrent tasks per user (0 = unlimited)
 BOT_MAX_TASKS = (
     15  # Maximum number of concurrent tasks the bot can handle (0 = unlimited)
 )
-USER_TIME_INTERVAL = 6  # Minimum time between user tasks in seconds (0 = no delay)
+USER_TIME_INTERVAL = 0  # Minimum time between user tasks in seconds (0 = no delay)
 STATUS_UPDATE_INTERVAL = (
     7  # Status update interval in seconds (minimum 2, recommended: 3-5)
 )
