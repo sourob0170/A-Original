@@ -143,6 +143,11 @@ class DbManager:
             for key, value in vars(settings).items()
             if not key.startswith("__")
         }
+        # Add timestamp to track when deploy config was updated
+        from time import time
+
+        config_file["_deploy_timestamp"] = time()
+
         try:
             await self.db.settings.deployConfig.replace_one(
                 {"_id": TgClient.ID},
@@ -244,6 +249,221 @@ class DbManager:
                 {"$unset": {db_path: ""}},
                 upsert=True,
             )
+
+    async def get_private_files(self):
+        """Get list of available private files from database and filesystem"""
+        if self._return:
+            return {}
+
+        try:
+            # Get files from database
+            db_files = await self.db.settings.files.find_one({"_id": TgClient.ID})
+            if not db_files:
+                db_files = {}
+
+            # List of known private files to check
+            known_files = [
+                "config.py",
+                "token.pickle",
+                "token_sa.pickle",
+                "youtube_token.pickle",
+                "rclone.conf",
+                "accounts.zip",
+                "list_drives.txt",
+                "cookies.txt",
+                ".netrc",
+                "shorteners.txt",
+                "streamrip_config.toml",
+                "zotify_credentials.json",
+            ]
+
+            available_files = {}
+
+            # Check all known files regardless of existence to show complete status
+            for file_name in known_files:
+                db_key = file_name.replace(".", "__")
+                file_exists_db = db_key in db_files and db_files[db_key] is not None
+                file_exists_fs = await aiopath.exists(file_name)
+
+                # Special handling for accounts.zip - also check if accounts directory exists
+                accounts_dir_exists = False
+                if file_name == "accounts.zip":
+                    accounts_dir_exists = await aiopath.exists("accounts")
+
+                # Always include the file in the list to show complete status
+                available_files[file_name] = {
+                    "exists_db": file_exists_db,
+                    "exists_fs": file_exists_fs,
+                    "accounts_dir_exists": accounts_dir_exists
+                    if file_name == "accounts.zip"
+                    else False,
+                    "size_db": len(db_files.get(db_key, b""))
+                    if file_exists_db
+                    else 0,
+                    "size_fs": await aiopath.getsize(file_name)
+                    if file_exists_fs
+                    else 0,
+                }
+
+            return available_files
+
+        except Exception as e:
+            LOGGER.error(f"Error getting private files list: {e}")
+            return {}
+
+    async def sync_private_files_to_db(self):
+        """Sync all existing private files from filesystem to database"""
+        if self._return:
+            return {"synced": 0, "errors": []}
+
+        try:
+            # List of known private files to sync
+            known_files = [
+                "config.py",
+                "token.pickle",
+                "token_sa.pickle",
+                "youtube_token.pickle",
+                "rclone.conf",
+                "accounts.zip",
+                "list_drives.txt",
+                "cookies.txt",
+                ".netrc",
+                "shorteners.txt",
+                "streamrip_config.toml",
+                "zotify_credentials.json",
+            ]
+
+            synced_count = 0
+            errors = []
+
+            for file_name in known_files:
+                try:
+                    if await aiopath.exists(file_name):
+                        # Check if already in database
+                        db_key = file_name.replace(".", "__")
+                        db_files = await self.db.settings.files.find_one(
+                            {"_id": TgClient.ID}
+                        )
+
+                        if (
+                            not db_files
+                            or db_key not in db_files
+                            or not db_files[db_key]
+                        ):
+                            # File exists in filesystem but not in database, sync it
+                            await self.update_private_file(file_name)
+                            synced_count += 1
+                            LOGGER.info(f"Synced {file_name} to database")
+
+                except Exception as e:
+                    error_msg = f"Error syncing {file_name}: {e}"
+                    LOGGER.error(error_msg)
+                    errors.append(error_msg)
+
+            return {"synced": synced_count, "errors": errors}
+
+        except Exception as e:
+            LOGGER.error(f"Error syncing private files to database: {e}")
+            return {"synced": 0, "errors": [str(e)]}
+
+    async def sync_private_files_to_fs(self):
+        """Sync all existing private files from database to filesystem"""
+        if self._return:
+            return {"synced": 0, "errors": []}
+
+        try:
+            # Get all files from database
+            db_files = await self.db.settings.files.find_one({"_id": TgClient.ID})
+            if not db_files:
+                return {"synced": 0, "errors": ["No files found in database"]}
+
+            # List of known private files to sync
+            known_files = [
+                "config.py",
+                "token.pickle",
+                "token_sa.pickle",
+                "youtube_token.pickle",
+                "rclone.conf",
+                "accounts.zip",
+                "list_drives.txt",
+                "cookies.txt",
+                ".netrc",
+                "shorteners.txt",
+                "streamrip_config.toml",
+                "zotify_credentials.json",
+            ]
+
+            synced_count = 0
+            errors = []
+
+            for file_name in known_files:
+                try:
+                    db_key = file_name.replace(".", "__")
+
+                    # Check if file exists in database but not in filesystem
+                    if db_files.get(db_key):
+                        if not await aiopath.exists(file_name):
+                            # File exists in database but not in filesystem, sync it
+                            async with aiopen(file_name, "wb") as f:
+                                await f.write(db_files[db_key])
+
+                            # Handle special post-sync operations
+                            if file_name == "accounts.zip":
+                                # Extract accounts.zip if it was synced
+                                try:
+                                    from asyncio import create_subprocess_exec
+
+                                    await (
+                                        await create_subprocess_exec(
+                                            "7z",
+                                            "x",
+                                            "-o.",
+                                            "-aoa",
+                                            "accounts.zip",
+                                            "accounts/*.json",
+                                        )
+                                    ).wait()
+                                    await (
+                                        await create_subprocess_exec(
+                                            "chmod", "-R", "777", "accounts"
+                                        )
+                                    ).wait()
+                                except Exception as e:
+                                    LOGGER.warning(
+                                        f"Failed to extract accounts.zip after sync: {e}"
+                                    )
+
+                            elif file_name in [".netrc", "netrc"]:
+                                # Set proper permissions for .netrc
+                                try:
+                                    await (
+                                        await create_subprocess_exec(
+                                            "chmod", "600", ".netrc"
+                                        )
+                                    ).wait()
+                                    await (
+                                        await create_subprocess_exec(
+                                            "cp", ".netrc", "/root/.netrc"
+                                        )
+                                    ).wait()
+                                except Exception as e:
+                                    LOGGER.warning(
+                                        f"Failed to set .netrc permissions after sync: {e}"
+                                    )
+
+                            synced_count += 1
+                            LOGGER.info(f"Synced {file_name} to filesystem")
+
+                except Exception as e:
+                    error_msg = f"Error syncing {file_name}: {e}"
+                    LOGGER.error(error_msg)
+                    errors.append(error_msg)
+
+            return {"synced": synced_count, "errors": errors}
+
+        except Exception as e:
+            LOGGER.error(f"Error syncing private files to filesystem: {e}")
+            return {"synced": 0, "errors": [str(e)]}
 
     async def update_nzb_config(self):
         if self._return:

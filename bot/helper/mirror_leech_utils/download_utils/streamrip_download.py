@@ -1,5 +1,3 @@
-import asyncio
-import contextlib
 import os
 import re
 import time
@@ -34,7 +32,7 @@ except ImportError:
 
 
 class StreamripDownloadHelper:
-    """Optimized helper class for streamrip downloads"""
+    """Comprehensive streamrip download helper with full CLI command support"""
 
     # Class-level constants to reduce memory allocation
     AUDIO_EXTENSIONS = frozenset([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"])
@@ -47,6 +45,31 @@ class StreamripDownloadHelper:
         "vorbis": "OGG",
         "m4a": "AAC",
         "aac": "AAC",
+    }
+
+    # Supported streamrip CLI commands with descriptions
+    SUPPORTED_COMMANDS = {
+        "url": "Download content from URLs",
+        "search": "Search for content using a specific source",
+        "id": "Download an item by ID",
+        "file": "Download content from URLs in a file",
+        "lastfm": "Download tracks from a last.fm playlist",
+        "config": "Manage configuration files",
+        "database": "View and modify the downloads database",
+    }
+
+    # Quality mappings for different platforms
+    QUALITY_MAPPINGS = {
+        "qobuz": {0: 1, 1: 2, 2: 3, 3: 4},  # 320kbps MP3, 16/44.1, 24/<=96, 24/>=96
+        "tidal": {
+            0: 0,
+            1: 1,
+            2: 2,
+            3: 3,
+        },  # 256kbps AAC, 320kbps AAC, 16/44.1 FLAC, 24/44.1 MQA
+        "deezer": {0: 0, 1: 1, 2: 2},  # 128kbps MP3, 320kbps MP3, FLAC
+        "soundcloud": {0: 0},  # Only 0 available
+        "youtube": {0: 0},  # Only 0 available
     }
 
     # Pre-compiled regex patterns for better performance
@@ -123,7 +146,6 @@ class StreamripDownloadHelper:
             self._quality = quality
             self._codec = codec
             self._download_url = url
-
             # Parse URL to get platform and media info
             from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
 
@@ -142,7 +164,7 @@ class StreamripDownloadHelper:
                 LOGGER.error(f"Invalid parsed result from URL {url}: {parsed}")
                 return False
 
-            platform, media_type, media_id = parsed
+            platform, _, _ = parsed
 
             # Set download path using existing DOWNLOAD_DIR pattern
             # Ensure all path components are strings to avoid path division errors
@@ -211,11 +233,8 @@ class StreamripDownloadHelper:
                 if hasattr(self._client, "login"):
                     await self._client.login()
             except Exception as auth_error:
-                if platform == "tidal":
-                    LOGGER.warning(f"⚠️ Tidal authentication failed: {auth_error}")
-                    return
-                LOGGER.error(
-                    f"❌ {platform.title()} authentication failed: {auth_error}"
+                LOGGER.warning(
+                    f"{platform.title()} authentication failed: {auth_error}"
                 )
                 return
 
@@ -270,7 +289,7 @@ class StreamripDownloadHelper:
                 return
 
         except Exception as e:
-            LOGGER.error(f"❌ Failed to create media object: {e}")
+            LOGGER.error(f"Failed to create media object: {e}")
             return
 
     async def _set_quality(self, quality: int):
@@ -298,14 +317,13 @@ class StreamripDownloadHelper:
         try:
             from bot.helper.streamrip_utils.streamrip_config import streamrip_config
 
+            # Ensure streamrip is initialized
+            await streamrip_config.lazy_initialize()
+
             config = streamrip_config.get_config()
-            if (
-                config
-                and hasattr(config, "session")
-                and hasattr(config.session, "downloads")
-            ):
+            if config and hasattr(config, "downloads"):
                 # Set the download folder to our specific path
-                config.session.downloads.folder = str(self._download_path)
+                config.downloads.folder = str(self._download_path)
         except Exception as e:
             LOGGER.warning(f"Failed to update streamrip download path: {e}")
 
@@ -343,7 +361,7 @@ class StreamripDownloadHelper:
 
         if mapped_codec is None:
             LOGGER.warning(
-                f"⚠️ Unknown codec '{codec}' - downloading in default format"
+                f"Unknown codec '{codec}' - downloading in default format"
             )
             return None
 
@@ -375,12 +393,14 @@ class StreamripDownloadHelper:
                     cmd.extend(
                         ["--codec", mapped_codec]
                     )  # Use --codec instead of -c
+
             # Add --no-db flag if database is disabled in bot settings OR if force download is enabled
             from bot.helper.streamrip_utils.streamrip_config import streamrip_config
 
             force_download = getattr(self.listener, "force_download", False)
+            db_enabled = streamrip_config.is_database_enabled()
 
-            if not streamrip_config.is_database_enabled() or force_download:
+            if not db_enabled or force_download:
                 cmd.extend(["--no-db"])
 
             # Add --verbose flag for better debugging (v2.1.0 feature)
@@ -422,22 +442,30 @@ class StreamripDownloadHelper:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout_check, stderr_check = await check_process.communicate()
+                stdout, stderr = await check_process.communicate()
+
                 if check_process.returncode != 0:
                     LOGGER.error("Streamrip 'rip' command not found")
-                    return False
+                    # Try alternative paths
+                    import shutil
+
+                    rip_path = shutil.which("rip")
+                    if not rip_path:
+                        return False
             except Exception as check_error:
                 LOGGER.error(f"Error checking streamrip: {check_error}")
                 return False
 
-            # Always regenerate config to ensure latest settings are applied
-            await self._create_safe_config_after_reset()
+            # Ensure config is initialized via centralized system
+            await self._ensure_streamrip_config()
 
             # Check FFMPEG availability
             await self._check_ffmpeg_availability()
 
             # Check if we have proper authentication for the URL
-            if not await self._validate_authentication_for_url(download_url):
+            auth_valid = await self._validate_authentication_for_url(download_url)
+
+            if not auth_valid:
                 LOGGER.error("No valid authentication found for this URL")
                 # Send helpful message to user
                 try:
@@ -474,202 +502,124 @@ class StreamripDownloadHelper:
                 env["PYTHONASYNCIODEBUG"] = "0"  # Disable asyncio debug mode
                 env["PYTHONHASHSEED"] = "0"  # Ensure deterministic behavior
 
+                # Check if we're in a Docker container
+                is_docker = Path("/.dockerenv").exists() or "container" in env.get(
+                    "container", ""
+                )
+
+                # Docker-specific environment adjustments
+                if is_docker:
+                    # Ensure proper locale for Docker
+                    env["LC_ALL"] = "C.UTF-8"
+                    env["LANG"] = "C.UTF-8"
+                    # Disable some problematic features in Docker
+                    env["STREAMRIP_NO_PROGRESS"] = "1"
+                    env["STREAMRIP_NO_INTERACTIVE"] = "1"
+                    # Set explicit temp directory
+                    env["TMPDIR"] = "/tmp"
+
                 # Create subprocess with enhanced isolation for asyncio stability
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.PIPE,  # Provide stdin for interactive prompts
-                    cwd=working_dir,
-                    env=env,
-                    # Add process group isolation to prevent event loop conflicts
-                    preexec_fn=None if os.name == "nt" else os.setsid,
-                    # Limit subprocess resources to prevent memory issues
-                    limit=1024 * 1024 * 10,  # 10MB buffer limit
-                )
+                # Use a separate process group to prevent event loop conflicts
+                import subprocess
 
-            except Exception as proc_error:
-                LOGGER.error(f"Failed to create subprocess: {proc_error}")
-                return False
-
-            try:
-                # Remove timeout restrictions for streamrip downloads (like Deezer)
-
-                # Send empty input to stdin to prevent hanging on prompts
-                # For Deezer ARL prompts, send newline to skip
-                stdin_input = b"\n"
-                stdout, stderr = await process.communicate(input=stdin_input)
-
-                # Log detailed output for debugging
-                stdout_text = stdout.decode() if stdout else ""
-                stderr.decode() if stderr else ""
-
-                # Log completion status
-                if process.returncode != 0:
-                    LOGGER.error(f"Streamrip failed with code: {process.returncode}")
-
-                self._is_downloading = False
-            except Exception as e:
-                # Handle any other errors
-                LOGGER.error(f"Streamrip process error: {e}")
-                self._is_downloading = False
+                # For production environments, use subprocess.run to avoid event loop issues
                 try:
-                    process.kill()
-                    await process.wait()
-                except Exception as kill_error:
-                    LOGGER.error(f"Error killing process: {kill_error}")
-                return False
+                    # Build comprehensive streamrip CLI command
+                    streamrip_cmd = self._build_streamrip_command(converted_url)
 
-            # Check result
-            if process.returncode == 0:
-                stdout_text = stdout.decode() if stdout else ""
-
-                # Check for issues in output
-                if (
-                    "Error loading config" in stdout_text
-                    or "Control characters" in stdout_text
-                ):
-                    LOGGER.error("Config corruption detected in output")
-
-                # Check for config corruption and fix automatically
-                config_corruption_indicators = [
-                    "Error loading config",
-                    "Control characters",
-                    "not allowed in strings",
-                    "Try running rip config reset",
-                ]
-
-                if any(
-                    indicator in stdout_text
-                    for indicator in config_corruption_indicators
-                ):
-                    LOGGER.error("Config corruption detected - fixing automatically")
-                    try:
-                        await self._reset_streamrip_config()
-                        return False  # Retry after fix
-                    except Exception:
-                        return False
-
-                # Check for download activity
-                download_indicators = [
-                    "Downloaded",
-                    "Downloading",
-                    "Converting",
-                    "Saved to",
-                ]
-                has_download_activity = any(
-                    indicator in stdout_text for indicator in download_indicators
-                )
-
-                if not has_download_activity and stdout_text:
-                    LOGGER.warning(
-                        "No download activity detected - check credentials/availability"
+                    LOGGER.info(
+                        f"Executing streamrip: {' '.join(streamrip_cmd[:3])} [options] {streamrip_cmd[-2]} [url]"
                     )
 
-                return True
+                    # Check if config file exists before execution
+                    config_path = self._get_streamrip_config_path()
+                    config_exists = Path(config_path).exists()
+                    if not config_exists:
+                        LOGGER.error(f"Config file not found at {config_path}")
+                        return False
 
-            # Handle errors
-            error_output = stderr.decode() if stderr else "Unknown error"
-            LOGGER.error(
-                f"Streamrip failed (code {process.returncode}): {error_output}"
-            )
+                    # Check if download directory exists
+                    download_dir_exists = self._download_path.exists()
+                    if not download_dir_exists:
+                        self._download_path.mkdir(parents=True, exist_ok=True)
 
-            # Check if this might be a credential issue
-            # Check for specific error patterns
-            if "No such file or directory" in error_output:
-                LOGGER.error("Streamrip CLI not found")
-            elif (
-                "Invalid URL" in error_output or "URL not supported" in error_output
-            ):
-                LOGGER.error("URL not supported by streamrip")
-            elif "Authentication" in error_output or "login" in error_output.lower():
-                LOGGER.error("Authentication failed - check credentials")
-            elif any(
-                x in error_output.lower()
-                for x in ["enter your arl", "authenticationerror"]
-            ):
-                LOGGER.error("Deezer authentication failed - check ARL")
-            elif any(
-                x in error_output.lower()
-                for x in ["enter your qobuz email", "enter your qobuz password"]
-            ):
-                LOGGER.error("Qobuz credentials missing - check email/password")
-            elif (
-                "event loop is closed" in error_output.lower()
-                or "runtimeerror" in error_output.lower()
-            ):
-                LOGGER.error("Streamrip internal error - retrying")
-                return await self._retry_download_with_isolation()
-            elif "qobuz" in error_output.lower() and (
-                "error" in error_output.lower() or "failed" in error_output.lower()
-            ):
-                LOGGER.error("Qobuz error - check credentials/subscription")
-            elif "tidal" in error_output.lower() and (
-                "error" in error_output.lower() or "failed" in error_output.lower()
-            ):
-                LOGGER.error("Tidal error - check credentials/subscription")
-            elif "deezer" in error_output.lower() and (
-                "error" in error_output.lower() or "failed" in error_output.lower()
-            ):
-                LOGGER.error("Deezer error - check ARL token")
-            elif "soundcloud" in error_output.lower():
-                LOGGER.error("SoundCloud error - check client ID/permissions")
-            elif (
-                "last.fm" in error_output.lower() or "lastfm" in error_output.lower()
-            ):
-                LOGGER.error("Last.fm error - check playlist access")
-            elif "spotify" in error_output.lower():
-                LOGGER.error("Spotify error - check playlist access")
-            elif (
-                "apple music" in error_output.lower()
-                or "music.apple.com" in error_output.lower()
-            ):
-                LOGGER.error("Apple Music error - check playlist access")
-            elif (
-                "timeout" in error_output.lower()
-                or "timed out" in error_output.lower()
-            ):
-                LOGGER.error("Download timed out - check network/size")
-            elif "does not exist" in error_output.lower() and (
-                "key" in error_output.lower() or "section" in error_output.lower()
-            ):
-                LOGGER.error("Config missing sections - regenerating")
-                with contextlib.suppress(Exception):
-                    await self._create_safe_config_after_reset()
-            elif (
-                "typeerror" in error_output.lower()
-                and "string formatting" in error_output.lower()
-            ):
-                LOGGER.error("Config format error - regenerating")
-                with contextlib.suppress(Exception):
-                    await self._create_safe_config_after_reset()
-            elif (
-                "ffmpeg" in error_output.lower()
-                or "could not find ffmpeg" in error_output.lower()
-            ):
-                LOGGER.error("FFMPEG not found - check installation")
-            elif (
-                "conversion" in error_output.lower()
-                and "failed" in error_output.lower()
-            ):
-                LOGGER.error("Audio conversion failed - check FFMPEG")
-            elif (
-                "conversionconfig" in error_output.lower()
-                and "unexpected keyword argument" in error_output.lower()
-            ):
-                LOGGER.error("Config compatibility issue - fixing")
-                await self._create_safe_config_after_reset()
-            elif "error loading config" in error_output.lower():
-                LOGGER.error("Config loading error - regenerating")
-            elif (
-                "control characters" in error_output.lower()
-                and "not allowed in strings" in error_output.lower()
-            ):
-                LOGGER.error("Config corruption detected - resetting")
-                with contextlib.suppress(Exception):
-                    await self._reset_streamrip_config()
+                    import time
 
-            return False
+                    start_time = time.time()
+
+                    # Run streamrip in a completely isolated subprocess
+                    result = subprocess.run(
+                        streamrip_cmd,
+                        cwd=working_dir,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,  # 5 minute timeout
+                        input="\n",
+                        check=False,  # Send newline for any prompts
+                    )
+
+                    end_time = time.time()
+                    end_time - start_time
+
+                    # Process the result
+                    stdout_text = result.stdout if result.stdout else ""
+                    stderr_text = result.stderr if result.stderr else ""
+
+                    if result.returncode == 0:
+                        # Check for download activity in stdout
+                        # Updated indicators for streamrip 2.1.0 which uses different output format
+                        download_indicators = [
+                            "Downloaded",
+                            "Downloading",
+                            "Converting",
+                            "Saved to",
+                            "Track downloaded",  # Legacy indicators
+                            "Tagging with",
+                            "Generated conversion command",
+                            "Source removed",
+                            "Moved:",  # Streamrip 2.1.0 indicators
+                            "api_request: endpoint=track/get",
+                            "Logged in to",
+                            "Login resp:",  # Authentication success indicators
+                            "ffmpeg",
+                            "Generated conversion command",  # Processing indicators
+                        ]
+
+                        # Find which indicators were detected
+                        found_indicators = [
+                            indicator
+                            for indicator in download_indicators
+                            if indicator in stdout_text
+                        ]
+
+                        has_download_activity = len(found_indicators) > 0
+
+                        if has_download_activity:
+                            return True
+                        LOGGER.warning(
+                            "No download activity detected - check credentials/availability"
+                        )
+                        return False
+                    LOGGER.error(f"Streamrip failed with code: {result.returncode}")
+
+                    # Handle specific error patterns
+                    self._handle_streamrip_errors(stderr_text)
+                    self._handle_streamrip_errors(
+                        stdout_text
+                    )  # Also check stdout for errors
+                    return False
+
+                except subprocess.TimeoutExpired:
+                    LOGGER.error("Streamrip process timed out after 5 minutes")
+                    return False
+                except Exception as subprocess_error:
+                    LOGGER.error(f"Subprocess execution failed: {subprocess_error}")
+                    return False
+
+            except Exception as e:
+                LOGGER.error(f"Failed to execute streamrip command: {e}")
+                return False
 
         except Exception as e:
             LOGGER.error(f"CLI download failed: {e}")
@@ -704,9 +654,6 @@ class StreamripDownloadHelper:
                 )
                 self._cached_search_paths = search_paths
 
-                LOGGER.info(
-                    f"Searching {len(search_paths)} paths for downloaded files"
-                )
             else:
                 search_paths = self._cached_search_paths
 
@@ -735,8 +682,6 @@ class StreamripDownloadHelper:
             # Use set for deduplication (more efficient than list conversion)
             unique_files = list({f.resolve(): f for f in downloaded_files}.values())
             unique_files.sort(key=lambda x: x.stat().st_mtime)
-
-            LOGGER.info(f"Found {len(unique_files)} downloaded audio files")
 
             # Move files if needed
             if unique_files:
@@ -802,31 +747,147 @@ class StreamripDownloadHelper:
             return files  # Return original files if moving fails
 
     async def _ensure_streamrip_config(self):
-        """Ensure streamrip config exists and is properly configured"""
+        """Ensure streamrip config exists using centralized config system"""
         try:
-            config_dir = Path.home() / ".config" / "streamrip"
-            config_file = config_dir / "config.toml"
+            from bot.helper.streamrip_utils.streamrip_config import (
+                ensure_streamrip_initialized,
+            )
 
-            if not config_file.exists():
-                LOGGER.info("Streamrip config not found, creating default config...")
+            # Use the centralized config system
+            success = await ensure_streamrip_initialized()
+            if not success:
+                LOGGER.error("Failed to initialize streamrip config")
+                return False
 
-                # Create config directory
-                config_dir.mkdir(parents=True, exist_ok=True)
-
-                # Create basic config with Deezer ARL from bot settings
-                config_content = self._create_default_config()
-
-                # Write config file asynchronously
-                import aiofiles
-
-                async with aiofiles.open(config_file, "w") as f:
-                    await f.write(config_content)
-
-                LOGGER.info(f"Created streamrip config at: {config_file}")
+            return True
 
         except Exception as e:
             LOGGER.error(f"Failed to ensure streamrip config: {e}")
-            # Don't fail the download if config creation fails
+            return False
+
+    def _build_streamrip_command(self, url: str) -> list[str]:
+        """Build comprehensive streamrip CLI command with all supported options"""
+        cmd = ["rip"]
+
+        # Global options (before command)
+        cmd.extend(["--config-path", str(self._get_streamrip_config_path())])
+        cmd.extend(["--folder", str(self._download_path)])
+
+        # Quality option
+        quality = getattr(self, "_quality", 3)
+        cmd.extend(["--quality", str(quality)])
+
+        # Codec option if specified
+        if hasattr(self, "_codec") and self._codec:
+            mapped_codec = self._map_codec_for_streamrip(self._codec)
+            if mapped_codec:
+                cmd.extend(["--codec", mapped_codec])
+
+        # Database option
+        if not self._is_database_enabled():
+            cmd.extend(["--no-db"])
+
+        # SSL verification (if disabled in config)
+        try:
+            from bot.core.config_manager import Config
+
+            if not getattr(Config, "STREAMRIP_VERIFY_SSL", True):
+                cmd.append("--no-ssl-verify")
+        except Exception:
+            pass
+
+        # Verbose mode for better debugging
+        cmd.append("--verbose")
+
+        # Progress bars disabled for bot usage
+        cmd.append("--no-progress")
+
+        # Command and URL
+        cmd.extend(["url", url])
+
+        return cmd
+
+    def _handle_streamrip_errors(self, error_output: str) -> None:
+        """Handle specific streamrip error patterns with concise logging"""
+        if not error_output:
+            return
+
+        error_lower = error_output.lower()
+
+        # Authentication errors (warnings, not errors)
+        if "authentication" in error_lower or "login" in error_lower:
+            LOGGER.warning(
+                "Authentication failed - check credentials in bot settings"
+            )
+        elif "enter your arl" in error_lower or "authenticationerror" in error_lower:
+            LOGGER.warning(
+                "Deezer authentication failed - check ARL in bot settings"
+            )
+        elif "qobuz" in error_lower and (
+            "error" in error_lower or "failed" in error_lower
+        ):
+            LOGGER.warning(
+                "Qobuz authentication failed - check credentials in bot settings"
+            )
+        elif "tidal" in error_lower and (
+            "error" in error_lower or "failed" in error_lower
+        ):
+            LOGGER.warning(
+                "Tidal authentication failed - check tokens in bot settings"
+            )
+        elif "soundcloud" in error_lower:
+            LOGGER.warning(
+                "SoundCloud authentication failed - check client ID in bot settings"
+            )
+
+        # Config errors
+        elif "config" in error_lower and (
+            "error" in error_lower or "loading" in error_lower
+        ):
+            LOGGER.error("Config error - check centralized config system")
+        elif "control characters" in error_lower:
+            LOGGER.error("Config corruption - check centralized config system")
+
+        # Network/availability errors
+        elif "timeout" in error_lower or "timed out" in error_lower:
+            LOGGER.error("Download timed out - check network/file size")
+        elif "not found" in error_lower or "404" in error_output:
+            LOGGER.error("Content not found - check URL availability")
+        elif "unavailable" in error_lower:
+            LOGGER.error("Content unavailable - may be region-locked or removed")
+
+        # System errors
+        elif "ffmpeg" in error_lower:
+            LOGGER.error("FFMPEG error - check installation")
+        elif "permission" in error_lower or "denied" in error_lower:
+            LOGGER.error("Permission error - check file/directory permissions")
+        elif "space" in error_lower or "disk" in error_lower:
+            LOGGER.error("Disk space error - check available storage")
+
+        else:
+            LOGGER.error(f"Unknown streamrip error: {error_output[:100]}...")
+
+    def _get_streamrip_config_path(self) -> str:
+        """Get the path to the streamrip config file"""
+        try:
+            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+            return streamrip_config.get_config_path()
+        except Exception:
+            # Fallback to default location
+            from pathlib import Path
+
+            return str(Path.home() / ".config" / "streamrip" / "config.toml")
+
+    def _is_database_enabled(self) -> bool:
+        """Check if streamrip database is enabled"""
+        try:
+            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+
+            return streamrip_config.is_database_enabled()
+        except Exception:
+            # Default to enabled if we can't check
+            return True
 
     def _get_ffmpeg_path(self) -> str:
         """Get the path to FFMPEG executable with caching"""
@@ -918,8 +979,8 @@ exec "{ffmpeg_path}" "${{args[@]}}"
             return wrapper_script
 
         except Exception as e:
-            LOGGER.error(f"⚠️ Failed to create FFmpeg wrapper: {e}")
-            LOGGER.info(f"📋 Falling back to direct ffmpeg path: {ffmpeg_path}")
+            LOGGER.error(f"Failed to create FFmpeg wrapper: {e}")
+            LOGGER.info(f"Falling back to direct ffmpeg path: {ffmpeg_path}")
             return ffmpeg_path
 
     async def _check_ffmpeg_availability(self):
@@ -929,236 +990,27 @@ exec "{ffmpeg_path}" "${{args[@]}}"
             import os
 
             if not os.path.exists(ffmpeg_path):
-                LOGGER.warning(f"⚠️ FFMPEG not found at expected path: {ffmpeg_path}")
+                LOGGER.warning(f"FFMPEG not found at expected path: {ffmpeg_path}")
                 LOGGER.warning("Audio conversion may fail if FFMPEG is required")
         except Exception as e:
             LOGGER.error(f"Error checking FFMPEG availability: {e}")
 
-    async def _create_compatible_config(self):
-        """Deprecated: Use safe config generation instead"""
-        await self._create_safe_config_after_reset()
-        return True
-
     async def _reset_streamrip_config(self):
-        """Reset streamrip config to fix corruption issues"""
+        """Reset streamrip config using centralized system"""
         try:
-            import asyncio
-            from pathlib import Path
+            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
 
-            config_dir = Path.home() / ".config" / "streamrip"
-            config_file = config_dir / "config.toml"
-
-            # Method 1: Try using 'rip config reset' command
-            try:
-                reset_process = await asyncio.create_subprocess_exec(
-                    "rip",
-                    "config",
-                    "reset",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.PIPE,
-                )
-
-                # Send 'y' to confirm reset
-                stdout, stderr = await asyncio.wait_for(
-                    reset_process.communicate(input=b"y\n"), timeout=30
-                )
-
-                if reset_process.returncode == 0:
-                    # Clear our cached config to force regeneration
-                    self._cached_config = None
-                    # Use safe config generation after reset
-                    await self._create_safe_config_after_reset()
-                    return True
-                LOGGER.warning(
-                    f"'rip config reset' failed with code {reset_process.returncode}"
-                )
-                error_text = stderr.decode() if stderr else "Unknown error"
-                LOGGER.warning(f"Reset error: {error_text}")
-
-            except Exception as reset_cmd_error:
-                LOGGER.warning(
-                    f"'rip config reset' command failed: {reset_cmd_error}"
-                )
-
-            # Method 2: Manual config file removal and regeneration
-            LOGGER.info("Attempting manual config reset...")
-
-            # Remove corrupted config file
-            if config_file.exists():
-                config_file.unlink()
-                LOGGER.info(f"Removed corrupted config file: {config_file}")
-
-            # Remove entire config directory to ensure clean slate
-            if config_dir.exists():
-                import shutil
-
-                shutil.rmtree(config_dir)
-                LOGGER.info(f"Removed config directory: {config_dir}")
-
-            # Clear cached config
-            self._cached_config = None
-
-            # Use safe config generation after reset
-            await self._create_safe_config_after_reset()
-            return True
+            # Use centralized config reset
+            success = await streamrip_config.reset_to_default_config()
+            if success:
+                LOGGER.info("Config reset via centralized system")
+                return True
+            LOGGER.error("Failed to reset config via centralized system")
+            return False
 
         except Exception as e:
             LOGGER.error(f"Failed to reset streamrip config: {e}")
             return False
-
-    async def _create_safe_config_after_reset(self):
-        """Create a minimal, safe config after reset to avoid control character issues"""
-        try:
-            from pathlib import Path
-
-            import aiofiles
-
-            from bot.core.config_manager import Config
-
-            config_dir = Path.home() / ".config" / "streamrip"
-            config_file = config_dir / "config.toml"
-
-            # Ensure directory exists
-            config_dir.mkdir(parents=True, exist_ok=True)
-
-            # Get credentials safely
-            qobuz_email = getattr(Config, "STREAMRIP_QOBUZ_EMAIL", "")
-            qobuz_password = getattr(Config, "STREAMRIP_QOBUZ_PASSWORD", "")
-            deezer_arl = getattr(Config, "STREAMRIP_DEEZER_ARL", "")
-            downloads_folder = getattr(
-                Config, "DOWNLOAD_DIR", str(Path.home() / "StreamripDownloads")
-            )
-
-            # Create minimal, safe config without complex formatting
-            safe_config = f"""[downloads]
-folder = "{downloads_folder}"
-source_subdirectories = false
-disc_subdirectories = true
-concurrency = true
-max_connections = 6
-requests_per_minute = 60
-verify_ssl = true
-
-[qobuz]
-quality = 3
-download_booklets = true
-use_auth_token = false
-email_or_userid = "{qobuz_email}"
-password_or_token = "{qobuz_password}"
-app_id = ""
-secrets = []
-
-[tidal]
-quality = 3
-download_videos = true
-user_id = ""
-country_code = ""
-access_token = ""
-refresh_token = ""
-token_expiry = "0"
-
-[deezer]
-quality = 2
-arl = "{deezer_arl}"
-use_deezloader = true
-deezloader_warnings = true
-
-[soundcloud]
-quality = 0
-client_id = ""
-app_version = ""
-
-[youtube]
-quality = 0
-download_videos = false
-video_downloads_folder = "{downloads_folder}/youtube"
-
-[database]
-downloads_enabled = true
-downloads_path = "./downloads.db"
-failed_downloads_enabled = true
-failed_downloads_path = "./failed_downloads.db"
-
-[conversion]
-enabled = false
-codec = "ALAC"
-sampling_rate = 48000
-bit_depth = 24
-lossy_bitrate = 320
-
-[qobuz_filters]
-extras = false
-repeats = false
-non_albums = false
-features = false
-non_studio_albums = false
-non_remaster = false
-
-[artwork]
-embed = true
-embed_size = "large"
-embed_max_width = -1
-save_artwork = true
-saved_max_width = -1
-
-[metadata]
-set_playlist_to_album = true
-renumber_playlist_tracks = true
-exclude = []
-
-[filepaths]
-add_singles_to_folder = false
-folder_format = "{{albumartist}} - {{title}} ({{year}}) [{{container}}] [{{bit_depth}}B-{{sampling_rate}}kHz]"
-track_format = "{{tracknumber:02}}. {{artist}} - {{title}}{{explicit}}"
-restrict_characters = false
-truncate_to = 120
-
-[lastfm]
-source = "qobuz"
-fallback_source = ""
-
-[cli]
-text_output = true
-progress_bars = false
-max_search_results = 100
-
-[misc]
-version = "2.0.6"
-check_for_updates = true
-"""
-
-            # Write the safe config
-            async with aiofiles.open(config_file, "w", encoding="utf-8") as f:
-                await f.write(safe_config)
-
-        except Exception as e:
-            LOGGER.error(f"Failed to create safe config: {e}")
-            raise
-
-    def _create_default_config(self) -> str:
-        """Deprecated: Use _create_safe_config_after_reset instead"""
-        # This method is kept for compatibility but redirects to safe config
-        LOGGER.warning(
-            "_create_default_config is deprecated, using safe config generation"
-        )
-        return "# Deprecated - use safe config generation"
-
-    async def _regenerate_streamrip_config(self):
-        """Deprecated: Use _create_safe_config_after_reset instead"""
-        LOGGER.warning(
-            "_regenerate_streamrip_config is deprecated, using safe config generation"
-        )
-        await self._create_safe_config_after_reset()
-
-    async def _validate_config_credentials(self, config_file: Path):
-        """Deprecated: Validation not needed with safe config generation"""
-
-    async def _update_deezer_arl(self, new_arl: str):
-        """Deprecated: Use safe config regeneration instead"""
-        LOGGER.info("Regenerating config with updated Deezer ARL")
-        await self._create_safe_config_after_reset()
-        return True
 
     async def _validate_authentication_for_url(self, url: str) -> bool:
         """Validate that we have proper authentication for the given URL"""
@@ -1172,12 +1024,8 @@ check_for_updates = true
                 # Deezer URL - check for ARL
                 deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
                 if not deezer_arl.strip():
-                    LOGGER.error(
-                        "❌ Deezer URL detected but no Deezer ARL configured!"
-                    )
-                    LOGGER.error("Please configure your Deezer ARL via:")
-                    LOGGER.error(
-                        "  /botsettings → Streamrip → Credential settings → Deezer arl"
+                    LOGGER.warning(
+                        "Deezer URL detected but no Deezer ARL configured"
                     )
                     return False
                 return True
@@ -1187,23 +1035,15 @@ check_for_updates = true
                 qobuz_email = Config.STREAMRIP_QOBUZ_EMAIL or ""
                 qobuz_password = Config.STREAMRIP_QOBUZ_PASSWORD or ""
                 if not qobuz_email.strip() or not qobuz_password.strip():
-                    LOGGER.error(
-                        "❌ Qobuz URL detected but no Qobuz credentials configured!"
-                    )
-                    LOGGER.error("Please configure your Qobuz credentials via:")
-                    LOGGER.error(
-                        "  /botsettings → Streamrip → Credential settings → Qobuz"
+                    LOGGER.warning(
+                        "Qobuz URL detected but no Qobuz credentials configured"
                     )
                     return False
 
                 # Additional Qobuz validation
                 if "@temp-mail.me" in qobuz_email.lower():
                     LOGGER.warning(
-                        "⚠️ Qobuz email appears to be a temporary email address"
-                    )
-                    LOGGER.warning("Qobuz may block temporary email providers")
-                    LOGGER.warning(
-                        "Consider using a permanent email address for better reliability"
+                        "Qobuz email appears to be a temporary email address - may be blocked"
                     )
 
                 return True
@@ -1221,18 +1061,8 @@ check_for_updates = true
                 has_token = bool(tidal_access_token.strip())
 
                 if not has_credentials and not has_token:
-                    LOGGER.error(
-                        "❌ Tidal URL detected but no Tidal authentication configured!"
-                    )
-                    LOGGER.error("Please configure your Tidal credentials via:")
-                    LOGGER.error(
-                        "  /botsettings → Streamrip → Credential settings → Tidal"
-                    )
-                    LOGGER.error(
-                        "💡 Note: Tidal requires interactive authentication to generate tokens"
-                    )
-                    LOGGER.error(
-                        "💡 You may need to run 'rip config --tidal' manually to authenticate"
+                    LOGGER.warning(
+                        "Tidal URL detected but no Tidal authentication configured"
                     )
                     return False
 
@@ -1242,11 +1072,7 @@ check_for_updates = true
                     # Additional Tidal validation (like Qobuz)
                     if "@temp-mail.me" in tidal_email.lower():
                         LOGGER.warning(
-                            "⚠️ Tidal email appears to be a temporary email address"
-                        )
-                        LOGGER.warning("Tidal may block temporary email providers")
-                        LOGGER.warning(
-                            "Consider using a permanent email address for better reliability"
+                            "Tidal email appears to be a temporary email address - may be blocked"
                         )
 
                     return True
@@ -1256,16 +1082,7 @@ check_for_updates = true
                 soundcloud_client_id = Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID or ""
                 if not soundcloud_client_id.strip():
                     LOGGER.warning(
-                        "⚠️ SoundCloud URL detected but no client ID configured"
-                    )
-                    LOGGER.warning(
-                        "SoundCloud may work without client ID for some tracks"
-                    )
-                    LOGGER.info(
-                        "💡 For better reliability, configure SoundCloud client ID via:"
-                    )
-                    LOGGER.info(
-                        "  /botsettings → Streamrip → Credential settings → SoundCloud"
+                        "SoundCloud URL detected but no client ID configured - may work for some tracks"
                     )
                     return True  # Allow SoundCloud without client ID (like Deezer allows missing ARL)
                 return True
@@ -1285,13 +1102,9 @@ check_for_updates = true
                 )
 
                 if not (has_deezer or has_qobuz or has_tidal):
-                    LOGGER.error(
-                        "❌ Last.fm playlist requires at least one streaming service configured!"
+                    LOGGER.warning(
+                        "Last.fm playlist requires at least one streaming service configured"
                     )
-                    LOGGER.error(
-                        "Please configure credentials for Deezer, Qobuz, or Tidal via:"
-                    )
-                    LOGGER.error("  /botsettings → Streamrip → Credential settings")
                     return False
 
                 return True
@@ -1311,13 +1124,9 @@ check_for_updates = true
                 )
 
                 if not (has_deezer or has_qobuz or has_tidal):
-                    LOGGER.error(
-                        "❌ Spotify playlist requires streaming service credentials for Last.fm conversion!"
+                    LOGGER.warning(
+                        "Spotify playlist requires streaming service credentials for Last.fm conversion"
                     )
-                    LOGGER.error(
-                        "Please configure credentials for Deezer, Qobuz, or Tidal via:"
-                    )
-                    LOGGER.error("  /botsettings → Streamrip → Credential settings")
                     return False
 
                 return True
@@ -1337,13 +1146,9 @@ check_for_updates = true
                 )
 
                 if not (has_deezer or has_qobuz or has_tidal):
-                    LOGGER.error(
-                        "❌ Apple Music playlist requires streaming service credentials for Last.fm conversion!"
+                    LOGGER.warning(
+                        "Apple Music playlist requires streaming service credentials for Last.fm conversion"
                     )
-                    LOGGER.error(
-                        "Please configure credentials for Deezer, Qobuz, or Tidal via:"
-                    )
-                    LOGGER.error("  /botsettings → Streamrip → Credential settings")
                     return False
 
                 return True
@@ -1423,170 +1228,6 @@ check_for_updates = true
         except Exception as e:
             LOGGER.warning(f"Error converting URL: {e}")
             return url
-
-    async def _retry_download_with_isolation(self) -> bool:
-        """Retry download with enhanced process isolation for asyncio event loop errors"""
-        try:
-            # Add a small delay to let any hanging processes clean up
-            await asyncio.sleep(2)
-
-            # Force garbage collection to clean up any lingering objects
-            import gc
-
-            gc.collect()
-
-            # Get the original URL for retry
-            download_url = getattr(self, "_download_url", self.listener.url)
-            converted_url = await self._convert_url_for_streamrip(download_url)
-
-            # Get quality and codec from the current instance
-            quality = getattr(self, "_quality", 3)  # Default to quality 3
-            codec = getattr(self, "_codec", "flac")  # Default to flac
-
-            # Map codec to streamrip-compatible format
-            mapped_codec = self._map_codec_for_streamrip(codec)
-
-            # Build codec command part
-            codec_cmd_part = ""
-            if mapped_codec is not None:
-                codec_cmd_part = f'cmd.extend(["--codec", "{mapped_codec}"])'
-            else:
-                codec_cmd_part = "# No codec specified - download in native format"
-
-            # Build command with additional isolation flags
-            cmd = [
-                "python3",
-                "-c",
-                f'''
-import asyncio
-import sys
-import os
-import subprocess
-
-# Create a completely isolated event loop
-try:
-    # Close any existing event loop
-    try:
-        loop = asyncio.get_event_loop()
-        if not loop.is_closed():
-            loop.close()
-    except:
-        pass
-
-    # Create new isolated event loop
-    asyncio.set_event_loop(asyncio.new_event_loop())
-
-    # Run streamrip in completely isolated subprocess
-    cmd = ["rip", "--quality", "{quality}"]
-
-    # Add codec if specified
-    {codec_cmd_part}
-
-    # Add --no-db flag only if database is disabled in bot settings
-    from bot.helper.streamrip_utils.streamrip_config import streamrip_config
-    if not streamrip_config.is_database_enabled():
-        cmd.append("--no-db")
-
-    cmd.extend(["--verbose", "url", "{converted_url}"])
-
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-
-    sys.exit(result.returncode)
-
-except Exception as e:
-    print(f"Isolated retry failed: {{e}}", file=sys.stderr)
-    sys.exit(1)
-''',
-            ]
-
-            # Create completely isolated subprocess
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(Path.home()),
-                # Maximum isolation
-                preexec_fn=None if os.name == "nt" else os.setsid,
-            )
-
-            # Wait for completion with timeout
-            try:
-                await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=360,  # 6 minute timeout for retry
-                )
-
-                return process.returncode == 0
-
-            except TimeoutError:
-                try:
-                    process.kill()
-                    await process.wait()
-                except:
-                    pass
-                return False
-
-        except Exception as e:
-            LOGGER.error(f"Retry exception: {e}")
-            return False
-
-    async def _reset_streamrip_config_if_needed(self):
-        """Reset streamrip config if it's invalid"""
-        try:
-            # First, try to create a proper config using streamrip's built-in method
-            config_dir = Path.home() / ".config" / "streamrip"
-            config_file = config_dir / "config.toml"
-
-            # If config doesn't exist or is invalid, create a new one
-            if not config_file.exists():
-                # Use streamrip's config creation (v2.1.0 syntax)
-                create_process = await asyncio.create_subprocess_exec(
-                    "rip",
-                    "config",
-                    "open",  # Remove --open, use 'open' subcommand
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.PIPE,
-                )
-
-                # Get Deezer ARL from bot config
-                deezer_arl = ""
-                try:
-                    from bot.core.config_manager import Config
-
-                    deezer_arl = Config.STREAMRIP_DEEZER_ARL or ""
-                except Exception:
-                    pass
-
-                # Provide ARL input
-                create_input = deezer_arl.encode() + b"\n" if deezer_arl else b"\n"
-
-                try:
-                    await asyncio.wait_for(
-                        create_process.communicate(input=create_input), timeout=15
-                    )
-
-                    if create_process.returncode != 0:
-                        # Fallback to safe config creation
-                        await self._create_safe_config_after_reset()
-
-                except TimeoutError:
-                    create_process.kill()
-                    await create_process.wait()
-                    await self._create_safe_config_after_reset()
-
-        except Exception as e:
-            LOGGER.error(f"Error checking/creating streamrip config: {e}")
-            # Fallback to safe config creation
-            await self._create_safe_config_after_reset()
-
-    async def _create_manual_config(self):
-        """Deprecated: Use safe config generation instead"""
-        await self._create_safe_config_after_reset()
 
     def cancel_download(self):
         """Cancel the download"""
@@ -1686,12 +1327,10 @@ async def add_streamrip_download(
 
     # Handle queuing
     if add_to_queue:
-        LOGGER.info(f"Added streamrip download to queue: {url}")
         await send_status_message(listener.message, "⏳ Added to download queue!")
         await event.wait()
         if listener.is_cancelled:
             return
-        LOGGER.info(f"Start from Queued/Download: {listener.name}")
 
     # Update task dict for active download
     async with task_dict_lock:
@@ -1707,7 +1346,6 @@ async def add_streamrip_download(
 
         # If download was successful, trigger the upload process
         if download_success:
-            LOGGER.info("Streamrip download completed, triggering upload process...")
             # Initialize media tools settings before upload (only for specialized listeners)
             if hasattr(listener, "initialize_media_tools"):
                 await listener.initialize_media_tools()

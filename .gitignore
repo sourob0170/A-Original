@@ -19,6 +19,5 @@ cookies/*
 downloads/*
 *.session
 __pycache__/
-venv/
 tdlib_user/
 tdlib_bot/

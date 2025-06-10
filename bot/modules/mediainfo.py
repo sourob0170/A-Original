@@ -865,20 +865,46 @@ async def gen_mediainfo(
 
         # Handle direct file path (from telegram_uploader or other internal calls)
         if media_path:
-            if await aiopath.exists(media_path):
-                # If direct file path is provided, use it directly
-                des_path = media_path
-                file_size = await aiopath.getsize(media_path)
-            else:
-                LOGGER.error(
-                    f"MediaInfo: Provided media_path does not exist: {media_path}"
-                )
-                # Don't fall through - return error immediately for missing files
+            # Validate media_path is a string
+            if not isinstance(media_path, str):
+                error_msg = f"MediaInfo: Invalid media_path type: {type(media_path)}, expected string"
+                LOGGER.error(error_msg)
+                if not silent:
+                    await send_message(message, error_msg)
+                return None
+
+            # Check if file exists
+            if not await aiopath.exists(media_path):
                 error_msg = f"MediaInfo: File not found: {media_path}"
                 LOGGER.error(error_msg)
                 if not silent:
                     await send_message(message, error_msg)
                 return None
+
+            # File exists, set des_path and get file size
+            des_path = media_path
+            try:
+                file_size = await aiopath.getsize(media_path)
+                if file_size == 0:
+                    error_msg = (
+                        f"MediaInfo: File exists but has zero size: {media_path}"
+                    )
+                    LOGGER.error(error_msg)
+                    if not silent:
+                        await send_message(message, error_msg)
+                    return None
+            except Exception as e:
+                error_msg = (
+                    f"MediaInfo: Error accessing file: {media_path}, Error: {e}"
+                )
+                LOGGER.error(error_msg)
+                if not silent:
+                    await send_message(message, error_msg)
+                return None
+
+            LOGGER.info(
+                f"MediaInfo: Processing file: {media_path} (size: {file_size} bytes)"
+            )
         elif link or media:
             # Only create the Mediainfo directory if we need to download files
             # Ensure the Mediainfo directory exists for downloads
@@ -905,10 +931,20 @@ async def gen_mediainfo(
                             # Fall back to a different directory
                             temp_download_path = "downloads/Mediainfo/"
                             if not await aiopath.isdir(temp_download_path):
-                                await mkdir(temp_download_path)
-                                LOGGER.info(
-                                    f"Created fallback directory: {temp_download_path}"
-                                )
+                                try:
+                                    await mkdir(temp_download_path)
+                                    LOGGER.info(
+                                        f"Created fallback directory: {temp_download_path}"
+                                    )
+                                except Exception as e3:
+                                    LOGGER.error(
+                                        f"Error creating fallback directory {temp_download_path}: {e3}"
+                                    )
+                                    # Use current working directory as last resort
+                                    temp_download_path = "./"
+                                    LOGGER.warning(
+                                        f"Using current directory as fallback: {temp_download_path}"
+                                    )
 
             if link:
                 if not is_url(link):
@@ -935,7 +971,23 @@ async def gen_mediainfo(
                 filename = (
                     filename.replace(" ", "_").replace("'", "").replace('"', "")
                 )
+
+                # Ensure we have a valid temp_download_path
+                if not temp_download_path:
+                    temp_download_path = "Mediainfo/"
+                    LOGGER.warning(
+                        "temp_download_path was empty, using default: Mediainfo/"
+                    )
+
                 des_path = ospath.join(temp_download_path, filename)
+
+                # Validate that des_path was set correctly
+                if not des_path or not isinstance(des_path, str):
+                    error_msg = f"MediaInfo: Failed to create valid destination path from link. temp_download_path: {temp_download_path}, filename: {filename}"
+                    LOGGER.error(error_msg)
+                    if not silent:
+                        await send_message(message, error_msg)
+                    return None
 
                 # Update status message if not in silent mode
                 if not silent and temp_send:
@@ -1057,128 +1109,274 @@ async def gen_mediainfo(
                         # Run garbage collection after download to free memory
                         smart_garbage_collection(aggressive=False)
 
-        elif media:
-            # Ensure media.file_name is not None
-            if not hasattr(media, "file_name") or media.file_name is None:
-                # Generate a default filename if none exists
-                file_name = f"mediainfo_{int(time())}"
-                LOGGER.warning(
-                    f"Media has no filename, using generated name: {file_name}"
-                )
-            else:
-                file_name = media.file_name
-
-            # Clean filename of any problematic characters
-            file_name = file_name.replace(" ", "_").replace("'", "").replace('"', "")
-            des_path = ospath.join(temp_download_path, file_name)
-            file_size = getattr(media, "file_size", 0)
-
-            # Update status message if not in silent mode
-            if not silent and temp_send:
-                await edit_message(
-                    temp_send,
-                    f"Downloading a sample of {file_name} for analysis...",
-                )
-
-            if file_size <= 30 * 1024 * 1024:  # 30MB
-                # For small files, download the entire file
-                if reply and des_path:
-                    try:
-                        # Ensure we have a valid path
-                        download_path = (
-                            ospath.join(getcwd(), des_path)
-                            if isinstance(des_path, str)
-                            else des_path
-                        )
-                        await reply.download(download_path)
-                    except Exception as e:
-                        LOGGER.error(f"Error downloading file: {e}")
-                        raise Exception(f"Failed to download file: {e}")
-                else:
-                    raise Exception("Invalid reply message or destination path")
-
-                # Run garbage collection after download to free memory
-                smart_garbage_collection(aggressive=False)
-            else:
-                # For large files, download only a portion
-                downloaded_size = 0
-                max_sample_size = 10 * 1024 * 1024  # 10MB
-                min_sample_size = (
-                    1 * 1024 * 1024
-                )  # 1MB (minimum required for analysis)
+            elif media:
+                # Don't redeclare des_path - use the function-level variable
+                # Initialize tracking variable for media processing
+                media_processing_successful = False
 
                 try:
-                    async with aiopen(des_path, "wb") as f:
-                        async for chunk in TgClient.bot.stream_media(media):
-                            try:
-                                await f.write(chunk)
-                                downloaded_size += len(chunk)
-
-                                # We only need enough data for ffprobe to analyze
-                                if downloaded_size >= max_sample_size:  # 10MB
-                                    LOGGER.info(
-                                        f"Got enough data ({downloaded_size / (1024 * 1024):.1f} MB) for analysis, stopping download"
-                                    )
-                                    break
-
-                                # Periodically update status for large files if not in silent mode
-                                if (
-                                    not silent
-                                    and temp_send
-                                    and downloaded_size % (2 * 1024 * 1024) == 0
-                                ):  # Every 2MB
-                                    await edit_message(
-                                        temp_send,
-                                        f"Downloading sample of {media.file_name} for analysis... ({downloaded_size / (1024 * 1024):.1f} MB)",
-                                    )
-                            except Exception as e:
-                                LOGGER.error(f"Error during chunk download: {e}")
-                                # Continue trying to download more chunks
-                                continue
-
-                    # If we got at least some data, consider it a success
-                    if downloaded_size >= min_sample_size:
-                        LOGGER.info(
-                            f"Successfully downloaded {downloaded_size / (1024 * 1024):.1f} MB sample of {media.file_name}"
-                        )
-                    elif downloaded_size > 0:
+                    # Ensure media.file_name is not None
+                    if not hasattr(media, "file_name") or media.file_name is None:
+                        # Generate a default filename if none exists
+                        file_name = f"mediainfo_{int(time())}"
                         LOGGER.warning(
-                            f"Downloaded only {downloaded_size / (1024 * 1024):.1f} MB sample of {media.file_name}, which may not be enough for proper analysis"
+                            f"Media has no filename, using generated name: {file_name}"
                         )
                     else:
+                        file_name = media.file_name
+
+                    # Clean filename of any problematic characters more thoroughly
+                    # Remove or replace characters that can cause issues with file paths
+                    import re
+
+                    # Replace problematic characters with safe alternatives
+                    file_name = file_name.replace("[", "(").replace(
+                        "]", ")"
+                    )  # Replace brackets with parentheses
+                    file_name = file_name.replace("'", "").replace(
+                        '"', ""
+                    )  # Remove quotes
+                    file_name = re.sub(
+                        r'[<>:"|?*]', "_", file_name
+                    )  # Replace Windows-forbidden characters
+                    file_name = re.sub(
+                        r"\s+", "_", file_name
+                    )  # Replace multiple spaces with single underscore
+                    file_name = file_name.strip(
+                        "._"
+                    )  # Remove leading/trailing dots and underscores
+
+                    # Ensure filename is not empty after cleaning
+                    if not file_name or file_name == "":
+                        file_name = f"mediainfo_{int(time())}"
+                        LOGGER.warning(
+                            f"Filename became empty after cleaning, using generated name: {file_name}"
+                        )
+
+                    # Ensure we have a valid temp_download_path
+                    if not temp_download_path:
+                        temp_download_path = "Mediainfo/"
+                        LOGGER.warning(
+                            "temp_download_path was empty, using default: Mediainfo/"
+                        )
+
+                    # Create des_path with error handling
+                    try:
+                        des_path = ospath.join(temp_download_path, file_name)
+                    except Exception as path_error:
                         LOGGER.error(
-                            "Failed to download any data from Telegram media"
+                            f"MediaInfo: Error creating des_path from temp_download_path='{temp_download_path}' and file_name='{file_name}': {path_error}"
                         )
-                        raise Exception(
-                            "Failed to download any data from Telegram media"
+                        # Try with a simpler filename
+                        simple_filename = f"mediainfo_{int(time())}.mkv"
+                        try:
+                            des_path = ospath.join(
+                                temp_download_path, simple_filename
+                            )
+                        except Exception as simple_path_error:
+                            LOGGER.error(
+                                f"MediaInfo: Even simple path creation failed: {simple_path_error}"
+                            )
+                            raise Exception(
+                                f"Failed to create valid file path: {simple_path_error}"
+                            )
+
+                    file_size = getattr(media, "file_size", 0)
+
+                    # Validate that des_path was set correctly
+                    if not des_path or not isinstance(des_path, str):
+                        error_msg = f"MediaInfo: Failed to create valid destination path from media. temp_download_path: {temp_download_path}, file_name: {file_name}"
+                        LOGGER.error(error_msg)
+                        if not silent:
+                            await send_message(message, error_msg)
+                        return None
+
+                    # Mark that des_path was successfully set
+                    media_processing_successful = True
+
+                    # Update status message if not in silent mode
+                    if not silent and temp_send:
+                        await edit_message(
+                            temp_send,
+                            f"Downloading a sample of {file_name} for analysis...",
                         )
+
+                    # Check if we have a reply message to download from
+                    if not reply:
+                        error_msg = (
+                            "MediaInfo: No reply message provided for media download"
+                        )
+                        LOGGER.error(error_msg)
+                        if not silent:
+                            await send_message(message, error_msg)
+                        return None
+
+                    if file_size <= 30 * 1024 * 1024:  # 30MB
+                        # For small files, download the entire file
+                        try:
+                            # Ensure we have a valid path
+                            download_path = (
+                                ospath.join(getcwd(), des_path)
+                                if isinstance(des_path, str)
+                                else des_path
+                            )
+                            await reply.download(download_path)
+
+                            # Verify the file was downloaded successfully
+                            if not await aiopath.exists(des_path):
+                                raise Exception(
+                                    f"Download failed - file not created at: {des_path}"
+                                )
+
+                            downloaded_size = await aiopath.getsize(des_path)
+
+                        except Exception as e:
+                            LOGGER.error(f"Error downloading file: {e}")
+                            raise Exception(f"Failed to download file: {e}")
+
+                        # Run garbage collection after download to free memory
+                        smart_garbage_collection(aggressive=False)
+                    else:
+                        # For large files, download only a portion
+                        downloaded_size = 0
+                        max_sample_size = 10 * 1024 * 1024  # 10MB
+                        min_sample_size = (
+                            1 * 1024 * 1024
+                        )  # 1MB (minimum required for analysis)
+
+                        try:
+                            async with aiopen(des_path, "wb") as f:
+                                async for chunk in TgClient.bot.stream_media(media):
+                                    try:
+                                        await f.write(chunk)
+                                        downloaded_size += len(chunk)
+
+                                        # We only need enough data for ffprobe to analyze
+                                        if (
+                                            downloaded_size >= max_sample_size
+                                        ):  # 10MB
+                                            break
+
+                                        # Periodically update status for large files if not in silent mode
+                                        if (
+                                            not silent
+                                            and temp_send
+                                            and downloaded_size % (2 * 1024 * 1024)
+                                            == 0
+                                        ):  # Every 2MB
+                                            await edit_message(
+                                                temp_send,
+                                                f"Downloading sample of {media.file_name} for analysis... ({downloaded_size / (1024 * 1024):.1f} MB)",
+                                            )
+                                    except Exception as e:
+                                        LOGGER.error(
+                                            f"Error during chunk download: {e}"
+                                        )
+                                        # Continue trying to download more chunks
+                                        continue
+
+                            # Verify the file was created
+                            if not await aiopath.exists(des_path):
+                                raise Exception(
+                                    f"Download failed - file not created at: {des_path}"
+                                )
+
+                            # If we got at least some data, consider it a success
+                            if downloaded_size < min_sample_size:
+                                if downloaded_size > 0:
+                                    LOGGER.warning(
+                                        f"Downloaded only {downloaded_size / (1024 * 1024):.1f} MB sample of {media.file_name}, which may not be enough for proper analysis"
+                                    )
+                                else:
+                                    LOGGER.error(
+                                        "Failed to download any data from Telegram media"
+                                    )
+                                    raise Exception(
+                                        "Failed to download any data from Telegram media"
+                                    )
+
+                        except Exception as e:
+                            LOGGER.error(
+                                f"Error downloading from Telegram media: {e}"
+                            )
+                            if (
+                                not await aiopath.exists(des_path)
+                                or await aiopath.getsize(des_path) == 0
+                            ):
+                                raise Exception(
+                                    f"Failed to download media sample: {e}"
+                                )
+
+                        finally:
+                            # Run garbage collection after download to free memory
+                            smart_garbage_collection(aggressive=False)
 
                 except Exception as e:
-                    LOGGER.error(f"Error downloading from Telegram media: {e}")
-                    if (
-                        not await aiopath.exists(des_path)
-                        or await aiopath.getsize(des_path) == 0
-                    ):
-                        raise Exception(f"Failed to download media sample: {e}")
-                    # If we have some data, continue with what we have
-                    LOGGER.info(
-                        f"Continuing with partial download ({await aiopath.getsize(des_path) / (1024 * 1024):.1f} MB)"
-                    )
+                    LOGGER.error(f"MediaInfo: Error processing media object: {e}")
 
-                finally:
-                    # Run garbage collection after download to free memory
-                    smart_garbage_collection(aggressive=False)
+                    # Check if des_path was set before the error occurred
+                    if des_path and media_processing_successful:
+                        # Check if the file was partially downloaded
+                        try:
+                            if await aiopath.exists(des_path):
+                                file_size_check = await aiopath.getsize(des_path)
+                                if file_size_check > 0:
+                                    # Don't return None - let the function continue with the partial file
+                                    pass  # This will allow the function to continue after the except block
+                                else:
+                                    if not silent:
+                                        error_msg = f"MediaInfo: Downloaded file has zero size: {e}"
+                                        await send_message(message, error_msg)
+                                    return None
+                            else:
+                                if not silent:
+                                    error_msg = f"MediaInfo: Failed to download media file: {e}"
+                                    await send_message(message, error_msg)
+                                return None
+                        except Exception as check_error:
+                            LOGGER.error(
+                                f"MediaInfo: Error checking downloaded file: {check_error}"
+                            )
+                            if not silent:
+                                error_msg = (
+                                    f"MediaInfo: Failed to process media file: {e}"
+                                )
+                                await send_message(message, error_msg)
+                            return None
+                    else:
+                        if not silent:
+                            error_msg = (
+                                f"MediaInfo: Failed to set up media file path: {e}"
+                            )
+                            await send_message(message, error_msg)
+                        return None
         else:
             # No media_path, link, or media provided
-            error_msg = "MediaInfo: No file path, link, or media provided"
+            error_msg = "MediaInfo: No file path, link, or media provided. Please provide one of: media_path, link, or media with reply."
             LOGGER.error(error_msg)
             if not silent:
                 await send_message(message, error_msg)
             return None
 
-        # Check if des_path was set by any of the above branches
+        # Final validation: Check if des_path was set by any of the above branches
         if not des_path:
-            error_msg = "MediaInfo: Failed to determine file path"
+            # Add detailed debugging information
+            debug_info = f"media_path={media_path}, link={link is not None}, media={media is not None}, reply={reply is not None}"
+
+            # Additional debugging for media branch
+            if media:
+                media_debug = f"media.file_name={getattr(media, 'file_name', 'None')}, media.file_size={getattr(media, 'file_size', 'None')}"
+                debug_info += f", {media_debug}"
+
+            error_msg = f"MediaInfo: Internal error - file path could not be determined despite successful validation. Debug: {debug_info}"
+            LOGGER.error(error_msg)
+            if not silent:
+                await send_message(message, error_msg)
+            return None
+
+        # Additional validation: Ensure des_path is a valid string
+        if not isinstance(des_path, str | bytes):
+            error_msg = f"MediaInfo: Internal error - invalid path type: {type(des_path)}, value: {des_path}"
             LOGGER.error(error_msg)
             if not silent:
                 await send_message(message, error_msg)
@@ -2248,7 +2446,9 @@ async def gen_mediainfo(
         stdout, stderr, return_code = await cmd_exec(cmd)
 
         if return_code != 0:
-            LOGGER.error(f"ffprobe error: {stderr}")
+            LOGGER.warning(
+                f"ffprobe failed with return code {return_code}: {stderr}"
+            )
 
             # Check if the file exists and is accessible
             if not await aiopath.exists(des_path):
@@ -2281,9 +2481,20 @@ async def gen_mediainfo(
                 raise Exception(f"File not found: {des_path}")
 
             # Check if the file has zero size
-            if await aiopath.getsize(des_path) == 0:
-                LOGGER.error(f"File exists but has zero size: {des_path}")
-                raise Exception(f"File has zero size: {des_path}")
+            try:
+                file_size_check = await aiopath.getsize(des_path)
+                if file_size_check == 0:
+                    LOGGER.error(f"File exists but has zero size: {des_path}")
+                    raise Exception(f"File has zero size: {des_path}")
+            except Exception as e:
+                LOGGER.error(f"Error checking file size: {e}")
+                raise Exception(f"File access error: {e}")
+
+            # ffprobe failed but file exists - this is likely a non-media file
+            # Try to provide basic information using file command
+            LOGGER.info(
+                f"ffprobe failed for {des_path}, attempting fallback analysis"
+            )
 
             # If it's a subtitle file and ffprobe failed, try a more basic approach
             if file_ext in subtitle_exts:
@@ -2471,6 +2682,9 @@ async def gen_mediainfo(
                     await telegraph.create_page(title="MediaInfo", content=tc)
                 )["path"]
 
+                # Log success
+                LOGGER.info("MediaInfo generated successfully")
+
                 # If in silent mode, just return the path
                 if silent:
                     return link_id
@@ -2503,6 +2717,9 @@ async def gen_mediainfo(
                                 title="MediaInfo (Simplified)", content=simplified_tc
                             )
                         )["path"]
+
+                        # Log success
+                        LOGGER.info("MediaInfo generated successfully (simplified)")
 
                         # If in silent mode, just return the path
                         if silent:
@@ -2575,6 +2792,9 @@ async def gen_mediainfo(
                                 title="Basic MediaInfo", content=basic_info
                             )
                         )["path"]
+
+                        # Log success
+                        LOGGER.info("MediaInfo generated successfully (basic)")
 
                         # If in silent mode, just return the path
                         if silent:

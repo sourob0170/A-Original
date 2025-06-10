@@ -204,10 +204,9 @@ class StreamripSearchHandler:
                             config
                         )
                         initialized_count += 1
-                        LOGGER.debug(f"✅ Initialized {platform.title()} client")
                     except Exception as e:
                         LOGGER.error(
-                            f"❌ Failed to initialize {platform.title()} client: {e}"
+                            f"Failed to initialize {platform.title()} client: {e}"
                         )
 
             # Store initial platform list for comparison later
@@ -289,7 +288,7 @@ class StreamripSearchHandler:
 
             if failed_platforms:
                 LOGGER.warning(
-                    f"❌ {len(failed_platforms)} platforms failed: {', '.join(failed_platforms)}"
+                    f"{len(failed_platforms)} platforms failed: {', '.join(failed_platforms)}"
                 )
 
             if total_results == 0:
@@ -508,7 +507,7 @@ class StreamripSearchHandler:
                         and client.session.closed
                     ):
                         LOGGER.warning(
-                            f"⚠️ {platform.title()} session is closed, recreating client"
+                            f"{platform.title()} session is closed, recreating client"
                         )
                         # Recreate client if session is closed
                         from bot.helper.streamrip_utils.streamrip_config import (
@@ -523,7 +522,7 @@ class StreamripSearchHandler:
                 except Exception as auth_error:
                     # Handle authentication failures consistently for all platforms
                     LOGGER.warning(
-                        f"⚠️ {platform.title()} authentication failed: {auth_error}"
+                        f"{platform.title()} authentication failed: {str(auth_error)[:100]}"
                     )
 
                     # Mark platform as failed but don't remove from clients during search
@@ -587,7 +586,7 @@ class StreamripSearchHandler:
                             or "Session is closed" in error_msg
                         ):
                             LOGGER.warning(
-                                f"Connection closed for {platform}, attempting to recreate client"
+                                f"Connection closed for {platform}, recreating client"
                             )
                             try:
                                 # Recreate client and retry once
@@ -638,18 +637,16 @@ class StreamripSearchHandler:
                                                 0
                                             )  # Yield to event loop
 
-                                LOGGER.info(
-                                    f"Successfully recovered {platform} connection"
-                                )
+                                LOGGER.info(f"Recovered {platform} connection")
                                 continue
 
                             except Exception as retry_error:
                                 LOGGER.error(
-                                    f"Failed to recover {platform} connection: {retry_error}"
+                                    f"Failed to recover {platform} connection: {str(retry_error)[:100]}"
                                 )
 
                         LOGGER.warning(
-                            f"Search type '{search_type}' failed on {platform}: {search_error}"
+                            f"Search '{search_type}' failed on {platform}: {str(search_error)[:100]}"
                         )
                         continue
 
@@ -659,10 +656,10 @@ class StreamripSearchHandler:
                 )
 
         except Exception as e:
-            LOGGER.error(f"Platform search error for {platform}: {e}")
+            LOGGER.error(f"Platform search error for {platform}: {str(e)[:100]}")
             if "authentication" in str(e).lower() or "login" in str(e).lower():
-                LOGGER.info(
-                    f"💡 {platform.title()} authentication may be required. Check your credentials."
+                LOGGER.warning(
+                    f"{platform.title()} authentication required - check credentials"
                 )
 
         return results
@@ -824,9 +821,7 @@ class StreamripSearchHandler:
                                 break
 
                     if not artist_found:
-                        LOGGER.warning(
-                            f"🎵 [SOUNDCLOUD] No artist field found, keeping default: {result['artist']}"
-                        )
+                        pass  # No artist found, continue with default
                 elif platform == "tidal":
                     if "artist" in item:
                         if isinstance(item["artist"], dict):
@@ -921,9 +916,7 @@ class StreamripSearchHandler:
                         album_title = item["publisher_metadata"].get("album_title")
                         if album_title:
                             result["album"] = str(album_title)
-                    elif "playlistdebug" in item and isinstance(
-                        item["playlist"], dict
-                    ):
+                    elif "playlist" in item and isinstance(item["playlist"], dict):
                         playlist_title = item["playlist"].get("title")
                         if playlist_title:
                             result["album"] = str(playlist_title)
@@ -986,7 +979,9 @@ class StreamripSearchHandler:
             return result
 
         except Exception as e:
-            LOGGER.warning(f"Failed to extract search result from {platform}: {e}")
+            LOGGER.warning(
+                f"Failed to extract search result from {platform}: {str(e)[:100]}"
+            )
             return None
 
     def _extract_cover_url(self, item: dict, platform: str, search_type: str) -> str:
@@ -1798,7 +1793,7 @@ async def _cleanup_inactive_clients():
                     and not cached_client.session.closed
                 ):
                     await cached_client.session.close()
-                    LOGGER.debug(f"Closed inactive {platform_name} client session")
+
             except Exception as e:
                 LOGGER.warning(
                     f"Error cleaning up inactive {platform_name} client: {e}"
@@ -1863,11 +1858,12 @@ async def _get_or_create_cached_client(platform_name, config):
                     # Update activity and reset circuit breaker
                     _update_client_activity(platform_name)
                     record_platform_success(platform_name)
+
                     return cached_client
             # Remove invalid or inactive cached client
+
             STREAMRIP_CLIENT_CACHE.pop(cache_key, None)
             CLIENT_LAST_ACTIVITY.pop(platform_name, None)
-
         # Create new client with timeout
         client = None
         try:
@@ -1930,9 +1926,21 @@ async def _get_or_create_cached_client(platform_name, config):
                     await client.session.close()
             return None
         except Exception as auth_error:
-            LOGGER.warning(
-                f"Authentication failed for {platform_name}: {auth_error}"
-            )
+            error_msg = str(auth_error).strip()
+            if not error_msg:
+                # Silent authentication failure - provide more context
+                if platform_name == "qobuz":
+                    LOGGER.warning(
+                        "Qobuz authentication failed: missing app_id/secrets or invalid credentials"
+                    )
+                else:
+                    LOGGER.warning(
+                        f"{platform_name.title()} authentication failed: check credentials"
+                    )
+            else:
+                LOGGER.warning(
+                    f"{platform_name.title()} authentication failed: {error_msg[:100]}"
+                )
             record_platform_failure(
                 platform_name
             )  # Record failure for circuit breaker
@@ -2030,7 +2038,7 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             platform_name = platforms_to_search[i]
             if isinstance(result, Exception):
                 LOGGER.warning(
-                    f"Failed to authenticate {platform_name} for inline search: {result}"
+                    f"Failed to authenticate {platform_name} for inline search: {str(result)[:100]}"
                 )
                 continue
             if result:
@@ -2064,7 +2072,7 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             platform_name = list(clients.keys())[i]
             if isinstance(result, Exception):
                 LOGGER.warning(
-                    f"Search failed for platform {platform_name}: {result}"
+                    f"Search failed for platform {platform_name}: {str(result)[:100]}"
                 )
                 record_platform_failure(
                     platform_name
@@ -2170,7 +2178,7 @@ async def _cleanup_inline_clients(clients):
             LOGGER.warning(f"Cleanup timeout for {platform_name} inline client")
         except Exception as cleanup_error:
             LOGGER.warning(
-                f"Failed to cleanup {platform_name} inline client: {cleanup_error}"
+                f"Failed to cleanup {platform_name} inline client: {str(cleanup_error)[:100]}"
             )
 
 
@@ -2235,7 +2243,7 @@ async def _search_platform_inline(client, platform_name, query, media_type):
                     or "Session is closed" in error_msg
                 ):
                     LOGGER.warning(
-                        f"Connection closed for {platform_name} (inline), attempting to recreate client"
+                        f"Connection closed for {platform_name} (inline), recreating client"
                     )
                     try:
                         # Recreate client and retry once for inline search
@@ -2289,7 +2297,7 @@ async def _search_platform_inline(client, platform_name, query, media_type):
                                             break
 
                                 LOGGER.info(
-                                    f"Successfully recovered {platform_name} connection (inline)"
+                                    f"Recovered {platform_name} connection (inline)"
                                 )
                                 continue
 
@@ -2611,7 +2619,7 @@ def _extract_search_result_inline(item, platform, search_type):
 
             if not artist_found:
                 LOGGER.warning(
-                    f"🎵 [INLINE-SOUNDCLOUD] No artist field found, keeping default: {result['artist']}"
+                    f"INLINE-SOUNDCLOUD: No artist field found, keeping default: {result['artist']}"
                 )
         elif "user" in item:
             # Generic user field handling for other platforms
@@ -3260,7 +3268,7 @@ async def inline_streamrip_search(_, inline_query: InlineQuery):
             return
 
     except TimeoutError:
-        LOGGER.warning(f"Search timed out after {search_timeout}s")
+        LOGGER.warning("Search timed out")
         # Send timeout message with suggestion to use regular search
         await inline_query.answer(
             results=[

@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from bot import DOWNLOAD_DIR, LOGGER
@@ -7,18 +8,46 @@ from bot.helper.ext_utils.db_handler import database
 try:
     from streamrip.config import Config as StreamripConfig
 
-    STREAMRIP_AVAILABLE = True
-except ImportError:
+    # Check if the Config class has the expected methods
+    if not hasattr(StreamripConfig, "defaults"):
+        LOGGER.error(
+            "StreamripConfig.defaults method not found - incompatible streamrip version"
+        )
+        STREAMRIP_AVAILABLE = False
+    else:
+        STREAMRIP_AVAILABLE = True
+
+except ImportError as e:
     STREAMRIP_AVAILABLE = False
-    LOGGER.warning("Streamrip not installed. Streamrip features will be disabled.")
+    LOGGER.warning(
+        f"Streamrip not installed: {e}. Streamrip features will be disabled."
+    )
 
 
 class StreamripConfigHelper:
-    """Helper for streamrip configuration management"""
+    """
+    Redesigned streamrip configuration system that follows your requirements:
+    1. Bot settings → streamrip_config.toml in bot directory
+    2. Custom config upload → direct replacement of config file
+    3. Single source of truth: the config file
+    """
 
     def __init__(self):
         self.config: StreamripConfig | None = None
-        self.config_path: Path | None = None
+        # Use bot's working directory for config file (as per your requirement)
+        self.config_path = Path.cwd() / "streamrip_config.toml"
+        # Streamrip's expected location - fix for Docker container
+        # In Docker, Path.home() might return /usr/src/app instead of /root
+        # So we explicitly use /root/.config/streamrip/config.toml
+        import os
+
+        home_dir = os.path.expanduser("~")
+        if home_dir == "/usr/src/app":
+            # We're in Docker container, use /root instead
+            home_dir = "/root"
+        self.streamrip_config_path = (
+            Path(home_dir) / ".config" / "streamrip" / "config.toml"
+        )
         self._initialized = False
         self._initialization_attempted = False
 
@@ -34,728 +63,362 @@ class StreamripConfigHelper:
         self._initialization_attempted = True
 
         if success:
-            # Enable streamrip if initialization was successful
-            from bot.core.config_manager import Config
-
             Config.STREAMRIP_ENABLED = True
-
         else:
-            # Disable streamrip if initialization failed
-            from bot.core.config_manager import Config
-
             Config.STREAMRIP_ENABLED = False
-            LOGGER.warning("❌ Streamrip disabled due to initialization failure")
+            LOGGER.warning("Streamrip disabled due to initialization failure")
 
         return success
 
     async def initialize(self) -> bool:
-        """Initialize streamrip configuration"""
+        """Initialize streamrip configuration according to new design"""
         if not STREAMRIP_AVAILABLE:
             LOGGER.error("Streamrip is not available")
             return False
 
         try:
-            # Use temporary config location
-            self.config_path = Path.home() / ".config" / "streamrip" / "config.toml"
+            # Check if we have any credentials in bot settings
+            has_credentials = self._has_any_credentials()
 
-            # Create config directory if it doesn't exist
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            # Step 1: Check if custom config exists in bot directory
+            if self.config_path.exists():
+                # If we have credentials in bot settings, always update the config
+                if has_credentials:
+                    await self._create_config_from_bot_settings()
 
-            # Try to load custom config from database first
-            custom_config = await self._load_config_from_db()
-
-            if custom_config:
-                # Save custom config to file and load it
-                from aiofiles import open as aiopen
-
-                async with aiopen(self.config_path, "w") as f:
-                    await f.write(custom_config)
-                self.config = StreamripConfig.from_file(str(self.config_path))
-                LOGGER.info("Loaded custom streamrip config from database")
+                # Load the config (either existing or updated)
+                self.config = StreamripConfig(str(self.config_path))
             else:
-                # Create default config using proper API
-                try:
-                    # Try the newer API first
-                    self.config = StreamripConfig()
-                    LOGGER.info(
-                        "Created default streamrip config using StreamripConfig()"
-                    )
-                except Exception:
-                    try:
-                        # Try alternative initialization
-                        self.config = StreamripConfig.defaults()
+                # Step 2: Create default config from bot settings
+                await self._create_config_from_bot_settings()
+                self.config = StreamripConfig(str(self.config_path))
 
-                    except Exception:
-                        # Fallback: create config file manually and load it
-                        await self._create_default_config_file()
-                        self.config = StreamripConfig.from_file(
-                            str(self.config_path)
-                        )
-
-            # Always apply bot settings to override any config values
-            await self._apply_bot_settings()
-            await self.save_config()
+            # Step 4: Always copy to streamrip's expected location
+            await self._deploy_config_to_streamrip()
 
             self._initialized = True
+
             return True
 
         except Exception as e:
             LOGGER.error(f"Failed to initialize streamrip config: {e}")
-            LOGGER.warning("Streamrip will be disabled due to configuration errors")
-            # Disable streamrip if initialization fails
             Config.STREAMRIP_ENABLED = False
             self._initialized = False
             self.config = None
             return False
 
-    async def _create_default_config_file(self):
-        """Create a default streamrip config file manually"""
-        default_config = """
-[session]
-[session.downloads]
-folder = "/tmp/downloads"
-concurrency = 4
+    def _has_any_credentials(self) -> bool:
+        """Check if bot settings have any streamrip credentials configured"""
+        # Check Qobuz credentials
+        qobuz_email = getattr(Config, "STREAMRIP_QOBUZ_EMAIL", "") or ""
+        qobuz_password = getattr(Config, "STREAMRIP_QOBUZ_PASSWORD", "") or ""
 
-[session.qobuz]
-quality = 3
-email_or_userid = ""
-password_or_token = ""
-use_auth_token = false
+        # Check Tidal credentials
+        tidal_access_token = (
+            getattr(Config, "STREAMRIP_TIDAL_ACCESS_TOKEN", "") or ""
+        )
 
-[session.tidal]
-quality = 3
-username = ""
-password = ""
-user_id = ""
-country_code = ""
-access_token = ""
-refresh_token = ""
-token_expiry = ""
+        # Check Deezer credentials
+        deezer_arl = getattr(Config, "STREAMRIP_DEEZER_ARL", "") or ""
 
-[session.deezer]
-quality = 2
-arl = ""
+        # Check SoundCloud credentials
+        soundcloud_client_id = (
+            getattr(Config, "STREAMRIP_SOUNDCLOUD_CLIENT_ID", "") or ""
+        )
 
-[session.soundcloud]
-quality = 1
+        return bool(
+            (qobuz_email.strip() and qobuz_password.strip())
+            or tidal_access_token.strip()
+            or deezer_arl.strip()
+            or soundcloud_client_id.strip()
+        )
 
-[session.youtube]
-quality = 0
+    async def _create_config_from_bot_settings(self) -> None:
+        """Create config file from bot settings"""
+        config_content = self._generate_config_from_settings()
+        await self._save_config_to_file(config_content)
 
-[session.conversion]
-enabled = false
-codec = "flac"
+    def _generate_config_from_settings(self) -> str:
+        """Generate comprehensive TOML config content from bot settings"""
+        # Get all credentials with proper defaults
+        qobuz_email = getattr(Config, "STREAMRIP_QOBUZ_EMAIL", "") or ""
+        qobuz_password = getattr(Config, "STREAMRIP_QOBUZ_PASSWORD", "") or ""
+        qobuz_app_id = getattr(Config, "STREAMRIP_QOBUZ_APP_ID", "") or ""
+        qobuz_secrets = getattr(Config, "STREAMRIP_QOBUZ_SECRETS", []) or []
 
-[session.database]
-downloads_enabled = true
-failed_downloads_enabled = true
-downloads_path = "~/.config/streamrip/streamrip_downloads.db"
-failed_downloads_path = "~/.config/streamrip/streamrip_failed.db"
+        tidal_access_token = (
+            getattr(Config, "STREAMRIP_TIDAL_ACCESS_TOKEN", "") or ""
+        )
+        tidal_refresh_token = (
+            getattr(Config, "STREAMRIP_TIDAL_REFRESH_TOKEN", "") or ""
+        )
+        tidal_user_id = getattr(Config, "STREAMRIP_TIDAL_USER_ID", "") or ""
+        tidal_country_code = (
+            getattr(Config, "STREAMRIP_TIDAL_COUNTRY_CODE", "US") or "US"
+        )
+        tidal_token_expiry = (
+            getattr(Config, "STREAMRIP_TIDAL_TOKEN_EXPIRY", "1748842786")
+            or "1748842786"
+        )
 
-[session.filepaths]
-track_format = "{artist} - {title}"
-folder_format = "{artist} - {album}"
+        deezer_arl = getattr(Config, "STREAMRIP_DEEZER_ARL", "") or ""
 
-[session.artwork]
-embed = true
-save_artwork = false
-embed_size = 1200
-saved_max_width = 1200
+        soundcloud_client_id = (
+            getattr(Config, "STREAMRIP_SOUNDCLOUD_CLIENT_ID", "") or ""
+        )
+        soundcloud_app_version = (
+            getattr(Config, "STREAMRIP_SOUNDCLOUD_APP_VERSION", "") or ""
+        )
 
-[session.metadata]
-exclude = []
-set_playlist_to_album = true
-renumber_playlist_tracks = true
+        # Format secrets as TOML array
+        secrets_str = str(qobuz_secrets).replace("'", '"') if qobuz_secrets else "[]"
 
-[session.misc]
-max_search_results = 20
+        return f"""# Streamrip Configuration
+# Generated from bot settings
+
+[downloads]
+folder = "{DOWNLOAD_DIR}"
+source_subdirectories = {str(getattr(Config, "STREAMRIP_SOURCE_SUBDIRECTORIES", False)).lower()}
+disc_subdirectories = {str(getattr(Config, "STREAMRIP_DISC_SUBDIRECTORIES", True)).lower()}
+concurrency = {str(getattr(Config, "STREAMRIP_CONCURRENCY", True)).lower()}
+max_connections = {getattr(Config, "STREAMRIP_MAX_CONNECTIONS", 6)}
+requests_per_minute = {getattr(Config, "STREAMRIP_REQUESTS_PER_MINUTE", 60)}
+verify_ssl = {str(getattr(Config, "STREAMRIP_VERIFY_SSL", True)).lower()}
+
+[qobuz]
+quality = {getattr(Config, "STREAMRIP_QOBUZ_QUALITY", 3)}
+download_booklets = {str(getattr(Config, "STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS", True)).lower()}
+use_auth_token = {str(getattr(Config, "STREAMRIP_QOBUZ_USE_AUTH_TOKEN", False)).lower()}
+email_or_userid = "{qobuz_email}"
+password_or_token = "{qobuz_password}"
+app_id = "{qobuz_app_id}"
+secrets = {secrets_str}
+
+[tidal]
+quality = {getattr(Config, "STREAMRIP_TIDAL_QUALITY", 3)}
+download_videos = {str(getattr(Config, "STREAMRIP_TIDAL_DOWNLOAD_VIDEOS", True)).lower()}
+user_id = "{tidal_user_id}"
+country_code = "{tidal_country_code}"
+access_token = "{tidal_access_token}"
+refresh_token = "{tidal_refresh_token}"
+token_expiry = "{tidal_token_expiry}"
+
+[deezer]
+quality = {getattr(Config, "STREAMRIP_DEEZER_QUALITY", 2)}
+arl = "{deezer_arl}"
+use_deezloader = {str(getattr(Config, "STREAMRIP_DEEZER_USE_DEEZLOADER", True)).lower()}
+deezloader_warnings = {str(getattr(Config, "STREAMRIP_DEEZER_DEEZLOADER_WARNINGS", True)).lower()}
+
+[soundcloud]
+quality = {getattr(Config, "STREAMRIP_SOUNDCLOUD_QUALITY", 0)}
+client_id = "{soundcloud_client_id}"
+app_version = "{soundcloud_app_version}"
+
+[youtube]
+quality = {getattr(Config, "STREAMRIP_YOUTUBE_QUALITY", 0)}
+download_videos = {str(getattr(Config, "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False)).lower()}
+video_downloads_folder = "{getattr(Config, "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER", "")}"
+
+[database]
+downloads_enabled = {str(getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True)).lower()}
+downloads_path = "{getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db")}"
+failed_downloads_enabled = {str(getattr(Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True)).lower()}
+failed_downloads_path = "{getattr(Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH", "./failed_downloads.db")}"
+
+[conversion]
+enabled = {str(getattr(Config, "STREAMRIP_CONVERSION_ENABLED", False)).lower()}
+codec = "{getattr(Config, "STREAMRIP_CONVERSION_CODEC", "ALAC")}"
+sampling_rate = {getattr(Config, "STREAMRIP_CONVERSION_SAMPLING_RATE", 48000)}
+bit_depth = {getattr(Config, "STREAMRIP_CONVERSION_BIT_DEPTH", 24)}
+lossy_bitrate = {getattr(Config, "STREAMRIP_CONVERSION_LOSSY_BITRATE", 320)}
+
+[qobuz_filters]
+extras = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_EXTRAS", False)).lower()}
+repeats = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_REPEATS", False)).lower()}
+non_albums = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", False)).lower()}
+features = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_FEATURES", False)).lower()}
+non_studio_albums = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", False)).lower()}
+non_remaster = {str(getattr(Config, "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", False)).lower()}
+
+[artwork]
+embed = {str(getattr(Config, "STREAMRIP_EMBED_COVER_ART", True)).lower()}
+embed_size = "{getattr(Config, "STREAMRIP_COVER_ART_SIZE", "large")}"
+embed_max_width = {getattr(Config, "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", -1)}
+save_artwork = {str(getattr(Config, "STREAMRIP_SAVE_COVER_ART", True)).lower()}
+saved_max_width = {getattr(Config, "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", -1)}
+
+[metadata]
+set_playlist_to_album = {str(getattr(Config, "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True)).lower()}
+renumber_playlist_tracks = {str(getattr(Config, "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True)).lower()}
+exclude = {str(getattr(Config, "STREAMRIP_METADATA_EXCLUDE", [])).replace("'", '"')}
+
+[filepaths]
+add_singles_to_folder = {str(getattr(Config, "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False)).lower()}
+folder_format = "{getattr(Config, "STREAMRIP_FILEPATHS_FOLDER_FORMAT", "{albumartist} - {title} ({year}) [{container}] [{bit_depth}B-{sampling_rate}kHz]")}"
+track_format = "{getattr(Config, "STREAMRIP_FILEPATHS_TRACK_FORMAT", "{tracknumber:02}. {artist} - {title}{explicit}")}"
+restrict_characters = {str(getattr(Config, "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False)).lower()}
+truncate_to = {getattr(Config, "STREAMRIP_FILEPATHS_TRUNCATE_TO", 120)}
+
+[lastfm]
+source = "{getattr(Config, "STREAMRIP_LASTFM_SOURCE", "qobuz")}"
+fallback_source = "{getattr(Config, "STREAMRIP_LASTFM_FALLBACK_SOURCE", "")}"
+
+[cli]
+text_output = {str(getattr(Config, "STREAMRIP_CLI_TEXT_OUTPUT", True)).lower()}
+progress_bars = {str(getattr(Config, "STREAMRIP_CLI_PROGRESS_BARS", False)).lower()}
+max_search_results = {getattr(Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100)}
+
+[misc]
+version = "{getattr(Config, "STREAMRIP_MISC_VERSION", "2.1.0")}"
+check_for_updates = {str(getattr(Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", False)).lower()}
 """
 
-        try:
-            from aiofiles import open as aiopen
-
-            async with aiopen(self.config_path, "w") as f:
-                await f.write(default_config.strip())
-            LOGGER.info(f"Created default config file at {self.config_path}")
-        except Exception as e:
-            LOGGER.error(f"Failed to create default config file: {e}")
-            raise
-
-    async def _apply_bot_settings(self):
-        """Apply bot configuration settings to streamrip config"""
-        if not self.config:
-            return
-
-        try:
-            # Download settings - use DOWNLOAD_DIR
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "downloads"
-            ):
-                self.config.session.downloads.folder = DOWNLOAD_DIR
-
-            # Platform-specific quality settings
-            if hasattr(self.config, "session"):
-                if hasattr(self.config.session, "qobuz"):
-                    qobuz_quality = (
-                        Config.STREAMRIP_QOBUZ_QUALITY
-                        or Config.STREAMRIP_DEFAULT_QUALITY
-                        or 3
-                    )
-                    self.config.session.qobuz.quality = qobuz_quality
-
-                if hasattr(self.config.session, "tidal"):
-                    tidal_quality = (
-                        Config.STREAMRIP_TIDAL_QUALITY
-                        or Config.STREAMRIP_DEFAULT_QUALITY
-                        or 3
-                    )
-                    self.config.session.tidal.quality = tidal_quality
-
-                if hasattr(self.config.session, "deezer"):
-                    deezer_quality = (
-                        Config.STREAMRIP_DEEZER_QUALITY
-                        or Config.STREAMRIP_DEFAULT_QUALITY
-                        or 2
-                    )
-                    # Deezer max is 2, so cap it
-                    deezer_quality = min(deezer_quality, 2)
-                    self.config.session.deezer.quality = deezer_quality
-
-                if hasattr(self.config.session, "soundcloud"):
-                    soundcloud_quality = Config.STREAMRIP_SOUNDCLOUD_QUALITY or 0
-                    # SoundCloud max is 1, so cap it
-                    soundcloud_quality = min(soundcloud_quality, 1)
-                    self.config.session.soundcloud.quality = soundcloud_quality
-
-                if hasattr(self.config.session, "youtube"):
-                    youtube_quality = Config.STREAMRIP_YOUTUBE_QUALITY or 0
-                    self.config.session.youtube.quality = youtube_quality
-
-            # Codec settings
-            codec = Config.STREAMRIP_DEFAULT_CODEC
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "conversion"
-            ):
-                self.config.session.conversion.enabled = (
-                    Config.STREAMRIP_AUTO_CONVERT
-                )
-                self.config.session.conversion.codec = codec
-
-            # Concurrent downloads
-            concurrent = Config.STREAMRIP_CONCURRENT_DOWNLOADS
-            if (
-                hasattr(self.config, "session")
-                and hasattr(self.config.session, "downloads")
-                and hasattr(self.config.session.downloads, "concurrency")
-            ):
-                self.config.session.downloads.concurrency = concurrent
-
-            # Database settings - use default streamrip location
-            # Streamrip will use its own database for download tracking
-            db_dir = Path.home() / ".config" / "streamrip"
-            db_dir.mkdir(parents=True, exist_ok=True)
-
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "database"
-            ):
-                self.config.session.database.downloads_path = str(
-                    db_dir / "streamrip_downloads.db"
-                )
-                self.config.session.database.failed_downloads_path = str(
-                    db_dir / "streamrip_failed.db"
-                )
-
-            # Authentication settings
-            await self._apply_auth_settings()
-
-            # Metadata settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "metadata"
-            ):
-                # Set metadata exclusions
-                if Config.STREAMRIP_METADATA_EXCLUDE:
-                    self.config.session.metadata.exclude = (
-                        Config.STREAMRIP_METADATA_EXCLUDE
-                    )
-
-                # Set playlist to album conversion
-                if hasattr(self.config.session.metadata, "set_playlist_to_album"):
-                    self.config.session.metadata.set_playlist_to_album = (
-                        Config.STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM
-                    )
-
-                # Set playlist track renumbering
-                if hasattr(self.config.session.metadata, "renumber_playlist_tracks"):
-                    self.config.session.metadata.renumber_playlist_tracks = (
-                        Config.STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS
-                    )
-
-            # Cover art settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "artwork"
-            ):
-                self.config.session.artwork.embed = Config.STREAMRIP_EMBED_COVER_ART
-                self.config.session.artwork.save_artwork = (
-                    Config.STREAMRIP_SAVE_COVER_ART
-                )
-
-                # Map cover art size to appropriate streamrip attributes
-                if hasattr(self.config.session.artwork, "embed_size"):
-                    # Convert size string to appropriate value for embed_size
-                    size_mapping = {
-                        "small": 300,
-                        "medium": 600,
-                        "large": 1200,
-                        "original": 0,  # 0 means original size
-                    }
-                    embed_size = size_mapping.get(
-                        Config.STREAMRIP_COVER_ART_SIZE.lower(), 1200
-                    )
-                    self.config.session.artwork.embed_size = embed_size
-
-                if hasattr(self.config.session.artwork, "saved_max_width"):
-                    # Set saved artwork max width based on size preference
-                    size_mapping = {
-                        "small": 300,
-                        "medium": 600,
-                        "large": 1200,
-                        "original": 0,  # 0 means original size
-                    }
-                    saved_width = size_mapping.get(
-                        Config.STREAMRIP_COVER_ART_SIZE.lower(), 1200
-                    )
-                    self.config.session.artwork.saved_max_width = saved_width
-
-            # Qobuz filters
-            if (
-                hasattr(self.config, "session")
-                and hasattr(self.config.session, "qobuz")
-                and hasattr(self.config.session.qobuz, "filters")
-            ):
-                # Apply Qobuz filters if they exist
-                if hasattr(self.config.session.qobuz.filters, "extras"):
-                    self.config.session.qobuz.filters.extras = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_EXTRAS
-                    )
-                if hasattr(self.config.session.qobuz.filters, "repeats"):
-                    self.config.session.qobuz.filters.repeats = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_REPEATS
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_albums"):
-                    self.config.session.qobuz.filters.non_albums = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS
-                    )
-                if hasattr(self.config.session.qobuz.filters, "features"):
-                    self.config.session.qobuz.filters.features = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_FEATURES
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_studio_albums"):
-                    self.config.session.qobuz.filters.non_studio_albums = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_remaster"):
-                    self.config.session.qobuz.filters.non_remaster = (
-                        Config.STREAMRIP_QOBUZ_FILTERS_NON_REMASTER
-                    )
-
-            # Additional advanced settings
-            await self._apply_advanced_settings()
-
-            # Streamlined config application without verbose logging
-
-        except Exception as e:
-            LOGGER.error(f"Error applying bot settings to streamrip config: {e}")
-
-    async def _apply_auth_settings(self):
-        """Apply authentication settings from bot config"""
-        try:
-            # Streamlined credential loading without verbose logging
-
-            # Qobuz authentication
-            if (
-                Config.STREAMRIP_QOBUZ_EMAIL
-                and Config.STREAMRIP_QOBUZ_PASSWORD
-                and hasattr(self.config, "session")
-                and hasattr(self.config.session, "qobuz")
-            ):
-                self.config.session.qobuz.email_or_userid = (
-                    Config.STREAMRIP_QOBUZ_EMAIL
-                )
-                self.config.session.qobuz.password_or_token = (
-                    Config.STREAMRIP_QOBUZ_PASSWORD
-                )
-                if hasattr(self.config.session.qobuz, "use_auth_token"):
-                    self.config.session.qobuz.use_auth_token = (
-                        Config.STREAMRIP_QOBUZ_USE_AUTH_TOKEN
-                    )
-                if Config.STREAMRIP_QOBUZ_APP_ID:
-                    self.config.session.qobuz.app_id = Config.STREAMRIP_QOBUZ_APP_ID
-                if Config.STREAMRIP_QOBUZ_SECRETS:
-                    self.config.session.qobuz.secrets = (
-                        Config.STREAMRIP_QOBUZ_SECRETS
-                    )
-                if hasattr(self.config.session.qobuz, "download_booklets"):
-                    self.config.session.qobuz.download_booklets = (
-                        Config.STREAMRIP_QOBUZ_DOWNLOAD_BOOKLETS
-                    )
-
-            # Tidal authentication
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "tidal"
-            ):
-                if not hasattr(self.config.session.tidal, "token_expiry"):
-                    self.config.session.tidal.token_expiry = None
-
-                if (
-                    Config.STREAMRIP_TIDAL_ACCESS_TOKEN
-                    and Config.STREAMRIP_TIDAL_REFRESH_TOKEN
-                ):
-                    self.config.session.tidal.access_token = (
-                        Config.STREAMRIP_TIDAL_ACCESS_TOKEN
-                    )
-                    self.config.session.tidal.refresh_token = (
-                        Config.STREAMRIP_TIDAL_REFRESH_TOKEN
-                    )
-                    if Config.STREAMRIP_TIDAL_USER_ID:
-                        self.config.session.tidal.user_id = int(
-                            str(Config.STREAMRIP_TIDAL_USER_ID).strip()
-                        )
-                    if Config.STREAMRIP_TIDAL_COUNTRY_CODE:
-                        self.config.session.tidal.country_code = (
-                            str(Config.STREAMRIP_TIDAL_COUNTRY_CODE).strip().upper()
-                        )
-                    else:
-                        self.config.session.tidal.country_code = "US"
-                    if Config.STREAMRIP_TIDAL_TOKEN_EXPIRY:
-                        self.config.session.tidal.token_expiry = float(
-                            str(Config.STREAMRIP_TIDAL_TOKEN_EXPIRY).strip()
-                        )
-                    else:
-                        self.config.session.tidal.token_expiry = 1748842786.0
-                    if hasattr(self.config.session.tidal, "download_videos"):
-                        self.config.session.tidal.download_videos = (
-                            Config.STREAMRIP_TIDAL_DOWNLOAD_VIDEOS
-                        )
-                # Removed username/password fallback - streamrip only supports token authentication for Tidal
-
-            # Deezer authentication
-            if (
-                Config.STREAMRIP_DEEZER_ARL
-                and hasattr(self.config, "session")
-                and hasattr(self.config.session, "deezer")
-            ):
-                self.config.session.deezer.arl = Config.STREAMRIP_DEEZER_ARL
-                if hasattr(self.config.session.deezer, "use_deezloader"):
-                    self.config.session.deezer.use_deezloader = (
-                        Config.STREAMRIP_DEEZER_USE_DEEZLOADER
-                    )
-                if hasattr(self.config.session.deezer, "deezloader_warnings"):
-                    self.config.session.deezer.deezloader_warnings = (
-                        Config.STREAMRIP_DEEZER_DEEZLOADER_WARNINGS
-                    )
-
-            # SoundCloud authentication
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "soundcloud"
-            ):
-                if Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID and hasattr(
-                    self.config.session.soundcloud, "client_id"
-                ):
-                    self.config.session.soundcloud.client_id = (
-                        Config.STREAMRIP_SOUNDCLOUD_CLIENT_ID
-                    )
-                if (
-                    hasattr(Config, "STREAMRIP_SOUNDCLOUD_APP_VERSION")
-                    and Config.STREAMRIP_SOUNDCLOUD_APP_VERSION
-                    and hasattr(self.config.session.soundcloud, "app_version")
-                ):
-                    self.config.session.soundcloud.app_version = (
-                        Config.STREAMRIP_SOUNDCLOUD_APP_VERSION
-                    )
-
-            # Last.fm configuration
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "lastfm"
-            ):
-                if hasattr(self.config.session.lastfm, "source"):
-                    primary_source = (
-                        "qobuz"
-                        if Config.STREAMRIP_QOBUZ_ENABLED
-                        else "tidal"
-                        if Config.STREAMRIP_TIDAL_ENABLED
-                        else "deezer"
-                    )
-                    self.config.session.lastfm.source = primary_source
-                if hasattr(self.config.session.lastfm, "fallback_source"):
-                    fallback_source = (
-                        "soundcloud" if Config.STREAMRIP_SOUNDCLOUD_ENABLED else ""
-                    )
-                    self.config.session.lastfm.fallback_source = fallback_source
-
-        except Exception as e:
-            LOGGER.error(f"Error applying auth settings: {e}")
-
-    async def _apply_advanced_settings(self):
-        """Apply comprehensive advanced settings from bot config"""
-        try:
-            # Filepaths settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "filepaths"
-            ):
-                if Config.STREAMRIP_FILENAME_TEMPLATE:
-                    self.config.session.filepaths.track_format = (
-                        Config.STREAMRIP_FILENAME_TEMPLATE
-                    )
-                elif hasattr(Config, "STREAMRIP_FILEPATHS_TRACK_FORMAT"):
-                    self.config.session.filepaths.track_format = (
-                        Config.STREAMRIP_FILEPATHS_TRACK_FORMAT
-                    )
-
-                if Config.STREAMRIP_FOLDER_TEMPLATE:
-                    self.config.session.filepaths.folder_format = (
-                        Config.STREAMRIP_FOLDER_TEMPLATE
-                    )
-                elif hasattr(Config, "STREAMRIP_FILEPATHS_FOLDER_FORMAT"):
-                    self.config.session.filepaths.folder_format = (
-                        Config.STREAMRIP_FILEPATHS_FOLDER_FORMAT
-                    )
-
-                if hasattr(self.config.session.filepaths, "add_singles_to_folder"):
-                    self.config.session.filepaths.add_singles_to_folder = getattr(
-                        Config, "STREAMRIP_FILEPATHS_ADD_SINGLES_TO_FOLDER", False
-                    )
-                if hasattr(self.config.session.filepaths, "restrict_characters"):
-                    self.config.session.filepaths.restrict_characters = getattr(
-                        Config, "STREAMRIP_FILEPATHS_RESTRICT_CHARACTERS", False
-                    )
-                if hasattr(self.config.session.filepaths, "truncate_to"):
-                    self.config.session.filepaths.truncate_to = getattr(
-                        Config, "STREAMRIP_FILEPATHS_TRUNCATE_TO", 120
-                    )
-
-            # Downloads settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "downloads"
-            ):
-                if hasattr(self.config.session.downloads, "folder"):
-                    self.config.session.downloads.folder = str(DOWNLOAD_DIR)
-                if hasattr(self.config.session.downloads, "concurrency"):
-                    self.config.session.downloads.concurrency = (
-                        Config.STREAMRIP_CONCURRENT_DOWNLOADS > 1
-                    )
-                if hasattr(self.config.session.downloads, "max_connections"):
-                    self.config.session.downloads.max_connections = getattr(
-                        Config, "STREAMRIP_MAX_CONNECTIONS", 6
-                    )
-                if hasattr(self.config.session.downloads, "requests_per_minute"):
-                    self.config.session.downloads.requests_per_minute = getattr(
-                        Config, "STREAMRIP_REQUESTS_PER_MINUTE", 60
-                    )
-                if hasattr(self.config.session.downloads, "source_subdirectories"):
-                    self.config.session.downloads.source_subdirectories = getattr(
-                        Config, "STREAMRIP_SOURCE_SUBDIRECTORIES", False
-                    )
-                if hasattr(self.config.session.downloads, "disc_subdirectories"):
-                    self.config.session.downloads.disc_subdirectories = getattr(
-                        Config, "STREAMRIP_DISC_SUBDIRECTORIES", True
-                    )
-                if hasattr(self.config.session.downloads, "verify_ssl"):
-                    self.config.session.downloads.verify_ssl = getattr(
-                        Config, "STREAMRIP_VERIFY_SSL", True
-                    )
-
-            # Database settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "database"
-            ):
-                if hasattr(self.config.session.database, "downloads_enabled"):
-                    self.config.session.database.downloads_enabled = getattr(
-                        Config, "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True
-                    )
-                if hasattr(self.config.session.database, "downloads_path"):
-                    self.config.session.database.downloads_path = getattr(
-                        Config, "STREAMRIP_DATABASE_DOWNLOADS_PATH", "./downloads.db"
-                    )
-                if hasattr(self.config.session.database, "failed_downloads_enabled"):
-                    self.config.session.database.failed_downloads_enabled = getattr(
-                        Config, "STREAMRIP_DATABASE_FAILED_DOWNLOADS_ENABLED", True
-                    )
-                if hasattr(self.config.session.database, "failed_downloads_path"):
-                    self.config.session.database.failed_downloads_path = getattr(
-                        Config,
-                        "STREAMRIP_DATABASE_FAILED_DOWNLOADS_PATH",
-                        "./failed_downloads.db",
-                    )
-
-            # Conversion settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "conversion"
-            ):
-                if hasattr(self.config.session.conversion, "enabled"):
-                    self.config.session.conversion.enabled = getattr(
-                        Config, "STREAMRIP_CONVERSION_ENABLED", False
-                    )
-                if hasattr(self.config.session.conversion, "codec"):
-                    self.config.session.conversion.codec = getattr(
-                        Config, "STREAMRIP_CONVERSION_CODEC", "ALAC"
-                    )
-                if hasattr(self.config.session.conversion, "sampling_rate"):
-                    self.config.session.conversion.sampling_rate = getattr(
-                        Config, "STREAMRIP_CONVERSION_SAMPLING_RATE", 48000
-                    )
-                if hasattr(self.config.session.conversion, "bit_depth"):
-                    self.config.session.conversion.bit_depth = getattr(
-                        Config, "STREAMRIP_CONVERSION_BIT_DEPTH", 24
-                    )
-                if hasattr(self.config.session.conversion, "lossy_bitrate"):
-                    self.config.session.conversion.lossy_bitrate = getattr(
-                        Config, "STREAMRIP_CONVERSION_LOSSY_BITRATE", 320
-                    )
-
-            # Metadata settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "metadata"
-            ):
-                if hasattr(self.config.session.metadata, "set_playlist_to_album"):
-                    self.config.session.metadata.set_playlist_to_album = getattr(
-                        Config, "STREAMRIP_METADATA_SET_PLAYLIST_TO_ALBUM", True
-                    )
-                if hasattr(self.config.session.metadata, "renumber_playlist_tracks"):
-                    self.config.session.metadata.renumber_playlist_tracks = getattr(
-                        Config, "STREAMRIP_METADATA_RENUMBER_PLAYLIST_TRACKS", True
-                    )
-                if hasattr(self.config.session.metadata, "exclude"):
-                    self.config.session.metadata.exclude = getattr(
-                        Config, "STREAMRIP_METADATA_EXCLUDE", []
-                    )
-
-            # Artwork settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "artwork"
-            ):
-                if hasattr(self.config.session.artwork, "embed"):
-                    self.config.session.artwork.embed = getattr(
-                        Config, "STREAMRIP_EMBED_COVER_ART", True
-                    )
-                if hasattr(self.config.session.artwork, "save_artwork"):
-                    self.config.session.artwork.save_artwork = getattr(
-                        Config, "STREAMRIP_SAVE_COVER_ART", True
-                    )
-                if hasattr(self.config.session.artwork, "embed_max_width"):
-                    self.config.session.artwork.embed_max_width = getattr(
-                        Config, "STREAMRIP_ARTWORK_EMBED_MAX_WIDTH", -1
-                    )
-                if hasattr(self.config.session.artwork, "saved_max_width"):
-                    self.config.session.artwork.saved_max_width = getattr(
-                        Config, "STREAMRIP_ARTWORK_SAVED_MAX_WIDTH", -1
-                    )
-
-            # Qobuz filters
-            if (
-                hasattr(self.config, "session")
-                and hasattr(self.config.session, "qobuz")
-                and hasattr(self.config.session.qobuz, "filters")
-            ):
-                if hasattr(self.config.session.qobuz.filters, "extras"):
-                    self.config.session.qobuz.filters.extras = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_EXTRAS", False
-                    )
-                if hasattr(self.config.session.qobuz.filters, "repeats"):
-                    self.config.session.qobuz.filters.repeats = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_REPEATS", False
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_albums"):
-                    self.config.session.qobuz.filters.non_albums = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_NON_ALBUMS", False
-                    )
-                if hasattr(self.config.session.qobuz.filters, "features"):
-                    self.config.session.qobuz.filters.features = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_FEATURES", False
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_studio_albums"):
-                    self.config.session.qobuz.filters.non_studio_albums = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_NON_STUDIO_ALBUMS", False
-                    )
-                if hasattr(self.config.session.qobuz.filters, "non_remaster"):
-                    self.config.session.qobuz.filters.non_remaster = getattr(
-                        Config, "STREAMRIP_QOBUZ_FILTERS_NON_REMASTER", False
-                    )
-
-            # Last.fm settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "lastfm"
-            ):
-                if hasattr(self.config.session.lastfm, "source"):
-                    self.config.session.lastfm.source = getattr(
-                        Config, "STREAMRIP_LASTFM_SOURCE", "qobuz"
-                    )
-                if hasattr(self.config.session.lastfm, "fallback_source"):
-                    self.config.session.lastfm.fallback_source = getattr(
-                        Config, "STREAMRIP_LASTFM_FALLBACK_SOURCE", ""
-                    )
-
-            # CLI settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "cli"
-            ):
-                if hasattr(self.config.session.cli, "text_output"):
-                    self.config.session.cli.text_output = getattr(
-                        Config, "STREAMRIP_CLI_TEXT_OUTPUT", True
-                    )
-                if hasattr(self.config.session.cli, "progress_bars"):
-                    # Always disable progress bars for bot usage
-                    self.config.session.cli.progress_bars = False
-                if hasattr(self.config.session.cli, "max_search_results"):
-                    self.config.session.cli.max_search_results = getattr(
-                        Config, "STREAMRIP_CLI_MAX_SEARCH_RESULTS", 100
-                    )
-
-            # Misc settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "misc"
-            ):
-                if hasattr(self.config.session.misc, "version"):
-                    self.config.session.misc.version = getattr(
-                        Config, "STREAMRIP_MISC_VERSION", "2.0.6"
-                    )
-                if hasattr(self.config.session.misc, "check_for_updates"):
-                    self.config.session.misc.check_for_updates = getattr(
-                        Config, "STREAMRIP_MISC_CHECK_FOR_UPDATES", True
-                    )
-
-            # YouTube settings
-            if hasattr(self.config, "session") and hasattr(
-                self.config.session, "youtube"
-            ):
-                if hasattr(self.config.session.youtube, "download_videos"):
-                    self.config.session.youtube.download_videos = getattr(
-                        Config, "STREAMRIP_YOUTUBE_DOWNLOAD_VIDEOS", False
-                    )
-                if hasattr(self.config.session.youtube, "video_downloads_folder"):
-                    self.config.session.youtube.video_downloads_folder = getattr(
-                        Config, "STREAMRIP_YOUTUBE_VIDEO_DOWNLOADS_FOLDER", ""
-                    )
-
-        except Exception as e:
-            LOGGER.error(f"Error applying advanced settings: {e}")
-
-    async def save_config(self) -> bool:
-        """Save streamrip configuration to file"""
-        if not self.config or not self.config_path:
-            return False
-
+    async def _save_config_to_file(self, content: str) -> None:
+        """Save config content to file and backup to database"""
         try:
             # Ensure directory exists
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Save config - use in-memory config only to avoid API issues
-            # Streamrip will use the in-memory configuration we've set up
+            # Write config file
+            import aiofiles
+
+            async with aiofiles.open(self.config_path, "w") as f:
+                await f.write(content)
+
+            # Backup to database for redundancy
+            await self._backup_config_to_database(content)
+
+        except Exception as e:
+            LOGGER.error(f"Failed to save config file: {e}")
+            raise
+
+    async def _deploy_config_to_streamrip(self) -> None:
+        """Copy config file to streamrip's expected location"""
+        try:
+            # Ensure streamrip config directory exists
+            self.streamrip_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy config file
+            shutil.copy2(self.config_path, self.streamrip_config_path)
+
+        except Exception as e:
+            LOGGER.error(f"Failed to deploy config to streamrip location: {e}")
+            raise
+
+    # ===== BOT SETTINGS INTEGRATION =====
+
+    async def update_config_from_bot_settings(self) -> bool:
+        """Update config file when bot settings change"""
+        try:
+            # Generate new config from current bot settings
+            config_content = self._generate_config_from_settings()
+
+            # Save to file
+            await self._save_config_to_file(config_content)
+
+            # Deploy to streamrip location
+            await self._deploy_config_to_streamrip()
+
+            # Reload config object
+            self.config = StreamripConfig(str(self.config_path))
 
             return True
 
         except Exception as e:
-            LOGGER.error(f"Failed to save streamrip config: {e}")
+            LOGGER.error(f"Failed to update config from bot settings: {e}")
             return False
+
+    # ===== CUSTOM CONFIG MANAGEMENT =====
+
+    async def upload_custom_config(self, config_content: str) -> bool:
+        """Upload and deploy custom config file"""
+        try:
+            # Validate config by trying to parse it
+            try:
+                # Save to temporary location first
+                temp_path = self.config_path.with_suffix(".tmp")
+                await self._save_config_to_file_path(config_content, temp_path)
+
+                # Try to load it to validate
+                test_config = StreamripConfig(str(temp_path))
+
+                # If successful, replace the main config
+                temp_path.replace(self.config_path)
+
+                # Deploy to streamrip location
+                await self._deploy_config_to_streamrip()
+
+                # Backup to database
+                await self._backup_config_to_database(config_content)
+
+                # Reload config object
+                self.config = test_config
+
+                return True
+
+            except Exception as e:
+                # Clean up temp file if it exists
+                temp_path = self.config_path.with_suffix(".tmp")
+                if temp_path.exists():
+                    temp_path.unlink()
+                raise e
+
+        except Exception as e:
+            LOGGER.error(f"Failed to upload custom config: {e}")
+            return False
+
+    async def _save_config_to_file_path(self, content: str, path: Path) -> None:
+        """Save config content to specific file path"""
+        try:
+            # Ensure directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write config file
+            import aiofiles
+
+            async with aiofiles.open(path, "w") as f:
+                await f.write(content)
+
+        except Exception as e:
+            LOGGER.error(f"Failed to save config to {path}: {e}")
+            raise
+
+    async def get_current_config_content(self) -> str | None:
+        """Get current config file content"""
+        try:
+            if self.config_path.exists():
+                import aiofiles
+
+                async with aiofiles.open(self.config_path) as f:
+                    return await f.read()
+            return None
+        except Exception as e:
+            LOGGER.error(f"Failed to read config file: {e}")
+            return None
+
+    async def reset_to_default_config(self) -> bool:
+        """Reset config to default based on bot settings"""
+        try:
+            # Remove existing config file
+            if self.config_path.exists():
+                self.config_path.unlink()
+
+            # Create new config from bot settings
+            await self._create_config_from_bot_settings()
+
+            # Deploy to streamrip location
+            await self._deploy_config_to_streamrip()
+
+            # Reload config object
+            self.config = StreamripConfig(str(self.config_path))
+
+            return True
+
+        except Exception as e:
+            LOGGER.error(f"Failed to reset config: {e}")
+            return False
+
+    # ===== UTILITY METHODS =====
 
     def get_config(self) -> StreamripConfig | None:
         """Get the streamrip configuration"""
@@ -765,92 +428,60 @@ max_search_results = 20
         """Check if config helper is initialized"""
         return self._initialized
 
-    def is_database_enabled(self) -> bool:
-        """Check if streamrip database is enabled in bot settings"""
-        return Config.STREAMRIP_ENABLE_DATABASE
-
     def get_platform_status(self) -> dict[str, bool]:
         """Get simplified platform status"""
+        qobuz_enabled = bool(
+            Config.STREAMRIP_QOBUZ_ENABLED and Config.STREAMRIP_QOBUZ_EMAIL
+        )
+        tidal_enabled = bool(
+            Config.STREAMRIP_TIDAL_ENABLED and Config.STREAMRIP_TIDAL_ACCESS_TOKEN
+        )
+        deezer_enabled = bool(
+            Config.STREAMRIP_DEEZER_ENABLED and Config.STREAMRIP_DEEZER_ARL
+        )
+        soundcloud_enabled = Config.STREAMRIP_SOUNDCLOUD_ENABLED
+        lastfm_enabled = Config.STREAMRIP_LASTFM_ENABLED
+
         return {
-            "qobuz": bool(
-                Config.STREAMRIP_QOBUZ_ENABLED and Config.STREAMRIP_QOBUZ_EMAIL
-            ),
-            "tidal": bool(
-                Config.STREAMRIP_TIDAL_ENABLED
-                and Config.STREAMRIP_TIDAL_ACCESS_TOKEN
-            ),
-            "deezer": bool(
-                Config.STREAMRIP_DEEZER_ENABLED and Config.STREAMRIP_DEEZER_ARL
-            ),
-            "soundcloud": Config.STREAMRIP_SOUNDCLOUD_ENABLED,
-            "lastfm": Config.STREAMRIP_LASTFM_ENABLED,
+            "qobuz": qobuz_enabled,
+            "tidal": tidal_enabled,
+            "deezer": deezer_enabled,
+            "soundcloud": soundcloud_enabled,
+            "lastfm": lastfm_enabled,
         }
 
-    async def _load_config_from_db(self) -> str | None:
-        """Load custom streamrip config from database"""
-        try:
-            if database.db is not None:
-                # Try to get custom streamrip config from private files
-                from bot.core.aeon_client import TgClient
+    def get_config_file_path(self) -> Path:
+        """Get the path to the config file"""
+        return self.config_path
 
-                files_doc = await database.db.settings.files.find_one(
-                    {"_id": TgClient.ID}, {"_id": 0}
-                )
+    def get_config_path(self) -> str:
+        """Get the path to the streamrip config file as string"""
+        return str(self.streamrip_config_path)
 
-                if files_doc and "streamrip_config__toml" in files_doc:
-                    config_data = files_doc["streamrip_config__toml"]
-                    if config_data:
-                        return config_data.decode("utf-8")
-            return None
-        except Exception as e:
-            LOGGER.error(f"Error loading streamrip config from database: {e}")
-            return None
+    def is_database_enabled(self) -> bool:
+        """Check if streamrip database is enabled"""
+        return getattr(Config, "STREAMRIP_DATABASE_DOWNLOADS_ENABLED", True)
 
-    async def save_custom_config_to_db(self, config_content: str) -> bool:
-        """Save custom streamrip config to database"""
+    async def _backup_config_to_database(self, content: str) -> None:
+        """Backup config content to database for redundancy"""
         try:
             if database.db is not None:
                 from bot.core.aeon_client import TgClient
 
-                # Save custom streamrip config as private file using existing pattern
+                # Store config as binary data in database
+                config_bytes = content.encode("utf-8")
+
                 await database.db.settings.files.update_one(
                     {"_id": TgClient.ID},
-                    {
-                        "$set": {
-                            "streamrip_config__toml": config_content.encode("utf-8")
-                        }
-                    },
+                    {"$set": {"streamrip_config__toml": config_bytes}},
                     upsert=True,
                 )
-                LOGGER.info("Saved custom streamrip config to database")
-                return True
-            return False
+
+            else:
+                LOGGER.warning("Database not available for config backup")
         except Exception as e:
-            LOGGER.error(f"Error saving streamrip config to database: {e}")
-            return False
-
-    async def get_custom_config_from_db(self) -> str | None:
-        """Get custom streamrip config from database for display"""
-        return await self._load_config_from_db()
-
-    async def delete_custom_config_from_db(self) -> bool:
-        """Delete custom streamrip config from database"""
-        try:
-            if database.db is not None:
-                from bot.core.aeon_client import TgClient
-
-                # Delete custom streamrip config from database
-                await database.db.settings.files.update_one(
-                    {"_id": TgClient.ID},
-                    {"$unset": {"streamrip_config__toml": ""}},
-                    upsert=True,
-                )
-                LOGGER.info("Deleted custom streamrip config from database")
-                return True
-            return False
-        except Exception as e:
-            LOGGER.error(f"Error deleting streamrip config from database: {e}")
-            return False
+            LOGGER.warning(f"Failed to backup config to database: {e}")
+            # Don't raise - backup failure shouldn't stop the main operation
 
 
 # Global config helper instance
@@ -860,3 +491,15 @@ streamrip_config = StreamripConfigHelper()
 async def ensure_streamrip_initialized() -> bool:
     """Ensure streamrip is initialized and enabled when needed"""
     return await streamrip_config.lazy_initialize()
+
+
+async def force_streamrip_config_update() -> bool:
+    """Force update streamrip config from current bot settings"""
+    try:
+        if streamrip_config._initialized:
+            return await streamrip_config.update_config_from_bot_settings()
+        # If not initialized, initialize it (which will use current bot settings)
+        return await streamrip_config.lazy_initialize()
+    except Exception as e:
+        LOGGER.error(f"Failed to force update streamrip config: {e}")
+        return False

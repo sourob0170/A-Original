@@ -158,17 +158,40 @@ async def load_settings():
             runtime_timestamp = runtime_config.get("_runtime_timestamp", 0)
             current_time = time()
 
-            # Add timestamp to current deploy config
-            current_deploy_config["_deploy_timestamp"] = current_time
+            # Only update deploy config timestamp if the actual config content changed
+            # Compare config content without timestamps
+            old_deploy_content = {
+                k: v for k, v in old_deploy_config.items() if not k.startswith("_")
+            }
+            current_deploy_content = {
+                k: v
+                for k, v in current_deploy_config.items()
+                if not k.startswith("_")
+            }
+
+            if old_deploy_content != current_deploy_content:
+                # Deploy config content actually changed - update timestamp
+                current_deploy_config["_deploy_timestamp"] = current_time
+                LOGGER.info("Deploy config content changed - updating timestamp")
+            else:
+                # Deploy config content unchanged - preserve existing timestamp
+                current_deploy_config["_deploy_timestamp"] = deploy_timestamp
+                LOGGER.info(
+                    "Deploy config content unchanged - preserving existing timestamp"
+                )
 
             # Only update runtime config if deploy config is newer than runtime config
             # This preserves manual changes made to runtime config
             if (
                 deploy_timestamp == 0
                 or runtime_timestamp == 0
-                or current_time > runtime_timestamp
+                or deploy_timestamp > runtime_timestamp
             ):
                 # Deploy config is newer or timestamps are missing - proceed with update
+                LOGGER.info(
+                    f"Deploy config is newer than runtime config. "
+                    f"Deploy timestamp: {deploy_timestamp}, Runtime timestamp: {runtime_timestamp}"
+                )
 
                 # Remove timestamp fields from comparison (they're metadata, not config)
                 deploy_config_for_comparison = {
@@ -219,7 +242,8 @@ async def load_settings():
             else:
                 # Runtime config is newer - preserve manual changes
                 LOGGER.info(
-                    "Runtime config is newer than deploy config - preserving manual changes"
+                    f"Runtime config is newer than deploy config - preserving manual changes. "
+                    f"Deploy timestamp: {deploy_timestamp}, Runtime timestamp: {runtime_timestamp}"
                 )
 
             # Always update deploy config with current values and timestamp
@@ -338,6 +362,18 @@ async def load_settings():
 
         # Load Zotify credentials from database if available
         await load_zotify_credentials_from_db()
+
+        # Force update streamrip config after settings are loaded
+        try:
+            from bot.helper.streamrip_utils.streamrip_config import (
+                force_streamrip_config_update,
+            )
+
+            await force_streamrip_config_update()
+        except Exception as e:
+            LOGGER.error(
+                f"Failed to update streamrip config after settings load: {e}"
+            )
 
         if await database.db.rss[BOT_ID].find_one():
             rows = database.db.rss[BOT_ID].find({})

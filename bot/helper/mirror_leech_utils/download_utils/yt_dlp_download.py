@@ -87,17 +87,10 @@ class YoutubeDLHelper:
         self._ext = ""
         self.is_playlist = False
 
-        # Check for user-specific cookies (multiple cookies support)
-        user_id = listener.user_id
-        self.user_cookies_list = self._get_user_cookies_list(user_id)
-
-        # Use first available cookie or default
-        if self.user_cookies_list:
-            cookies_file = self.user_cookies_list[0]
-            self.current_cookie_index = 0
-        else:
-            cookies_file = "cookies.txt"
-            self.current_cookie_index = -1
+        # Initialize with default cookies, will be updated in async_init
+        self.user_cookies_list = []
+        self.current_cookie_index = -1
+        cookies_file = "cookies.txt"
 
         self.opts = {
             "progress_hooks": [self._on_download_progress],
@@ -131,6 +124,23 @@ class YoutubeDLHelper:
             },
         }
 
+    async def async_init(self):
+        """Async initialization for cookie setup"""
+        # Check for user-specific cookies (multiple cookies support)
+        user_id = self._listener.user_id
+        self.user_cookies_list = await self._get_user_cookies_list(user_id)
+
+        # Use first available cookie or default
+        if self.user_cookies_list:
+            cookies_file = self.user_cookies_list[0]
+            self.current_cookie_index = 0
+        else:
+            cookies_file = "cookies.txt"
+            self.current_cookie_index = -1
+
+        # Update the cookiefile in opts
+        self.opts["cookiefile"] = cookies_file
+
         # Log which cookies file is being used
         if self.user_cookies_list:
             cookie_num = (
@@ -144,18 +154,16 @@ class YoutubeDLHelper:
         else:
             LOGGER.info("Using default cookies.txt file")
 
-    def _get_user_cookies_list(self, user_id):
+    async def _get_user_cookies_list(self, user_id):
         """Get list of all cookie files for a user (from both database and filesystem)"""
         cookies_list = []
 
         # First, try to get cookies from database and create temporary files
         try:
-            import asyncio
-
             from bot.helper.ext_utils.db_handler import database
 
-            # Get cookies from database
-            db_cookies = asyncio.run(database.get_user_cookies(user_id))
+            # Get cookies from database - properly await the coroutine
+            db_cookies = await database.get_user_cookies(user_id)
 
             for cookie in db_cookies:
                 cookie_num = cookie["number"]
@@ -1159,6 +1167,9 @@ class YoutubeDLHelper:
         return
 
     async def add_download(self, path, qual, playlist, options):
+        # Initialize async components first
+        await self.async_init()
+
         if playlist:
             self.opts["ignoreerrors"] = True
             self.is_playlist = True

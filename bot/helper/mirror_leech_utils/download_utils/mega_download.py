@@ -104,9 +104,31 @@ class MegaAppListener(MegaListener):
 
         error_str = str(error).lower() if error else "unknown error"
         if error_str != "no error":
-            # Ignore access denied errors that happen during cleanup/logout
+            # Check if this is an authentication-related error during active operations
             if "access denied" in error_str.lower():
+                # Only ignore access denied errors during cleanup/logout, not during active operations
+                if hasattr(self, "_cleanup_mode") and self._cleanup_mode:
+                    LOGGER.debug("Ignoring access denied error during cleanup")
+                    return
+                # This is a real authentication error during active operations
+                self.error = error.copy() if hasattr(error, "copy") else str(error)
+                LOGGER.error(
+                    f"MEGA Authentication Error during active operation: {self.error}"
+                )
+                # Provide user-friendly error message
+                friendly_msg = (
+                    "❌ MEGA Authentication Failed: Access denied.\n\n"
+                    "This usually means:\n"
+                    "• Invalid MEGA email or password\n"
+                    "• Account suspended or restricted\n"
+                    "• Two-factor authentication enabled (not supported)\n"
+                    "• Session expired - please try again\n\n"
+                    "Please check your MEGA credentials in bot settings."
+                )
+                async_to_sync(self.listener.on_download_error, friendly_msg)
+                self.continue_event.set()
                 return
+
             self.error = error.copy() if hasattr(error, "copy") else str(error)
 
             # Classify error severity based on error content
@@ -178,7 +200,13 @@ class MegaAppListener(MegaListener):
 
             if str(error).lower() != "no error":
                 error_msg = str(error)
-                LOGGER.error(f"MEGA transfer finished with error: {error_msg}")
+                # Check if this is an access denied error and log as warning instead of error
+                if "access denied" in error_msg.lower():
+                    LOGGER.warning(
+                        f"MEGA transfer finished with access denied: {error_msg}"
+                    )
+                else:
+                    LOGGER.error(f"MEGA transfer finished with error: {error_msg}")
                 self.error = error_msg
                 async_to_sync(
                     self.listener.on_download_error,
@@ -251,6 +279,12 @@ async def _cleanup_mega_apis(api, folder_api, executor):
             except Exception as e:
                 LOGGER.debug(f"Error setting executor event: {e}")
 
+        # Mark cleanup mode to ignore access denied errors during logout
+        if hasattr(executor, "listener") and hasattr(
+            executor.listener, "_cleanup_mode"
+        ):
+            executor.listener._cleanup_mode = True
+
         # Logout directly without using executor to avoid timeout issues
         if api:
             try:
@@ -259,14 +293,19 @@ async def _cleanup_mega_apis(api, folder_api, executor):
                     asyncio.get_event_loop().run_in_executor(None, api.logout),
                     timeout=120,
                 )
+                LOGGER.info("MEGA download API logged out successfully")
             except TimeoutError:
                 LOGGER.warning(
                     "MEGA download logout timed out after 120 seconds, but download was successful"
                 )
             except Exception as e:
-                LOGGER.warning(
-                    f"MEGA download logout failed: {e}, but download was successful"
-                )
+                error_str = str(e).lower()
+                if "access denied" in error_str:
+                    LOGGER.debug(f"Access denied during MEGA logout (expected): {e}")
+                else:
+                    LOGGER.warning(
+                        f"MEGA download logout failed: {e}, but download was successful"
+                    )
 
         if folder_api:
             try:
@@ -277,15 +316,21 @@ async def _cleanup_mega_apis(api, folder_api, executor):
                     ),
                     timeout=120,
                 )
-                LOGGER.info("MEGA folder API logged out")
+                LOGGER.info("MEGA folder API logged out successfully")
             except TimeoutError:
                 LOGGER.warning(
                     "MEGA folder API logout timed out after 120 seconds, but download was successful"
                 )
             except Exception as e:
-                LOGGER.warning(
-                    f"MEGA folder API logout failed: {e}, but download was successful"
-                )
+                error_str = str(e).lower()
+                if "access denied" in error_str:
+                    LOGGER.debug(
+                        f"Access denied during MEGA folder logout (expected): {e}"
+                    )
+                else:
+                    LOGGER.warning(
+                        f"MEGA folder API logout failed: {e}, but download was successful"
+                    )
     except Exception as e:
         LOGGER.error(f"Error during MEGA API cleanup: {e}")
 
@@ -336,9 +381,78 @@ async def add_mega_download(listener, path):
     try:
         # Login if credentials are provided
         if MEGA_EMAIL and MEGA_PASSWORD:
-            await executor.do(api.login, (MEGA_EMAIL, MEGA_PASSWORD), timeout=60)
+            LOGGER.info(
+                f"Attempting MEGA login with email: {MEGA_EMAIL[:3]}***@{MEGA_EMAIL.split('@')[1] if '@' in MEGA_EMAIL else 'unknown'}"
+            )
+            try:
+                await executor.do(api.login, (MEGA_EMAIL, MEGA_PASSWORD), timeout=60)
+                LOGGER.info("MEGA login successful")
+            except Exception as login_error:
+                error_msg = str(login_error).lower()
+                LOGGER.error(f"MEGA login failed: {login_error}")
+
+                # Provide specific error messages for common authentication issues
+                if any(
+                    auth_error in error_msg
+                    for auth_error in [
+                        "access denied",
+                        "invalid credentials",
+                        "authentication failed",
+                        "unauthorized",
+                        "forbidden",
+                        "login required",
+                    ]
+                ):
+                    friendly_msg = (
+                        "❌ MEGA Authentication Failed: Invalid credentials.\n\n"
+                        "This usually means:\n"
+                        "• Incorrect MEGA email or password\n"
+                        "• Account suspended or restricted\n"
+                        "• Two-factor authentication enabled (not supported)\n\n"
+                        "Please check your MEGA credentials in bot settings."
+                    )
+                elif "timed out" in error_msg:
+                    friendly_msg = "❌ MEGA login timed out. Please check your internet connection and try again."
+                else:
+                    friendly_msg = f"❌ MEGA login failed: {login_error}"
+
+                await listener.on_download_error(friendly_msg)
+                return
         else:
-            pass  # Anonymous access
+            LOGGER.info("Using anonymous MEGA access (no credentials provided)")
+            # Anonymous access
+
+        # Check for login errors after authentication attempt
+        if mega_listener.error is not None:
+            error_msg = str(mega_listener.error).lower()
+            LOGGER.error(
+                f"MEGA authentication error detected: {mega_listener.error}"
+            )
+
+            if any(
+                auth_error in error_msg
+                for auth_error in [
+                    "access denied",
+                    "invalid credentials",
+                    "authentication failed",
+                    "unauthorized",
+                    "forbidden",
+                    "login required",
+                ]
+            ):
+                friendly_msg = (
+                    "❌ MEGA Authentication Failed: Access denied.\n\n"
+                    "This usually means:\n"
+                    "• Invalid MEGA email or password\n"
+                    "• Account suspended or restricted\n"
+                    "• Two-factor authentication enabled (not supported)\n\n"
+                    "Please check your MEGA credentials in bot settings."
+                )
+            else:
+                friendly_msg = f"❌ MEGA Error: {mega_listener.error}"
+
+            await listener.on_download_error(friendly_msg)
+            return
 
         # Handle file vs folder links
         link_type = get_mega_link_type(listener.link)

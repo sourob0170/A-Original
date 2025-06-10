@@ -92,7 +92,9 @@ def clean_caption(caption):
     return cleaned
 
 
-async def generate_caption(filename, directory, caption_template):
+async def generate_caption(
+    filename, directory, caption_template, html_prefix=None, html_suffix=None
+):
     """
     Generate a caption for a file using a template.
 
@@ -100,6 +102,8 @@ async def generate_caption(filename, directory, caption_template):
         filename (str): The name of the file
         directory (str): The directory containing the file
         caption_template (str): The template to use for the caption
+        html_prefix (str, optional): HTML-formatted prefix to include in filename
+        html_suffix (str, optional): HTML-formatted suffix to include in filename
 
     Returns:
         str: The generated caption
@@ -422,10 +426,53 @@ async def generate_caption(filename, directory, caption_template):
         # Format extension in uppercase
         format_upper = os.path.splitext(filename)[1][1:].upper()
 
+        # Create HTML-formatted filename if prefix/suffix with HTML exists
+        base_filename = os.path.splitext(filename)[0]
+
+        def create_html_filename_local(
+            clean_filename, html_prefix=None, html_suffix=None
+        ):
+            """Local helper function to create HTML-formatted filename."""
+            import re
+
+            html_filename = clean_filename
+
+            if html_prefix:
+                # Extract clean text from HTML prefix for comparison
+                clean_prefix = re.sub(r"<.*?>", "", html_prefix)
+                # If the filename starts with the clean prefix, replace it with HTML version
+                if clean_filename.startswith(clean_prefix + " "):
+                    html_filename = clean_filename.replace(
+                        clean_prefix + " ", html_prefix + " ", 1
+                    )
+
+            if html_suffix:
+                # Extract clean text from HTML suffix for comparison
+                clean_suffix = re.sub(r"<.*?>", "", html_suffix)
+                # If the filename ends with the clean suffix, replace it with HTML version
+                # Handle both cases: suffix in middle and suffix at end
+                if html_filename.endswith(" " + clean_suffix):
+                    # Suffix at the end
+                    html_filename = (
+                        html_filename[: -len(" " + clean_suffix)] + " " + html_suffix
+                    )
+                elif " " + clean_suffix + " " in html_filename:
+                    # Suffix in the middle
+                    html_filename = html_filename.replace(
+                        " " + clean_suffix + " ", " " + html_suffix + " "
+                    )
+
+            return html_filename
+
+        html_filename = create_html_filename_local(
+            base_filename, html_prefix, html_suffix
+        )
+
         # Create caption data dictionary
         caption_data = DefaultDict(
             # Basic variables
-            filename=os.path.splitext(filename)[0],  # Filename without extension
+            filename=base_filename,  # Clean filename for file operations
+            html_filename=html_filename,  # HTML-formatted filename for captions
             size=readable_size,
             duration=get_readable_time(video_duration, True),
             quality=video_quality or filename_metadata.get("quality", ""),

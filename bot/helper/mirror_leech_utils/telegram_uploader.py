@@ -13,6 +13,7 @@ import psutil
 from aioshutil import rmtree
 from natsort import natsorted
 from PIL import Image
+from pyrogram import enums
 from pyrogram.errors import BadRequest, FloodPremiumWait, FloodWait, RPCError
 from pyrogram.types import (
     InputMediaDocument,
@@ -49,6 +50,48 @@ from bot.helper.ext_utils.template_processor import extract_metadata_from_filena
 from bot.helper.telegram_helper.message_utils import delete_message
 
 LOGGER = getLogger(__name__)
+
+
+def create_html_filename(clean_filename, html_prefix=None, html_suffix=None):
+    """
+    Create an HTML-formatted filename by replacing clean prefix/suffix with HTML versions.
+
+    Args:
+        clean_filename (str): The filename with clean (non-HTML) prefix/suffix
+        html_prefix (str, optional): HTML-formatted prefix to replace clean prefix
+        html_suffix (str, optional): HTML-formatted suffix to replace clean suffix
+
+    Returns:
+        str: Filename with HTML formatting applied
+    """
+    html_filename = clean_filename
+
+    if html_prefix:
+        # Extract clean text from HTML prefix for comparison
+        clean_prefix = re_sub("<.*?>", "", html_prefix)
+        # If the filename starts with the clean prefix, replace it with HTML version
+        if clean_filename.startswith(clean_prefix + " "):
+            html_filename = clean_filename.replace(
+                clean_prefix + " ", html_prefix + " ", 1
+            )
+
+    if html_suffix:
+        # Extract clean text from HTML suffix for comparison
+        clean_suffix = re_sub("<.*?>", "", html_suffix)
+        # If the filename ends with the clean suffix, replace it with HTML version
+        # Handle both cases: suffix in middle and suffix at end
+        if html_filename.endswith(" " + clean_suffix):
+            # Suffix at the end
+            html_filename = (
+                html_filename[: -len(" " + clean_suffix)] + " " + html_suffix
+            )
+        elif " " + clean_suffix + " " in html_filename:
+            # Suffix in the middle
+            html_filename = html_filename.replace(
+                " " + clean_suffix + " ", " " + html_suffix + " "
+            )
+
+    return html_filename
 
 
 def get_memory_usage():
@@ -156,6 +199,26 @@ class TelegramUploader:
         if self._thumb != "none" and not await aiopath.exists(self._thumb):
             self._thumb = None
 
+    def _build_caption_with_prefix_suffix(self, core_content):
+        """
+        Build caption with HTML prefix and suffix around core content.
+        Prefix and suffix remain as HTML, core content can be styled independently.
+        """
+        caption_parts = []
+
+        # Add HTML prefix if available
+        if hasattr(self, "_html_prefix") and self._html_prefix:
+            caption_parts.append(self._html_prefix)
+
+        # Add core content (filename with styling)
+        caption_parts.append(core_content)
+
+        # Add HTML suffix if available
+        if hasattr(self, "_html_suffix") and self._html_suffix:
+            caption_parts.append(self._html_suffix)
+
+        return " ".join(caption_parts)
+
     async def _msg_to_reply(self):
         if self._listener.up_dest:
             msg = self._listener.message.text.lstrip("/")
@@ -207,9 +270,6 @@ class TelegramUploader:
 
         # Initialize caption
         cap_mono = None
-        file_with_prefix = file_
-        file_with_suffix = file_
-        display_name = file_
         final_filename = file_
 
         try:
@@ -233,75 +293,90 @@ class TelegramUploader:
             # We'll generate caption after file renaming to ensure we use the correct file path
             cap_mono = None
 
-            # Process filename modifications first
-            if not self._lcaption:
-                # Apply leech filename template if specified (highest priority for filename)
-                if self._lfilename:
-                    try:
-                        # Process the template with file metadata
-                        processed_filename = await process_template(
-                            self._lfilename, file_metadata
-                        )
-                        if processed_filename:
-                            # Keep the original extension if not included in the template
-                            if ext and not processed_filename.endswith(f".{ext}"):
-                                final_filename = f"{processed_filename}.{ext}"
-                            else:
-                                final_filename = processed_filename
-                            LOGGER.info(
-                                f"Applied leech filename template: {final_filename}"
-                            )
-                            display_name = final_filename
-                    except Exception as e:
-                        LOGGER.error(f"Error applying leech filename template: {e}")
-                        # Fall back to original filename
-                        final_filename = file_
-                        display_name = file_
-                else:
-                    # Handle prefix (less memory-intensive)
-                    if self._lprefix:
-                        clean_prefix = re_sub("<.*?>", "", self._lprefix)
-                        file_with_prefix = f"{clean_prefix} {file_}"
-                        display_name = file_with_prefix
-                        final_filename = file_with_prefix
+            # Process filename modifications with correct priority order:
+            # 1. Apply leech filename template first
+            # 2. Apply leech caption second (uses changed filename)
+            # 3. Apply prefix and suffix last (independent from caption)
 
-                    # Handle suffix (less memory-intensive)
-                    if self._lsuffix:
-                        # Split the filename and extension
-                        name, ext = (
-                            ospath.splitext(file_with_prefix)
-                            if "." in file_with_prefix
-                            else (file_with_prefix, "")
-                        )
-                        clean_suffix = re_sub("<.*?>", "", self._lsuffix)
-                        file_with_suffix = f"{name} {clean_suffix}{ext}"
-                        display_name = file_with_suffix
-                        final_filename = file_with_suffix
-                    else:
-                        file_with_suffix = file_with_prefix
-                        final_filename = file_with_prefix
+            # Initialize working filename
+            working_filename = file_
+            core_filename = file_  # For caption processing
 
-                # Apply font style if specified (moderately memory-intensive)
+            # Store HTML prefix/suffix for later use (after caption)
+            if self._lprefix:
+                self._html_prefix = self._lprefix
+            if self._lsuffix:
+                self._html_suffix = self._lsuffix
+
+            # Step 1: Apply leech filename template first (if set)
+            if self._lfilename:
+                try:
+                    # Process the template with file metadata
+                    processed_filename = await process_template(
+                        self._lfilename, file_metadata
+                    )
+                    if processed_filename:
+                        # Keep the original extension if not included in the template
+                        if ext and not processed_filename.endswith(f".{ext}"):
+                            working_filename = f"{processed_filename}.{ext}"
+                            core_filename = f"{processed_filename}.{ext}"
+                        else:
+                            working_filename = processed_filename
+                            core_filename = processed_filename
+                        LOGGER.info(
+                            f"Applied leech filename template: {working_filename}"
+                        )
+                except Exception as e:
+                    LOGGER.error(f"Error applying leech filename template: {e}")
+                    # Continue with the current working_filename
+
+            # Step 2: Generate leech caption BEFORE applying prefix/suffix
+            # This ensures leech caption gets the changed filename but NOT prefix/suffix
+            if self._lcaption:
+                # Rename the file first so caption generation uses the correct filename
+                if working_filename != file_:
+                    new_path = ospath.join(dirpath, working_filename)
+                    LOGGER.info(
+                        f"Renaming for caption: {self._up_path} -> {new_path}"
+                    )
+                    await rename(self._up_path, new_path)
+                    self._up_path = new_path
+
+                # Use the current file path (which reflects leech filename changes)
+                current_filename = ospath.basename(self._up_path)
+                current_dirpath = ospath.dirname(self._up_path)
+
+                # Generate caption using the changed filename (WITHOUT prefix/suffix)
+                cap_mono = await generate_caption(
+                    current_filename, current_dirpath, self._lcaption, None, None
+                )
+                LOGGER.info("Applied leech caption template")
+
+                # Set final filename for further processing
+                final_filename = working_filename
+            else:
+                # No leech caption - generate default caption
+                # Apply font style if specified (for caption display)
                 if self._lfont:
-                    # Apply the font style to the display name (with prefix/suffix/filename)
+                    # Apply the font style to the core filename only
                     try:
-                        styled_name = await apply_font_style(
-                            display_name, self._lfont
+                        styled_core = await apply_font_style(
+                            core_filename, self._lfont
                         )
-                        # Set the caption to the styled name
-                        cap_mono = styled_name
+                        # Set caption to styled core (prefix/suffix will be added later)
+                        cap_mono = styled_core
                         LOGGER.info(
                             f"Applied font style '{self._lfont}' to filename"
                         )
                     except Exception as e:
                         LOGGER.error(f"Error applying font style: {e}")
-                        # If font styling fails, use the display name with HTML formatting
-                        cap_mono = f"<code>{display_name}</code>"
+                        # If font styling fails, use the core filename with HTML formatting
+                        cap_mono = f"<code>{core_filename}</code>"
                     # Force garbage collection after font styling
                     gc.collect()
                 else:
-                    # If no font style, just use the display name with HTML formatting
-                    cap_mono = f"<code>{display_name}</code>"
+                    # Build default caption with <code>core</code>
+                    styled_core = f"<code>{core_filename}</code>"
 
                     # Enhanced caption for streamrip downloads
                     if self._is_streamrip and self._streamrip_platform:
@@ -315,17 +390,51 @@ class TelegramUploader:
                             "apple_music": "🍎",
                         }.get(self._streamrip_platform.lower(), "🎶")
 
-                        cap_mono = f"<code>{platform_emoji} {self._streamrip_platform.title()}\n{display_name}</code>"
+                        styled_core = f"<code>{platform_emoji} {self._streamrip_platform.title()}\n{core_filename}</code>"
 
                     # Enhanced caption for zotify downloads
                     elif self._is_zotify:
                         # Add zotify platform info to caption
-                        cap_mono = f"<code>🎧 Spotify\n{display_name}</code>"
+                        styled_core = f"<code>🎧 Spotify\n{core_filename}</code>"
 
-            # Rename the file with the final filename
-            if final_filename != file_:
+                    cap_mono = styled_core
+
+                # Set final filename for file operations
+                final_filename = working_filename
+
+            # Step 3: Apply prefix and suffix to BOTH filename AND caption (last step)
+            if self._lprefix:
+                # Clean prefix for filename (remove HTML tags for file system compatibility)
+                clean_prefix = re_sub("<.*?>", "", self._lprefix)
+                final_filename = f"{clean_prefix} {final_filename}"
+                LOGGER.info(f"Applied leech prefix to filename: {final_filename}")
+
+                # Add HTML prefix to caption
+                if cap_mono:
+                    cap_mono = f"{self._html_prefix} {cap_mono}"
+
+            if self._lsuffix:
+                # Split the filename and extension
+                name, ext = (
+                    ospath.splitext(final_filename)
+                    if "." in final_filename
+                    else (final_filename, "")
+                )
+                # Clean suffix for filename (remove HTML tags for file system compatibility)
+                clean_suffix = re_sub("<.*?>", "", self._lsuffix)
+                final_filename = f"{name} {clean_suffix}{ext}"
+                LOGGER.info(f"Applied leech suffix to filename: {final_filename}")
+
+                # Add HTML suffix to caption
+                if cap_mono:
+                    cap_mono = f"{cap_mono} {self._html_suffix}"
+
+            # Rename the file with the final filename (if not already renamed for caption)
+            if final_filename != file_ and final_filename != ospath.basename(
+                self._up_path
+            ):
                 new_path = ospath.join(dirpath, final_filename)
-                LOGGER.info(f"Renaming: {self._up_path} -> {new_path}")
+                LOGGER.info(f"Final renaming: {self._up_path} -> {new_path}")
                 await rename(self._up_path, new_path)
                 self._up_path = new_path
 
@@ -353,33 +462,26 @@ class TelegramUploader:
                 new_path = ospath.join(dirpath, f"{name}{ext}")
                 await rename(self._up_path, new_path)
                 self._up_path = new_path
-                # Update display name for caption
-                display_name = f"{name}{ext}"
+                # Update core filename for caption (without prefix/suffix)
+                core_filename = f"{name}{ext}"
                 # Update caption if it's based on the filename
                 if not self._lcaption and cap_mono:
                     if self._lfont:
                         try:
-                            cap_mono = await apply_font_style(
-                                display_name, self._lfont
+                            styled_core = await apply_font_style(
+                                core_filename, self._lfont
+                            )
+                            cap_mono = self._build_caption_with_prefix_suffix(
+                                styled_core
                             )
                         except Exception:
-                            cap_mono = f"<code>{display_name}</code>"
+                            cap_mono = self._build_caption_with_prefix_suffix(
+                                f"<code>{core_filename}</code>"
+                            )
                     else:
-                        cap_mono = f"<code>{display_name}</code>"
-
-            # Generate caption after all file operations are complete
-            if self._lcaption:
-                if ospath.exists(self._up_path):
-                    # Use the current file path (self._up_path) which reflects any renaming
-                    current_filename = ospath.basename(self._up_path)
-                    current_dirpath = ospath.dirname(self._up_path)
-
-                    cap_mono = await generate_caption(
-                        current_filename, current_dirpath, self._lcaption
-                    )
-                else:
-                    # Return a basic caption if file doesn't exist
-                    cap_mono = f"<code>{ospath.basename(self._up_path)}</code>"
+                        cap_mono = self._build_caption_with_prefix_suffix(
+                            f"<code>{core_filename}</code>"
+                        )
 
             # We'll generate MediaInfo during the upload process instead of here
             # This is to avoid issues with files being deleted after MediaInfo generation
@@ -423,17 +525,20 @@ class TelegramUploader:
                     input_media = InputMediaVideo(
                         media=msg.video.file_id,
                         caption=msg.caption,
+                        parse_mode=enums.ParseMode.HTML,
                     )
                 elif hasattr(msg, "document") and msg.document:
                     input_media = InputMediaDocument(
                         media=msg.document.file_id,
                         caption=msg.caption,
+                        parse_mode=enums.ParseMode.HTML,
                     )
                 elif hasattr(msg, "photo") and msg.photo:
                     # Handle photo messages
                     input_media = InputMediaPhoto(
                         media=msg.photo.file_id,
                         caption=msg.caption,
+                        parse_mode=enums.ParseMode.HTML,
                     )
                 else:
                     continue
@@ -475,117 +580,144 @@ class TelegramUploader:
             # Create a copy of the msgs list to avoid modifying the original during iteration
             msgs_copy = msgs.copy()
 
-            # Determine the caption to use for the media group
+            # Determine the caption to use for the media group with new priority order
             group_caption = None
+
+            # Get the actual filename that was used (after all modifications)
+            # First, try to find a message in the group that has already been sent
+            actual_filename = None
+            for msg_item in msgs_copy:
+                if isinstance(msg_item, Message):
+                    if hasattr(msg_item, "document") and msg_item.document:
+                        actual_filename = msg_item.document.file_name
+                        break
+                    if hasattr(msg_item, "video") and msg_item.video:
+                        actual_filename = msg_item.video.file_name
+                        break
+
+            # If we couldn't find a filename from existing messages, use the subkey
+            if not actual_filename:
+                # Remove part numbers from the filename
+                base_name = re.sub(r"\.part\d+(\..*)?$", "", subkey)
+                # If it's a path, get just the filename
+                if os.path.sep in base_name:
+                    base_name = os.path.basename(base_name)
+                actual_filename = base_name
+
+            # Apply the correct priority order:
+            # 1. Apply leech filename template first
+            # 2. Apply leech caption second (uses changed filename)
+            # 3. Apply prefix and suffix last (independent from caption)
+
+            working_filename = actual_filename
+            core_filename = actual_filename  # For caption display
+
+            # Store HTML prefix/suffix for later use (after caption)
+            if self._lprefix:
+                self._html_prefix = self._lprefix
+            if self._lsuffix:
+                self._html_suffix = self._lsuffix
+
+            # Step 1: Apply leech filename template first
+            if self._lfilename:
+                try:
+                    # Extract file metadata for template variables
+                    from bot.helper.ext_utils.template_processor import (
+                        process_template,
+                    )
+
+                    # Extract basic file info
+                    name, ext = os.path.splitext(working_filename)
+                    if ext:
+                        ext = ext[1:]  # Remove the dot
+
+                    # Extract metadata from filename using our helper function
+                    metadata = await extract_metadata_from_filename(name)
+
+                    # Populate metadata dictionary
+                    file_metadata = {
+                        "filename": name,
+                        "ext": ext,
+                        **metadata,  # Include all extracted metadata
+                    }
+
+                    # Process the template with file metadata
+                    processed_filename = await process_template(
+                        self._lfilename, file_metadata
+                    )
+                    if processed_filename:
+                        # Keep the original extension if not included in the template
+                        if ext and not processed_filename.endswith(f".{ext}"):
+                            working_filename = f"{processed_filename}.{ext}"
+                            core_filename = f"{processed_filename}.{ext}"
+                        else:
+                            working_filename = processed_filename
+                            core_filename = processed_filename
+                        LOGGER.info(
+                            f"Applied leech filename template to media group: {working_filename}"
+                        )
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error applying leech filename template to media group: {e}"
+                    )
+
+            # Step 2: Handle leech caption BEFORE applying prefix/suffix
+            # This ensures leech caption gets the changed filename but NOT prefix/suffix
             if self._lcaption:
                 # If leech caption is set, use it for the media group
                 group_caption = self._lcaption
-            elif self._lfilename or self._lprefix or self._lsuffix:
-                # If leech filename, prefix, or suffix is set but no caption, use the modified filename as caption
-                # Extract the base filename without part numbers
-                import os
-                # re module is already imported at the top of the file
+                LOGGER.info("Using leech caption template for media group")
+            # No leech caption - generate default caption
+            elif self._lfont:
+                try:
+                    from bot.helper.ext_utils.font_utils import apply_font_style
 
-                # Get the actual filename that was used (after all modifications)
-                # First, try to find a message in the group that has already been sent
-                actual_filename = None
-                for msg_item in msgs_copy:
-                    if isinstance(msg_item, Message):
-                        if hasattr(msg_item, "document") and msg_item.document:
-                            actual_filename = msg_item.document.file_name
-                            break
-                        if hasattr(msg_item, "video") and msg_item.video:
-                            actual_filename = msg_item.video.file_name
-                            break
+                    styled_core = await apply_font_style(core_filename, self._lfont)
+                    group_caption = styled_core
+                    LOGGER.info(
+                        f"Applied font style '{self._lfont}' to media group caption"
+                    )
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error applying font style to media group caption: {e}"
+                    )
+                    group_caption = f"<code>{core_filename}</code>"
+            else:
+                group_caption = f"<code>{core_filename}</code>"
 
-                # If we couldn't find a filename from existing messages, use the subkey
-                if not actual_filename:
-                    # Remove part numbers from the filename
-                    base_name = re.sub(r"\.part\d+(\..*)?$", "", subkey)
-                    # If it's a path, get just the filename
-                    if os.path.sep in base_name:
-                        base_name = os.path.basename(base_name)
-                    actual_filename = base_name
+            # Step 3: Apply prefix and suffix to BOTH filename AND caption (last step)
+            if self._lprefix:
+                # Clean prefix for filename (remove HTML tags for file system compatibility)
+                clean_prefix = re_sub("<.*?>", "", self._lprefix)
+                working_filename = f"{clean_prefix} {working_filename}"
+                LOGGER.info(
+                    f"Applied leech prefix to media group: {working_filename}"
+                )
 
-                # Apply leech filename template if specified (highest priority for filename)
-                if self._lfilename:
-                    try:
-                        # Extract file metadata for template variables
-                        from bot.helper.ext_utils.template_processor import (
-                            process_template,
-                        )
+                # Add HTML prefix to caption
+                if group_caption:
+                    group_caption = f"{self._html_prefix} {group_caption}"
 
-                        # Extract basic file info
-                        name, ext = os.path.splitext(actual_filename)
-                        if ext:
-                            ext = ext[1:]  # Remove the dot
+            if self._lsuffix:
+                # Split the filename and extension
+                name, ext = (
+                    ospath.splitext(working_filename)
+                    if "." in working_filename
+                    else (working_filename, "")
+                )
+                # Clean suffix for filename (remove HTML tags for file system compatibility)
+                clean_suffix = re_sub("<.*?>", "", self._lsuffix)
+                working_filename = f"{name} {clean_suffix}{ext}"
+                LOGGER.info(
+                    f"Applied leech suffix to media group: {working_filename}"
+                )
 
-                        # Extract metadata from filename using our helper function
-                        metadata = await extract_metadata_from_filename(name)
+                # Add HTML suffix to caption
+                if group_caption:
+                    group_caption = f"{group_caption} {self._html_suffix}"
 
-                        # Populate metadata dictionary
-                        file_metadata = {
-                            "filename": name,
-                            "ext": ext,
-                            **metadata,  # Include all extracted metadata
-                        }
-
-                        # Process the template with file metadata
-                        processed_filename = await process_template(
-                            self._lfilename, file_metadata
-                        )
-                        if processed_filename:
-                            # Keep the original extension if not included in the template
-                            if ext and not processed_filename.endswith(f".{ext}"):
-                                display_name = f"{processed_filename}.{ext}"
-                            else:
-                                display_name = processed_filename
-                            LOGGER.info(
-                                f"Applied leech filename template to media group caption: {display_name}"
-                            )
-                            actual_filename = display_name
-
-                            # Set the group caption to use the modified filename
-                            if self._lfont:
-                                try:
-                                    from bot.helper.ext_utils.font_utils import (
-                                        apply_font_style,
-                                    )
-
-                                    group_caption = await apply_font_style(
-                                        actual_filename, self._lfont
-                                    )
-                                except Exception as e:
-                                    LOGGER.error(
-                                        f"Error applying font style to media group caption: {e}"
-                                    )
-                                    group_caption = f"<code>{actual_filename}</code>"
-                            else:
-                                group_caption = f"<code>{actual_filename}</code>"
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error applying leech filename template to media group: {e}"
-                        )
-
-                # Apply font style if specified
-                if self._lfont:
-                    try:
-                        from bot.helper.ext_utils.font_utils import apply_font_style
-
-                        styled_name = await apply_font_style(
-                            actual_filename, self._lfont
-                        )
-                        group_caption = styled_name
-                        LOGGER.info(
-                            f"Applied font style '{self._lfont}' to media group caption"
-                        )
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error applying font style to media group caption: {e}"
-                        )
-                        group_caption = f"<code>{actual_filename}</code>"
-                else:
-                    group_caption = f"<code>{actual_filename}</code>"
+            # Update actual_filename with the processed result
+            actual_filename = working_filename
 
             # Process messages in batches
             for i in range(0, len(msgs_copy), batch_size):
@@ -645,9 +777,21 @@ class TelegramUploader:
                                             )
                                         )
 
+                                        # Create HTML-formatted filename if prefix/suffix with HTML exists
+                                        html_prefix = getattr(
+                                            self, "_html_prefix", None
+                                        )
+                                        html_suffix = getattr(
+                                            self, "_html_suffix", None
+                                        )
+                                        html_filename = create_html_filename(
+                                            name, html_prefix, html_suffix
+                                        )
+
                                         # Populate metadata dictionary
                                         metadata = {
-                                            "filename": name,
+                                            "filename": name,  # Clean filename for file operations
+                                            "html_filename": html_filename,  # HTML-formatted filename for captions
                                             "ext": ext,
                                             **extracted_metadata,  # Include all extracted metadata
                                         }
@@ -661,7 +805,7 @@ class TelegramUploader:
                                         f"Error processing caption template: {e}"
                                     )
                                     caption = group_caption
-                            elif self._lfilename and actual_filename:
+                            elif self._lfilename and core_filename:
                                 # If we have a processed filename but no template, use it
                                 if self._lfont:
                                     try:
@@ -669,16 +813,56 @@ class TelegramUploader:
                                             apply_font_style,
                                         )
 
-                                        caption = await apply_font_style(
-                                            actual_filename, self._lfont
+                                        styled_core = await apply_font_style(
+                                            core_filename, self._lfont
                                         )
+                                        # Apply prefix/suffix to this caption too
+                                        caption = styled_core
+                                        if (
+                                            hasattr(self, "_html_prefix")
+                                            and self._html_prefix
+                                        ):
+                                            caption = (
+                                                f"{self._html_prefix} {caption}"
+                                            )
+                                        if (
+                                            hasattr(self, "_html_suffix")
+                                            and self._html_suffix
+                                        ):
+                                            caption = (
+                                                f"{caption} {self._html_suffix}"
+                                            )
                                     except Exception as e:
                                         LOGGER.error(
                                             f"Error applying font style to caption: {e}"
                                         )
-                                        caption = f"<code>{actual_filename}</code>"
+                                        caption = f"<code>{core_filename}</code>"
+                                        if (
+                                            hasattr(self, "_html_prefix")
+                                            and self._html_prefix
+                                        ):
+                                            caption = (
+                                                f"{self._html_prefix} {caption}"
+                                            )
+                                        if (
+                                            hasattr(self, "_html_suffix")
+                                            and self._html_suffix
+                                        ):
+                                            caption = (
+                                                f"{caption} {self._html_suffix}"
+                                            )
                                 else:
-                                    caption = f"<code>{actual_filename}</code>"
+                                    caption = f"<code>{core_filename}</code>"
+                                    if (
+                                        hasattr(self, "_html_prefix")
+                                        and self._html_prefix
+                                    ):
+                                        caption = f"{self._html_prefix} {caption}"
+                                    if (
+                                        hasattr(self, "_html_suffix")
+                                        and self._html_suffix
+                                    ):
+                                        caption = f"{caption} {self._html_suffix}"
                             else:
                                 # Otherwise use the original caption
                                 caption = msg.caption
@@ -687,12 +871,14 @@ class TelegramUploader:
                             input_media = InputMediaVideo(
                                 media=msg.video.file_id,
                                 caption=caption,
+                                parse_mode=enums.ParseMode.HTML,
                             )
                             input_media_list.append(input_media)
                         elif hasattr(msg, "document") and msg.document:
                             input_media = InputMediaDocument(
                                 media=msg.document.file_id,
                                 caption=caption,
+                                parse_mode=enums.ParseMode.HTML,
                             )
                             input_media_list.append(input_media)
                         elif hasattr(msg, "photo") and msg.photo:
@@ -700,6 +886,7 @@ class TelegramUploader:
                             input_media = InputMediaPhoto(
                                 media=msg.photo.file_id,
                                 caption=caption,
+                                parse_mode=enums.ParseMode.HTML,
                             )
                             input_media_list.append(input_media)
                     except Exception as e:
@@ -1134,6 +1321,7 @@ class TelegramUploader:
                     force_document=True,
                     disable_notification=True,
                     progress=self._upload_progress,
+                    parse_mode=enums.ParseMode.HTML,
                 )
             elif is_video:
                 key = "videos"
@@ -1173,6 +1361,7 @@ class TelegramUploader:
                     supports_streaming=True,
                     disable_notification=True,
                     progress=self._upload_progress,
+                    parse_mode=enums.ParseMode.HTML,
                 )
             elif is_audio:
                 key = "audios"
@@ -1217,6 +1406,7 @@ class TelegramUploader:
                     thumb=thumb,
                     disable_notification=True,
                     progress=self._upload_progress,
+                    parse_mode=enums.ParseMode.HTML,
                 )
             else:
                 key = "photos"
@@ -1241,6 +1431,7 @@ class TelegramUploader:
                         force_document=True,
                         disable_notification=True,
                         progress=self._upload_progress,
+                        parse_mode=enums.ParseMode.HTML,
                     )
                 else:
                     # Try to send as photo, but be prepared to fall back to document
@@ -1251,6 +1442,7 @@ class TelegramUploader:
                             caption=cap_mono,
                             disable_notification=True,
                             progress=self._upload_progress,
+                            parse_mode=enums.ParseMode.HTML,
                         )
                     except BadRequest as e:
                         if "PHOTO_EXT_INVALID" in str(e):
@@ -1266,6 +1458,7 @@ class TelegramUploader:
                                 force_document=True,
                                 disable_notification=True,
                                 progress=self._upload_progress,
+                                parse_mode=enums.ParseMode.HTML,
                             )
                         else:
                             raise
@@ -1532,17 +1725,31 @@ class TelegramUploader:
                 media_ids = []
                 for msg in msgs_list:
                     if hasattr(msg, "video") and msg.video:
-                        media_ids.append(InputMediaVideo(media=msg.video.file_id))
+                        media_ids.append(
+                            InputMediaVideo(
+                                media=msg.video.file_id,
+                                parse_mode=enums.ParseMode.HTML,
+                            )
+                        )
                     elif hasattr(msg, "document") and msg.document:
                         media_ids.append(
-                            InputMediaDocument(media=msg.document.file_id)
+                            InputMediaDocument(
+                                media=msg.document.file_id,
+                                parse_mode=enums.ParseMode.HTML,
+                            )
                         )
                     elif hasattr(msg, "photo") and msg.photo:
-                        media_ids.append(InputMediaPhoto(media=msg.photo.file_id))
+                        media_ids.append(
+                            InputMediaPhoto(
+                                media=msg.photo.file_id,
+                                parse_mode=enums.ParseMode.HTML,
+                            )
+                        )
 
                 # Add caption to the first media item only
                 if media_ids and msgs_list[0].caption:
                     media_ids[0].caption = msgs_list[0].caption
+                    media_ids[0].parse_mode = enums.ParseMode.HTML
 
                 # Check if we have a stored command message for this destination
                 dest_str = str(dest)

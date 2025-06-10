@@ -1,10 +1,8 @@
 name: Deploy to Heroku
 
 on:
-  # Manual deployment trigger - only available on extended branch
+  # Manual deployment trigger - available on any branch
   workflow_dispatch:
-    branches:
-      - extended  # Manual trigger only available on extended branch
     inputs:
       HEROKU_APP_NAME:
         description: "Heroku App name"
@@ -40,11 +38,9 @@ on:
       - 'requirements.txt'
       - 'Dockerfile'
     branches:
-      - extended  # Deploy from extended branch only
-
-  # Monthly scheduled deployment at 3 AM UTC on the 1st of every month
-  schedule:
-    - cron: '0 3 1 * *'
+      - deploy
+      - main
+      - extended
 
 jobs:
   deploy:
@@ -52,8 +48,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: extended  # Always checkout extended branch
+        # Dynamically checkout the current branch (no ref specified means current branch)
+
+      - name: Show current branch
+        run: |
+          echo "Deploying from branch: ${{ github.ref_name }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          git branch --show-current
 
       - name: Delete unnecessary directories and files
         run: |

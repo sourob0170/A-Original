@@ -202,7 +202,15 @@ try:
 
             if str(error).lower() != "no error":
                 error_msg = str(error)
-                LOGGER.error(f"MEGA clone transfer finished with error: {error_msg}")
+                # Check if this is an access denied error and log as warning instead of error
+                if "access denied" in error_msg.lower():
+                    LOGGER.warning(
+                        f"MEGA clone transfer finished with access denied: {error_msg}"
+                    )
+                else:
+                    LOGGER.error(
+                        f"MEGA clone transfer finished with error: {error_msg}"
+                    )
                 self.error = error_msg
                 async_to_sync(
                     self.listener.on_download_error,

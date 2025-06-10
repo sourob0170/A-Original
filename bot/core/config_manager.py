@@ -367,7 +367,7 @@ class Config:
     MEDIAINFO_ENABLED: bool = False
 
     # YouTube Upload Settings
-    YOUTUBE_UPLOAD_ENABLED: bool = False  # Enable/disable YouTube upload feature
+    YOUTUBE_UPLOAD_ENABLED: bool = True  # Enable/disable YouTube upload feature
     YOUTUBE_UPLOAD_DEFAULT_PRIVACY: str = (
         "unlisted"  # Default privacy setting: public, unlisted, private
     )

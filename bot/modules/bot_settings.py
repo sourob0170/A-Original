@@ -241,7 +241,7 @@ DEFAULT_VALUES = {
     "ZOTIFY_PRINT_SKIPS": False,
     "ZOTIFY_MATCH_EXISTING": False,
     # YouTube Upload Settings
-    "YOUTUBE_UPLOAD_ENABLED": False,
+    "YOUTUBE_UPLOAD_ENABLED": True,
     "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "unlisted",
     "YOUTUBE_UPLOAD_DEFAULT_CATEGORY": "22",
     "YOUTUBE_UPLOAD_DEFAULT_TAGS": "",
@@ -1467,34 +1467,109 @@ Send one of the following position options:
             f"<b>Config Variables</b> | Page: {int(start / 10) + 1} | State: {state}"
         )
     elif key == "private":
+        # Get available private files
+        available_files = await database.get_private_files()
+
+        # Create universal buttons for private files management
+        buttons.data_button("📤 Set Files", "botset private_set")
+        buttons.data_button("👁️ View Files", "botset private_view")
+        buttons.data_button("🗑️ Delete Files", "botset private_delete")
+        buttons.data_button("🔄 Sync to DB", "botset private_sync_db")
+        buttons.data_button("💾 Sync to FS", "botset private_sync_fs")
+
         buttons.data_button("⬅️ Back", "botset back", "footer")
         buttons.data_button("❌ Close", "botset close", "footer")
-        msg = """<b>Private Files Management</b>
 
-<b>Upload a private file:</b>
-Send any of these files:
-• config.py
-• token.pickle
-• youtube_token.pickle
-• rclone.conf
-• accounts.zip
-• list_drives.txt
-• cookies.txt
-• .netrc
-• streamrip_config.toml
-• zotify_credentials.json
-• Any other private file
+        # Create status message showing which files exist
+        file_status = []
+        files_need_sync_to_db = 0
+        files_need_sync_to_fs = 0
+        known_files = [
+            ("config.py", "🔧 Config"),
+            ("token.pickle", "🔑 Token"),
+            ("token_sa.pickle", "🔑 SA Token"),
+            ("youtube_token.pickle", "📺 YouTube Token"),
+            ("rclone.conf", "☁️ Rclone Config"),
+            ("accounts.zip", "📁 Service Accounts"),
+            ("list_drives.txt", "📋 Drive List"),
+            ("cookies.txt", "🍪 Cookies"),
+            (".netrc", "🔐 Netrc"),
+            ("shorteners.txt", "🔗 Shorteners"),
+            ("streamrip_config.toml", "🎵 Streamrip Config"),
+            ("zotify_credentials.json", "🎧 Zotify Credentials"),
+        ]
 
-<b>Delete a private file:</b>
-Send only the file name as text message.
+        for file_name, display_name in known_files:
+            # All files should be in available_files now
+            file_info = available_files.get(
+                file_name,
+                {
+                    "exists_db": False,
+                    "exists_fs": False,
+                    "accounts_dir_exists": False,
+                },
+            )
+
+            # Determine base status
+            if file_info["exists_db"] and file_info["exists_fs"]:
+                status = "✅ DB+FS"
+            elif file_info["exists_db"]:
+                status = "⚠️ DB"  # Highlight files that need syncing to FS
+                files_need_sync_to_fs += 1
+            elif file_info["exists_fs"]:
+                status = "⚠️ FS"  # Highlight files that need syncing to DB
+                files_need_sync_to_db += 1
+            else:
+                status = "❌"
+
+            # Special handling for accounts.zip - also check accounts directory
+            if file_name == "accounts.zip":
+                accounts_dir_exists = file_info.get("accounts_dir_exists", False)
+                if accounts_dir_exists:
+                    if status == "❌":
+                        status = "✅ DIR"  # Only directory exists
+                    else:
+                        status += "+DIR"  # File + directory exists
+
+            file_status.append(f"• {display_name}: {status}")
+
+        sync_warnings = []
+        if files_need_sync_to_db > 0:
+            sync_warnings.append(
+                f"⚠️ <b>{files_need_sync_to_db} file(s) need syncing to database!</b>"
+            )
+        if files_need_sync_to_fs > 0:
+            sync_warnings.append(
+                f"⚠️ <b>{files_need_sync_to_fs} file(s) need syncing to filesystem!</b>"
+            )
+
+        sync_warning = "\n" + "\n".join(sync_warnings) if sync_warnings else ""
+
+        msg = f"""<b>🔒 Private Files Management</b>
+
+<b>File Status:</b>
+{chr(10).join(file_status)}{sync_warning}
+
+<b>Actions:</b>
+• <b>📤 Set Files:</b> Upload new private files
+• <b>👁️ View Files:</b> Download existing files
+• <b>🗑️ Delete Files:</b> Remove private files
+• <b>🔄 Sync to DB:</b> Backup filesystem files to database
+• <b>💾 Sync to FS:</b> Restore database files to filesystem
+
+<b>Legend:</b>
+• ✅ DB+FS: Available in database and filesystem
+• ⚠️ DB: Available in database only (⚠️ Not in filesystem)
+• ⚠️ FS: Available in filesystem only (⚠️ Not backed up)
+• ✅ DIR: Directory exists (accounts.zip)
+• ❌: Not available
 
 <b>Note:</b>
-• Changing .netrc will not take effect for aria2c until restart.
-• streamrip_config.toml will be used for custom streamrip configuration.
-• zotify_credentials.json will be used for Spotify authentication.
-• youtube_token.pickle will be used for YouTube uploads.
-
-<i>Timeout: 60 seconds</i>"""
+• Changing .netrc will not take effect for aria2c until restart
+• streamrip_config.toml will be used for custom streamrip configuration
+• zotify_credentials.json will be used for Spotify authentication
+• youtube_token.pickle will be used for YouTube uploads
+• Files showing ⚠️ should be synced for complete backup/restore"""
     elif key == "aria":
         for k in list(aria2_options.keys())[start : 10 + start]:
             buttons.data_button(k, f"botset ariavar {k}")
@@ -13508,10 +13583,582 @@ async def edit_bot_settings(client, query):
         # Set the state back to what it was
         globals()["state"] = current_state
         await update_buttons(message, data[1])
+    elif data[1] == "private_set":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+
+        # Create a message for file upload
+        buttons = ButtonMaker()
+        buttons.data_button("❌ Cancel", "botset private")
+
+        await edit_message(
+            message,
+            """<b>📤 Upload Private Files</b>
+
+<b>Send any of these files:</b>
+• config.py
+• token.pickle
+• token_sa.pickle
+• youtube_token.pickle
+• rclone.conf
+• accounts.zip
+• list_drives.txt
+• cookies.txt
+• .netrc
+• shorteners.txt
+• streamrip_config.toml
+• zotify_credentials.json
+• Any other private file
+
+<b>Note:</b>
+• Changing .netrc will not take effect for aria2c until restart
+• streamrip_config.toml will be used for custom streamrip configuration
+• zotify_credentials.json will be used for Spotify authentication
+• youtube_token.pickle will be used for YouTube uploads
+• shorteners.txt will be used for URL shortening services
+
+<i>Timeout: 60 seconds</i>""",
+            buttons.build_menu(1),
+        )
 
         pfunc = partial(update_private_file, pre_message=message)
-        rfunc = partial(update_buttons, message)
+        rfunc = partial(update_buttons, message, "private")
         await event_handler(client, query, pfunc, rfunc, True)
+    elif data[1] == "private_view":
+        await query.answer()
+        # Get available private files
+        available_files = await database.get_private_files()
+
+        # Filter to only show files that actually exist somewhere
+        existing_files = {}
+        for file_name, file_info in available_files.items():
+            if (
+                file_info["exists_db"]
+                or file_info["exists_fs"]
+                or (
+                    file_name == "accounts.zip"
+                    and file_info.get("accounts_dir_exists", False)
+                )
+            ):
+                existing_files[file_name] = file_info
+
+        if not existing_files:
+            await query.answer("No private files available!", show_alert=True)
+            return
+
+        # Create buttons for each available file
+        buttons = ButtonMaker()
+        for file_name in existing_files:
+            display_name = file_name.replace("_", " ").title()
+            if file_name == ".netrc":
+                display_name = "Netrc"
+            elif file_name == "config.py":
+                display_name = "Config"
+            elif file_name == "token_sa.pickle":
+                display_name = "SA Token"
+            elif file_name == "shorteners.txt":
+                display_name = "Shorteners"
+            elif file_name == "streamrip_config.toml":
+                display_name = "Streamrip Config"
+            elif file_name == "zotify_credentials.json":
+                display_name = "Zotify Credentials"
+            buttons.data_button(
+                f"📄 {display_name}", f"botset private_send {file_name}"
+            )
+
+        buttons.data_button("⬅️ Back", "botset private", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        await edit_message(
+            message,
+            f"""<b>👁️ View Private Files</b>
+
+<b>Available Files ({len(existing_files)}):</b>
+Click on any file to download it.
+
+<b>Note:</b> Files will be sent as documents in this chat.""",
+            buttons.build_menu(2),
+        )
+    elif data[1] == "private_delete":
+        await query.answer()
+        # Get available private files
+        available_files = await database.get_private_files()
+
+        # Filter to only show files that actually exist somewhere
+        existing_files = {}
+        for file_name, file_info in available_files.items():
+            if (
+                file_info["exists_db"]
+                or file_info["exists_fs"]
+                or (
+                    file_name == "accounts.zip"
+                    and file_info.get("accounts_dir_exists", False)
+                )
+            ):
+                existing_files[file_name] = file_info
+
+        if not existing_files:
+            await query.answer(
+                "No private files available to delete!", show_alert=True
+            )
+            return
+
+        # Create buttons for each available file
+        buttons = ButtonMaker()
+        for file_name in existing_files:
+            display_name = file_name.replace("_", " ").title()
+            if file_name == ".netrc":
+                display_name = "Netrc"
+            elif file_name == "config.py":
+                display_name = "Config"
+            elif file_name == "token_sa.pickle":
+                display_name = "SA Token"
+            elif file_name == "shorteners.txt":
+                display_name = "Shorteners"
+            elif file_name == "streamrip_config.toml":
+                display_name = "Streamrip Config"
+            elif file_name == "zotify_credentials.json":
+                display_name = "Zotify Credentials"
+            buttons.data_button(
+                f"🗑️ {display_name}", f"botset private_confirm_delete {file_name}"
+            )
+
+        # Add "Delete All" button
+        buttons.data_button("🗑️ Delete All", "botset private_confirm_delete_all")
+        buttons.data_button("⬅️ Back", "botset private", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        await edit_message(
+            message,
+            f"""<b>🗑️ Delete Private Files</b>
+
+<b>Available Files ({len(existing_files)}):</b>
+Click on any file to delete it.
+
+<b>⚠️ Warning:</b> This action cannot be undone!""",
+            buttons.build_menu(2),
+        )
+    elif data[1] == "private_send":
+        await query.answer()
+        file_name = data[2]
+
+        try:
+            # Check if file exists in filesystem first
+            if await aiopath.exists(file_name):
+                await send_file(message, file_name, f"📄 {file_name}")
+            # Special handling for accounts.zip - create from accounts directory if it exists
+            elif file_name == "accounts.zip" and await aiopath.exists("accounts"):
+                # Create accounts.zip from accounts directory
+                await (
+                    await create_subprocess_exec(
+                        "7z", "a", "accounts.zip", "accounts/*.json"
+                    )
+                ).wait()
+                if await aiopath.exists("accounts.zip"):
+                    await send_file(message, file_name, f"📄 {file_name}")
+                    # Update database with the newly created file
+                    await database.update_private_file("accounts.zip")
+                else:
+                    await query.answer(
+                        "Failed to create accounts.zip from directory!",
+                        show_alert=True,
+                    )
+                    return
+            else:
+                # Try to get from database
+                db_files = await database.db.settings.files.find_one(
+                    {"_id": TgClient.ID}
+                )
+                if db_files:
+                    db_key = file_name.replace(".", "__")
+                    if db_files.get(db_key):
+                        # Write file from database to filesystem temporarily
+                        async with aiopen(file_name, "wb") as f:
+                            await f.write(db_files[db_key])
+                        await send_file(message, file_name, f"📄 {file_name}")
+                        # Clean up temporary file
+                        await remove(file_name)
+                    else:
+                        await query.answer(
+                            f"File {file_name} not found!", show_alert=True
+                        )
+                        return
+                else:
+                    await query.answer(
+                        f"File {file_name} not found!", show_alert=True
+                    )
+                    return
+
+            await query.answer(f"File {file_name} sent successfully!")
+
+        except Exception as e:
+            LOGGER.error(f"Error sending private file {file_name}: {e}")
+            await query.answer(f"Error sending file {file_name}!", show_alert=True)
+    elif data[1] == "private_confirm_delete":
+        await query.answer()
+
+        if data[2] == "all":
+            # Confirm delete all
+            buttons = ButtonMaker()
+            buttons.data_button(
+                "✅ Yes, Delete All", "botset private_delete_all_confirmed"
+            )
+            buttons.data_button("❌ Cancel", "botset private_delete")
+
+            await edit_message(
+                message,
+                """<b>⚠️ Confirm Delete All Private Files</b>
+
+Are you sure you want to delete ALL private files?
+
+<b>This will remove:</b>
+• All files from the database
+• All files from the filesystem
+• This action cannot be undone!
+
+<b>Files that will be deleted:</b>
+• config.py, token.pickle, token_sa.pickle, youtube_token.pickle
+• rclone.conf, accounts.zip, list_drives.txt
+• cookies.txt, .netrc, shorteners.txt
+• streamrip_config.toml, zotify_credentials.json
+• Any other private files""",
+                buttons.build_menu(1),
+            )
+        else:
+            # Confirm delete single file
+            file_name = data[2]
+            display_name = file_name.replace("_", " ").title()
+            if file_name == ".netrc":
+                display_name = "Netrc"
+            elif file_name == "config.py":
+                display_name = "Config"
+            elif file_name == "token_sa.pickle":
+                display_name = "SA Token"
+            elif file_name == "shorteners.txt":
+                display_name = "Shorteners"
+            elif file_name == "streamrip_config.toml":
+                display_name = "Streamrip Config"
+            elif file_name == "zotify_credentials.json":
+                display_name = "Zotify Credentials"
+
+            buttons = ButtonMaker()
+            buttons.data_button(
+                "✅ Yes, Delete", f"botset private_delete_confirmed {file_name}"
+            )
+            buttons.data_button("❌ Cancel", "botset private_delete")
+
+            await edit_message(
+                message,
+                f"""<b>⚠️ Confirm Delete File</b>
+
+Are you sure you want to delete <b>{display_name}</b>?
+
+<b>File:</b> <code>{file_name}</code>
+
+<b>This will remove:</b>
+• File from the database
+• File from the filesystem
+• This action cannot be undone!""",
+                buttons.build_menu(1),
+            )
+    elif data[1] == "private_delete_confirmed":
+        await query.answer()
+        file_name = data[2]
+
+        try:
+            # Delete from filesystem if exists
+            if await aiopath.exists(file_name):
+                await remove(file_name)
+
+            # Delete from database
+            db_path = file_name.replace(".", "__")
+            await database.db.settings.files.update_one(
+                {"_id": TgClient.ID},
+                {"$unset": {db_path: ""}},
+                upsert=True,
+            )
+
+            # Handle special file deletions (same logic as update_private_file)
+            if file_name == "accounts.zip":
+                if await aiopath.exists("accounts"):
+                    await rmtree("accounts", ignore_errors=True)
+                if await aiopath.exists("rclone_sa"):
+                    await rmtree("rclone_sa", ignore_errors=True)
+                Config.USE_SERVICE_ACCOUNTS = False
+                await database.update_config({"USE_SERVICE_ACCOUNTS": False})
+            elif file_name in [".netrc", "netrc"]:
+                await (await create_subprocess_exec("touch", ".netrc")).wait()
+                await (await create_subprocess_exec("chmod", "600", ".netrc")).wait()
+                await (
+                    await create_subprocess_exec("cp", ".netrc", "/root/.netrc")
+                ).wait()
+            elif file_name == "streamrip_config.toml":
+                try:
+                    from bot.helper.streamrip_utils.streamrip_config import (
+                        streamrip_config,
+                    )
+
+                    success = await streamrip_config.delete_custom_config_from_db()
+                    if success:
+                        await streamrip_config.initialize()
+                        LOGGER.info(
+                            "Streamrip custom config deleted, reverted to default"
+                        )
+                except Exception as e:
+                    LOGGER.error(f"Error handling streamrip config deletion: {e}")
+            elif file_name == "zotify_credentials.json":
+                try:
+                    from pathlib import Path
+
+                    user_id = getattr(Config, "OWNER_ID", 0)
+
+                    if database.db is not None:
+                        try:
+                            await database.db.users.update_one(
+                                {"_id": user_id},
+                                {"$unset": {"ZOTIFY_CREDENTIALS": ""}},
+                            )
+                        except Exception as e:
+                            LOGGER.error(
+                                f"Error clearing Zotify credentials from database: {e}"
+                            )
+
+                    credentials_path = (
+                        Config.ZOTIFY_CREDENTIALS_PATH or "./zotify_credentials.json"
+                    )
+                    creds_file = Path(credentials_path)
+                    if creds_file.exists():
+                        creds_file.unlink()
+                except Exception as e:
+                    LOGGER.error(f"Error handling Zotify credentials deletion: {e}")
+
+            await query.answer(f"File {file_name} deleted successfully!")
+            # Return to private files menu
+            await update_buttons(message, "private")
+
+        except Exception as e:
+            LOGGER.error(f"Error deleting private file {file_name}: {e}")
+            await query.answer(f"Error deleting file {file_name}!", show_alert=True)
+    elif data[1] == "private_delete_all_confirmed":
+        await query.answer()
+
+        try:
+            # Get all available files first
+            available_files = await database.get_private_files()
+
+            # Filter to only delete files that actually exist somewhere
+            existing_files = {}
+            for file_name, file_info in available_files.items():
+                if (
+                    file_info["exists_db"]
+                    or file_info["exists_fs"]
+                    or (
+                        file_name == "accounts.zip"
+                        and file_info.get("accounts_dir_exists", False)
+                    )
+                ):
+                    existing_files[file_name] = file_info
+
+            deleted_count = 0
+
+            # Delete each existing file
+            for file_name in existing_files:
+                try:
+                    # Delete from filesystem if exists
+                    if await aiopath.exists(file_name):
+                        await remove(file_name)
+
+                    # Delete from database
+                    db_path = file_name.replace(".", "__")
+                    await database.db.settings.files.update_one(
+                        {"_id": TgClient.ID},
+                        {"$unset": {db_path: ""}},
+                        upsert=True,
+                    )
+                    deleted_count += 1
+
+                except Exception as e:
+                    LOGGER.error(f"Error deleting file {file_name}: {e}")
+
+            # Handle special cleanup
+            try:
+                # Clean up accounts and rclone_sa directories
+                if await aiopath.exists("accounts"):
+                    await rmtree("accounts", ignore_errors=True)
+                if await aiopath.exists("rclone_sa"):
+                    await rmtree("rclone_sa", ignore_errors=True)
+
+                # Reset service accounts config
+                Config.USE_SERVICE_ACCOUNTS = False
+                await database.update_config({"USE_SERVICE_ACCOUNTS": False})
+
+                # Reset netrc
+                await (await create_subprocess_exec("touch", ".netrc")).wait()
+                await (await create_subprocess_exec("chmod", "600", ".netrc")).wait()
+                await (
+                    await create_subprocess_exec("cp", ".netrc", "/root/.netrc")
+                ).wait()
+
+                # Reset streamrip config
+                try:
+                    from bot.helper.streamrip_utils.streamrip_config import (
+                        streamrip_config,
+                    )
+
+                    await streamrip_config.delete_custom_config_from_db()
+                    await streamrip_config.initialize()
+                except Exception as e:
+                    LOGGER.error(f"Error resetting streamrip config: {e}")
+
+                # Clear zotify credentials
+                try:
+                    user_id = getattr(Config, "OWNER_ID", 0)
+                    if database.db is not None:
+                        await database.db.users.update_one(
+                            {"_id": user_id},
+                            {"$unset": {"ZOTIFY_CREDENTIALS": ""}},
+                        )
+                except Exception as e:
+                    LOGGER.error(f"Error clearing Zotify credentials: {e}")
+
+            except Exception as e:
+                LOGGER.error(f"Error during special cleanup: {e}")
+
+            await query.answer(
+                f"Successfully deleted {deleted_count} private files!"
+            )
+            # Return to private files menu
+            await update_buttons(message, "private")
+
+        except Exception as e:
+            LOGGER.error(f"Error deleting all private files: {e}")
+            await query.answer("Error deleting files!", show_alert=True)
+    elif data[1] == "private_sync_db":
+        await query.answer()
+
+        try:
+            # Show syncing message
+            await edit_message(
+                message,
+                """<b>🔄 Syncing Private Files to Database</b>
+
+⏳ Checking filesystem files and syncing to database...
+
+<i>Please wait, this may take a few seconds.</i>""",
+            )
+
+            # Perform the sync
+            sync_result = await database.sync_private_files_to_db()
+
+            # Prepare result message
+            if sync_result["synced"] > 0:
+                result_msg = f"""<b>✅ Sync to Database Completed</b>
+
+<b>Files Synced:</b> {sync_result["synced"]} files backed up to database
+
+<b>Status:</b> All filesystem files are now properly backed up in the database."""
+
+                if sync_result["errors"]:
+                    result_msg += "\n\n<b>⚠️ Warnings:</b>\n"
+                    for error in sync_result["errors"][:3]:  # Show max 3 errors
+                        result_msg += f"• {error}\n"
+                    if len(sync_result["errors"]) > 3:
+                        result_msg += (
+                            f"• ... and {len(sync_result['errors']) - 3} more errors"
+                        )
+            elif sync_result["errors"]:
+                result_msg = f"""<b>❌ Sync to Database Failed</b>
+
+<b>Errors encountered:</b>
+{chr(10).join(f"• {error}" for error in sync_result["errors"][:5])}"""
+            else:
+                result_msg = """<b>✅ Sync to Database Completed</b>
+
+<b>Status:</b> All files are already synced to database.
+No filesystem-only files found."""
+
+            # Show result for 3 seconds then return to private files menu
+            await edit_message(message, result_msg)
+            await sleep(3)
+            await update_buttons(message, "private")
+
+        except Exception as e:
+            LOGGER.error(f"Error syncing private files to database: {e}")
+            await edit_message(
+                message,
+                f"""<b>❌ Sync to Database Failed</b>
+
+<b>Error:</b> {e!s}
+
+<i>Please try again or check the logs for more details.</i>""",
+            )
+            await sleep(3)
+            await update_buttons(message, "private")
+    elif data[1] == "private_sync_fs":
+        await query.answer()
+
+        try:
+            # Show syncing message
+            await edit_message(
+                message,
+                """<b>💾 Syncing Private Files to Filesystem</b>
+
+⏳ Checking database files and syncing to filesystem...
+
+<i>Please wait, this may take a few seconds.</i>""",
+            )
+
+            # Perform the sync
+            sync_result = await database.sync_private_files_to_fs()
+
+            # Prepare result message
+            if sync_result["synced"] > 0:
+                result_msg = f"""<b>✅ Sync to Filesystem Completed</b>
+
+<b>Files Synced:</b> {sync_result["synced"]} files restored to filesystem
+
+<b>Status:</b> All database files are now properly restored in the filesystem."""
+
+                if sync_result["errors"]:
+                    result_msg += "\n\n<b>⚠️ Warnings:</b>\n"
+                    for error in sync_result["errors"][:3]:  # Show max 3 errors
+                        result_msg += f"• {error}\n"
+                    if len(sync_result["errors"]) > 3:
+                        result_msg += (
+                            f"• ... and {len(sync_result['errors']) - 3} more errors"
+                        )
+            elif sync_result["errors"]:
+                result_msg = f"""<b>❌ Sync to Filesystem Failed</b>
+
+<b>Errors encountered:</b>
+{chr(10).join(f"• {error}" for error in sync_result["errors"][:5])}"""
+            else:
+                result_msg = """<b>✅ Sync to Filesystem Completed</b>
+
+<b>Status:</b> All files are already synced to filesystem.
+No database-only files found."""
+
+            # Show result for 3 seconds then return to private files menu
+            await edit_message(message, result_msg)
+            await sleep(3)
+            await update_buttons(message, "private")
+
+        except Exception as e:
+            LOGGER.error(f"Error syncing private files to filesystem: {e}")
+            await edit_message(
+                message,
+                f"""<b>❌ Sync to Filesystem Failed</b>
+
+<b>Error:</b> {e!s}
+
+<i>Please try again or check the logs for more details.</i>""",
+            )
+            await sleep(3)
+            await update_buttons(message, "private")
     elif data[1] == "configure_tools":
         await query.answer()
         # This handler is for the "Configure Tools" button in the Media Tools menu

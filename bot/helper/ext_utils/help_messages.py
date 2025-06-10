@@ -1050,10 +1050,10 @@ Download high-quality music from streaming platforms like Qobuz, Tidal, Deezer, 
 • <code>/srs</code>, <code>/srsearch</code> or <code>/streamripsearch</code> - Search for music across platforms
 
 <b>Supported Platforms:</b>
-• <b>Qobuz</b> - Up to Hi-Res+ quality (24-bit/192kHz)
-• <b>Tidal</b> - Up to Hi-Res/MQA quality (24-bit/96kHz)
-• <b>Deezer</b> - Up to CD quality (16-bit/44.1kHz)
-• <b>SoundCloud</b> - Up to 320 kbps
+• <b>Qobuz</b> - Up to Hi-Res+ quality (24-bit/192kHz) - Quality levels 0-4
+• <b>Tidal</b> - Up to Hi-Res/MQA quality (24-bit/96kHz) - Quality levels 0-3
+• <b>Deezer</b> - Up to CD quality (16-bit/44.1kHz) - Quality levels 0-2
+• <b>SoundCloud</b> - Up to 320 kbps - Quality levels 0-1
 
 <b>Input Types:</b>
 • Direct URLs from supported platforms
@@ -1117,7 +1117,6 @@ Customize how your music downloads are handled.
 • <code>-up mg</code> - Upload to MEGA.nz cloud storage
 • <code>-up &lt;path&gt;</code> - Custom upload path for Rclone
 • <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
-• <code>-sync</code> - Sync with cloud storage
 
 <b>Telegram Upload (Leech only):</b>
 • <code>-thumb &lt;url&gt;</code> - Custom thumbnail URL
@@ -1127,7 +1126,6 @@ Customize how your music downloads are handled.
 <b>File Selection:</b>
 • <code>-s</code> - Select specific files from multi-track downloads
 • <code>-e &lt;extensions&gt;</code> - Exclude file extensions
-• <code>-j</code> - Join files if multiple parts
 
 <b>Upload Type:</b>
 • <code>-doc</code> - Upload as document
@@ -1145,84 +1143,70 @@ Customize how your music downloads are handled.
 • <code>/srm url -n "Jazz Collection" -up "Music/Jazz"</code>
 • <code>/srl url -sp 2GB -doc -cap "High Quality Music"</code>"""
 
-streamrip_media_tools = """<b>🎬 Media Tools Integration</b>
+streamrip_search_flags = """<b>🔍 Search Options</b>
 
-Enhance your music downloads with powerful media processing tools.
+Search for music across supported platforms and download results.
 
-<b>Main Media Tools Flag:</b>
-• <code>-mt</code> - Enable media tools processing
+<b>Platform Selection:</b>
+• <code>-p &lt;platform&gt;</code> or <code>-platform &lt;platform&gt;</code> - Search specific platform
+  - <code>-p qobuz</code> - Search Qobuz only
+  - <code>-p tidal</code> - Search Tidal only
+  - <code>-p deezer</code> - Search Deezer only
+  - <code>-p soundcloud</code> - Search SoundCloud only
 
-<b>Core Operations:</b>
-• <code>-compress</code> - Enable compression
-• <code>-extract</code> - Enable extraction
-• <code>-add</code> - Enable adding tracks/metadata
+<b>Media Type Filter:</b>
+• <code>-t &lt;type&gt;</code> or <code>-type &lt;type&gt;</code> - Filter by media type
+  - <code>-t track</code> - Search for individual songs
+  - <code>-t album</code> - Search for full albums
+  - <code>-t artist</code> - Search for artist profiles
+  - <code>-t playlist</code> - Search for playlists
 
-<b>Compression Presets:</b>
-• <code>-audio-fast</code> - Fast audio compression
-• <code>-audio-medium</code> - Balanced audio compression
-• <code>-audio-slow</code> - High-quality audio compression
-
-<b>Specific Compression Types:</b>
-• <code>-comp-audio</code> - Compress audio tracks
-• <code>-comp-image</code> - Compress album artwork
-• <code>-comp-document</code> - Compress metadata files
-• <code>-comp-archive</code> - Compress final archive
-
-<b>Extract Operations:</b>
-• <code>-extract-audio</code> - Extract audio tracks
-• <code>-extract-attachment</code> - Extract embedded files
-
-<b>Add Operations:</b>
-• <code>-add-audio</code> - Add audio tracks
-• <code>-add-attachment</code> - Add metadata/artwork
-• <code>-preserve</code> - Keep existing tracks when adding
-• <code>-replace</code> - Replace existing tracks
+<b>Result Control:</b>
+• <code>-f</code> or <code>-first</code> - Download first result automatically
+• <code>-n &lt;number&gt;</code> or <code>-num &lt;number&gt;</code> - Limit number of results
 
 <b>Examples:</b>
-• <code>/srm url -mt -compress -audio-medium</code>
-• <code>/srl url -mt -add-attachment -preserve</code>
-• <code>/srm url -mt -comp-audio -extract-attachment</code>
+• <code>/srs Daft Punk Random Access Memories</code> - Search all platforms
+• <code>/srs -p qobuz -t album Beethoven Symphony</code> - Search Qobuz albums only
+• <code>/srs -f -p tidal The Weeknd Blinding Lights</code> - Auto-download first Tidal result
+• <code>/srs -t artist -n 5 Miles Davis</code> - Show 5 artist results
 
-<b>Note:</b> Media tools require additional processing time but provide enhanced output quality."""
+<b>Note:</b> Search results show platform availability and quality levels for each result."""
 
-streamrip_control_flags = """<b>🔧 Advanced Control Flags</b>
+streamrip_control_flags = """<b>🔧 Control Flags</b>
 
-Fine-tune your streamrip downloads with advanced options.
-
-<b>Archive & Security:</b>
-• <code>-z &lt;password&gt;</code> - Archive password protection
-  - <code>/srmirror url -z "mypassword"</code>
-  - Works with compressed downloads
+Fine-tune your streamrip downloads with available options.
 
 <b>Force Operations:</b>
 • <code>-f</code> - Force run (bypass some checks)
-• <code>-fd</code> - Force download (ignore cache)
-• <code>-fu</code> - Force upload (re-upload existing)
+• <code>-fd</code> - Force download (ignore cache/database)
 
-<b>Processing Control:</b>
-• <code>-s</code> - Select files from multi-track downloads
-• <code>-j</code> - Join files if multiple parts
-• <code>-e &lt;extensions&gt;</code> - Exclude file extensions
-  - <code>-e "log,cue,m3u"</code> - Exclude metadata files
-
-<b>Cloud Integration (Mirror):</b>
-• <code>-sync</code> - Sync with cloud storage
-• <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
-  - <code>-rcf "--buffer-size:8M|--transfers:4"</code>
-
-<b>Upload Options (Leech):</b>
+<b>Upload Options (Leech only):</b>
 • <code>-doc</code> - Upload as document (preserves quality)
 • <code>-med</code> - Upload as media (Telegram compression)
+• <code>-thumb &lt;url&gt;</code> - Custom thumbnail URL
+• <code>-sp &lt;size&gt;</code> - Split size for large files
+• <code>-cap &lt;caption&gt;</code> - Custom caption for uploads
+
+<b>Cloud Integration (Mirror only):</b>
+• <code>-up &lt;destination&gt;</code> - Upload destination
+  - <code>-up gd</code> - Upload to Google Drive
+  - <code>-up "Music/Streamrip"</code> - Custom path
+• <code>-rcf &lt;flags&gt;</code> - Custom rclone flags
+
+<b>File Selection:</b>
+• <code>-s</code> - Select specific files from multi-track downloads
+• <code>-e &lt;extensions&gt;</code> - Exclude file extensions
 
 <b>Examples:</b>
-• <code>/srm url -z "secure123" -sync -f</code>
-• <code>/srl url -s -j -doc -e "log,cue"</code>
-• <code>/srm url -rcf "--transfers:8" -fd</code>
+• <code>/srm url -f -up "Music/Jazz"</code>
+• <code>/srl url -doc -sp 2GB -cap "High Quality Music"</code>
+• <code>/srm url -fd -rcf "--transfers:8"</code>
 
 <b>Tips:</b>
-• Use <code>-doc</code> for lossless audio preservation
+• Use <code>-doc</code> for lossless audio preservation in Telegram
 • Use <code>-s</code> for large albums to select specific tracks
-• Combine flags for complex workflows"""
+• Use <code>-fd</code> to re-download previously downloaded content"""
 
 streamrip_examples = """<b>📋 Usage Examples</b>
 
@@ -1242,33 +1226,36 @@ Real-world examples of streamrip commands for different scenarios.
 • <code>/srm url -n "Artist - Album (2023)" -up "Music/2023"</code>
 • <code>/srl url -n "Jazz Essentials" -cap "High Quality Jazz"</code>
 
-<b>🎬 Media Tools Enhanced:</b>
-• <code>/srm url -mt -compress -audio-medium</code>
-• <code>/srl url -mt -add-attachment -preserve</code>
-• <code>/srm url -mt -comp-audio -extract-attachment</code>
-
-<b>🔒 Secure Downloads:</b>
-• <code>/srm url -z "mypassword" -compress</code>
-• <code>/srl url -doc -z "secure123"</code>
+<b>🔍 Search Examples:</b>
+• <code>/srs -p qobuz -t album Beethoven Symphony</code>
+• <code>/srs -f -p tidal The Weeknd Blinding Lights</code>
+• <code>/srs -t artist -n 5 Miles Davis</code>
 
 <b>📦 Batch Processing:</b>
 • Upload a text file with multiple URLs and use:
-• <code>/srm -q 3 -c flac -mt</code> (reply to file)
+• <code>/srm -q 3 -c flac</code> (reply to file)
 • <code>/srl -doc -sp 2GB</code> (reply to file)
 
 <b>🔍 Advanced Selection:</b>
-• <code>/srm url -s -e "log,cue" -j</code>
+• <code>/srm url -s -e "log,cue"</code>
 • <code>/srl url -s -doc -thumb "https://image.url"</code>
 
 <b>☁️ Cloud Integration:</b>
-• <code>/srm url -sync -rcf "--transfers:8"</code>
-• <code>/srm url -up "Music/Streamrip" -sync</code>
+• <code>/srm url -up "Music/Streamrip" -rcf "--transfers:8"</code>
+• <code>/srm url -up gd -n "My Collection"</code>
+
+<b>🎧 Platform-Specific Examples:</b>
+• <code>/srm qobuz:album:123456 -q 4 -c flac</code> - Qobuz Hi-Res+
+• <code>/srl tidal:track:789012 -q 3 -doc</code> - Tidal MQA
+• <code>/srm deezer:playlist:345678 -q 2 -c mp3</code> - Deezer CD quality
+• <code>/srl soundcloud:user/track -q 1 -c mp3</code> - SoundCloud 320kbps
 
 <b>💡 Pro Tips:</b>
-• Combine quality and media tools for best results
+• Use ID format (platform:type:id) for direct access
 • Use batch files for downloading entire discographies
 • Select specific tracks from large albums with <code>-s</code>
-• Use <code>-doc</code> for preserving audio quality in Telegram"""
+• Use <code>-doc</code> for preserving audio quality in Telegram
+• Use <code>-f</code> flag to bypass download checks when needed"""
 
 streamrip_platforms = """<b>🎵 Platform Support & Features</b>
 
@@ -1333,7 +1320,7 @@ STREAMRIP_HELP_DICT = {
     "main": streamrip_main,
     "Quality-Flags": streamrip_quality_flags,
     "Download-Flags": streamrip_download_flags,
-    "Media-Tools": streamrip_media_tools,
+    "Search-Options": streamrip_search_flags,
     "Control-Flags": streamrip_control_flags,
     "Examples": streamrip_examples,
     "Platforms": streamrip_platforms,
