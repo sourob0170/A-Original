@@ -42,18 +42,21 @@ def get_page_content(page_num):
         # Extract pages
         17: get_extract_intro_page(),
         18: get_extract_settings_page(),
+        # Remove pages
+        19: get_remove_intro_page(),
+        20: get_remove_settings_page(),
         # Add pages
-        19: get_add_intro_page_1(),
-        20: get_add_intro_page_2(),
-        21: get_add_settings_page(),
+        21: get_add_intro_page_1(),
+        22: get_add_intro_page_2(),
+        23: get_add_settings_page(),
         # Other pages
-        22: get_priority_guide_page(),
-        23: get_usage_examples_page_1(),
-        24: get_usage_examples_page_2(),
+        24: get_priority_guide_page(),
+        25: get_usage_examples_page_1(),
+        26: get_usage_examples_page_2(),
         # Metadata page
-        25: get_metadata_guide_page(),
+        27: get_metadata_guide_page(),
         # MT Flag page
-        26: get_mt_flag_guide_page(),
+        28: get_mt_flag_guide_page(),
     }
     return pages.get(page_num, "Invalid page")
 
@@ -213,8 +216,9 @@ def get_merge_document_page():
     msg += "• Works best with similar document types\n"
     msg += "• Page size and orientation are preserved\n"
     msg += "• Bookmarks from original PDFs are preserved\n"
-    msg += "• Password-protected PDFs may not merge correctly\n"
+    msg += "• Password-protected PDFs are automatically skipped\n"
     msg += "• Use -merge-pdf flag for PDF-only merging\n"
+    msg += "• Powered by PyMuPDF for fast and reliable processing\n"
 
     return msg
 
@@ -623,6 +627,7 @@ def get_trim_intro_page():
     msg += "<b>Important:</b> Make sure to enable trim in Media Tools settings before using this feature.\n\n"
 
     msg += "<b>How to Use</b>:\n"
+    msg += "<b>For Media Files (Video/Audio):</b>\n"
     msg += "Add the <code>-trim</code> flag followed by the time range in format <code>start_time-end_time</code>:\n"
     msg += '<code>/leech https://example.com/video.mp4 -trim "00:01:30-00:02:45"</code>\n'
     msg += "This will extract the portion from 1 minute 30 seconds to 2 minutes 45 seconds.\n\n"
@@ -637,9 +642,21 @@ def get_trim_intro_page():
     msg += '<code>/leech https://example.com/video.mp4 -trim "-00:05:00"</code>\n'
     msg += "This will extract the portion from the beginning to 5 minutes.\n\n"
 
+    msg += "<b>For Documents (PDF):</b>\n"
+    msg += "Add the <code>-trim</code> flag followed by the page range in format <code>start_page-end_page</code>:\n"
+    msg += '<code>/leech https://example.com/document.pdf -trim "5-10"</code>\n'
+    msg += "This will extract pages 5 to 10 from the PDF document.\n\n"
+
+    msg += "You can also extract from a specific page to the end:\n"
+    msg += '<code>/mirror https://example.com/document.pdf -trim "3-"</code>\n'
+    msg += "This will extract from page 3 to the last page.\n\n"
+
     msg += "To delete the original file after trimming, add the <code>-del</code> flag:\n"
     msg += '<code>/leech https://example.com/video.mp4 -trim "00:01:30-00:02:45" -del</code>\n'
-    msg += "This will trim the media and delete the original file after successful trimming.\n\n"
+    msg += (
+        '<code>/mirror https://example.com/document.pdf -trim "5-10" -del</code>\n'
+    )
+    msg += "This will trim the media/document and delete the original file after successful trimming.\n\n"
 
     msg += "<b>Supported Media Types</b>:\n"
     msg += "• <b>Videos</b>: MP4, MKV, AVI, MOV, WebM, FLV, WMV, etc.\n"
@@ -649,20 +666,38 @@ def get_trim_intro_page():
     msg += "• <b>Subtitles</b>: SRT, ASS, VTT, etc.\n"
     msg += "• <b>Archives</b>: ZIP, RAR, 7Z, etc. (extracts specific files)\n\n"
 
-    msg += '<blockquote expandable="expandable"><b>Time Format</b>:\n'
-    msg += "The trim feature supports several time formats:\n"
+    msg += '<blockquote expandable="expandable"><b>Time Format (Media Files)</b>:\n'
+    msg += "The trim feature supports several time formats for media files:\n"
     msg += "• <b>HH:MM:SS</b>: Hours, minutes, seconds (00:30:45)\n"
     msg += "• <b>MM:SS</b>: Minutes, seconds (05:30)\n"
     msg += "• <b>SS</b>: Seconds only (90)\n"
     msg += "• <b>Decimal seconds</b>: For precise trimming (00:01:23.456)\n\n"
 
-    msg += "Examples:\n"
+    msg += "Media Examples:\n"
     msg += (
         '<code>/leech video.mp4 -trim "00:01:30-00:02:45"</code> (HH:MM:SS format)\n'
     )
     msg += '<code>/mirror audio.mp3 -trim "5:30-10:45"</code> (MM:SS format)\n'
     msg += '<code>/leech video.mp4 -trim "90-180"</code> (seconds only)\n'
     msg += '<code>/mirror audio.mp3 -trim "01:23.456-02:34.567"</code> (with decimal seconds)</blockquote>\n\n'
+
+    msg += '<blockquote expandable="expandable"><b>Page Format (Documents)</b>:\n'
+    msg += "For document files (PDF), use page numbers:\n"
+    msg += "• <b>Page numbers</b>: Use integers starting from 1\n"
+    msg += "• <b>Page ranges</b>: start_page-end_page format\n"
+    msg += (
+        "• <b>Open ranges</b>: Use dash (-) for end to extract until last page\n\n"
+    )
+
+    msg += "Document Examples:\n"
+    msg += '<code>/leech document.pdf -trim "1-5"</code> (extract pages 1 to 5)\n'
+    msg += (
+        '<code>/mirror document.pdf -trim "10-25"</code> (extract pages 10 to 25)\n'
+    )
+    msg += (
+        '<code>/leech document.pdf -trim "3-"</code> (extract from page 3 to end)\n'
+    )
+    msg += '<code>/mirror document.pdf -trim "1-1"</code> (extract only first page)</blockquote>\n\n'
 
     return msg
 
@@ -682,6 +717,10 @@ def get_trim_settings_page():
     msg += "• <b>Document Trim</b>: Enable/disable trimming for document files\n"
     msg += "• <b>Subtitle Trim</b>: Enable/disable trimming for subtitle files\n"
     msg += "• <b>Archive Trim</b>: Enable/disable trimming for archive files\n\n"
+
+    msg += "<b>Document Page Settings</b>:\n"
+    msg += "• <b>Document Start Page</b>: Set the starting page number for document trimming (default: 1)\n"
+    msg += "• <b>Document End Page</b>: Set the ending page number for document trimming (empty for last page)\n\n"
 
     msg += "<b>Format Settings</b>:\n"
     msg += (
@@ -731,7 +770,7 @@ def get_trim_settings_page():
         "• <b>Images</b>: For static images, creates a copy with quality settings\n"
     )
     msg += "• <b>Animated GIFs</b>: Extracts specific frame ranges\n"
-    msg += "• <b>Documents</b>: PDF trimming extracts specific page ranges\n"
+    msg += "• <b>Documents</b>: PDF trimming extracts specific page ranges using PyMuPDF\n"
     msg += "• <b>Subtitles</b>: Extracts entries within the specified time range\n"
     msg += "• <b>Archives</b>: Extracts specific files based on patterns</blockquote>\n\n"
 
@@ -932,8 +971,141 @@ def get_extract_settings_page():
     return msg
 
 
+def get_remove_intro_page():
+    msg = "<b>Remove Feature Guide (19/28)</b>\n\n"
+    msg += "<b>Remove Feature</b>\n"
+    msg += "Remove specific tracks or metadata from media files with customizable track selection.\n\n"
+
+    msg += "<b>Important:</b> Make sure to enable the Remove feature in Media Tools settings before using it.\n\n"
+
+    msg += "<b>How to Use</b>:\n"
+    msg += "Add remove flags to your download commands:\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-video</code> (remove all video tracks)\n"
+    msg += "<code>/mirror https://example.com/video.mkv -remove-audio</code> (remove all audio tracks)\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-subtitle</code> (remove all subtitle tracks)\n"
+    msg += "<code>/mirror https://example.com/video.mkv -remove-attachment</code> (remove all attachments)\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-metadata</code> (remove metadata)\n\n"
+
+    msg += "<b>Remove Specific Tracks by Index</b>:\n"
+    msg += "Use index parameters to remove specific tracks:\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-video-index 0</code> (remove first video track)\n"
+    msg += "<code>/mirror https://example.com/video.mkv -remove-audio-index 1,2</code> (remove 2nd and 3rd audio tracks)\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-subtitle-index 0,1,2</code> (remove first 3 subtitle tracks)\n\n"
+
+    msg += "<b>Supported Media Types</b>:\n"
+    msg += "• <b>Videos</b>: MP4, MKV, AVI, WebM, MOV, etc.\n"
+    msg += "• <b>Audio</b>: MP3, AAC, FLAC, WAV, OGG, etc.\n"
+    msg += "• <b>Subtitles</b>: SRT, ASS, VTT, WebVTT, etc.\n"
+    msg += "• <b>Attachments</b>: Fonts, images, and other embedded files\n\n"
+
+    msg += "<b>Track Types</b>:\n"
+    msg += "• <b>Video Tracks</b>: Remove unwanted video streams\n"
+    msg += "• <b>Audio Tracks</b>: Remove specific language audio or commentary\n"
+    msg += "• <b>Subtitle Tracks</b>: Remove unwanted subtitle languages\n"
+    msg += "• <b>Attachments</b>: Remove fonts, images, and other embedded files\n"
+    msg += "• <b>Metadata</b>: Strip file information and tags\n\n"
+
+    msg += "<b>Short Format Flags</b>:\n"
+    msg += "• <code>-rvi</code>: Short for -remove-video-index\n"
+    msg += "• <code>-rai</code>: Short for -remove-audio-index\n"
+    msg += "• <code>-rsi</code>: Short for -remove-subtitle-index\n"
+    msg += "• <code>-rati</code>: Short for -remove-attachment-index\n\n"
+
+    msg += "<b>RO Files</b>:\n"
+    msg += "By default, removing tracks will replace the original file. To keep both the original and processed files:\n"
+    msg += "• Set 'RO' to OFF in /mediatools > Remove > Configure\n"
+    msg += "• Use the <code>-del</code> flag to control this behavior:\n"
+    msg += "<code>/leech https://example.com/video.mkv -remove-video-index 1 -del f</code> (keep original)\n"
+    msg += "<code>/mirror https://example.com/video.mkv -remove-audio-index 0 -del t</code> (remove original)\n\n"
+
+    msg += "<b>Priority Settings</b>:\n"
+    msg += (
+        "• Remove feature has priority 8 by default (runs after most other tools)\n"
+    )
+    msg += "• Configure priority in Media Tools settings\n"
+    msg += "• Lower numbers run earlier in the processing pipeline\n\n"
+
+    return msg
+
+
+def get_remove_settings_page():
+    msg = "<b>Remove Settings (20/28)</b>\n\n"
+
+    msg += "<b>General Settings</b>:\n"
+    msg += "• <b>Remove Enabled</b>: Master toggle for the remove feature\n"
+    msg += "• <b>Remove Priority</b>: Set the execution order (default: 8)\n"
+    msg += (
+        "• <b>RO (Remove Original)</b>: Delete original file after removing tracks\n"
+    )
+    msg += "• <b>Remove Metadata</b>: Strip metadata from files\n\n"
+
+    msg += "<b>Track Type Settings</b>:\n"
+    msg += "• <b>Video Remove</b>: Enable/disable video track removal\n"
+    msg += "• <b>Audio Remove</b>: Enable/disable audio track removal\n"
+    msg += "• <b>Subtitle Remove</b>: Enable/disable subtitle track removal\n"
+    msg += "• <b>Attachment Remove</b>: Enable/disable attachment removal\n\n"
+
+    msg += "<b>Index Settings</b>:\n"
+    msg += "• <b>Video Index</b>: Which video tracks to remove (empty = all)\n"
+    msg += "• <b>Audio Index</b>: Which audio tracks to remove (empty = all)\n"
+    msg += "• <b>Subtitle Index</b>: Which subtitle tracks to remove (empty = all)\n"
+    msg += "• <b>Attachment Index</b>: Which attachments to remove (empty = all)\n\n"
+
+    msg += '<blockquote expandable="expandable"><b>Index Options</b>:\n'
+    msg += "• <b>Empty/None</b>: Remove all tracks of the specified type\n"
+    msg += "• <b>0</b>: Remove only the first track (index starts at 0)\n"
+    msg += "• <b>1</b>: Remove only the second track\n"
+    msg += "• <b>2</b>: Remove only the third track\n"
+    msg += "• <b>0,1</b>: Remove first and second tracks\n"
+    msg += "• <b>0,2,3</b>: Remove first, third, and fourth tracks\n"
+    msg += "• <b>all</b>: Remove all tracks of the specified type\n\n"
+    msg += "Multiple indices can be specified in both settings and command flags.\n"
+    msg += "Example setting: 0,1,2\n"
+    msg += "Example command: -remove-audio-index 0,1,2 or -rai 0,1,2\n\n"
+    msg += "If you're unsure about track indices, use MediaInfo to view track information.</blockquote>\n\n"
+
+    msg += '<blockquote expandable="expandable"><b>Use Cases</b>:\n'
+    msg += "• <b>Remove Commentary</b>: Remove director's commentary audio tracks\n"
+    msg += "• <b>Language Cleanup</b>: Remove unwanted subtitle languages\n"
+    msg += "• <b>Size Reduction</b>: Remove unnecessary video/audio tracks to save space\n"
+    msg += (
+        "• <b>Privacy</b>: Strip metadata that might contain personal information\n"
+    )
+    msg += "• <b>Compatibility</b>: Remove tracks that cause playback issues\n"
+    msg += "• <b>Attachment Cleanup</b>: Remove embedded fonts or images\n\n"
+    msg += "The remove feature is particularly useful for:\n"
+    msg += "• Multi-language media files with many audio/subtitle tracks\n"
+    msg += "• Files with embedded attachments you don't need\n"
+    msg += "• Reducing file size by removing unnecessary streams\n"
+    msg += "• Preparing files for specific devices or players</blockquote>\n\n"
+
+    msg += '<blockquote expandable="expandable"><b>Best Practices</b>:\n'
+    msg += "• Use MediaInfo to identify track indices before removal\n"
+    msg += (
+        "• Test with a small file first to verify the correct tracks are removed\n"
+    )
+    msg += "• Keep backups when removing important tracks\n"
+    msg += "• Remove feature works best with MKV containers\n"
+    msg += "• Some containers may not support track removal\n"
+    msg += "• Metadata removal is irreversible - make sure you don't need it\n"
+    msg += "• Use comma-separated indices (0,1,2) for multiple track removal\n"
+    msg += "• Combine with other tools for complete file processing\n"
+    msg += (
+        "• Use -del flag to control whether original files are kept</blockquote>\n\n"
+    )
+
+    msg += "<b>Configuration</b>:\n"
+    msg += "• Enable remove in Media Tools settings\n"
+    msg += "• Enable specific track type removal (video, audio, etc.)\n"
+    msg += "• Set default indices for automatic removal\n"
+    msg += "• Configure priority to control when removal runs in the pipeline\n"
+    msg += "• Use command flags to override settings for specific tasks\n\n"
+
+    return msg
+
+
 def get_priority_guide_page():
-    msg = "<b>Media Tools Priority Guide (22/26)</b>\n\n"
+    msg = "<b>Media Tools Priority Guide (24/28)</b>\n\n"
     msg += "<b>Understanding Priority Settings:</b>\n"
     msg += "Media tools (merge, watermark, convert, compression, trim, extract) use a priority system to determine the order of processing.\n\n"
 
@@ -944,7 +1116,8 @@ def get_priority_guide_page():
     msg += "• Default convert priority: 3 (runs third)\n"
     msg += "• Default compression priority: 4 (runs fourth)\n"
     msg += "• Default trim priority: 5 (runs fifth)\n"
-    msg += "• Default extract priority: 6 (runs sixth)\n\n"
+    msg += "• Default extract priority: 6 (runs sixth)\n"
+    msg += "• Default remove priority: 8 (runs eighth)\n\n"
 
     msg += "<b>Priority Hierarchy:</b>\n"
     msg += "1. Command line settings (highest priority)\n"
@@ -971,7 +1144,7 @@ def get_priority_guide_page():
 
 
 def get_metadata_guide_page():
-    msg = "<b>Metadata Feature Guide (25/26)</b>\n\n"
+    msg = "<b>Metadata Feature Guide (27/28)</b>\n\n"
     msg += "<b>Metadata Feature</b>\n"
     msg += "Add custom metadata to media files (videos, audio, images, documents) to enhance organization and information.\n\n"
 
@@ -1008,7 +1181,7 @@ def get_metadata_guide_page():
     msg += "<b>Implementation Details</b>:\n"
     msg += "• Videos/Audio: Uses FFmpeg for metadata embedding\n"
     msg += "• E-books: Uses ebook-meta (Calibre) when available\n"
-    msg += "• PDF: Uses pdftk when available\n"
+    msg += "• PDF: Uses PyMuPDF for fast and reliable processing\n"
     msg += "• Other files: Uses exiftool as fallback\n\n"
 
     msg += "Different formats support different metadata fields. Some may have limitations on which metadata can be modified.</blockquote>\n\n"
@@ -1044,7 +1217,7 @@ def get_metadata_guide_page():
 
 
 def get_usage_examples_page_1():
-    msg = "<b>Media Tools Usage Examples (1/2) (23/26)</b>\n\n"
+    msg = "<b>Media Tools Usage Examples (1/2) (25/28)</b>\n\n"
 
     msg += "<b>Merge Examples</b>:\n"
     msg += "• <code>/leech https://example.com/videos.zip -merge-video</code>\n"
@@ -1086,7 +1259,7 @@ def get_usage_examples_page_1():
 
 
 def get_usage_examples_page_2():
-    msg = "<b>Media Tools Usage Examples (2/2) (24/26)</b>\n\n"
+    msg = "<b>Media Tools Usage Examples (2/2) (26/28)</b>\n\n"
 
     msg += "<b>Compression Examples</b>:\n"
     msg += "• <code>/leech https://example.com/video.mp4 -video-fast</code>\n"
@@ -1105,6 +1278,20 @@ def get_usage_examples_page_2():
     msg += "  Extracts first video track and second audio track\n\n"
     msg += "• <code>/leech https://example.com/video.mkv -extract-audio-index all</code>\n"
     msg += "  Extracts all audio tracks\n\n"
+
+    msg += "<b>Remove Examples</b>:\n"
+    msg += (
+        "• <code>/leech https://example.com/video.mkv -remove-video-index 1</code>\n"
+    )
+    msg += "  Removes second video track\n\n"
+    msg += "• <code>/mirror https://example.com/video.mkv -remove-audio-index 0,2</code>\n"
+    msg += "  Removes first and third audio tracks\n\n"
+    msg += "• <code>/leech https://example.com/video.mkv -remove-subtitle</code>\n"
+    msg += "  Removes all subtitle tracks\n\n"
+    msg += "• <code>/mirror https://example.com/video.mkv -remove-metadata</code>\n"
+    msg += "  Strips metadata from file\n\n"
+    msg += "• <code>/leech https://example.com/video.mkv -rvi 0,1 -rai 2</code>\n"
+    msg += "  Removes first two video tracks and third audio track\n\n"
 
     msg += "<b>Add Examples</b>:\n"
     msg += "• <code>/leech https://example.com/video.mp4 -add</code>\n"
@@ -1152,7 +1339,7 @@ def get_usage_examples_page_2():
 
 
 def get_mt_flag_guide_page():
-    msg = "<b>Media Tools Flag Guide (26/26)</b>\n\n"
+    msg = "<b>Media Tools Flag Guide (28/28)</b>\n\n"
     msg += "<b>Media Tools Flag</b>: -mt\n\n"
     msg += "/cmd link -mt (opens media tools settings before starting the task)\n\n"
 
@@ -1178,7 +1365,7 @@ def get_mt_flag_guide_page():
 
 
 def get_add_intro_page_1():
-    msg = "<b>Add Feature Guide (Part 1) (19/26)</b>\n\n"
+    msg = "<b>Add Feature Guide (Part 1) (21/28)</b>\n\n"
     msg += "<b>Add Feature</b>\n"
     msg += "Add media tracks (video, audio, subtitle, attachment) to existing files with customizable settings.\n\n"
 
@@ -1221,7 +1408,7 @@ def get_add_intro_page_1():
 
 
 def get_add_intro_page_2():
-    msg = "<b>Add Feature Guide (Part 2) (20/26)</b>\n\n"
+    msg = "<b>Add Feature Guide (Part 2) (22/28)</b>\n\n"
 
     msg += "<b>Track Management Flags</b>:\n"
     msg += "• <code>-add -del</code>: Add tracks and delete original file\n"
@@ -1272,7 +1459,7 @@ def get_add_intro_page_2():
 
 
 def get_add_settings_page():
-    msg = "<b>Add Settings (21/26)</b>\n\n"
+    msg = "<b>Add Settings (23/28)</b>\n\n"
 
     msg += "<b>Main Settings</b>:\n"
     msg += "• <b>Add Enabled</b>: Enable or disable the add feature globally\n"
@@ -1311,7 +1498,7 @@ def get_add_settings_page():
     msg += "<b>Quality Settings</b>:\n"
     msg += "• <b>Video</b>: Quality (CRF), preset, bitrate, resolution, FPS\n"
     msg += "• <b>Audio</b>: Bitrate, channels, sampling rate, volume\n"
-    msg += "• <b>Subtitle</b>: Language, encoding, font, font size\n"
+    msg += "• <b>Subtitle</b>: Language, encoding, font, font size, hardsub\n"
     msg += "• <b>Attachment</b>: MIME type\n\n"
 
     msg += '<blockquote expandable="expandable"><b>Best Practices</b>:\n'
@@ -1322,6 +1509,16 @@ def get_add_settings_page():
     msg += "• The Add feature works best with MKV containers\n"
     msg += "• MP4 containers have limited subtitle format support\n"
     msg += "• Some containers may not support certain track types\n"
+    msg += "• <b>Hardsub</b>: Burns subtitles permanently into video (cannot be disabled)\n"
+    msg += (
+        "• <b>Soft subtitles</b>: Separate subtitle tracks (can be toggled on/off)\n"
+    )
+    msg += "\n<b>📋 Container Compatibility:</b>\n"
+    msg += "• <b>MKV</b>: ✅ Excellent (all subtitle formats)\n"
+    msg += "• <b>MP4/MOV</b>: ⚠️ Good (SRT→mov_text, VTT→mov_text)\n"
+    msg += "• <b>WebM</b>: ✅ Good (most formats)\n"
+    msg += "• <b>AVI</b>: ❌ Limited (recommend hardsub)\n"
+    msg += "• <b>Recommendation</b>: Use MKV for best subtitle support\n\n"
     msg += "• When using multi-input mode (-m), each index corresponds to a different input file\n"
     msg += "• Use the -del flag to delete original files after adding tracks\n"
     msg += "• Use the -preserve flag to keep existing tracks when adding new ones\n"
@@ -1334,7 +1531,7 @@ def get_pagination_buttons(current_page):
     buttons = ButtonMaker()
 
     # Total number of pages
-    total_pages = 26
+    total_pages = 28
 
     # Add navigation buttons
     if current_page > 1:
@@ -1380,7 +1577,7 @@ async def media_tools_help_cmd(_, message):
     if hasattr(message, "text") and len(message.text.split()) > 1:
         try:
             requested_page = int(message.text.split()[1])
-            if 1 <= requested_page <= 26:  # Max page is now 26
+            if 1 <= requested_page <= 28:  # Max page is now 28
                 current_page = requested_page
         except ValueError:
             pass

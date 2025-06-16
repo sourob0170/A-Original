@@ -48,29 +48,26 @@ def get_ad_keywords():
 async def handle_ad_message(_, message):
     """
     Handler for messages from FSUB_IDS channels that contain ad keywords
+    Note: Keyword filtering is already done in the filter, so this function
+    only handles messages that are confirmed to contain ad keywords
     """
-    # Check if ad broadcaster is enabled at runtime
+    # Double-check if ad broadcaster is enabled at runtime
     if not Config.AD_BROADCASTER_ENABLED:
         return
 
-    # Get the current ad keywords (from config or default)
+    # Get the current ad keywords to find which one matched
     ad_keywords = get_ad_keywords()
-
-    # Skip if message doesn't contain any of the ad keywords
     message_text = message.text or message.caption or ""
 
-    # Check if any of the keywords/phrases are in the message
+    # Find which keyword matched (for logging purposes)
     found_keyword = None
     for keyword in ad_keywords:
         if keyword in message_text:
             found_keyword = keyword
             break
 
-    if not found_keyword:
-        return
-
     LOGGER.info(
-        f"Ad detected with keyword/phrase: '{found_keyword}' in message: {message.id}"
+        f"Ad detected with keyword/phrase: '{found_keyword or 'unknown'}' in message: {message.id}"
     )
 
     # Get the message link
@@ -148,8 +145,8 @@ def init_ad_broadcaster():
     ad_keywords = get_ad_keywords()
     LOGGER.info(f"Ad broadcaster will detect the following keywords: {ad_keywords}")
 
-    # Create a filter for messages from FSUB_IDS channels
-    async def fsub_filter(_, __, message):
+    # Create a filter for messages from FSUB_IDS channels that contain ad keywords
+    async def fsub_ad_filter(_, __, message):
         # Check if ad broadcaster is enabled at runtime
         if not Config.AD_BROADCASTER_ENABLED:
             return False
@@ -160,13 +157,35 @@ def init_ad_broadcaster():
         # Check if message is from one of the FSUB_IDS channels
         chat_id = message.chat.id
         fsub_ids = [int(channel_id) for channel_id in Config.FSUB_IDS.split()]
-        return chat_id in fsub_ids
+        if chat_id not in fsub_ids:
+            return False
 
-    # Register the message handler for text messages
+        # Get the current ad keywords (from config or default)
+        ad_keywords = get_ad_keywords()
+
+        # Check if message contains any of the ad keywords
+        message_text = message.text or message.caption or ""
+
+        # Check if any of the keywords/phrases are in the message
+        for keyword in ad_keywords:
+            if keyword in message_text:
+                # Keyword found, allow processing
+                return True
+
+        # No keywords found, don't process this message
+        # Log this for debugging (but only occasionally to avoid spam)
+        if message.id % 100 == 0:  # Log every 100th filtered message
+            LOGGER.info(
+                f"Message {message.id} from FSUB channel filtered out - no ad keywords found"
+            )
+        return False
+
+    # Register the message handler for text messages with ad keywords
     TgClient.bot.add_handler(
         MessageHandler(
             handle_ad_message,
-            filters=filters.create(fsub_filter) & (filters.text | filters.caption),
+            filters=filters.create(fsub_ad_filter)
+            & (filters.text | filters.caption),
         ),
         group=10,  # Use a high group number to ensure it's processed after other handlers
     )

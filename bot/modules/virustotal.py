@@ -14,6 +14,7 @@ from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.links_utils import is_url
 from bot.helper.ext_utils.status_utils import get_readable_file_size
+from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     edit_message,
@@ -21,6 +22,360 @@ from bot.helper.telegram_helper.message_utils import (
 )
 
 LOGGER = getLogger(__name__)
+
+# Global storage for scan results (for callback handling)
+VT_SCAN_RESULTS = {}
+
+
+def _extract_scan_data(result: dict) -> dict:
+    """Extract and normalize scan data from VirusTotal response."""
+    attributes = result.get("attributes", {})
+
+    # Get stats
+    stats = attributes.get("stats", {})
+
+    # Get engines/results data
+    engines_data = attributes.get("engines", {}) or attributes.get("results", {})
+
+    # Extract signatures if available
+    signatures = []
+    if "signatures" in attributes:
+        signatures = attributes["signatures"]
+    elif engines_data:
+        # Extract signatures from engine results
+        for engine_name, engine_data in engines_data.items():
+            if (
+                isinstance(engine_data, dict)
+                and engine_data.get("result")
+                and engine_data.get("result") != "clean"
+            ):
+                if engine_data["result"] not in [
+                    "unrated",
+                    "timeout",
+                    "type-unsupported",
+                ]:
+                    signatures.append(f"{engine_name}: {engine_data['result']}")
+
+    return {
+        "stats": stats,
+        "engines": engines_data,
+        "signatures": signatures,
+        "raw_result": result,
+    }
+
+
+def _determine_threat_status(stats: dict) -> tuple[str, str]:
+    """Determine threat status and emoji based on stats."""
+    malicious = stats.get("malicious", 0)
+    suspicious = stats.get("suspicious", 0)
+
+    if malicious >= 3:
+        return "❌ POTENTIALLY DANGEROUS", "🔴"
+    if malicious > 0 or suspicious > 0:
+        return "⚠️ SUSPICIOUS", "🟡"
+    return "✅ SAFE", "🟢"
+
+
+def _format_basic_results(
+    file_name: str, file_size: int, scan_data: dict, vt_link: str, scan_id: str
+) -> tuple[str, object]:
+    """Format basic scan results with buttons."""
+    stats = scan_data["stats"]
+    threat_status, status_emoji = _determine_threat_status(stats)
+
+    # Format response
+    response = f"<b>{status_emoji} VirusTotal Scan Results</b>\n\n"
+    response += f"<b>File:</b> {html.escape(file_name)}\n"
+    response += f"<b>Size:</b> {get_readable_file_size(file_size)}\n"
+    response += f"<b>Status:</b> {threat_status}\n\n"
+    response += "<b>Detection Summary:</b>\n"
+    response += f"• Malicious: {stats.get('malicious', 0)}\n"
+    response += f"• Suspicious: {stats.get('suspicious', 0)}\n"
+    response += f"• Harmless: {stats.get('harmless', 0)}\n"
+    response += f"• Undetected: {stats.get('undetected', 0)}\n"
+
+    # Add timeout and failure counts if present
+    if stats.get("timeout", 0) > 0:
+        response += f"• Timeout: {stats.get('timeout', 0)}\n"
+    if stats.get("failure", 0) > 0:
+        response += f"• Failure: {stats.get('failure', 0)}\n"
+
+    response += f"\n<b>Full Report:</b> <a href='{vt_link}'>View on VirusTotal</a>"
+
+    # Create buttons
+    buttons = ButtonMaker()
+    buttons.data_button("🔍 Detections", f"vt_det_{scan_id}")
+
+    # Only show signatures button if there are signatures
+    if scan_data["signatures"]:
+        buttons.data_button("🦠 Signatures", f"vt_sig_{scan_id}")
+
+    buttons.data_button("❌ Close", f"vt_close_{scan_id}")
+
+    return response, buttons.build_menu(2)
+
+
+def _format_url_results(
+    url: str, scan_data: dict, vt_link: str, scan_id: str
+) -> tuple[str, object]:
+    """Format URL scan results with buttons."""
+    stats = scan_data["stats"]
+    threat_status, status_emoji = _determine_threat_status(stats)
+
+    # Format response
+    response = f"<b>{status_emoji} VirusTotal URL Scan Results</b>\n\n"
+    response += f"<b>URL:</b> {html.escape(url)}\n"
+    response += f"<b>Status:</b> {threat_status}\n\n"
+    response += "<b>Detection Summary:</b>\n"
+    response += f"• Malicious: {stats.get('malicious', 0)}\n"
+    response += f"• Suspicious: {stats.get('suspicious', 0)}\n"
+    response += f"• Harmless: {stats.get('harmless', 0)}\n"
+    response += f"• Undetected: {stats.get('undetected', 0)}\n"
+
+    # Add timeout count if present
+    if stats.get("timeout", 0) > 0:
+        response += f"• Timeout: {stats.get('timeout', 0)}\n"
+
+    response += f"\n<b>Full Report:</b> <a href='{vt_link}'>View on VirusTotal</a>"
+
+    # Create buttons
+    buttons = ButtonMaker()
+    buttons.data_button("🔍 Detections", f"vt_det_{scan_id}")
+
+    # Only show signatures button if there are signatures
+    if scan_data["signatures"]:
+        buttons.data_button("🦠 Signatures", f"vt_sig_{scan_id}")
+
+    buttons.data_button("❌ Close", f"vt_close_{scan_id}")
+
+    return response, buttons.build_menu(2)
+
+
+def _format_detections(scan_data: dict, scan_id: str) -> tuple[str, object]:
+    """Format detailed detection results."""
+    engines = scan_data["engines"]
+    stats = scan_data["stats"]
+
+    if not engines:
+        response = "❌ <b>No detection data available</b>"
+        buttons = ButtonMaker()
+        buttons.data_button("🔙 Back", f"vt_back_{scan_id}")
+        buttons.data_button("❌ Close", f"vt_close_{scan_id}")
+        return response, buttons.build_menu(2)
+
+    # Categorize engines
+    malicious_engines = []
+    suspicious_engines = []
+    harmless_engines = []
+    undetected_engines = []
+    other_engines = []
+
+    for engine_name, engine_data in engines.items():
+        if isinstance(engine_data, dict):
+            category = engine_data.get("category", "unknown")
+            result = engine_data.get("result", "N/A")
+
+            if category == "malicious":
+                malicious_engines.append(f"🔴 {engine_name}: {result}")
+            elif category == "suspicious":
+                suspicious_engines.append(f"🟡 {engine_name}: {result}")
+            elif category == "harmless":
+                harmless_engines.append(f"🟢 {engine_name}: Clean")
+            elif category == "undetected":
+                undetected_engines.append(f"⚪ {engine_name}: Undetected")
+            else:
+                other_engines.append(f"⚫ {engine_name}: {category}")
+
+    # Build response
+    response = "<b>🔍 Detailed Detection Results</b>\n\n"
+    response += f"<b>Summary:</b> {stats.get('malicious', 0)} malicious, {stats.get('suspicious', 0)} suspicious, "
+    response += f"{stats.get('harmless', 0)} harmless, {stats.get('undetected', 0)} undetected\n\n"
+
+    # Show malicious detections first
+    if malicious_engines:
+        response += f"<b>🔴 Malicious ({len(malicious_engines)}):</b>\n"
+        for detection in malicious_engines[:10]:  # Limit to first 10
+            response += f"{detection}\n"
+        if len(malicious_engines) > 10:
+            response += f"... and {len(malicious_engines) - 10} more\n"
+        response += "\n"
+
+    # Show suspicious detections
+    if suspicious_engines:
+        response += f"<b>🟡 Suspicious ({len(suspicious_engines)}):</b>\n"
+        for detection in suspicious_engines[:5]:  # Limit to first 5
+            response += f"{detection}\n"
+        if len(suspicious_engines) > 5:
+            response += f"... and {len(suspicious_engines) - 5} more\n"
+        response += "\n"
+
+    # Show some clean results
+    if harmless_engines:
+        response += f"<b>🟢 Clean ({len(harmless_engines)}):</b>\n"
+        for detection in harmless_engines[:3]:  # Show first 3
+            response += f"{detection}\n"
+        if len(harmless_engines) > 3:
+            response += f"... and {len(harmless_engines) - 3} more\n"
+        response += "\n"
+
+    # Show undetected count
+    if undetected_engines:
+        response += f"<b>⚪ Undetected:</b> {len(undetected_engines)} engines\n\n"
+
+    # Show other categories if any
+    if other_engines:
+        response += f"<b>⚫ Other:</b> {len(other_engines)} engines\n\n"
+
+    # Create buttons
+    buttons = ButtonMaker()
+    buttons.data_button("🔙 Back", f"vt_back_{scan_id}")
+    buttons.data_button("❌ Close", f"vt_close_{scan_id}")
+
+    return response, buttons.build_menu(2)
+
+
+def _format_signatures(scan_data: dict, scan_id: str) -> tuple[str, object]:
+    """Format malware signatures."""
+    signatures = scan_data["signatures"]
+
+    if not signatures:
+        response = (
+            "ℹ️ <b>No malware signatures found</b>\n\nThis file appears to be clean."
+        )
+    else:
+        response = f"<b>🦠 Malware Signatures ({len(signatures)})</b>\n\n"
+
+        # Show signatures (limit to prevent message being too long)
+        for _i, signature in enumerate(signatures[:15]):  # Show first 15
+            response += f"• {html.escape(str(signature))}\n"
+
+        if len(signatures) > 15:
+            response += f"\n... and {len(signatures) - 15} more signatures"
+
+    # Create buttons
+    buttons = ButtonMaker()
+    buttons.data_button("🔙 Back", f"vt_back_{scan_id}")
+    buttons.data_button("❌ Close", f"vt_close_{scan_id}")
+
+    return response, buttons.build_menu(2)
+
+
+@new_task
+async def vt_callback_handler(_, query):
+    """Handle VirusTotal callback queries."""
+
+    def safe_answer(message, show_alert=False):
+        """Safely answer callback query with error handling."""
+
+        async def _answer():
+            try:
+                await query.answer(message, show_alert=show_alert)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if (
+                    "query_id_invalid" in error_msg
+                    or "query id is invalid" in error_msg
+                ):
+                    # Query has already been answered or expired, ignore silently
+                    pass
+                else:
+                    LOGGER.warning(f"Failed to answer VT callback query: {e}")
+
+        return _answer()
+
+    try:
+        data = query.data
+        user_id = query.from_user.id
+
+        # Parse callback data
+        if not data.startswith("vt_"):
+            return
+
+        parts = data.split("_", 2)
+        if len(parts) < 3:
+            await safe_answer("❌ Invalid callback data")
+            return
+
+        action = parts[1]  # det, sig, back, close
+        scan_id = parts[2]
+
+        # Check if scan result exists
+        if scan_id not in VT_SCAN_RESULTS:
+            await safe_answer("❌ Scan result expired")
+            return
+
+        scan_result = VT_SCAN_RESULTS[scan_id]
+
+        # Check if user is authorized (scan owner)
+        if scan_result.get("user_id") != user_id:
+            await safe_answer("❌ Unauthorized")
+            return
+
+        scan_data = scan_result["scan_data"]
+
+        if action == "det":
+            # Show detections
+            response, buttons = _format_detections(scan_data, scan_id)
+            await edit_message(query.message, response, buttons)
+            await safe_answer("🔍 Showing detections")
+
+        elif action == "sig":
+            # Show signatures
+            response, buttons = _format_signatures(scan_data, scan_id)
+            await edit_message(query.message, response, buttons)
+            await safe_answer("🦠 Showing signatures")
+
+        elif action == "back":
+            # Go back to main results
+            if scan_result.get("is_url"):
+                response, buttons = _format_url_results(
+                    scan_result["url"], scan_data, scan_result["vt_link"], scan_id
+                )
+            else:
+                response, buttons = _format_basic_results(
+                    scan_result["file_name"],
+                    scan_result["file_size"],
+                    scan_data,
+                    scan_result["vt_link"],
+                    scan_id,
+                )
+            await edit_message(query.message, response, buttons)
+            await safe_answer("🔙 Back to results")
+
+        elif action == "close":
+            # Close and clean up
+            VT_SCAN_RESULTS.pop(scan_id, None)
+
+            await edit_message(query.message, "✅ <b>VirusTotal scan closed</b>")
+            await safe_answer("❌ Closed")
+
+    except Exception as e:
+        LOGGER.error(f"Error in VT callback handler: {e}")
+        await safe_answer("❌ Error processing request")
+
+
+def cleanup_old_scan_results():
+    """Clean up scan results older than 1 hour."""
+    current_time = time.time()
+    expired_keys = []
+
+    for scan_id, scan_result in VT_SCAN_RESULTS.items():
+        if current_time - scan_result.get("timestamp", 0) > 3600:  # 1 hour
+            expired_keys.append(scan_id)
+
+    for key in expired_keys:
+        del VT_SCAN_RESULTS[key]
+
+    if expired_keys:
+        LOGGER.info(f"Cleaned up {len(expired_keys)} expired VT scan results")
+
+
+# Schedule periodic cleanup
+from bot.helper.ext_utils.bot_utils import SetInterval
+
+# Clean up old scan results every 30 minutes
+if Config.VT_ENABLED:
+    SetInterval(1800, cleanup_old_scan_results)  # 1800 seconds = 30 minutes
 
 
 class VirusTotalClient:
@@ -184,37 +539,30 @@ async def scan_file(client, message, file_msg):
         # Analyze the file
         result = await vt_client.analyze_file(file_path)
 
-        # Process results
-        stats = result.get("stats", {})
-        malicious = stats.get("malicious", 0)
-        suspicious = stats.get("suspicious", 0)
-        harmless = stats.get("harmless", 0)
-        undetected = stats.get("undetected", 0)
+        # Extract and process scan data
+        scan_data = _extract_scan_data(result)
 
-        # Determine threat level
-        if malicious >= 3:
-            threat_status = "❌ POTENTIALLY DANGEROUS"
-        elif malicious > 0 or suspicious > 0:
-            threat_status = "⚠️ SUSPICIOUS"
-        else:
-            threat_status = "✅ SAFE"
+        # Generate unique scan ID
+        scan_id = f"{message.from_user.id}_{int(time.time())}"
 
-        # Format response
-        response = "<b>VirusTotal Scan Results</b>\n\n"
-        response += f"<b>File:</b> {html.escape(file_name)}\n"
-        response += f"<b>Size:</b> {get_readable_file_size(file_size)}\n"
-        response += f"<b>Status:</b> {threat_status}\n\n"
-        response += "<b>Detection Summary:</b>\n"
-        response += f"- Malicious: {malicious}\n"
-        response += f"- Suspicious: {suspicious}\n"
-        response += f"- Harmless: {harmless}\n"
-        response += f"- Undetected: {undetected}\n\n"
+        # Store scan result for callback handling
+        VT_SCAN_RESULTS[scan_id] = {
+            "user_id": message.from_user.id,
+            "scan_data": scan_data,
+            "file_name": file_name,
+            "file_size": file_size,
+            "vt_link": result.get("link", ""),
+            "is_url": False,
+            "timestamp": time.time(),
+        }
 
-        # Add link to full report
-        response += f"<b>Full Report:</b> <a href='{result.get('link', '')}'>View on VirusTotal</a>"
+        # Format response with buttons
+        response, buttons = _format_basic_results(
+            file_name, file_size, scan_data, result.get("link", ""), scan_id
+        )
 
         # Send results
-        await edit_message(status_msg, response)
+        await edit_message(status_msg, response, buttons)
 
     except Exception as e:
         LOGGER.error(f"Error in VirusTotal scan: {e}")
@@ -260,36 +608,29 @@ async def scan_url(message, url):
         # Analyze the URL
         result = await vt_client.analyze_url(url)
 
-        # Process results
-        stats = result.get("stats", {})
-        malicious = stats.get("malicious", 0)
-        suspicious = stats.get("suspicious", 0)
-        harmless = stats.get("harmless", 0)
-        undetected = stats.get("undetected", 0)
+        # Extract and process scan data
+        scan_data = _extract_scan_data(result)
 
-        # Determine threat level
-        if malicious >= 3:
-            threat_status = "❌ POTENTIALLY DANGEROUS"
-        elif malicious > 0 or suspicious > 0:
-            threat_status = "⚠️ SUSPICIOUS"
-        else:
-            threat_status = "✅ SAFE"
+        # Generate unique scan ID
+        scan_id = f"{message.from_user.id}_{int(time.time())}"
 
-        # Format response
-        response = "<b>VirusTotal URL Scan Results</b>\n\n"
-        response += f"<b>URL:</b> {html.escape(url)}\n"
-        response += f"<b>Status:</b> {threat_status}\n\n"
-        response += "<b>Detection Summary:</b>\n"
-        response += f"- Malicious: {malicious}\n"
-        response += f"- Suspicious: {suspicious}\n"
-        response += f"- Harmless: {harmless}\n"
-        response += f"- Undetected: {undetected}\n\n"
+        # Store scan result for callback handling
+        VT_SCAN_RESULTS[scan_id] = {
+            "user_id": message.from_user.id,
+            "scan_data": scan_data,
+            "url": url,
+            "vt_link": result.get("link", ""),
+            "is_url": True,
+            "timestamp": time.time(),
+        }
 
-        # Add link to full report
-        response += f"<b>Full Report:</b> <a href='{result.get('link', '')}'>View on VirusTotal</a>"
+        # Format response with buttons
+        response, buttons = _format_url_results(
+            url, scan_data, result.get("link", ""), scan_id
+        )
 
         # Send results
-        await edit_message(status_msg, response)
+        await edit_message(status_msg, response, buttons)
 
     except Exception as e:
         LOGGER.error(f"Error in VirusTotal URL scan: {e}")

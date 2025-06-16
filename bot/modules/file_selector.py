@@ -42,6 +42,11 @@ async def select(_, message):
         await send_message(message, msg)
         return
 
+    # Check if task and listener exist before accessing user_id
+    if not task or not hasattr(task, "listener") or not task.listener:
+        await send_message(message, "Task or listener not found!")
+        return
+
     if user_id not in (Config.OWNER_ID, task.listener.user_id) and (
         user_id not in user_data or not user_data[user_id].get("SUDO")
     ):
@@ -102,6 +107,12 @@ async def confirm_selection(_, query):
         await query.answer("This task has been cancelled!", show_alert=True)
         await delete_message(message)
         return
+    # Check if task and listener exist before accessing user_id
+    if not task or not hasattr(task, "listener") or not task.listener:
+        await query.answer("Task or listener not found!", show_alert=True)
+        await delete_message(message)
+        return
+
     if user_id != task.listener.user_id:
         await query.answer("This task is not for you!", show_alert=True)
     elif data[1] == "pin":

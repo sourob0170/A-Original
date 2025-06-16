@@ -213,6 +213,17 @@ class Mirror(TaskListener):
             "-extract-subtitle-codec": "",
             "-extract-maintain-quality": "",
             "-extract-priority": "",
+            "-remove": False,
+            "-remove-video": False,
+            "-remove-audio": False,
+            "-remove-subtitle": False,
+            "-remove-attachment": False,
+            "-remove-metadata": False,
+            "-remove-video-index": "",
+            "-remove-audio-index": "",
+            "-remove-subtitle-index": "",
+            "-remove-attachment-index": "",
+            "-remove-priority": "",
             "-add": False,
             "-add-video": False,
             "-add-audio": False,
@@ -226,6 +237,11 @@ class Mirror(TaskListener):
             "-ai": "",
             "-si": "",
             "-ati": "",
+            # Remove shorter index flags
+            "-rvi": "",
+            "-rai": "",
+            "-rsi": "",
+            "-rati": "",
         }
 
         # Parse arguments from the command
@@ -257,12 +273,24 @@ class Mirror(TaskListener):
             user_default_upload = self.user_dict.get(
                 "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
             )
-            if user_default_upload == "mg" and not self.up_dest:
+            if user_default_upload == "gd" and not self.up_dest:
+                self.up_dest = "gd"
+            elif user_default_upload == "mg" and not self.up_dest:
                 self.up_dest = "mg"
             elif user_default_upload == "yt" and not self.up_dest:
                 self.up_dest = "yt"
+            elif user_default_upload == "ddl" and not self.up_dest:
+                self.up_dest = "ddl"
 
-            if self.up_dest == "mg":
+            if self.up_dest == "gd":
+                # Validate Google Drive configuration
+                if not Config.GDRIVE_UPLOAD_ENABLED:
+                    await send_message(
+                        self.message,
+                        "❌ Google Drive upload is disabled by the administrator.",
+                    )
+                    return None
+            elif self.up_dest == "mg":
                 # Validate MEGA configuration
                 if not Config.MEGA_ENABLED:
                     await send_message(
@@ -337,6 +365,14 @@ class Mirror(TaskListener):
                         "❌ YouTube upload is disabled by the administrator.",
                     )
                     return None
+            elif self.up_dest == "ddl":
+                # Validate DDL configuration
+                if not Config.DDL_ENABLED:
+                    await send_message(
+                        self.message,
+                        "❌ DDL upload is disabled by the administrator.",
+                    )
+                    return None
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
@@ -358,6 +394,36 @@ class Mirror(TaskListener):
         self.add_attachment_enabled = args["-add-attachment"]
         self.preserve_flag = args["-preserve"]
         self.replace_flag = args["-replace"]
+
+        # Remove settings
+        self.remove_enabled = args["-remove"]
+        self.remove_video_enabled = args["-remove-video"]
+        self.remove_audio_enabled = args["-remove-audio"]
+        self.remove_subtitle_enabled = args["-remove-subtitle"]
+        self.remove_attachment_enabled = args["-remove-attachment"]
+        self.remove_metadata = args["-remove-metadata"]
+
+        # Handle remove index arguments
+        self.remove_video_index = args["-remove-video-index"] or args["-rvi"]
+        self.remove_audio_index = args["-remove-audio-index"] or args["-rai"]
+        self.remove_subtitle_index = args["-remove-subtitle-index"] or args["-rsi"]
+        self.remove_attachment_index = (
+            args["-remove-attachment-index"] or args["-rati"]
+        )
+
+        # Enable remove if any specific remove flag is set
+        if (
+            self.remove_video_enabled
+            or self.remove_audio_enabled
+            or self.remove_subtitle_enabled
+            or self.remove_attachment_enabled
+            or self.remove_metadata
+            or self.remove_video_index
+            or self.remove_audio_index
+            or self.remove_subtitle_index
+            or self.remove_attachment_index
+        ):
+            self.remove_enabled = True
         self.join = args["-j"]
         self.thumb = args["-t"]
         self.split_size = args["-sp"]
@@ -1081,10 +1147,16 @@ class Mirror(TaskListener):
 
 
 async def mirror(client, message):
-    # Check if mirror operations are enabled in the configuration
-    if not Config.MIRROR_ENABLED:
+    # Check if any upload service is available
+    if not (
+        Config.GDRIVE_UPLOAD_ENABLED
+        or Config.RCLONE_ENABLED
+        or Config.YOUTUBE_UPLOAD_ENABLED
+        or Config.DDL_ENABLED
+        or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+    ):
         await send_message(
-            message, "❌ Mirror operations are disabled by the administrator."
+            message, "❌ All upload services are disabled by the administrator."
         )
         return
     bot_loop.create_task(Mirror(client, message).new_event())
@@ -1101,10 +1173,16 @@ async def leech(client, message):
 
 
 async def jd_mirror(client, message):
-    # Check if mirror operations are enabled in the configuration
-    if not Config.MIRROR_ENABLED:
+    # Check if any upload service is available
+    if not (
+        Config.GDRIVE_UPLOAD_ENABLED
+        or Config.RCLONE_ENABLED
+        or Config.YOUTUBE_UPLOAD_ENABLED
+        or Config.DDL_ENABLED
+        or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+    ):
         await send_message(
-            message, "❌ Mirror operations are disabled by the administrator."
+            message, "❌ All upload services are disabled by the administrator."
         )
         return
     # Check if JDownloader operations are enabled in the configuration
@@ -1117,10 +1195,16 @@ async def jd_mirror(client, message):
 
 
 async def nzb_mirror(client, message):
-    # Check if mirror operations are enabled in the configuration
-    if not Config.MIRROR_ENABLED:
+    # Check if any upload service is available
+    if not (
+        Config.GDRIVE_UPLOAD_ENABLED
+        or Config.RCLONE_ENABLED
+        or Config.YOUTUBE_UPLOAD_ENABLED
+        or Config.DDL_ENABLED
+        or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+    ):
         await send_message(
-            message, "❌ Mirror operations are disabled by the administrator."
+            message, "❌ All upload services are disabled by the administrator."
         )
         return
     # Check if NZB operations are enabled in the configuration

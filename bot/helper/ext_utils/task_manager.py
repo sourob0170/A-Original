@@ -474,13 +474,13 @@ async def start_queue_processor():
 
                         smart_garbage_collection(aggressive=True)
 
-            # Adaptive sleep intervals
+            # Optimized adaptive sleep intervals to reduce CPU usage
             if running_count == 0 and has_queued:
-                sleep_time = 15  # Urgent
+                sleep_time = 30  # Increased from 15 to 30 for urgent cases
             elif has_queued:
-                sleep_time = 45  # Normal
+                sleep_time = 60  # Increased from 45 to 60 for normal cases
             else:
-                sleep_time = 60  # Idle
+                sleep_time = 120  # Increased from 60 to 120 for idle cases
 
             await asyncio.sleep(sleep_time)
 

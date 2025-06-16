@@ -12,12 +12,83 @@ from bot.helper.mirror_leech_utils.status_utils.mega_status import MegaCloneStat
 from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.telegram_helper.message_utils import send_status_message
 
-# Try to import MEGA SDK at module level, but don't fail if not available
-try:
-    from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+# Try to import MEGA SDK with system-wide detection
+MEGA_SDK_AVAILABLE = False
+MEGA_IMPORT_ERROR = None
 
-    MEGA_SDK_AVAILABLE = True
-    MEGA_IMPORT_ERROR = None
+
+def _detect_and_import_mega():
+    """Detect MEGA SDK installation system-wide and import"""
+    import sys
+    from pathlib import Path
+
+    # System-wide search paths for MEGA SDK
+    search_paths = [
+        "/usr/local/lib/python3.13/dist-packages",
+        "/usr/lib/python3/dist-packages",
+        "/usr/lib/python3.13/dist-packages",
+        "/usr/local/lib/python3.12/dist-packages",
+        "/usr/lib/python3.12/dist-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
+        "/usr/src/app/.venv/lib/python3.13/site-packages",
+        "/opt/megasdk/lib/python3.13/site-packages",
+    ]
+
+    # Try standard import first
+    try:
+        from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+
+        # Test basic functionality
+        api = MegaApi("test")
+        api.getVersion()
+        return (
+            True,
+            None,
+            (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+        )
+    except ImportError:
+        pass
+    except Exception as e:
+        return False, f"MEGA SDK validation failed: {e}", None
+
+    # Search system-wide paths
+    for path in search_paths:
+        mega_path = Path(path) / "mega"
+        if mega_path.exists():
+            try:
+                if str(Path(path)) not in sys.path:
+                    sys.path.insert(0, str(Path(path)))
+
+                from mega import (
+                    MegaApi,
+                    MegaError,
+                    MegaListener,
+                    MegaRequest,
+                    MegaTransfer,
+                )
+
+                # Test basic functionality
+                api = MegaApi("test")
+                api.getVersion()
+                return (
+                    True,
+                    None,
+                    (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+                )
+            except Exception:
+                continue
+
+    return False, "MEGA SDK not found in system-wide search", None
+
+
+# Perform detection and define classes
+try:
+    success, error, classes = _detect_and_import_mega()
+    if success:
+        MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer = classes
+        MEGA_SDK_AVAILABLE = True
+        MEGA_IMPORT_ERROR = None
 
     # Define the real MegaCloneListener class when MEGA SDK is available
     class MegaCloneListener(MegaListener):
@@ -91,9 +162,6 @@ try:
                         self.public_node = request.getPublicMegaNode()
                         if self.public_node:
                             self.__name = self.public_node.getName()
-                            LOGGER.info(
-                                f"MEGA public node retrieved for clone: {self.__name} ({self.public_node.getSize()} bytes)"
-                            )
                         else:
                             self.error = "Failed to get public node"
                             LOGGER.error("MEGA clone: Failed to get public node")
@@ -102,19 +170,20 @@ try:
                         self.error = f"Public node error: {e}"
 
                 elif request_type == MegaRequest.TYPE_FETCH_NODES:
-                    LOGGER.info("MEGA nodes fetched for clone, getting root node...")
                     try:
                         self.node = api.getRootNode()
                         if self.node:
-                            LOGGER.info(
-                                f"MEGA root node for clone: {self.node.getName()}"
-                            )
+                            self.__name = self.node.getName()
+                            # Always set continue event for FETCH_NODES to prevent timeout
+                            self.continue_event.set()
                         else:
                             self.error = "Failed to get root node"
                             LOGGER.error("MEGA clone: Failed to get root node")
+                            self.continue_event.set()
                     except Exception as e:
                         LOGGER.error(f"Failed to get root node: {e}")
                         self.error = f"Root node error: {e}"
+                        self.continue_event.set()
 
                 elif request_type == MegaRequest.TYPE_COPY:
                     try:
@@ -142,13 +211,13 @@ try:
                         LOGGER.error(f"Failed to get clone public link: {e}")
                         self.error = f"Clone public link error: {e}"
 
-                # Safer event setting
+                # Safer event setting - only set for specific request types that haven't already set it
                 try:
-                    if request_type not in self._NO_EVENT_ON or (
-                        self.node
-                        and self.__name
-                        and "cloud drive" not in self.__name.lower()
+                    if (
+                        request_type not in self._NO_EVENT_ON
+                        and request_type != MegaRequest.TYPE_FETCH_NODES
                     ):
+                        # FETCH_NODES already sets the event above, don't set it again
                         self.continue_event.set()
                 except Exception as e:
                     LOGGER.error(f"Error setting continue event: {e}")
@@ -187,11 +256,7 @@ try:
         if self.__bytes_transferred > 0:
             total_bytes = transfer.getTotalBytes()
             if total_bytes > 0:
-                progress = (self.__bytes_transferred / total_bytes) * 100
-                if progress % 10 < 0.1:  # Log every 10%
-                    LOGGER.info(
-                        f"MEGA clone progress: {progress:.1f}% ({self.__bytes_transferred}/{total_bytes} bytes)"
-                    )
+                (self.__bytes_transferred / total_bytes) * 100
 
     def onTransferFinish(self, _api: MegaApi, transfer: MegaTransfer, error):
         try:
@@ -238,7 +303,7 @@ try:
 
         # States 1 and 4 are recoverable, don't cancel for these
         if state in [1, 4]:
-            LOGGER.info(
+            LOGGER.warning(
                 f"MEGA clone transfer error is recoverable (state {state}), continuing..."
             )
             return
@@ -356,8 +421,6 @@ def _get_clone_premium_settings(is_premium):
 async def _detect_mega_clone_account_type(api):
     """Detect MEGA account type for clone operations"""
     try:
-        LOGGER.info("Detecting MEGA account type for clone...")
-
         # Add a small delay to ensure account details are available
         await asyncio.sleep(0.5)
 
@@ -379,10 +442,10 @@ async def _detect_mega_clone_account_type(api):
         if account_details:
             try:
                 pro_level = account_details.getProLevel()
-                storage_used = account_details.getStorageUsed()
-                storage_max = account_details.getStorageMax()
-                transfer_used = account_details.getTransferOwnUsed()
-                transfer_max = account_details.getTransferMax()
+                account_details.getStorageUsed()
+                account_details.getStorageMax()
+                account_details.getTransferOwnUsed()
+                account_details.getTransferMax()
 
                 is_premium = pro_level > 0
 
@@ -390,22 +453,11 @@ async def _detect_mega_clone_account_type(api):
                     LOGGER.info(
                         f"🎉 MEGA Premium account detected for clone (Level {pro_level})"
                     )
-                    LOGGER.info(f"📊 Storage: {storage_used}/{storage_max} bytes")
-                    LOGGER.info(f"📊 Transfer: {transfer_used}/{transfer_max} bytes")
-                    LOGGER.info(
-                        "✅ Premium features enabled: parallel downloads, no bandwidth limits"
-                    )
                 else:
                     LOGGER.info("📱 MEGA Free account detected for clone")
-                    LOGGER.info(f"📊 Storage: {storage_used}/{storage_max} bytes")
-                    LOGGER.info(f"📊 Transfer: {transfer_used}/{transfer_max} bytes")
-                    LOGGER.info(
-                        "⚠️ Free account limitations: single downloads, bandwidth limited"
-                    )
 
                 return is_premium, _get_clone_premium_settings(is_premium)
-            except Exception as e:
-                LOGGER.debug(f"Error parsing clone account details: {e}")
+            except Exception:
                 LOGGER.info(
                     "📱 MEGA account detected for clone, using free account settings as fallback"
                 )
@@ -460,9 +512,7 @@ async def send_clone_completion_message(listener, mega_listener):
                     disable_web_page_preview=True,
                     disable_notification=True,
                 )
-                LOGGER.info(
-                    f"Clone completion message sent to log chat: {Config.LOG_CHAT_ID}"
-                )
+
             except Exception as e:
                 LOGGER.error(
                     f"Failed to send clone completion message to log chat: {e}"
@@ -474,8 +524,6 @@ async def send_clone_completion_message(listener, mega_listener):
         async with task_dict_lock:
             if listener.mid in task_dict:
                 del task_dict[listener.mid]
-
-        LOGGER.info(f"Clone completion message sent for: {name}")
 
     except Exception as e:
         LOGGER.error(f"Error sending clone completion message: {e}")
@@ -512,13 +560,73 @@ async def send_clone_completion_message(listener, mega_listener):
             LOGGER.error(f"Error sending fallback clone message: {e2}")
 
 
-async def _cleanup_mega_clone_api(api, executor, listener=None):
-    """Helper function to cleanup MEGA API instances"""
+async def _fallback_to_download_upload(listener, mega_link, clone_path=None):
+    """
+    Fallback method: Download from MEGA and then upload to MEGA when direct cloning fails
+    """
     try:
+        # Import the necessary modules for download
+        from bot.helper.mirror_leech_utils.download_utils.mega_download import (
+            add_mega_download,
+        )
+
+        # Update listener to indicate this is a clone operation with upload
+        listener.is_clone = True
+        listener.mega_upload_path = clone_path  # Set the upload path for MEGA upload
+
+        # Start MEGA download with correct filesystem path
+        download_path = listener.dir  # Use the listener's download directory
+        await add_mega_download(listener, download_path)
+
+    except Exception as e:
+        error_msg = f"MEGA clone fallback failed: {e}"
+        LOGGER.error(error_msg)
+        await listener.on_download_error(error_msg)
+
+
+async def _navigate_to_folder(api, root_node, folder_path):
+    """Navigate to a specific folder path in MEGA"""
+    if not folder_path or folder_path in {"", "/"}:
+        return root_node
+
+    try:
+        current_node = root_node
+        path_parts = [part for part in folder_path.split("/") if part.strip()]
+
+        for part in path_parts:
+            children = api.getChildren(current_node)
+            found = False
+
+            if children:
+                for i in range(children.size()):
+                    child = children.get(i)
+                    if child and child.isFolder() and not child.isRemoved():
+                        child_name = child.getName()
+                        if child_name == part:
+                            current_node = child
+                            found = True
+                            break
+
+            if not found:
+                LOGGER.warning(f"Folder '{part}' not found in path '{folder_path}'")
+                return None
+
+        return current_node
+
+    except Exception as e:
+        LOGGER.error(f"Error navigating to folder '{folder_path}': {e}")
+        return None
+
+
+async def _cleanup_mega_clone_api(api, executor, listener=None):
+    """Helper function to cleanup MEGA API instances with enhanced memory safety"""
+    try:
+        # Remove listener first to prevent callbacks during cleanup
         if listener and api:
             try:
                 api.removeListener(listener)
-                LOGGER.info("MEGA clone listener removed")
+                # Add small delay to ensure listener removal is processed
+                await asyncio.sleep(0.2)
             except Exception as e:
                 LOGGER.error(f"Error removing MEGA clone listener: {e}")
 
@@ -529,28 +637,43 @@ async def _cleanup_mega_clone_api(api, executor, listener=None):
             except Exception as e:
                 LOGGER.debug(f"Error setting executor event: {e}")
 
-        # Logout directly without using executor to avoid timeout issues
+        # Enhanced logout with better error handling and memory safety
         if api:
             try:
-                # Use direct asyncio.wait_for instead of sync_to_async to avoid timeout issues
+                # Add a small delay before logout to ensure all operations are complete
+                await asyncio.sleep(0.5)
+
+                # Use direct asyncio.wait_for with shorter timeout to prevent hanging
                 await asyncio.wait_for(
                     asyncio.get_event_loop().run_in_executor(None, api.logout),
-                    timeout=120,
+                    timeout=30,  # Reduced timeout to prevent hanging
                 )
-                LOGGER.info("MEGA clone API logged out")
+
+                # Add delay after logout to ensure cleanup is complete
+                await asyncio.sleep(0.2)
+
             except TimeoutError:
                 LOGGER.warning(
-                    "MEGA clone logout timed out after 120 seconds, but clone was successful"
+                    "MEGA clone logout timed out after 30 seconds - forcing cleanup"
                 )
+                # Force cleanup by setting api to None
+                api = None
             except Exception as e:
-                LOGGER.warning(
-                    f"MEGA clone logout failed: {e}, but clone was successful"
-                )
+                LOGGER.warning(f"MEGA clone logout failed: {e} - forcing cleanup")
+                # Force cleanup by setting api to None
+                api = None
+
     except Exception as e:
         LOGGER.error(f"Error during MEGA clone API cleanup: {e}")
+        # Force cleanup in case of any errors
+        try:
+            if api:
+                api = None
+        except:
+            pass
 
 
-async def add_mega_clone(listener, mega_link):
+async def add_mega_clone(listener, mega_link, clone_path=None):
     """
     Clone files/folders from MEGA.nz to MEGA account using the MEGA SDK v4.8.0.
     Performs direct MEGA-to-MEGA cloning without local downloading.
@@ -558,6 +681,7 @@ async def add_mega_clone(listener, mega_link):
     Args:
         listener: Clone listener object
         mega_link: MEGA link to clone
+        clone_path: Optional destination folder path for cloning
     """
     # Check if MEGA operations are enabled
     if not Config.MEGA_ENABLED:
@@ -602,10 +726,6 @@ async def add_mega_clone(listener, mega_link):
         await listener.on_download_error(error_msg)
         return
 
-    LOGGER.info("MEGA SDK v4.8.0 is available for clone")
-
-    LOGGER.info(f"Starting MEGA clone: {mega_link}")
-
     executor = AsyncMegaCloneExecutor()
     api = None
     mega_listener = None
@@ -618,9 +738,6 @@ async def add_mega_clone(listener, mega_link):
             api = MegaApi(None, None, None, app_key)
             if not api:
                 raise Exception("Failed to create MEGA API instance")
-            LOGGER.info(
-                f"MEGA API instance created successfully with key: {app_key}"
-            )
 
             # Add a small delay to allow API initialization
             await asyncio.sleep(0.1)
@@ -634,7 +751,6 @@ async def add_mega_clone(listener, mega_link):
         try:
             mega_listener = MegaCloneListener(executor.continue_event, listener)
             api.addListener(mega_listener)
-            LOGGER.info("MEGA clone listener attached")
         except Exception as e:
             error_msg = f"Failed to attach MEGA listener: {e!s}"
             LOGGER.error(error_msg)
@@ -642,7 +758,6 @@ async def add_mega_clone(listener, mega_link):
             return
 
         # Login with credentials
-        LOGGER.info("Logging into MEGA for clone...")
         try:
             # Increase timeout for clone login to 120 seconds
             await executor.do(api.login, (MEGA_EMAIL, MEGA_PASSWORD), timeout=120)
@@ -663,45 +778,96 @@ async def add_mega_clone(listener, mega_link):
 
         # Detect account type and get optimized settings
         try:
-            is_premium, premium_settings = await _detect_mega_clone_account_type(api)
-            LOGGER.info(
-                f"MEGA clone account type detected: {'Premium' if is_premium else 'Free'}"
-            )
+            await _detect_mega_clone_account_type(api)
         except Exception as e:
             LOGGER.warning(
                 f"Could not detect account type for clone: {e}, using free account settings"
             )
-            is_premium = False
 
         # Get public node to clone
         link_type = get_mega_link_type(mega_link)
-        LOGGER.info(f"MEGA clone link type: {link_type}")
 
-        LOGGER.info("Getting public node for clone...")
-        try:
-            await executor.do(api.getPublicNode, (mega_link,), timeout=30)
-        except Exception as e:
-            error_msg = f"Failed to get public node: {e!s}"
-            LOGGER.error(error_msg)
-            await listener.on_download_error(error_msg)
-            return
+        if link_type == "file":
+            try:
+                await executor.do(api.getPublicNode, (mega_link,), timeout=30)
+            except Exception as e:
+                error_msg = f"Failed to get public node: {e!s}"
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
 
-        # Add a small delay to allow the public node callback to complete
-        await asyncio.sleep(0.2)
+            # Add a small delay to allow the public node callback to complete
+            await asyncio.sleep(0.2)
 
-        if mega_listener.error is not None:
-            error_msg = f"Failed to get MEGA node for clone: {mega_listener.error}"
-            LOGGER.error(error_msg)
-            await listener.on_download_error(error_msg)
-            return
+            if mega_listener.error is not None:
+                error_msg = (
+                    f"Failed to get MEGA node for clone: {mega_listener.error}"
+                )
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
 
-        if mega_listener.public_node is None:
-            error_msg = "Failed to retrieve MEGA node for clone"
-            LOGGER.error(error_msg)
-            await listener.on_download_error(error_msg)
-            return
+            if mega_listener.public_node is None:
+                error_msg = "Failed to retrieve MEGA node for clone"
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
 
-        node = mega_listener.public_node
+            node = mega_listener.public_node
+        else:
+            # Handle folder links using loginToFolder (like MEGA download does)
+            folder_api = MegaApi(None, None, None, "aimleechbot_clone_folder")
+            folder_listener = MegaCloneListener(executor.continue_event, listener)
+            folder_api.addListener(folder_listener)
+
+            try:
+                await executor.do(
+                    folder_api.loginToFolder, (mega_link,), timeout=120
+                )
+            except Exception as e:
+                error_msg = f"Failed to login to folder: {e!s}"
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
+
+            # Add a small delay to allow the folder login callback to complete
+            await asyncio.sleep(0.2)
+
+            if folder_listener.error is not None:
+                error_msg = (
+                    f"Failed to get MEGA folder for clone: {folder_listener.error}"
+                )
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
+
+            if folder_listener.node is None:
+                error_msg = "Failed to retrieve MEGA folder node for clone"
+                LOGGER.error(error_msg)
+                await listener.on_download_error(error_msg)
+                return
+
+            # Get the folder node directly
+            node = folder_listener.node
+
+            # Calculate actual folder size (MEGA often reports wrong size for folders)
+            folder_size = node.getSize()
+            if folder_size == 4294967295:  # MEGA's "unknown size" value
+                # Try to calculate actual size by iterating through children
+                try:
+                    children = folder_api.getChildren(node)
+                    if children:
+                        calculated_size = 0
+                        child_count = children.size()
+                        for i in range(child_count):
+                            child = children.get(i)
+                            if child:
+                                calculated_size += child.getSize()
+                        folder_size = calculated_size
+                except Exception as e:
+                    LOGGER.warning(
+                        f"Could not calculate folder size: {e}, using reported size"
+                    )
 
     except Exception as e:
         error_msg = f"Error accessing MEGA for clone: {e!s}"
@@ -711,13 +877,15 @@ async def add_mega_clone(listener, mega_link):
         return
 
     # Set name and size based on the node
-    listener.name = listener.name or node.getName()
-    listener.size = node.getSize()
+    # Preserve the original folder name from the MEGA link, not the SDK default
+    original_folder_name = node.getName()
+    listener.name = listener.name or original_folder_name
+    listener.size = folder_size if "folder_size" in locals() else node.getSize()
+
+    # Store the original name for later use in upload
+    listener.original_mega_name = original_folder_name
 
     gid = token_hex(4)
-    LOGGER.info(
-        f"MEGA clone info - Name: {listener.name}, Size: {listener.size} bytes"
-    )
 
     # Check if clone should be queued
     added_to_queue, event = await check_running_tasks(listener)
@@ -758,46 +926,64 @@ async def add_mega_clone(listener, mega_link):
         LOGGER.info(f"Starting MEGA clone: {listener.name}")
 
     try:
-        # Get destination folder
-        dest_folder = mega_listener.node  # Root by default
-        if Config.MEGA_CLONE_TO_FOLDER:
-            # TODO: Navigate to specific folder
-            LOGGER.info(
-                f"Using clone destination folder: {Config.MEGA_CLONE_TO_FOLDER}"
-            )
+        # MEGA SDK v4.8.0 has segmentation fault issues with copyNode and folder navigation
+        # Fall back to download + upload immediately to prevent segfaults
+        LOGGER.warning(
+            "MEGA clone: Direct cloning disabled due to MEGA SDK segmentation fault issues"
+        )
+        LOGGER.info("MEGA clone: Falling back to download + upload method...")
 
-        # Start the actual clone operation
+        # Get the selected destination path for the fallback
+        selected_clone_path = clone_path or (
+            getattr(listener, "mega_clone_path", None)
+            if hasattr(listener, "mega_clone_path")
+            else None
+        )
 
-        # Use copyNode with new name parameter for MEGA SDK v4.8.0
-        await executor.do(api.copyNode, (node, dest_folder, listener.name))
+        # Cleanup current API instances before fallback to prevent segfaults
+        await _cleanup_mega_clone_api(api, executor, mega_listener)
 
-        # Check if clone was successful
-        if mega_listener.error:
-            error_msg = f"MEGA clone failed: {mega_listener.error}"
-            LOGGER.error(error_msg)
-            await listener.on_download_error(error_msg)
-            return
-
-        # Generate public link if configured
-        if Config.MEGA_UPLOAD_PUBLIC and mega_listener.cloned_node:
-            cloned_node = api.getNodeByHandle(mega_listener.cloned_node)
-            if cloned_node:
-                await executor.do(api.exportNode, (cloned_node,))
-
-        LOGGER.info(f"MEGA clone completed: {listener.name}")
-
-        # Set executor event to signal completion and prevent timeout
-        if executor and hasattr(executor, "continue_event"):
-            executor.continue_event.set()
-
-        # For clone operations, send completion message directly instead of calling on_download_complete
-        # This prevents the system from treating it as a download operation
-        await send_clone_completion_message(listener, mega_listener)
+        # Fall back to download + upload with the selected destination path
+        await _fallback_to_download_upload(listener, mega_link, selected_clone_path)
+        return
 
     except Exception as e:
         error_msg = f"Error during MEGA clone: {e!s}"
         LOGGER.error(error_msg)
+
+        # Check if this is a critical error that might cause segfault
+        error_str = str(e).lower()
+        if any(
+            keyword in error_str
+            for keyword in ["segmentation", "memory", "core", "signal", "abort"]
+        ):
+            LOGGER.critical(f"MEGA clone: Critical error detected - {error_msg}")
+            error_msg = "❌ MEGA clone failed due to a critical system error. This may be due to MEGA SDK limitations or memory issues."
+
         await listener.on_download_error(error_msg)
+    except:
+        # Catch any other critical errors including segfaults
+        critical_error = "❌ MEGA clone failed due to an unexpected critical error. This may be due to MEGA SDK limitations."
+        LOGGER.critical("MEGA clone: Unexpected critical error occurred")
+        try:
+            await listener.on_download_error(critical_error)
+        except:
+            # If even error reporting fails, just log it
+            LOGGER.critical("MEGA clone: Failed to report error to user")
     finally:
-        # Always cleanup API connections
-        await _cleanup_mega_clone_api(api, executor, mega_listener)
+        # Always cleanup API connections with enhanced safety
+        try:
+            await _cleanup_mega_clone_api(api, executor, mega_listener)
+            LOGGER.info("MEGA clone: Final cleanup completed")
+        except Exception as cleanup_error:
+            LOGGER.error(f"MEGA clone: Error during final cleanup: {cleanup_error}")
+            # Force cleanup even if normal cleanup fails
+            try:
+                if api:
+                    api = None
+                if executor:
+                    executor = None
+                if mega_listener:
+                    mega_listener = None
+            except:
+                pass

@@ -57,11 +57,19 @@ COMMANDS = {
     "GenSessionCommand": "- Generate Pyrogram session string",
     "TruecallerCommand": "- Lookup phone numbers using Truecaller",
     "VirusTotalCommand": "- Scan files or URLs for viruses using VirusTotal",
+    # QuickInfo Commands
+    "QuickInfoCommand": "- Get chat/user information with interactive buttons",
     "BotSetCommand": "- [ADMIN] Open Bot settings",
     "LogCommand": "- [ADMIN] View log",
     "RestartCommand": "- [ADMIN] Restart the bot",
 }
 
+# Add encoding/decoding commands if enabled
+if Config.ENCODING_ENABLED:
+    COMMANDS["EncodeCommand"] = "- Encode text using various methods"
+
+if Config.DECODING_ENABLED:
+    COMMANDS["DecodeCommand"] = "- Decode encoded text with auto-detection"
 
 # Setup Commands
 COMMAND_OBJECTS = [
@@ -83,14 +91,14 @@ async def set_commands():
 
 # Main Function
 async def main():
-    # Initialize garbage collection with startup-optimized thresholds
-    LOGGER.info("Configuring garbage collection for startup optimization...")
+    # Initialize garbage collection with optimized thresholds
+    LOGGER.info("Configuring garbage collection for optimal performance...")
     gc.enable()
-    # Use higher thresholds during startup to reduce GC overhead
-    # This reduces CPU usage during the critical startup phase
+    # Use balanced thresholds to reduce GC overhead while maintaining memory efficiency
+    # Optimized for lower memory usage and reduced CPU overhead
     gc.set_threshold(
-        1000, 15, 15
-    )  # Higher thresholds to reduce GC frequency during startup
+        1500, 20, 20
+    )  # Balanced thresholds to reduce GC frequency while preventing memory bloat
 
     from .core.startup import (
         load_configurations,
@@ -138,30 +146,34 @@ async def main():
     from .helper.ext_utils.task_manager import start_queue_processor
     from .helper.ext_utils.task_monitor import start_monitoring
 
+    # Optimized startup sequence - prioritize essential tasks
     await gather(
         save_settings(),
         clean_all(),
-        initiate_search_tools(),
-        get_packages_version(),
         restart_notification(),
         telegraph.create_account(),
-        rclone_serve_booter(),
     )
+
+    # Initialize non-critical services with delay to reduce startup load
+    create_task(initiate_search_tools())  # noqa: RUF006
+    create_task(get_packages_version())  # noqa: RUF006
+    create_task(rclone_serve_booter())  # noqa: RUF006
 
     # Start background services immediately without delays
     LOGGER.info("Starting background services...")
 
     # Start task monitoring system and queue processor only if task monitoring is enabled
+    # Optimized to reduce resource usage by default
     if Config.TASK_MONITOR_ENABLED:
-        LOGGER.info("Starting task monitoring system...")
+        LOGGER.info("Starting optimized task monitoring system...")
         create_task(start_monitoring())  # noqa: RUF006
 
-        # Start queue processor to ensure tasks run even under high system resources
-        LOGGER.info("Starting queue processor...")
+        # Start queue processor with reduced frequency to save resources
+        LOGGER.info("Starting optimized queue processor...")
         create_task(start_queue_processor())  # noqa: RUF006
     else:
         LOGGER.info(
-            "Task monitoring is disabled - skipping task monitor and queue processor"
+            "Task monitoring is disabled - skipping task monitor and queue processor (recommended for resource optimization)"
         )
 
     # Initialize auto-restart scheduler
@@ -184,9 +196,11 @@ async def main():
 
     LOGGER.info("All background services initialized successfully")
 
-    # Adjust garbage collection thresholds for normal operation after startup
-    LOGGER.info("Adjusting garbage collection thresholds for normal operation...")
-    gc.set_threshold(700, 10, 10)  # More aggressive thresholds for normal operation
+    # Adjust garbage collection thresholds for optimal operation after startup
+    LOGGER.info("Adjusting garbage collection thresholds for optimal operation...")
+    gc.set_threshold(
+        1000, 15, 15
+    )  # Balanced thresholds for optimal memory/CPU trade-off
 
 
 bot_loop.run_until_complete(main())

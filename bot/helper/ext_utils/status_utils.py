@@ -81,11 +81,23 @@ async def get_specific_tasks(status, user_id):
     if status == "All":
         if user_id:
             return [
-                tk for tk in task_dict.values() if tk.listener.user_id == user_id
+                tk
+                for tk in task_dict.values()
+                if hasattr(tk, "listener")
+                and tk.listener
+                and hasattr(tk.listener, "user_id")
+                and tk.listener.user_id == user_id
             ]
         return list(task_dict.values())
     tasks_to_check = (
-        [tk for tk in task_dict.values() if tk.listener.user_id == user_id]
+        [
+            tk
+            for tk in task_dict.values()
+            if hasattr(tk, "listener")
+            and tk.listener
+            and hasattr(tk.listener, "user_id")
+            and tk.listener.user_id == user_id
+        ]
         if user_id
         else list(task_dict.values())
     )

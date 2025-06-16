@@ -9,13 +9,86 @@ from time import time
 from aiofiles.os import path as aiopath
 from aiofiles.os import remove as aioremove
 
-# Try to import MEGA SDK at module level, but don't fail if not available
-try:
-    from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+# Try to import MEGA SDK with system-wide detection
+MEGA_SDK_AVAILABLE = False
+MEGA_IMPORT_ERROR = None
 
-    MEGA_SDK_AVAILABLE = True
-    MEGA_IMPORT_ERROR = None
-except ImportError as e:
+
+def _detect_and_import_mega():
+    """Detect MEGA SDK installation system-wide and import"""
+    import sys
+    from pathlib import Path
+
+    # System-wide search paths for MEGA SDK
+    search_paths = [
+        "/usr/local/lib/python3.13/dist-packages",
+        "/usr/lib/python3/dist-packages",
+        "/usr/lib/python3.13/dist-packages",
+        "/usr/local/lib/python3.12/dist-packages",
+        "/usr/lib/python3.12/dist-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
+        "/usr/src/app/.venv/lib/python3.13/site-packages",
+        "/opt/megasdk/lib/python3.13/site-packages",
+    ]
+
+    # Try standard import first
+    try:
+        from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+
+        # Test basic functionality
+        api = MegaApi("test")
+        api.getVersion()
+        return (
+            True,
+            None,
+            (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+        )
+    except ImportError:
+        pass
+    except Exception as e:
+        return False, f"MEGA SDK validation failed: {e}", None
+
+    # Search system-wide paths
+    for path in search_paths:
+        mega_path = Path(path) / "mega"
+        if mega_path.exists():
+            try:
+                if str(Path(path)) not in sys.path:
+                    sys.path.insert(0, str(Path(path)))
+
+                from mega import (
+                    MegaApi,
+                    MegaError,
+                    MegaListener,
+                    MegaRequest,
+                    MegaTransfer,
+                )
+
+                # Test basic functionality
+                api = MegaApi("test")
+                api.getVersion()
+                return (
+                    True,
+                    None,
+                    (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+                )
+            except Exception:
+                continue
+
+    return False, "MEGA SDK not found in system-wide search", None
+
+
+# Perform detection
+try:
+    success, error, classes = _detect_and_import_mega()
+    if success:
+        MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer = classes
+        MEGA_SDK_AVAILABLE = True
+        MEGA_IMPORT_ERROR = None
+    else:
+        raise ImportError(error)
+except Exception as e:
     # Create dummy classes to prevent import errors
     class MegaApi:
         pass
@@ -39,30 +112,6 @@ except ImportError as e:
 
     MEGA_SDK_AVAILABLE = False
     MEGA_IMPORT_ERROR = str(e)
-except Exception as e:
-    # Handle other import errors
-    class MegaApi:
-        pass
-
-    class MegaListener:
-        pass
-
-    class MegaRequest:
-        TYPE_LOGIN = 1
-        TYPE_FETCH_NODES = 2
-        TYPE_GET_PUBLIC_NODE = 3
-        TYPE_COPY = 4
-        TYPE_EXPORT = 5
-        TYPE_CREATE_FOLDER = 6
-
-    class MegaTransfer:
-        pass
-
-    class MegaError:
-        pass
-
-    MEGA_SDK_AVAILABLE = False
-    MEGA_IMPORT_ERROR = f"Unexpected error: {e!s}"
 
 from bot import LOGGER, task_dict, task_dict_lock
 from bot.core.config_manager import Config
@@ -118,7 +167,6 @@ async def generate_video_thumbnail(video_path):
             thumbnail_path,
         ]
 
-        LOGGER.info(f"Generating thumbnail for: {video_path}")
         process = await create_subprocess_exec(
             *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
@@ -152,6 +200,7 @@ class MegaUploadListener(MegaListener):
         self.__name = ""
         self.__start_time = time()
         self.__upload_folder = None
+        self.upload_folder_path = None  # Store the upload folder path for display
 
     @property
     def downloaded_bytes(self):
@@ -165,6 +214,28 @@ class MegaUploadListener(MegaListener):
         self.is_cancelled = True
         await self.listener.on_upload_error("Upload cancelled by user")
 
+    def _generate_mega_path(self):
+        """Generate MEGA path for display in completion message"""
+        try:
+            # Use the stored upload folder path
+            if hasattr(self, "upload_folder_path") and self.upload_folder_path:
+                # Use the stored folder path
+                if hasattr(self.listener, "name") and self.listener.name:
+                    mega_path = (
+                        f"MEGA:/{self.upload_folder_path}/{self.listener.name}"
+                    )
+                else:
+                    mega_path = f"MEGA:/{self.upload_folder_path}"
+                return mega_path
+            if hasattr(self.listener, "name") and self.listener.name:
+                # Use root folder with file/folder name
+                return f"MEGA:/{self.listener.name}"
+            # Fallback to generic MEGA path
+            return "MEGA:/Cloud Drive"
+        except Exception as e:
+            LOGGER.error(f"Error generating MEGA path: {e}")
+            return "MEGA:/Cloud Drive"
+
     def onRequestFinish(self, api, request, error):
         """Called when a request finishes - with exception handling to prevent SWIG errors"""
         try:
@@ -177,7 +248,7 @@ class MegaUploadListener(MegaListener):
                 if "error code: -1" in error_str:
                     # Error code -1 is typically a temporary network/connection issue
                     # Log as INFO since these are usually automatically retried and succeed
-                    LOGGER.info(
+                    LOGGER.warning(
                         f"MEGA temporary connection issue (will retry): {self.error}"
                     )
                 elif any(
@@ -231,9 +302,7 @@ class MegaUploadListener(MegaListener):
             elif request_type == MegaRequest.TYPE_CREATE_FOLDER:
                 try:
                     self.__upload_folder = request.getNodeHandle()
-                    LOGGER.info(
-                        f"MEGA upload folder created: {self.__upload_folder}"
-                    )
+
                 except Exception as e:
                     LOGGER.error(f"Failed to get folder handle: {e}")
                     self.error = f"Folder handle error: {e}"
@@ -248,12 +317,17 @@ class MegaUploadListener(MegaListener):
                     files_count = 1 if is_file else 0
                     folders_count = 0 if is_file else 1
                     mime_type = "File" if is_file else "Folder"
+
+                    # Generate MEGA path for display
+                    mega_path = self._generate_mega_path()
+
                     async_to_sync(
                         self.listener.on_upload_complete,
                         public_link,
                         files_count,
                         folders_count,
                         mime_type,
+                        mega_path,  # Add rclone_path parameter for path display
                     )
                 except Exception as e:
                     LOGGER.error(f"Failed to get public link: {e}")
@@ -355,17 +429,46 @@ class MegaUploadListener(MegaListener):
                     f"MEGA Upload Transfer Error: {error_msg}",
                 )
             else:
-                LOGGER.info(
-                    f"MEGA upload completed successfully: {transfer.getFileName()}"
-                )
+                transfer_name = transfer.getFileName()
+                LOGGER.info(f"MEGA upload completed successfully: {transfer_name}")
                 self.upload_node = transfer.getNodeHandle()
 
-                # Generate public link if configured
-                if Config.MEGA_UPLOAD_PUBLIC:
+                # For clone operations, only generate public link for the main folder/file
+                # Individual files in a folder should not trigger link generation
+                is_clone_operation = getattr(self.listener, "is_clone", False)
+                should_generate_link = (
+                    Config.MEGA_UPLOAD_PUBLIC or is_clone_operation
+                )
+
+                # Check if this is the main transfer (not individual files in a folder)
+                is_main_transfer = False
+                if hasattr(self.listener, "name") and self.listener.name:
+                    # For folders, check if this is the main folder transfer
+                    if (
+                        transfer_name == self.listener.name
+                        or (
+                            transfer_name == "MEGA_Folder"
+                            and self.listener.name != "MEGA_Folder"
+                        )
+                        or (
+                            hasattr(self.listener, "is_file")
+                            and self.listener.is_file
+                            and transfer_name == self.listener.name
+                        )
+                    ):
+                        is_main_transfer = True
+                else:
+                    # Fallback: if no listener name, treat as main transfer
+                    is_main_transfer = True
+
+                if should_generate_link and is_main_transfer:
                     node = api.getNodeByHandle(self.upload_node)
                     if node:
                         api.exportNode(node)
                         return  # Wait for export to complete
+                elif not is_main_transfer:
+                    # Don't complete upload for individual files - wait for main transfer
+                    return
 
                 # If no public link needed, complete upload
                 # Determine if it's a file or folder
@@ -373,12 +476,17 @@ class MegaUploadListener(MegaListener):
                 files_count = 1 if is_file else 0
                 folders_count = 0 if is_file else 1
                 mime_type = "File" if is_file else "Folder"
+
+                # Generate MEGA path for display
+                mega_path = self._generate_mega_path()
+
                 async_to_sync(
                     self.listener.on_upload_complete,
                     None,
                     files_count,
                     folders_count,
                     mime_type,
+                    mega_path,  # Add rclone_path parameter for path display
                 )
 
             self.continue_event.set()
@@ -397,7 +505,7 @@ class MegaUploadListener(MegaListener):
 
         # States 1 and 4 are recoverable, don't cancel for these
         if state in [1, 4]:
-            LOGGER.info(
+            LOGGER.warning(
                 f"MEGA upload transfer error is recoverable (state {state}), continuing..."
             )
             return
@@ -463,10 +571,6 @@ class AsyncMegaExecutor:
                     raise Exception(
                         f"MEGA {function_name} operation failed after {max_attempts} attempts. This may be due to network issues or MEGA server problems."
                     )
-                # Not the last attempt - this is just a retry, log as INFO
-                LOGGER.info(
-                    f"MEGA {function_name} operation timed out after {current_timeout} seconds (attempt {attempt + 1}) - retrying with longer timeout"
-                )
                 continue  # Try again
 
             except Exception as e:
@@ -512,10 +616,10 @@ async def _detect_mega_account_type(api):
         if account_details:
             try:
                 pro_level = account_details.getProLevel()
-                storage_used = account_details.getStorageUsed()
-                storage_max = account_details.getStorageMax()
-                transfer_used = account_details.getTransferOwnUsed()
-                transfer_max = account_details.getTransferMax()
+                account_details.getStorageUsed()
+                account_details.getStorageMax()
+                account_details.getTransferOwnUsed()
+                account_details.getTransferMax()
 
                 is_premium = pro_level > 0
 
@@ -523,22 +627,11 @@ async def _detect_mega_account_type(api):
                     LOGGER.info(
                         f"🎉 MEGA Premium account detected (Level {pro_level})"
                     )
-                    LOGGER.info(f"📊 Storage: {storage_used}/{storage_max} bytes")
-                    LOGGER.info(f"📊 Transfer: {transfer_used}/{transfer_max} bytes")
-                    LOGGER.info(
-                        "✅ Premium features enabled: larger chunks, parallel uploads, no bandwidth limits"
-                    )
                 else:
                     LOGGER.info("📱 MEGA Free account detected")
-                    LOGGER.info(f"📊 Storage: {storage_used}/{storage_max} bytes")
-                    LOGGER.info(f"📊 Transfer: {transfer_used}/{transfer_max} bytes")
-                    LOGGER.info(
-                        "⚠️ Free account limitations: smaller chunks, single uploads, bandwidth limited"
-                    )
 
                 return is_premium, _get_premium_settings(is_premium)
-            except Exception as e:
-                LOGGER.debug(f"Error parsing account details: {e}")
+            except Exception:
                 LOGGER.info(
                     "📱 MEGA account detected, using free account settings as fallback"
                 )
@@ -559,7 +652,6 @@ async def _navigate_to_folder(api, root_node, folder_path):
     """Navigate to a specific folder path in MEGA drive"""
     try:
         if not folder_path or folder_path in {"", "/"}:
-            LOGGER.info("Using root folder (empty path)")
             return root_node
 
         # Remove leading/trailing slashes and split path
@@ -617,7 +709,6 @@ async def _cleanup_mega_upload_api(api, executor, listener=None):
                     asyncio.get_event_loop().run_in_executor(None, api.logout),
                     timeout=120,
                 )
-                LOGGER.info("MEGA upload API logged out")
             except TimeoutError:
                 LOGGER.warning(
                     "MEGA upload logout timed out after 120 seconds, but upload was successful"
@@ -659,14 +750,21 @@ async def add_mega_upload(listener, path):
     if user_mega_email and user_mega_password:
         MEGA_EMAIL = user_mega_email
         MEGA_PASSWORD = user_mega_password
+        LOGGER.info("✅ Using user MEGA credentials for upload")
     else:
         MEGA_EMAIL = Config.MEGA_EMAIL
         MEGA_PASSWORD = Config.MEGA_PASSWORD
+        LOGGER.info("✅ Using bot MEGA credentials for upload")
 
     if not MEGA_EMAIL or not MEGA_PASSWORD:
-        await listener.on_upload_error(
-            "❌ MEGA.nz credentials not configured. Please set MEGA_EMAIL and MEGA_PASSWORD."
+        error_msg = (
+            "❌ MEGA.nz credentials not configured.\n\n"
+            "To use MEGA upload, you need to:\n"
+            "1. Set your personal MEGA credentials in /settings → MEGA Settings\n"
+            "2. Or ask the administrator to configure bot-wide MEGA credentials\n\n"
+            "Note: MEGA downloads work because they can use anonymous access, but uploads require authentication."
         )
+        await listener.on_upload_error(error_msg)
         return
 
     # Check if MEGA SDK v4.8.0 is available and working
@@ -678,8 +776,6 @@ async def add_mega_upload(listener, path):
             error_msg += f"\nImport error: {MEGA_IMPORT_ERROR}"
         await listener.on_upload_error(error_msg)
         return
-
-    LOGGER.info(f"Starting MEGA upload: {path}")
 
     executor = AsyncMegaExecutor()
     api = None
@@ -788,6 +884,7 @@ async def add_mega_upload(listener, path):
 
         # Check if user selected a specific folder through folder selector
         selected_folder_path = getattr(listener, "mega_upload_path", None)
+
         if selected_folder_path:
             upload_folder_node = await _navigate_to_folder(
                 api, mega_listener.node, selected_folder_path
@@ -799,11 +896,10 @@ async def add_mega_upload(listener, path):
                 LOGGER.error(error_msg)
                 await listener.on_upload_error(error_msg)
                 return
+            # Store the folder path for display in completion message
+            mega_listener.upload_folder_path = selected_folder_path
         elif Config.MEGA_UPLOAD_FOLDER:
             # Use configured upload folder
-            LOGGER.info(
-                f"Using configured upload folder: {Config.MEGA_UPLOAD_FOLDER}"
-            )
             upload_folder_node = await _navigate_to_folder(
                 api, mega_listener.node, Config.MEGA_UPLOAD_FOLDER
             )
@@ -812,8 +908,11 @@ async def add_mega_upload(listener, path):
                 LOGGER.error(error_msg)
                 await listener.on_upload_error(error_msg)
                 return
+            # Store the folder path for display in completion message
+            mega_listener.upload_folder_path = Config.MEGA_UPLOAD_FOLDER
         else:
-            LOGGER.info("Using MEGA root folder for upload")
+            # Store empty path for root folder
+            mega_listener.upload_folder_path = ""
 
         # Store node handle for memory safety (prevent segmentation faults)
         upload_folder_handle = upload_folder_node.getHandle()
@@ -827,11 +926,19 @@ async def add_mega_upload(listener, path):
 
     # Set name and size based on the path
     if ospath.isfile(path):
-        listener.name = listener.name or ospath.basename(path)
+        # For clone operations, use the original name if available
+        if hasattr(listener, "original_mega_name") and listener.original_mega_name:
+            listener.name = listener.name or listener.original_mega_name
+        else:
+            listener.name = listener.name or ospath.basename(path)
         listener.size = await aiopath.getsize(path)
         listener.is_file = True
     else:
-        listener.name = listener.name or ospath.basename(path)
+        # For clone operations, use the original name if available
+        if hasattr(listener, "original_mega_name") and listener.original_mega_name:
+            listener.name = listener.name or listener.original_mega_name
+        else:
+            listener.name = listener.name or ospath.basename(path)
         listener.is_file = False
         # Calculate folder size
         total_size = 0

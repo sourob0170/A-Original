@@ -28,11 +28,15 @@ from bot.modules import (
     confirm_restart,
     confirm_selection,
     count_node,
+    decode_command,
     delete_file,
     delete_pending_messages,
     edit_bot_settings,
     edit_media_tools_settings,
     edit_user_settings,
+    # Encoding/Decoding imports
+    encode_command,
+    encoding_callback,
     execute,
     font_styles_cmd,
     force_delete_all_messages,
@@ -44,12 +48,14 @@ from bot.modules import (
     handle_broadcast_media,
     handle_cancel_broadcast_command,
     handle_cancel_button,
-    handle_cancel_command,
     handle_command,
+    handle_encoding_message,
+    handle_forwarded_message,
     handle_group_gensession,
     handle_no_suffix_commands,
     handle_qb_commands,
     handle_session_input,
+    handle_shared_entities,
     hydra_search,
     imdb_callback,
     imdb_search,
@@ -69,6 +75,9 @@ from bot.modules import (
     nzb_mirror,
     paste_text,
     ping,
+    quickinfo_callback,
+    # QuickInfo imports
+    quickinfo_command,
     remove_from_queue,
     remove_sudo,
     restart_bot,
@@ -357,6 +366,12 @@ def add_handlers():
             BotCommands.VirusTotalCommand,
             CustomFilters.authorized,
         ),
+        # QuickInfo commands
+        "quickinfo": (
+            quickinfo_command,
+            BotCommands.QuickInfoCommand,
+            CustomFilters.authorized,
+        ),
     }
 
     # Add streamrip handlers if streamrip is enabled
@@ -442,6 +457,27 @@ def add_handlers():
         # Add MEGA handlers to command_filters
         command_filters.update(mega_handlers)
 
+    # Add encoding/decoding handlers if enabled
+    if Config.ENCODING_ENABLED:
+        encoding_handlers = {
+            "encode": (
+                encode_command,
+                BotCommands.EncodeCommand,
+                CustomFilters.authorized,
+            ),
+        }
+        command_filters.update(encoding_handlers)
+
+    if Config.DECODING_ENABLED:
+        decoding_handlers = {
+            "decode": (
+                decode_command,
+                BotCommands.DecodeCommand,
+                CustomFilters.authorized,
+            ),
+        }
+        command_filters.update(decoding_handlers)
+
     for handler_func, command_name, custom_filter in command_filters.values():
         if custom_filter:
             filters_to_apply = (
@@ -486,7 +522,18 @@ def add_handlers():
         "^fontstyles": font_styles_callback,
         "^mthelp": media_tools_help_callback,
         "^gensession_cancel$": handle_cancel_button,
+        "^quickinfo_": quickinfo_callback,  # QuickInfo callbacks
     }
+
+    # Add encoding/decoding callback handlers if enabled
+    if Config.ENCODING_ENABLED or Config.DECODING_ENABLED:
+        public_regex_filters["^enc_"] = encoding_callback
+
+    # Add VirusTotal callback handler if enabled
+    if Config.VT_ENABLED:
+        from bot.modules.virustotal import vt_callback_handler
+
+        public_regex_filters["^vt_"] = vt_callback_handler
 
     # Add Zotify quality selector callback handler if enabled
     if Config.ZOTIFY_ENABLED:
@@ -555,14 +602,124 @@ def add_handlers():
         group=0,
     )
 
+    # Build dynamic regex pattern for command variants based on enabled features
+    base_commands = [
+        "mirror",
+        "m",
+        "leech",
+        "l",
+        "jdmirror",
+        "jm",
+        "jdleech",
+        "jl",
+        "nzbmirror",
+        "nm",
+        "nzbleech",
+        "nl",
+        "ytdl",
+        "y",
+        "ytdlleech",
+        "yl",
+        "streamripmirror",
+        "srmirror",
+        "srm",
+        "streamripleech",
+        "srleech",
+        "srl",
+        "streamripsearch",
+        "srsearch",
+        "srs",
+        "streamripquality",
+        "srquality",
+        "zotifymirror",
+        "zmirror",
+        "zm",
+        "zotifyleech",
+        "zleech",
+        "zl",
+        "zotifysearch",
+        "zsearch",
+        "zs",
+        "clone",
+        "count",
+        "del",
+        "cancelall",
+        "forcestart",
+        "fs",
+        "list",
+        "search",
+        "nzbsearch",
+        "status",
+        "s",
+        "statusall",
+        "sall",
+        "users",
+        "auth",
+        "unauth",
+        "addsudo",
+        "rmsudo",
+        "ping",
+        "restart",
+        "restartall",
+        "stats",
+        "help",
+        "log",
+        "shell",
+        "aexec",
+        "exec",
+        "clearlocals",
+        "botsettings",
+        "speedtest",
+        "broadcast",
+        "broadcastall",
+        "sel",
+        "rss",
+        "check_deletions",
+        "cd",
+        "imdb",
+        "login",
+        "mediasearch",
+        "mds",
+        "truecaller",
+        "ask",
+        "mediainfo",
+        "mi",
+        "spectrum",
+        "sox",
+        "paste",
+        "virustotal",
+        "mediatools",
+        "mt",
+        "mthelp",
+        "mth",
+        "fontstyles",
+        "fonts",
+        "settings",
+        "usettings",
+        "us",
+        "gensession",
+        "gs",
+        "megasearch",
+        "mgs",
+        "quickinfo",
+        "qi",
+    ]
+
+    # Add encoding/decoding commands if enabled
+    if Config.ENCODING_ENABLED:
+        base_commands.extend(["encode", "enc"])
+    if Config.DECODING_ENABLED:
+        base_commands.extend(["decode", "dec"])
+
+    # Build the regex pattern
+    commands_pattern = "|".join(base_commands)
+    regex_pattern = rf"^/({commands_pattern})([a-zA-Z0-9_]*)($| )"
+
     # Add handler for all command variants (with or without suffix)
     TgClient.bot.add_handler(
         MessageHandler(
             handle_no_suffix_commands,
-            filters=regex(
-                r"^/(mirror|m|leech|l|jdmirror|jm|jdleech|jl|nzbmirror|nm|nzbleech|nl|ytdl|y|ytdlleech|yl|streamripmirror|srmirror|srm|streamripleech|srleech|srl|streamripsearch|srsearch|srs|streamripquality|srquality|zotifymirror|zmirror|zm|zotifyleech|zleech|zl|zotifysearch|zsearch|zs|clone|count|del|cancelall|forcestart|fs|list|search|nzbsearch|status|s|statusall|sall|users|auth|unauth|addsudo|rmsudo|ping|restart|restartall|stats|help|log|shell|aexec|exec|clearlocals|botsettings|speedtest|broadcast|broadcastall|sel|rss|check_deletions|cd|imdb|login|mediasearch|mds|truecaller|ask|mediainfo|mi|spectrum|sox|paste|virustotal)([a-zA-Z0-9_]*)($| )"
-            )
-            & CustomFilters.pm_or_authorized,
+            filters=regex(regex_pattern) & CustomFilters.pm_or_authorized,
         ),
         group=0,
     )
@@ -576,6 +733,16 @@ def add_handlers():
         ),
         group=0,
     )
+
+    # Add handler for encoding message processing (when user has selected a method)
+    if Config.ENCODING_ENABLED or Config.DECODING_ENABLED:
+        TgClient.bot.add_handler(
+            MessageHandler(
+                handle_encoding_message,
+                filters=filters.text | filters.document,
+            ),
+            group=1,  # Lower priority to not interfere with commands
+        )
 
     # Add handlers for special commands that should work in both private chats and groups
     # These handlers will be called before the handle_no_suffix_commands handler
@@ -615,15 +782,6 @@ def add_handlers():
             filters=command(BotCommands.FontStylesCommand, case_sensitive=True),
         ),
         group=-1,  # Higher priority than regular handlers
-    )
-
-    # Add a handler for /cancel command in private chats
-    TgClient.bot.add_handler(
-        MessageHandler(
-            handle_cancel_command,
-            filters=command("cancel", case_sensitive=False) & filters.private,
-        ),
-        group=0,
     )
 
     # Add a handler for /cancelbc command for broadcast cancellation
@@ -729,3 +887,34 @@ def add_handlers():
     from bot.modules.ad_broadcaster import init_ad_broadcaster
 
     init_ad_broadcaster()
+
+    # Add QuickInfo handlers for forwarded messages and shared entities
+    TgClient.bot.add_handler(
+        MessageHandler(
+            handle_forwarded_message,
+            filters=filters.private & filters.forwarded,
+        ),
+        group=2,  # Lower priority to not interfere with commands
+    )
+
+    TgClient.bot.add_handler(
+        MessageHandler(
+            handle_shared_entities,
+            filters=filters.private
+            & (
+                filters.create(
+                    lambda _, __, m: getattr(m, "users_shared", None) is not None
+                )
+                | filters.create(
+                    lambda _, __, m: getattr(m, "chats_shared", None) is not None
+                )
+                | filters.create(
+                    lambda _, __, m: getattr(m, "user_shared", None) is not None
+                )
+                | filters.create(
+                    lambda _, __, m: getattr(m, "chat_shared", None) is not None
+                )
+            ),
+        ),
+        group=2,  # Lower priority to not interfere with commands
+    )

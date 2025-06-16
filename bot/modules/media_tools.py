@@ -229,6 +229,9 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         if is_media_tool_enabled("extract"):
             buttons.data_button("Extract", f"mediatools {user_id} extract")
 
+        if is_media_tool_enabled("remove"):
+            buttons.data_button("Remove", f"mediatools {user_id} remove")
+
         if is_media_tool_enabled("add"):
             buttons.data_button("Add", f"mediatools {user_id} add")
 
@@ -511,6 +514,51 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         else:
             audio_add_status = "❌ OFF"
 
+        # Get remove status
+        remove_enabled = user_dict.get("REMOVE_ENABLED", False)
+        # Check both if remove is available and enabled globally
+        owner_remove_available = is_media_tool_enabled("remove")
+        owner_remove_enabled = owner_remove_available and Config.REMOVE_ENABLED
+
+        if remove_enabled:
+            remove_status = "✅ ON (User)"
+        elif owner_remove_enabled:
+            remove_status = "✅ ON (Global)"
+        else:
+            remove_status = "❌ OFF"
+
+        # Get remove video status
+        video_remove_enabled = user_dict.get("REMOVE_VIDEO_ENABLED", False)
+        owner_video_remove_enabled = (
+            hasattr(Config, "REMOVE_VIDEO_ENABLED") and Config.REMOVE_VIDEO_ENABLED
+        )
+
+        if "REMOVE_VIDEO_ENABLED" in user_dict:
+            if video_remove_enabled:
+                video_remove_status = "✅ ON (User)"
+            else:
+                video_remove_status = "❌ OFF (User)"
+        elif owner_video_remove_enabled:
+            video_remove_status = "✅ ON (Global)"
+        else:
+            video_remove_status = "❌ OFF"
+
+        # Get remove audio status
+        audio_remove_enabled = user_dict.get("REMOVE_AUDIO_ENABLED", False)
+        owner_audio_remove_enabled = (
+            hasattr(Config, "REMOVE_AUDIO_ENABLED") and Config.REMOVE_AUDIO_ENABLED
+        )
+
+        if "REMOVE_AUDIO_ENABLED" in user_dict:
+            if audio_remove_enabled:
+                audio_remove_status = "✅ ON (User)"
+            else:
+                audio_remove_status = "❌ OFF (User)"
+        elif owner_audio_remove_enabled:
+            audio_remove_status = "✅ ON (Global)"
+        else:
+            audio_remove_status = "❌ OFF"
+
         text = f"""⌬ <b>Media Tools Settings :</b>
 ┟ <b>Name</b> → {user_name}
 ┃
@@ -534,6 +582,10 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Extract</b> → {extract_status}
 ┠ <b>Video Extract</b> → {video_extract_status}
 ┠ <b>Audio Extract</b> → {audio_extract_status}
+┃
+┠ <b>Remove</b> → {remove_status}
+┠ <b>Video Remove</b> → {video_remove_status}
+┠ <b>Audio Remove</b> → {audio_remove_status}
 ┃
 ┠ <b>Add</b> → {add_status}
 ┠ <b>Video Add</b> → {video_add_status}
@@ -1736,6 +1788,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         )
         buttons.data_button("Trim Help", f"mediatools {user_id} help_trim")
         buttons.data_button("Extract Help", f"mediatools {user_id} help_extract")
+        buttons.data_button("Remove Help", f"mediatools {user_id} help_remove")
         buttons.data_button("Add Help", f"mediatools {user_id} help_add")
         buttons.data_button("Priority Guide", f"mediatools {user_id} help_priority")
         buttons.data_button("Usage Examples", f"mediatools {user_id} help_examples")
@@ -1754,6 +1807,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Compression Help</b> - Information about compressing files
 ┠ <b>Trim Help</b> - Information about trimming media files
 ┠ <b>Extract Help</b> - Information about extracting media tracks
+┠ <b>Remove Help</b> - Information about removing media tracks
 ┠ <b>Add Help</b> - Information about adding media tracks
 ┠ <b>Priority Guide</b> - How tool priority affects processing
 ┖ <b>Usage Examples</b> - Examples of how to use media tools"""
@@ -1923,6 +1977,8 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃
 ┠ <b>Document Trim Settings:</b>
 ┃ • <b>Enabled/Disabled</b> - Toggle document trim
+┃ • <b>Start Page</b> - Starting page number for trimming (1-based)
+┃ • <b>End Page</b> - Ending page number for trimming (empty for last page)
 ┃ • <b>Quality</b> - Document quality (1-100)
 ┃ • <b>Format</b> - Output format (pdf, docx, txt, etc.)
 ┃
@@ -1940,14 +1996,25 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃   Example: <code>/leech https://example.com/video.mp4 -trim 00:01:30 00:02:45</code>
 ┃   This will trim the video from 1 minute 30 seconds to 2 minutes 45 seconds
 ┃
+┃ • <b>Trim Documents:</b> Add <code>-trim start-page end-page</code> for documents
+┃   Example: <code>/leech https://example.com/document.pdf -trim 5 10</code>
+┃   This will extract pages 5 to 10 from the PDF document
+┃   Example: <code>/leech https://example.com/document.pdf -trim 3 -</code>
+┃   This will extract from page 3 to the last page
+┃
 ┃ • <b>RO:</b> Add <code>-del</code> to delete the original file after trimming
 ┃   Example: <code>/leech https://example.com/video.mp4 -trim 00:01:30 00:02:45 -del</code>
+┃   Example: <code>/leech https://example.com/document.pdf -trim 5 10 -del</code>
 ┃
-┃ • <b>Time Format:</b> Use HH:MM:SS or seconds
+┃ • <b>Time Format:</b> Use HH:MM:SS or seconds for media files
 ┃   Example: <code>-trim 90 165</code> (trim from 90 seconds to 165 seconds)
 ┃   Example: <code>-trim 00:01:30 00:02:45</code> (trim from 1m30s to 2m45s)
 ┃
-┖ <b>Note:</b> Trim uses FFmpeg for processing and supports most media formats. Format settings with value 'none' will use the original file format."""
+┃ • <b>Page Format:</b> Use page numbers for documents
+┃   Example: <code>-trim 1 5</code> (extract pages 1 to 5)
+┃   Example: <code>-trim 10 -</code> (extract from page 10 to end)
+┃
+┖ <b>Note:</b> Trim uses FFmpeg for media processing and PyMuPDF for document processing. Format settings with value 'none' will use the original file format."""
 
     elif stype == "help_extract":
         # Extract Guide
@@ -2141,6 +2208,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 • <b>Path</b> - Path to subtitle file to add
 • <b>Codec</b> - Subtitle codec to use (copy, srt, ass, etc.)
 • <b>Index</b> - Specific index to add subtitle track to (comma-separated for multiple)
+• <b>Hardsub</b> - Burn subtitles permanently into video (cannot be turned off)
 • <b>Language</b> - Subtitle language code (e.g., eng, spa, fre)
 • <b>Encoding</b> - Character encoding (e.g., UTF-8, latin1)
 • <b>Font</b> - Font for ASS/SSA subtitles (e.g., Arial)
@@ -2167,6 +2235,70 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃
 ┖ <b>Note:</b> Add uses FFmpeg for processing and works best with MKV containers."""
 
+    elif stype == "help_remove":
+        # Remove Help
+        buttons.data_button("Back to Help", f"mediatools {user_id} help", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        text = f"""⌬ <b>Remove Help :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Overview:</b>
+┃ The Remove feature allows you to remove specific tracks or metadata from media files.
+┃
+┠ <b>Supported Media Types:</b>
+┃ • <b>Videos</b> - MP4, MKV, AVI, WebM, etc.
+┃ • <b>Audio</b> - MP3, AAC, FLAC, WAV, etc.
+┃ • <b>Subtitles</b> - SRT, ASS, VTT, etc.
+┃ • <b>Attachments</b> - Fonts, images, and other embedded files
+┃
+┠ <b>Settings:</b>
+┃ • <b>Enabled/Disabled</b> - Toggle Remove feature
+┃ • <b>Priority</b> - Processing order when multiple tools are enabled
+┃ • <b>RO (Remove Original)</b> - Delete original file after removing tracks
+┃ • <b>Remove Metadata</b> - Strip metadata from files
+┃
+┠ <b>Track Type Settings:</b>
+┃ • <b>Video Remove</b> - Enable/disable video track removal
+┃ • <b>Audio Remove</b> - Enable/disable audio track removal
+┃ • <b>Subtitle Remove</b> - Enable/disable subtitle track removal
+┃ • <b>Attachment Remove</b> - Enable/disable attachment removal
+┃
+┠ <b>Index Settings:</b>
+┃ • <b>Video Index</b> - Which video tracks to remove (empty = all)
+┃ • <b>Audio Index</b> - Which audio tracks to remove (empty = all)
+┃ • <b>Subtitle Index</b> - Which subtitle tracks to remove (empty = all)
+┃ • <b>Attachment Index</b> - Which attachments to remove (empty = all)
+┃
+┠ <b>Usage:</b>
+┃ • <b>Remove All Tracks:</b> Add <code>-remove</code> to any download command
+┃   Example: <code>/leech https://example.com/video.mkv -remove</code>
+┃
+┃ • <b>Remove Specific Track Types:</b>
+┃   Example: <code>/leech https://example.com/video.mkv -remove-video</code>
+┃   Example: <code>/mirror https://example.com/video.mkv -remove-audio</code>
+┃   Example: <code>/leech https://example.com/video.mkv -remove-subtitle</code>
+┃   Example: <code>/mirror https://example.com/video.mkv -remove-attachment</code>
+┃
+┃ • <b>Remove Specific Track by Index:</b>
+┃   Example: <code>/leech https://example.com/video.mkv -remove-audio-index 1</code>
+┃   This will remove the second audio track (index starts at 0)
+┃
+┃ • <b>Remove Multiple Tracks by Index:</b>
+┃   Example: <code>/mirror https://example.com/video.mkv -remove-audio-index 0,2</code>
+┃   This will remove the first and third audio tracks
+┃
+┃ • <b>Remove Metadata:</b>
+┃   Example: <code>/leech https://example.com/video.mkv -remove-metadata</code>
+┃   This will strip metadata from the file
+┃
+┃ • <b>Short Format Flags:</b>
+┃   Example: <code>/mirror https://example.com/video.mkv -rvi 0,1 -rai 2</code>
+┃   This removes first two video tracks and third audio track
+┃
+┖ <b>Note:</b> Remove uses FFmpeg for processing and works best with MKV containers."""
+
     elif stype == "help_priority":
         # Priority Guide
         buttons.data_button("Back to Help", f"mediatools {user_id} help", "footer")
@@ -2182,7 +2314,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>How Priority Works:</b>
 ┃ • Lower number means higher priority (1 is highest priority)
 ┃ • When multiple media tools are enabled, they run in priority order
-┃ • Default priorities: Merge (1), Watermark (2), Convert (3), Compression (4), Trim (5)
+┃ • Default priorities: Merge (1), Watermark (2), Convert (3), Compression (4), Trim (5), Extract (6), Add (7), Remove (8)
 ┃
 ┠ <b>Why Priority Matters:</b>
 ┃ The order of processing affects the final result:
@@ -2197,7 +2329,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃
 ┠ <b>Setting Priority:</b>
 ┃ 1. Go to Media Tools settings
-┃ 2. Select the tool (Watermark, Merge, Convert, Compression, or Trim)
+┃ 2. Select the tool (Watermark, Merge, Convert, Compression, Trim, Extract, Add, or Remove)
 ┃ 3. Click "Set Priority"
 ┃ 4. Enter a number (lower = higher priority)
 ┃
@@ -2600,6 +2732,145 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Subtitle Extract</b> → {subtitle_status}
 ┖ <b>Attachment Extract</b> → {attachment_status}"""
 
+    elif stype == "remove":
+        # Remove settings menu
+        remove_enabled = user_dict.get("REMOVE_ENABLED", False)
+        buttons.data_button(
+            "✅ Enabled" if remove_enabled else "❌ Disabled",
+            f"mediatools {user_id} tog REMOVE_ENABLED {'f' if remove_enabled else 't'}",
+        )
+        buttons.data_button("Configure", f"mediatools {user_id} remove_config")
+        buttons.data_button(
+            "Set Priority", f"mediatools {user_id} menu REMOVE_PRIORITY"
+        )
+
+        # Add RO toggle button (Remove Original)
+        # Use global setting as fallback when user hasn't set it explicitly
+        remove_original = user_dict.get(
+            "REMOVE_DELETE_ORIGINAL", Config.REMOVE_DELETE_ORIGINAL
+        )
+        buttons.data_button(
+            f"RO: {'✅ ON' if remove_original else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_DELETE_ORIGINAL {'f' if remove_original else 't'}",
+        )
+
+        buttons.data_button("Reset", f"mediatools {user_id} reset_remove")
+        buttons.data_button("Remove", f"mediatools {user_id} remove_remove")
+        buttons.data_button("Back", f"mediatools {user_id} back", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get remove priority
+        user_has_priority = (
+            "REMOVE_PRIORITY" in user_dict and user_dict["REMOVE_PRIORITY"]
+        )
+        if user_has_priority:
+            priority = f"{user_dict['REMOVE_PRIORITY']} (User)"
+        elif hasattr(Config, "REMOVE_PRIORITY") and Config.REMOVE_PRIORITY:
+            priority = f"{Config.REMOVE_PRIORITY} (Global)"
+        else:
+            priority = "8 (Default)"
+
+        # Get RO toggle status (Remove Original)
+        remove_original = user_dict.get("REMOVE_DELETE_ORIGINAL", True)
+        if "REMOVE_DELETE_ORIGINAL" in user_dict:
+            remove_original_status = (
+                "✅ Enabled (User)" if remove_original else "❌ Disabled (User)"
+            )
+        elif hasattr(Config, "REMOVE_DELETE_ORIGINAL"):
+            remove_original_status = (
+                "✅ Enabled (Global)"
+                if Config.REMOVE_DELETE_ORIGINAL
+                else "❌ Disabled (Global)"
+            )
+        else:
+            remove_original_status = "✅ Enabled (Default)"
+
+        # Get metadata remove status
+        metadata_remove = user_dict.get("REMOVE_METADATA", False)
+        if "REMOVE_METADATA" in user_dict:
+            metadata_status = (
+                "✅ Enabled (User)" if metadata_remove else "❌ Disabled (User)"
+            )
+        elif hasattr(Config, "REMOVE_METADATA"):
+            metadata_status = (
+                "✅ Enabled (Global)"
+                if Config.REMOVE_METADATA
+                else "❌ Disabled (Global)"
+            )
+        else:
+            metadata_status = "❌ Disabled (Default)"
+
+        # Get video remove status
+        video_enabled = user_dict.get("REMOVE_VIDEO_ENABLED", False)
+        if "REMOVE_VIDEO_ENABLED" in user_dict:
+            video_status = (
+                "✅ Enabled (User)" if video_enabled else "❌ Disabled (User)"
+            )
+        elif hasattr(Config, "REMOVE_VIDEO_ENABLED") and Config.REMOVE_VIDEO_ENABLED:
+            video_status = "✅ Enabled (Global)"
+        else:
+            video_status = "❌ Disabled"
+
+        # Get audio remove status
+        audio_enabled = user_dict.get("REMOVE_AUDIO_ENABLED", False)
+        if "REMOVE_AUDIO_ENABLED" in user_dict:
+            audio_status = (
+                "✅ Enabled (User)" if audio_enabled else "❌ Disabled (User)"
+            )
+        elif hasattr(Config, "REMOVE_AUDIO_ENABLED") and Config.REMOVE_AUDIO_ENABLED:
+            audio_status = "✅ Enabled (Global)"
+        else:
+            audio_status = "❌ Disabled"
+
+        # Get subtitle remove status
+        subtitle_enabled = user_dict.get("REMOVE_SUBTITLE_ENABLED", False)
+        if "REMOVE_SUBTITLE_ENABLED" in user_dict:
+            subtitle_status = (
+                "✅ Enabled (User)" if subtitle_enabled else "❌ Disabled (User)"
+            )
+        elif (
+            hasattr(Config, "REMOVE_SUBTITLE_ENABLED")
+            and Config.REMOVE_SUBTITLE_ENABLED
+        ):
+            subtitle_status = "✅ Enabled (Global)"
+        else:
+            subtitle_status = "❌ Disabled"
+
+        # Get attachment remove status
+        attachment_enabled = user_dict.get("REMOVE_ATTACHMENT_ENABLED", False)
+        if "REMOVE_ATTACHMENT_ENABLED" in user_dict:
+            attachment_status = (
+                "✅ Enabled (User)" if attachment_enabled else "❌ Disabled (User)"
+            )
+        elif (
+            hasattr(Config, "REMOVE_ATTACHMENT_ENABLED")
+            and Config.REMOVE_ATTACHMENT_ENABLED
+        ):
+            attachment_status = "✅ Enabled (Global)"
+        else:
+            attachment_status = "❌ Disabled"
+
+        text = f"""⌬ <b>Remove Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Status</b> → {"✅ Enabled" if remove_enabled else "❌ Disabled"}
+┠ <b>Priority</b> → <code>{priority}</code>
+┠ <b>RO</b> → {remove_original_status}
+┠ <b>Metadata</b> → {metadata_status}
+┃
+┠ <b>Video Remove</b> → {video_status}
+┠ <b>Audio Remove</b> → {audio_status}
+┠ <b>Subtitle Remove</b> → {subtitle_status}
+┖ <b>Attachment Remove</b> → {attachment_status}
+
+<b>Usage:</b>
+• Remove specific tracks or metadata from media files
+• Use indices to remove specific tracks: <code>-remove-video-index 0,1</code>
+• Remove all tracks of a type: <code>-remove-audio</code>
+• Remove metadata: <code>-remove-metadata</code>
+• Example: <code>/leech url -remove-video-index 1 -remove-metadata</code>"""
+
     elif stype == "add":
         # Add settings menu
         add_enabled = user_dict.get("ADD_ENABLED", False)
@@ -2810,6 +3081,13 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
             f"mediatools {user_id} tog TRIM_DOCUMENT_ENABLED {'f' if document_enabled else 't'}",
         )
         buttons.data_button(
+            "Document Start Page",
+            f"mediatools {user_id} menu TRIM_DOCUMENT_START_PAGE",
+        )
+        buttons.data_button(
+            "Document End Page", f"mediatools {user_id} menu TRIM_DOCUMENT_END_PAGE"
+        )
+        buttons.data_button(
             "Document Quality", f"mediatools {user_id} menu TRIM_DOCUMENT_QUALITY"
         )
         buttons.data_button(
@@ -2931,6 +3209,22 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         )
 
         # Get document trim settings
+        document_start_page = user_dict.get("TRIM_DOCUMENT_START_PAGE", None)
+        if document_start_page is None and hasattr(
+            Config, "TRIM_DOCUMENT_START_PAGE"
+        ):
+            document_start_page = Config.TRIM_DOCUMENT_START_PAGE
+        document_start_page_str = (
+            f"{document_start_page}" if document_start_page else "1 (Default)"
+        )
+
+        document_end_page = user_dict.get("TRIM_DOCUMENT_END_PAGE", None)
+        if document_end_page is None and hasattr(Config, "TRIM_DOCUMENT_END_PAGE"):
+            document_end_page = Config.TRIM_DOCUMENT_END_PAGE
+        document_end_page_str = (
+            f"{document_end_page}" if document_end_page else "Last page (Default)"
+        )
+
         document_quality = user_dict.get("TRIM_DOCUMENT_QUALITY", "none")
         if document_quality is None and hasattr(Config, "TRIM_DOCUMENT_QUALITY"):
             document_quality = Config.TRIM_DOCUMENT_QUALITY
@@ -3095,6 +3389,8 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Image Format</b> → <code>{image_format_str}</code>
 ┃
 ┠ <b>Document Trim</b> → {document_status}
+┠ <b>Document Start Page</b> → <code>{document_start_page_str}</code>
+┠ <b>Document End Page</b> → <code>{document_end_page_str}</code>
 ┠ <b>Document Quality</b> → <code>{document_quality_str}</code>
 ┠ <b>Document Format</b> → <code>{document_format_str}</code>
 ┃
@@ -3545,6 +3841,587 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃
 ┠ <b>Maintain Quality</b> → {maintain_quality_status}
 ┖ <b>RO</b> → {delete_original_status}"""
+
+    elif stype == "remove_config":
+        # Remove configuration menu
+        # Video remove settings
+        video_enabled = user_dict.get("REMOVE_VIDEO_ENABLED", False)
+        buttons.data_button(
+            f"Video: {'✅ ON' if video_enabled else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_VIDEO_ENABLED {'f' if video_enabled else 't'}",
+        )
+        buttons.data_button(
+            "Video Settings", f"mediatools {user_id} remove_video_config"
+        )
+
+        # Audio remove settings
+        audio_enabled = user_dict.get("REMOVE_AUDIO_ENABLED", False)
+        buttons.data_button(
+            f"Audio: {'✅ ON' if audio_enabled else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_AUDIO_ENABLED {'f' if audio_enabled else 't'}",
+        )
+        buttons.data_button(
+            "Audio Settings", f"mediatools {user_id} remove_audio_config"
+        )
+
+        # Subtitle remove settings
+        subtitle_enabled = user_dict.get("REMOVE_SUBTITLE_ENABLED", False)
+        buttons.data_button(
+            f"Subtitle: {'✅ ON' if subtitle_enabled else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_SUBTITLE_ENABLED {'f' if subtitle_enabled else 't'}",
+        )
+        buttons.data_button(
+            "Subtitle Settings", f"mediatools {user_id} remove_subtitle_config"
+        )
+
+        # Attachment remove settings
+        attachment_enabled = user_dict.get("REMOVE_ATTACHMENT_ENABLED", False)
+        buttons.data_button(
+            f"Attachment: {'✅ ON' if attachment_enabled else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_ATTACHMENT_ENABLED {'f' if attachment_enabled else 't'}",
+        )
+        buttons.data_button(
+            "Attachment Settings", f"mediatools {user_id} remove_attachment_config"
+        )
+
+        # Metadata remove toggle
+        metadata_remove = user_dict.get("REMOVE_METADATA", False)
+        buttons.data_button(
+            f"Metadata: {'✅ ON' if metadata_remove else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_METADATA {'f' if metadata_remove else 't'}",
+        )
+
+        # Maintain quality toggle
+        maintain_quality = user_dict.get("REMOVE_MAINTAIN_QUALITY", True)
+        buttons.data_button(
+            f"Quality: {'✅ ON' if maintain_quality else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_MAINTAIN_QUALITY {'f' if maintain_quality else 't'}",
+        )
+
+        # Delete original toggle
+        delete_original = user_dict.get("REMOVE_DELETE_ORIGINAL", True)
+        buttons.data_button(
+            f"RO: {'✅ ON' if delete_original else '❌ OFF'}",
+            f"mediatools {user_id} tog REMOVE_DELETE_ORIGINAL {'f' if delete_original else 't'}",
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} remove", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get remove settings
+        video_index = user_dict.get("REMOVE_VIDEO_INDEX", None)
+        if video_index is None and hasattr(Config, "REMOVE_VIDEO_INDEX"):
+            video_index = Config.REMOVE_VIDEO_INDEX
+        video_index_str = (
+            f"{video_index}" if video_index is not None else "All (Default)"
+        )
+
+        audio_index = user_dict.get("REMOVE_AUDIO_INDEX", None)
+        if audio_index is None and hasattr(Config, "REMOVE_AUDIO_INDEX"):
+            audio_index = Config.REMOVE_AUDIO_INDEX
+        audio_index_str = (
+            f"{audio_index}" if audio_index is not None else "All (Default)"
+        )
+
+        subtitle_index = user_dict.get("REMOVE_SUBTITLE_INDEX", None)
+        if subtitle_index is None and hasattr(Config, "REMOVE_SUBTITLE_INDEX"):
+            subtitle_index = Config.REMOVE_SUBTITLE_INDEX
+        subtitle_index_str = (
+            f"{subtitle_index}" if subtitle_index is not None else "All (Default)"
+        )
+
+        attachment_index = user_dict.get("REMOVE_ATTACHMENT_INDEX", None)
+        if attachment_index is None and hasattr(Config, "REMOVE_ATTACHMENT_INDEX"):
+            attachment_index = Config.REMOVE_ATTACHMENT_INDEX
+        attachment_index_str = (
+            f"{attachment_index}"
+            if attachment_index is not None
+            else "All (Default)"
+        )
+
+        # Get remove enabled status for each type
+        # Video remove status
+        video_remove_enabled = user_dict.get("REMOVE_VIDEO_ENABLED", False)
+        owner_video_remove_enabled = (
+            hasattr(Config, "REMOVE_VIDEO_ENABLED") and Config.REMOVE_VIDEO_ENABLED
+        )
+
+        if "REMOVE_VIDEO_ENABLED" in user_dict:
+            if video_remove_enabled:
+                video_status = "✅ Enabled (User)"
+            else:
+                video_status = "❌ Disabled (User)"
+        elif owner_video_remove_enabled:
+            video_status = "✅ Enabled (Global)"
+        else:
+            video_status = "❌ Disabled"
+
+        # Audio remove status
+        audio_remove_enabled = user_dict.get("REMOVE_AUDIO_ENABLED", False)
+        owner_audio_remove_enabled = (
+            hasattr(Config, "REMOVE_AUDIO_ENABLED") and Config.REMOVE_AUDIO_ENABLED
+        )
+
+        if "REMOVE_AUDIO_ENABLED" in user_dict:
+            if audio_remove_enabled:
+                audio_status = "✅ Enabled (User)"
+            else:
+                audio_status = "❌ Disabled (User)"
+        elif owner_audio_remove_enabled:
+            audio_status = "✅ Enabled (Global)"
+        else:
+            audio_status = "❌ Disabled"
+
+        # Subtitle remove status
+        subtitle_remove_enabled = user_dict.get("REMOVE_SUBTITLE_ENABLED", False)
+        owner_subtitle_remove_enabled = (
+            hasattr(Config, "REMOVE_SUBTITLE_ENABLED")
+            and Config.REMOVE_SUBTITLE_ENABLED
+        )
+
+        if "REMOVE_SUBTITLE_ENABLED" in user_dict:
+            if subtitle_remove_enabled:
+                subtitle_status = "✅ Enabled (User)"
+            else:
+                subtitle_status = "❌ Disabled (User)"
+        elif owner_subtitle_remove_enabled:
+            subtitle_status = "✅ Enabled (Global)"
+        else:
+            subtitle_status = "❌ Disabled"
+
+        # Attachment remove status
+        attachment_remove_enabled = user_dict.get("REMOVE_ATTACHMENT_ENABLED", False)
+        owner_attachment_remove_enabled = (
+            hasattr(Config, "REMOVE_ATTACHMENT_ENABLED")
+            and Config.REMOVE_ATTACHMENT_ENABLED
+        )
+
+        if "REMOVE_ATTACHMENT_ENABLED" in user_dict:
+            if attachment_remove_enabled:
+                attachment_status = "✅ Enabled (User)"
+            else:
+                attachment_status = "❌ Disabled (User)"
+        elif owner_attachment_remove_enabled:
+            attachment_status = "✅ Enabled (Global)"
+        else:
+            attachment_status = "❌ Disabled"
+
+        # Get metadata remove status
+        metadata_remove_enabled = user_dict.get("REMOVE_METADATA", False)
+        owner_metadata_remove_enabled = (
+            hasattr(Config, "REMOVE_METADATA") and Config.REMOVE_METADATA
+        )
+
+        if "REMOVE_METADATA" in user_dict:
+            if metadata_remove_enabled:
+                metadata_status = "✅ Enabled (User)"
+            else:
+                metadata_status = "❌ Disabled (User)"
+        elif owner_metadata_remove_enabled:
+            metadata_status = "✅ Enabled (Global)"
+        else:
+            metadata_status = "❌ Disabled"
+
+        # Get delete original status
+        delete_original_enabled = user_dict.get("REMOVE_DELETE_ORIGINAL", True)
+        owner_delete_original_enabled = (
+            hasattr(Config, "REMOVE_DELETE_ORIGINAL")
+            and Config.REMOVE_DELETE_ORIGINAL
+        )
+
+        if "REMOVE_DELETE_ORIGINAL" in user_dict:
+            if delete_original_enabled:
+                delete_original_status = "✅ Enabled (User)"
+            else:
+                delete_original_status = "❌ Disabled (User)"
+        elif owner_delete_original_enabled:
+            delete_original_status = "✅ Enabled (Global)"
+        else:
+            delete_original_status = "✅ Enabled (Default)"
+
+        text = f"""⌬ <b>Remove Configuration :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Video Remove</b> → {video_status}
+┠ <b>Video Index</b> → <code>{video_index_str}</code>
+┃
+┠ <b>Audio Remove</b> → {audio_status}
+┠ <b>Audio Index</b> → <code>{audio_index_str}</code>
+┃
+┠ <b>Subtitle Remove</b> → {subtitle_status}
+┠ <b>Subtitle Index</b> → <code>{subtitle_index_str}</code>
+┃
+┠ <b>Attachment Remove</b> → {attachment_status}
+┠ <b>Attachment Index</b> → <code>{attachment_index_str}</code>
+┃
+┠ <b>Metadata Remove</b> → {metadata_status}
+┖ <b>RO</b> → {delete_original_status}
+
+<b>Usage:</b>
+• Remove specific tracks or metadata from media files
+• Use indices to remove specific tracks: <code>0,1,2</code> or <code>0-2</code>
+• Remove all tracks of a type by enabling the type without specifying indices
+• Remove metadata to strip file information
+• Example: Remove video tracks 0 and 1: <code>-remove-video-index 0,1</code>
+• Example: Remove all audio tracks: <code>-remove-audio</code>"""
+
+    elif stype == "remove_video_config":
+        # Video remove configuration menu
+        buttons.data_button("Codec", f"mediatools {user_id} menu REMOVE_VIDEO_CODEC")
+        buttons.data_button(
+            "Format", f"mediatools {user_id} menu REMOVE_VIDEO_FORMAT"
+        )
+        buttons.data_button("Index", f"mediatools {user_id} menu REMOVE_VIDEO_INDEX")
+        buttons.data_button(
+            "Quality", f"mediatools {user_id} menu REMOVE_VIDEO_QUALITY"
+        )
+        buttons.data_button(
+            "Preset", f"mediatools {user_id} menu REMOVE_VIDEO_PRESET"
+        )
+        buttons.data_button(
+            "Bitrate", f"mediatools {user_id} menu REMOVE_VIDEO_BITRATE"
+        )
+        buttons.data_button(
+            "Resolution", f"mediatools {user_id} menu REMOVE_VIDEO_RESOLUTION"
+        )
+        buttons.data_button("FPS", f"mediatools {user_id} menu REMOVE_VIDEO_FPS")
+
+        buttons.data_button("Back", f"mediatools {user_id} remove_config", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get video remove settings
+        video_codec = user_dict.get("REMOVE_VIDEO_CODEC", "none")
+        if video_codec == "none" and hasattr(Config, "REMOVE_VIDEO_CODEC"):
+            video_codec = Config.REMOVE_VIDEO_CODEC
+        video_codec_str = (
+            f"{video_codec}" if video_codec != "none" else "none (Default)"
+        )
+
+        video_format = user_dict.get("REMOVE_VIDEO_FORMAT", "none")
+        if video_format == "none" and hasattr(Config, "REMOVE_VIDEO_FORMAT"):
+            video_format = Config.REMOVE_VIDEO_FORMAT
+        video_format_str = (
+            f"{video_format}" if video_format != "none" else "none (Default)"
+        )
+
+        video_index = user_dict.get("REMOVE_VIDEO_INDEX", None)
+        if video_index is None and hasattr(Config, "REMOVE_VIDEO_INDEX"):
+            video_index = Config.REMOVE_VIDEO_INDEX
+        video_index_str = (
+            f"{video_index}" if video_index is not None else "All (Default)"
+        )
+
+        video_quality = user_dict.get("REMOVE_VIDEO_QUALITY", "none")
+        if video_quality == "none" and hasattr(Config, "REMOVE_VIDEO_QUALITY"):
+            video_quality = Config.REMOVE_VIDEO_QUALITY
+        video_quality_str = (
+            f"{video_quality}" if video_quality != "none" else "none (Default)"
+        )
+
+        video_preset = user_dict.get("REMOVE_VIDEO_PRESET", "none")
+        if video_preset == "none" and hasattr(Config, "REMOVE_VIDEO_PRESET"):
+            video_preset = Config.REMOVE_VIDEO_PRESET
+        video_preset_str = (
+            f"{video_preset}" if video_preset != "none" else "none (Default)"
+        )
+
+        video_bitrate = user_dict.get("REMOVE_VIDEO_BITRATE", "none")
+        if video_bitrate == "none" and hasattr(Config, "REMOVE_VIDEO_BITRATE"):
+            video_bitrate = Config.REMOVE_VIDEO_BITRATE
+        video_bitrate_str = (
+            f"{video_bitrate}" if video_bitrate != "none" else "none (Default)"
+        )
+
+        video_resolution = user_dict.get("REMOVE_VIDEO_RESOLUTION", "none")
+        if video_resolution == "none" and hasattr(Config, "REMOVE_VIDEO_RESOLUTION"):
+            video_resolution = Config.REMOVE_VIDEO_RESOLUTION
+        video_resolution_str = (
+            f"{video_resolution}" if video_resolution != "none" else "none (Default)"
+        )
+
+        video_fps = user_dict.get("REMOVE_VIDEO_FPS", "none")
+        if video_fps == "none" and hasattr(Config, "REMOVE_VIDEO_FPS"):
+            video_fps = Config.REMOVE_VIDEO_FPS
+        video_fps_str = f"{video_fps}" if video_fps != "none" else "none (Default)"
+
+        text = f"""⌬ <b>Video Remove Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Codec</b> → <code>{video_codec_str}</code>
+┠ <b>Format</b> → <code>{video_format_str}</code>
+┠ <b>Index</b> → <code>{video_index_str}</code>
+┠ <b>Quality</b> → <code>{video_quality_str}</code>
+┠ <b>Preset</b> → <code>{video_preset_str}</code>
+┠ <b>Bitrate</b> → <code>{video_bitrate_str}</code>
+┠ <b>Resolution</b> → <code>{video_resolution_str}</code>
+┖ <b>FPS</b> → <code>{video_fps_str}</code>
+
+<b>Usage:</b>
+• Configure video processing settings for removal
+• Use 'none' to disable specific settings
+• Index specifies which video tracks to remove
+• Other settings control output quality and format"""
+
+    elif stype == "remove_audio_config":
+        # Audio remove configuration menu
+        buttons.data_button("Codec", f"mediatools {user_id} menu REMOVE_AUDIO_CODEC")
+        buttons.data_button(
+            "Format", f"mediatools {user_id} menu REMOVE_AUDIO_FORMAT"
+        )
+        buttons.data_button("Index", f"mediatools {user_id} menu REMOVE_AUDIO_INDEX")
+        buttons.data_button(
+            "Bitrate", f"mediatools {user_id} menu REMOVE_AUDIO_BITRATE"
+        )
+        buttons.data_button(
+            "Channels", f"mediatools {user_id} menu REMOVE_AUDIO_CHANNELS"
+        )
+        buttons.data_button(
+            "Sampling", f"mediatools {user_id} menu REMOVE_AUDIO_SAMPLING"
+        )
+        buttons.data_button(
+            "Volume", f"mediatools {user_id} menu REMOVE_AUDIO_VOLUME"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} remove_config", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get audio remove settings
+        audio_codec = user_dict.get("REMOVE_AUDIO_CODEC", "none")
+        if audio_codec == "none" and hasattr(Config, "REMOVE_AUDIO_CODEC"):
+            audio_codec = Config.REMOVE_AUDIO_CODEC
+        audio_codec_str = (
+            f"{audio_codec}" if audio_codec != "none" else "none (Default)"
+        )
+
+        audio_format = user_dict.get("REMOVE_AUDIO_FORMAT", "none")
+        if audio_format == "none" and hasattr(Config, "REMOVE_AUDIO_FORMAT"):
+            audio_format = Config.REMOVE_AUDIO_FORMAT
+        audio_format_str = (
+            f"{audio_format}" if audio_format != "none" else "none (Default)"
+        )
+
+        audio_index = user_dict.get("REMOVE_AUDIO_INDEX", None)
+        if audio_index is None and hasattr(Config, "REMOVE_AUDIO_INDEX"):
+            audio_index = Config.REMOVE_AUDIO_INDEX
+        audio_index_str = (
+            f"{audio_index}" if audio_index is not None else "All (Default)"
+        )
+
+        audio_bitrate = user_dict.get("REMOVE_AUDIO_BITRATE", "none")
+        if audio_bitrate == "none" and hasattr(Config, "REMOVE_AUDIO_BITRATE"):
+            audio_bitrate = Config.REMOVE_AUDIO_BITRATE
+        audio_bitrate_str = (
+            f"{audio_bitrate}" if audio_bitrate != "none" else "none (Default)"
+        )
+
+        audio_channels = user_dict.get("REMOVE_AUDIO_CHANNELS", "none")
+        if audio_channels == "none" and hasattr(Config, "REMOVE_AUDIO_CHANNELS"):
+            audio_channels = Config.REMOVE_AUDIO_CHANNELS
+        audio_channels_str = (
+            f"{audio_channels}" if audio_channels != "none" else "none (Default)"
+        )
+
+        audio_sampling = user_dict.get("REMOVE_AUDIO_SAMPLING", "none")
+        if audio_sampling == "none" and hasattr(Config, "REMOVE_AUDIO_SAMPLING"):
+            audio_sampling = Config.REMOVE_AUDIO_SAMPLING
+        audio_sampling_str = (
+            f"{audio_sampling}" if audio_sampling != "none" else "none (Default)"
+        )
+
+        audio_volume = user_dict.get("REMOVE_AUDIO_VOLUME", "none")
+        if audio_volume == "none" and hasattr(Config, "REMOVE_AUDIO_VOLUME"):
+            audio_volume = Config.REMOVE_AUDIO_VOLUME
+        audio_volume_str = (
+            f"{audio_volume}" if audio_volume != "none" else "none (Default)"
+        )
+
+        text = f"""⌬ <b>Audio Remove Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Codec</b> → <code>{audio_codec_str}</code>
+┠ <b>Format</b> → <code>{audio_format_str}</code>
+┠ <b>Index</b> → <code>{audio_index_str}</code>
+┠ <b>Bitrate</b> → <code>{audio_bitrate_str}</code>
+┠ <b>Channels</b> → <code>{audio_channels_str}</code>
+┠ <b>Sampling</b> → <code>{audio_sampling_str}</code>
+┖ <b>Volume</b> → <code>{audio_volume_str}</code>
+
+<b>Usage:</b>
+• Configure audio processing settings for removal
+• Use 'none' to disable specific settings
+• Index specifies which audio tracks to remove
+• Other settings control output quality and format"""
+
+    elif stype == "remove_subtitle_config":
+        # Subtitle remove configuration menu
+        buttons.data_button(
+            "Codec", f"mediatools {user_id} menu REMOVE_SUBTITLE_CODEC"
+        )
+        buttons.data_button(
+            "Format", f"mediatools {user_id} menu REMOVE_SUBTITLE_FORMAT"
+        )
+        buttons.data_button(
+            "Index", f"mediatools {user_id} menu REMOVE_SUBTITLE_INDEX"
+        )
+        buttons.data_button(
+            "Language", f"mediatools {user_id} menu REMOVE_SUBTITLE_LANGUAGE"
+        )
+        buttons.data_button(
+            "Encoding", f"mediatools {user_id} menu REMOVE_SUBTITLE_ENCODING"
+        )
+        buttons.data_button(
+            "Font", f"mediatools {user_id} menu REMOVE_SUBTITLE_FONT"
+        )
+        buttons.data_button(
+            "Font Size", f"mediatools {user_id} menu REMOVE_SUBTITLE_FONT_SIZE"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} remove_config", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get subtitle remove settings
+        subtitle_codec = user_dict.get("REMOVE_SUBTITLE_CODEC", "none")
+        if subtitle_codec == "none" and hasattr(Config, "REMOVE_SUBTITLE_CODEC"):
+            subtitle_codec = Config.REMOVE_SUBTITLE_CODEC
+        subtitle_codec_str = (
+            f"{subtitle_codec}" if subtitle_codec != "none" else "none (Default)"
+        )
+
+        subtitle_format = user_dict.get("REMOVE_SUBTITLE_FORMAT", "none")
+        if subtitle_format == "none" and hasattr(Config, "REMOVE_SUBTITLE_FORMAT"):
+            subtitle_format = Config.REMOVE_SUBTITLE_FORMAT
+        subtitle_format_str = (
+            f"{subtitle_format}" if subtitle_format != "none" else "none (Default)"
+        )
+
+        subtitle_index = user_dict.get("REMOVE_SUBTITLE_INDEX", None)
+        if subtitle_index is None and hasattr(Config, "REMOVE_SUBTITLE_INDEX"):
+            subtitle_index = Config.REMOVE_SUBTITLE_INDEX
+        subtitle_index_str = (
+            f"{subtitle_index}" if subtitle_index is not None else "All (Default)"
+        )
+
+        subtitle_language = user_dict.get("REMOVE_SUBTITLE_LANGUAGE", "none")
+        if subtitle_language == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_LANGUAGE"
+        ):
+            subtitle_language = Config.REMOVE_SUBTITLE_LANGUAGE
+        subtitle_language_str = (
+            f"{subtitle_language}"
+            if subtitle_language != "none"
+            else "none (Default)"
+        )
+
+        subtitle_encoding = user_dict.get("REMOVE_SUBTITLE_ENCODING", "none")
+        if subtitle_encoding == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_ENCODING"
+        ):
+            subtitle_encoding = Config.REMOVE_SUBTITLE_ENCODING
+        subtitle_encoding_str = (
+            f"{subtitle_encoding}"
+            if subtitle_encoding != "none"
+            else "none (Default)"
+        )
+
+        subtitle_font = user_dict.get("REMOVE_SUBTITLE_FONT", "none")
+        if subtitle_font == "none" and hasattr(Config, "REMOVE_SUBTITLE_FONT"):
+            subtitle_font = Config.REMOVE_SUBTITLE_FONT
+        subtitle_font_str = (
+            f"{subtitle_font}" if subtitle_font != "none" else "none (Default)"
+        )
+
+        subtitle_font_size = user_dict.get("REMOVE_SUBTITLE_FONT_SIZE", "none")
+        if subtitle_font_size == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_FONT_SIZE"
+        ):
+            subtitle_font_size = Config.REMOVE_SUBTITLE_FONT_SIZE
+        subtitle_font_size_str = (
+            f"{subtitle_font_size}"
+            if subtitle_font_size != "none"
+            else "none (Default)"
+        )
+
+        text = f"""⌬ <b>Subtitle Remove Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Codec</b> → <code>{subtitle_codec_str}</code>
+┠ <b>Format</b> → <code>{subtitle_format_str}</code>
+┠ <b>Index</b> → <code>{subtitle_index_str}</code>
+┠ <b>Language</b> → <code>{subtitle_language_str}</code>
+┠ <b>Encoding</b> → <code>{subtitle_encoding_str}</code>
+┠ <b>Font</b> → <code>{subtitle_font_str}</code>
+┖ <b>Font Size</b> → <code>{subtitle_font_size_str}</code>
+
+<b>Usage:</b>
+• Configure subtitle processing settings for removal
+• Use 'none' to disable specific settings
+• Index specifies which subtitle tracks to remove
+• Other settings control output format and appearance"""
+
+    elif stype == "remove_attachment_config":
+        # Attachment remove configuration menu
+        buttons.data_button(
+            "Format", f"mediatools {user_id} menu REMOVE_ATTACHMENT_FORMAT"
+        )
+        buttons.data_button(
+            "Index", f"mediatools {user_id} menu REMOVE_ATTACHMENT_INDEX"
+        )
+        buttons.data_button(
+            "Filter", f"mediatools {user_id} menu REMOVE_ATTACHMENT_FILTER"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} remove_config", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get attachment remove settings
+        attachment_format = user_dict.get("REMOVE_ATTACHMENT_FORMAT", "none")
+        if attachment_format == "none" and hasattr(
+            Config, "REMOVE_ATTACHMENT_FORMAT"
+        ):
+            attachment_format = Config.REMOVE_ATTACHMENT_FORMAT
+        attachment_format_str = (
+            f"{attachment_format}"
+            if attachment_format != "none"
+            else "none (Default)"
+        )
+
+        attachment_index = user_dict.get("REMOVE_ATTACHMENT_INDEX", None)
+        if attachment_index is None and hasattr(Config, "REMOVE_ATTACHMENT_INDEX"):
+            attachment_index = Config.REMOVE_ATTACHMENT_INDEX
+        attachment_index_str = (
+            f"{attachment_index}"
+            if attachment_index is not None
+            else "All (Default)"
+        )
+
+        attachment_filter = user_dict.get("REMOVE_ATTACHMENT_FILTER", "none")
+        if attachment_filter == "none" and hasattr(
+            Config, "REMOVE_ATTACHMENT_FILTER"
+        ):
+            attachment_filter = Config.REMOVE_ATTACHMENT_FILTER
+        attachment_filter_str = (
+            f"{attachment_filter}"
+            if attachment_filter != "none"
+            else "none (Default)"
+        )
+
+        text = f"""⌬ <b>Attachment Remove Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Format</b> → <code>{attachment_format_str}</code>
+┠ <b>Index</b> → <code>{attachment_index_str}</code>
+┖ <b>Filter</b> → <code>{attachment_filter_str}</code>
+
+<b>Usage:</b>
+• Configure attachment processing settings for removal
+• Use 'none' to disable specific settings
+• Index specifies which attachments to remove
+• Filter allows pattern-based attachment selection"""
 
     elif stype == "add_config":
         # Add configuration menu
@@ -5875,6 +6752,13 @@ Use 'copy' codec to preserve original quality. When set to 'none', settings won'
             "Font Size", f"mediatools {user_id} menu ADD_SUBTITLE_FONT_SIZE"
         )
 
+        # Hardsub toggle
+        hardsub_enabled = user_dict.get("ADD_SUBTITLE_HARDSUB_ENABLED", False)
+        buttons.data_button(
+            f"Hardsub: {'✅ ON' if hardsub_enabled else '❌ OFF'}",
+            f"mediatools {user_id} tog ADD_SUBTITLE_HARDSUB_ENABLED {'f' if hardsub_enabled else 't'}",
+        )
+
         buttons.data_button("Back", f"mediatools {user_id} add_config", "footer")
         buttons.data_button("Close", f"mediatools {user_id} close", "footer")
         btns = buttons.build_menu(2)
@@ -5932,11 +6816,16 @@ Use 'copy' codec to preserve original quality. When set to 'none', settings won'
             else "none (Default)"
         )
 
+        # Get hardsub setting
+        hardsub_enabled = user_dict.get("ADD_SUBTITLE_HARDSUB_ENABLED", False)
+        hardsub_str = "✅ Enabled" if hardsub_enabled else "❌ Disabled"
+
         text = f"""<b>Subtitle Add Configuration</b>
 
 <b>Basic Settings:</b>
 ┣ <b>Codec:</b> {subtitle_codec_str}
-┗ <b>Index:</b> {subtitle_index_str}
+┣ <b>Index:</b> {subtitle_index_str}
+┗ <b>Hardsub:</b> {hardsub_str}
 
 <b>Advanced Settings:</b>
 ┣ <b>Language:</b> {subtitle_language_str}
@@ -5947,6 +6836,7 @@ Use 'copy' codec to preserve original quality. When set to 'none', settings won'
 <b>Help:</b>
 • <b>Codec:</b> Set the subtitle codec (e.g., copy, srt, ass, vtt)
 • <b>Index:</b> Set the position to add the subtitle track (e.g., 0, 1, 2)
+• <b>Hardsub:</b> Burn subtitles into video (permanent) vs soft subtitles (separate track)
 • <b>Language:</b> Set subtitle language code (e.g., eng, spa, fre)
 • <b>Encoding:</b> Set character encoding (e.g., UTF-8, latin1)
 • <b>Font:</b> Set font for ASS/SSA subtitles (e.g., Arial)
@@ -6522,10 +7412,13 @@ Use 'copy' codec to preserve original format or 'srt' to convert ASS/SSA to SRT.
 • <code>/mirror link -merge-all</code> - Merge all supported types</blockquote>
 
 <blockquote expandable="expandable"><b>Trim Examples:</b>
-• <code>/leech link -trim "00:01:30-00:02:45"</code> - Extract portion
+• <code>/leech link -trim "00:01:30-00:02:45"</code> - Extract video portion
 • <code>/mirror link -trim "00:01:30-00:02:45" -del</code> - With RO
 • <code>/leech link -trim "-00:05:00"</code> - From start to 5 minutes
-• <code>/mirror link -trim "00:10:00-"</code> - From 10 minutes to end</blockquote>
+• <code>/mirror link -trim "00:10:00-"</code> - From 10 minutes to end
+• <code>/leech document.pdf -trim "5-10"</code> - Extract pages 5 to 10
+• <code>/mirror document.pdf -trim "3-"</code> - From page 3 to end
+• <code>/leech document.pdf -trim "1-5" -del</code> - Pages 1-5 with RO</blockquote>
 
 <blockquote expandable="expandable"><b>Convert Examples:</b>
 • <code>/leech link -cv mp4</code> - Convert video to MP4
@@ -6541,6 +7434,8 @@ Use 'copy' codec to preserve original format or 'srt' to convert ASS/SSA to SRT.
 • <code>/leech link -watermark "© My Channel" -cv mp4</code> - Watermark + Convert
 • <code>/mirror link.zip -cv mp4 -merge-video</code> - Convert + Merge
 • <code>/leech link.zip -watermark "© 2025" -merge-video</code> - Watermark + Merge
+• <code>/leech document.pdf -trim "5-10" -cd docx</code> - Trim pages + Convert
+• <code>/mirror documents.zip -trim "1-3" -merge-pdf</code> - Trim + Merge PDFs
 • <code>/mirror -i 3 -m merge-folder -merge-video</code> - Multi-link + Merge
 • <code>/leech -b -m merge-folder -merge-audio</code> - Bulk download + Merge</blockquote>
 
@@ -6704,6 +7599,8 @@ async def get_menu(option, message, user_id):
         back_target = "trim"
     elif option == "EXTRACT_PRIORITY":
         back_target = "extract"
+    elif option == "REMOVE_PRIORITY":
+        back_target = "remove"
     elif option.startswith(
         ("WATERMARK_", "AUDIO_WATERMARK_", "SUBTITLE_WATERMARK_", "IMAGE_WATERMARK_")
     ):
@@ -6782,6 +7679,17 @@ async def get_menu(option, message, user_id):
         back_target = "extract_config"
     elif option.startswith("EXTRACT_"):
         back_target = "extract"
+    elif option.startswith(
+        (
+            "REMOVE_VIDEO_",
+            "REMOVE_AUDIO_",
+            "REMOVE_SUBTITLE_",
+            "REMOVE_ATTACHMENT_",
+        )
+    ) or option in ["REMOVE_METADATA", "REMOVE_DELETE_ORIGINAL"]:
+        back_target = "remove_config"
+    elif option.startswith("REMOVE_"):
+        back_target = "remove"
     elif option.startswith("ADD_VIDEO_"):
         back_target = "add_video_config"
     elif option.startswith("ADD_AUDIO_"):
@@ -6870,6 +7778,17 @@ async def get_menu(option, message, user_id):
         current_value = "6 (Default)"
     elif option == "ADD_PRIORITY":
         current_value = "7 (Default)"
+    elif option == "REMOVE_PRIORITY":
+        current_value = "8 (Default)"
+    elif option == "REMOVE_DELETE_ORIGINAL":
+        current_value = "True (Default)"
+    elif option in {"REMOVE_VIDEO_INDEX", "REMOVE_AUDIO_INDEX"} or option in {
+        "REMOVE_SUBTITLE_INDEX",
+        "REMOVE_ATTACHMENT_INDEX",
+    }:
+        current_value = "All (Default)"
+    elif option == "REMOVE_METADATA":
+        current_value = "False (Default)"
     elif option == "EXTRACT_DELETE_ORIGINAL":
         current_value = "True (Default)"
     elif (
@@ -6992,6 +7911,10 @@ async def get_menu(option, message, user_id):
         current_value = "00:00:00 (Default)"
     elif option == "TRIM_END_TIME":
         current_value = "End of file (Default)"
+    elif option == "TRIM_DOCUMENT_START_PAGE":
+        current_value = "1 (Default)"
+    elif option == "TRIM_DOCUMENT_END_PAGE":
+        current_value = "Last page (Default)"
     else:
         current_value = "None"
 
@@ -7248,6 +8171,37 @@ async def set_option(_, message, option, rfunc):
                 error_msg = await send_message(
                     message,
                     "Invalid time format! Use HH:MM:SS, MM:SS, or SS format.\nExample: 00:02:30 (2 minutes 30 seconds)\nExample: 10:45 (10 minutes 45 seconds)\nExample: 180 (180 seconds)",
+                )
+                await auto_delete_message(error_msg, time=300)
+                return
+    elif option == "TRIM_DOCUMENT_START_PAGE":
+        # Validate page number (must be positive integer)
+        try:
+            page_num = int(value)
+            if page_num < 1:
+                raise ValueError("Page number must be positive")
+            value = str(page_num)
+        except ValueError:
+            error_msg = await send_message(
+                message,
+                "Invalid page number! Must be a positive integer.\nExample: 1 (first page)\nExample: 5 (fifth page)",
+            )
+            await auto_delete_message(error_msg, time=300)
+            return
+    elif option == "TRIM_DOCUMENT_END_PAGE":
+        # Allow empty value for end page (last page) or validate page number
+        if value == "":
+            value = ""  # Empty string means last page
+        else:
+            try:
+                page_num = int(value)
+                if page_num < 1:
+                    raise ValueError("Page number must be positive")
+                value = str(page_num)
+            except ValueError:
+                error_msg = await send_message(
+                    message,
+                    "Invalid page number! Must be a positive integer or empty for last page.\nExample: 10 (tenth page)\nExample: (empty for last page)",
                 )
                 await auto_delete_message(error_msg, time=300)
                 return
@@ -8099,12 +9053,18 @@ async def edit_media_tools_settings(client, query):
         "trim_config",
         "extract",
         "extract_config",
+        "remove",
+        "remove_config",
         "add",
         "add_config",
         "add_video_config",
         "add_audio_config",
         "add_subtitle_config",
         "add_attachment_config",
+        "remove_video_config",
+        "remove_audio_config",
+        "remove_subtitle_config",
+        "remove_attachment_config",
         "convert_video",
         "convert_audio",
         "convert_subtitle",
@@ -8117,6 +9077,7 @@ async def edit_media_tools_settings(client, query):
         "help_compression",
         "help_trim",
         "help_extract",
+        "help_remove",
         "help_add",
         "help_priority",
         "help_examples",
@@ -8381,6 +9342,20 @@ async def edit_media_tools_settings(client, query):
                 await update_media_tools_settings(query, "extract_config")
             else:
                 await update_media_tools_settings(query, "extract")
+        elif data[3].startswith("REMOVE_"):
+            if data[3] == "REMOVE_ENABLED":
+                await update_media_tools_settings(query, "remove")
+            elif (
+                data[3].startswith("REMOVE_VIDEO_")
+                or data[3].startswith("REMOVE_AUDIO_")
+                or data[3].startswith("REMOVE_SUBTITLE_")
+                or data[3].startswith("REMOVE_ATTACHMENT_")
+                or data[3] == "REMOVE_METADATA"
+                or data[3] == "REMOVE_DELETE_ORIGINAL"
+            ):
+                await update_media_tools_settings(query, "remove_config")
+            else:
+                await update_media_tools_settings(query, "remove")
         elif data[3].startswith("ADD_"):
             if data[3] == "ADD_ENABLED":
                 await update_media_tools_settings(query, "add")
@@ -8580,6 +9555,47 @@ async def edit_media_tools_settings(client, query):
             buttons.data_button(
                 "Back",
                 f"mediatools {user_id} add_attachment_config",
+                "footer",
+            )
+        # Add specific handling for Remove feature settings
+        elif data[3].startswith("REMOVE_VIDEO_"):
+            # For video remove settings, go back to the video remove config menu
+            buttons.data_button(
+                "Back",
+                f"mediatools {user_id} remove_video_config",
+                "footer",
+            )
+        elif data[3].startswith("REMOVE_AUDIO_"):
+            # For audio remove settings, go back to the audio remove config menu
+            buttons.data_button(
+                "Back",
+                f"mediatools {user_id} remove_audio_config",
+                "footer",
+            )
+        elif data[3].startswith("REMOVE_SUBTITLE_"):
+            # For subtitle remove settings, go back to the subtitle remove config menu
+            buttons.data_button(
+                "Back",
+                f"mediatools {user_id} remove_subtitle_config",
+                "footer",
+            )
+        elif data[3].startswith("REMOVE_ATTACHMENT_"):
+            # For attachment remove settings, go back to the attachment remove config menu
+            buttons.data_button(
+                "Back",
+                f"mediatools {user_id} remove_attachment_config",
+                "footer",
+            )
+        elif data[3] in [
+            "REMOVE_PRIORITY",
+            "REMOVE_METADATA",
+            "REMOVE_DELETE_ORIGINAL",
+            "REMOVE_MAINTAIN_QUALITY",
+        ]:
+            # For other remove settings, go back to the remove config menu
+            buttons.data_button(
+                "Back",
+                f"mediatools {user_id} remove_config",
                 "footer",
             )
         else:
@@ -8839,6 +9855,8 @@ async def edit_media_tools_settings(client, query):
             "TRIM_IMAGE_ENABLED",
             "TRIM_IMAGE_QUALITY",
             "TRIM_DOCUMENT_ENABLED",
+            "TRIM_DOCUMENT_START_PAGE",
+            "TRIM_DOCUMENT_END_PAGE",
             "TRIM_DOCUMENT_QUALITY",
             "TRIM_SUBTITLE_ENABLED",
             "TRIM_SUBTITLE_ENCODING",
@@ -8893,6 +9911,104 @@ async def edit_media_tools_settings(client, query):
                 del user_dict[key]
         await database.update_user_data(user_id)
         await update_media_tools_settings(query, "extract")
+
+    elif data[2] == "reset_remove":
+        await query.answer("Resetting all remove settings to default...")
+        # Remove all remove settings from user_dict
+        remove_keys = [
+            "REMOVE_ENABLED",
+            "REMOVE_PRIORITY",
+            "REMOVE_DELETE_ORIGINAL",
+            "REMOVE_METADATA",
+            "REMOVE_MAINTAIN_QUALITY",
+            # Video remove settings
+            "REMOVE_VIDEO_ENABLED",
+            "REMOVE_VIDEO_CODEC",
+            "REMOVE_VIDEO_FORMAT",
+            "REMOVE_VIDEO_INDEX",
+            "REMOVE_VIDEO_QUALITY",
+            "REMOVE_VIDEO_PRESET",
+            "REMOVE_VIDEO_BITRATE",
+            "REMOVE_VIDEO_RESOLUTION",
+            "REMOVE_VIDEO_FPS",
+            # Audio remove settings
+            "REMOVE_AUDIO_ENABLED",
+            "REMOVE_AUDIO_CODEC",
+            "REMOVE_AUDIO_FORMAT",
+            "REMOVE_AUDIO_INDEX",
+            "REMOVE_AUDIO_BITRATE",
+            "REMOVE_AUDIO_CHANNELS",
+            "REMOVE_AUDIO_SAMPLING",
+            "REMOVE_AUDIO_VOLUME",
+            # Subtitle remove settings
+            "REMOVE_SUBTITLE_ENABLED",
+            "REMOVE_SUBTITLE_CODEC",
+            "REMOVE_SUBTITLE_FORMAT",
+            "REMOVE_SUBTITLE_INDEX",
+            "REMOVE_SUBTITLE_LANGUAGE",
+            "REMOVE_SUBTITLE_ENCODING",
+            "REMOVE_SUBTITLE_FONT",
+            "REMOVE_SUBTITLE_FONT_SIZE",
+            # Attachment remove settings
+            "REMOVE_ATTACHMENT_ENABLED",
+            "REMOVE_ATTACHMENT_FORMAT",
+            "REMOVE_ATTACHMENT_INDEX",
+            "REMOVE_ATTACHMENT_FILTER",
+        ]
+        for key in remove_keys:
+            if key in user_dict:
+                del user_dict[key]
+        await database.update_user_data(user_id)
+        await update_media_tools_settings(query, "remove")
+
+    elif data[2] == "remove_remove":
+        await query.answer("Setting all remove settings to None...")
+        # Set all remove settings to None/False
+        # General settings
+        update_user_ldata(user_id, "REMOVE_ENABLED", False)
+        update_user_ldata(user_id, "REMOVE_METADATA", False)
+        update_user_ldata(user_id, "REMOVE_DELETE_ORIGINAL", True)
+        update_user_ldata(user_id, "REMOVE_MAINTAIN_QUALITY", True)
+
+        # Video remove settings
+        update_user_ldata(user_id, "REMOVE_VIDEO_ENABLED", False)
+        update_user_ldata(user_id, "REMOVE_VIDEO_CODEC", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_FORMAT", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_INDEX", None)
+        update_user_ldata(user_id, "REMOVE_VIDEO_QUALITY", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_PRESET", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_BITRATE", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_RESOLUTION", "none")
+        update_user_ldata(user_id, "REMOVE_VIDEO_FPS", "none")
+
+        # Audio remove settings
+        update_user_ldata(user_id, "REMOVE_AUDIO_ENABLED", False)
+        update_user_ldata(user_id, "REMOVE_AUDIO_CODEC", "none")
+        update_user_ldata(user_id, "REMOVE_AUDIO_FORMAT", "none")
+        update_user_ldata(user_id, "REMOVE_AUDIO_INDEX", None)
+        update_user_ldata(user_id, "REMOVE_AUDIO_BITRATE", "none")
+        update_user_ldata(user_id, "REMOVE_AUDIO_CHANNELS", "none")
+        update_user_ldata(user_id, "REMOVE_AUDIO_SAMPLING", "none")
+        update_user_ldata(user_id, "REMOVE_AUDIO_VOLUME", "none")
+
+        # Subtitle remove settings
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_ENABLED", False)
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_CODEC", "none")
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_FORMAT", "none")
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_INDEX", None)
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_LANGUAGE", "none")
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_ENCODING", "none")
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_FONT", "none")
+        update_user_ldata(user_id, "REMOVE_SUBTITLE_FONT_SIZE", "none")
+
+        # Attachment remove settings
+        update_user_ldata(user_id, "REMOVE_ATTACHMENT_ENABLED", False)
+        update_user_ldata(user_id, "REMOVE_ATTACHMENT_FORMAT", "none")
+        update_user_ldata(user_id, "REMOVE_ATTACHMENT_INDEX", None)
+        update_user_ldata(user_id, "REMOVE_ATTACHMENT_FILTER", "none")
+
+        await database.update_user_data(user_id)
+        await update_media_tools_settings(query, "remove")
 
     elif data[2] == "reset_compression":
         await query.answer("Resetting all compression settings to default...")
@@ -8995,8 +10111,12 @@ async def edit_media_tools_settings(client, query):
         # Set start and end time to default values
         update_user_ldata(user_id, "TRIM_START_TIME", "00:00:00")
         update_user_ldata(user_id, "TRIM_END_TIME", "")
+        # Set document page settings to default values
+        update_user_ldata(user_id, "TRIM_DOCUMENT_START_PAGE", "1")
+        update_user_ldata(user_id, "TRIM_DOCUMENT_END_PAGE", "")
         for key in trim_keys:
-            update_user_ldata(user_id, key, "none")
+            if key not in ["TRIM_DOCUMENT_START_PAGE", "TRIM_DOCUMENT_END_PAGE"]:
+                update_user_ldata(user_id, key, "none")
         await database.update_user_data(user_id)
         await update_media_tools_settings(query, "trim")
 
@@ -9334,6 +10454,8 @@ async def edit_media_tools_settings(client, query):
         update_user_ldata(user_id, "TRIM_ARCHIVE_ENABLED", False)
         update_user_ldata(user_id, "TRIM_START_TIME", "00:00:00")
         update_user_ldata(user_id, "TRIM_END_TIME", "")
+        update_user_ldata(user_id, "TRIM_DOCUMENT_START_PAGE", "1")
+        update_user_ldata(user_id, "TRIM_DOCUMENT_END_PAGE", "")
         update_user_ldata(user_id, "TRIM_IMAGE_QUALITY", "none")
         update_user_ldata(user_id, "TRIM_DOCUMENT_QUALITY", "none")
         update_user_ldata(user_id, "TRIM_VIDEO_CODEC", "none")
@@ -9553,6 +10675,8 @@ async def edit_media_tools_settings(client, query):
             "TRIM_IMAGE_ENABLED",
             "TRIM_IMAGE_QUALITY",
             "TRIM_DOCUMENT_ENABLED",
+            "TRIM_DOCUMENT_START_PAGE",
+            "TRIM_DOCUMENT_END_PAGE",
             "TRIM_DOCUMENT_QUALITY",
             "TRIM_SUBTITLE_ENABLED",
             "TRIM_SUBTITLE_ENCODING",
@@ -9861,52 +10985,71 @@ async def get_image_watermark_path(user_id):
     Returns:
         str: Path to the temporary image watermark file, or "none" if not found
     """
-    # Check if the database is available
+    # Check if the database is available and connection is valid
     if database.db is None:
         # If no database, check if owner has a static path configured
         if hasattr(Config, "IMAGE_WATERMARK_PATH") and Config.IMAGE_WATERMARK_PATH:
             return Config.IMAGE_WATERMARK_PATH
         return "none"
 
-    # First check if the user has an image watermark in the database
-    user_data = await database.db.users.find_one(
-        {"_id": user_id}, {"IMAGE_WATERMARK": 1}
-    )
-    if user_data and "IMAGE_WATERMARK" in user_data:
-        # User has an image watermark, create a temporary file
-        temp_dir = f"{os.getcwd()}/temp/watermarks"
-        await makedirs(temp_dir, exist_ok=True)
-        temp_path = f"{temp_dir}/{user_id}_{int(time())}.png"
+    try:
+        # Ensure database connection is valid before attempting to use it
+        await database.ensure_connection()
 
-        try:
-            # Write the user's image data to the temporary file
-            async with aiopen(temp_path, "wb") as f:
-                await f.write(user_data["IMAGE_WATERMARK"])
-            return temp_path
-        except Exception:
-            pass
-            # Fall through to check for owner's watermark
+        # Check if connection is still invalid after ensure_connection
+        if database.db is None or database._return:
+            # If database connection failed, check if owner has a static path configured
+            if (
+                hasattr(Config, "IMAGE_WATERMARK_PATH")
+                and Config.IMAGE_WATERMARK_PATH
+            ):
+                return Config.IMAGE_WATERMARK_PATH
+            return "none"
 
-    # If user doesn't have a watermark or there was an error, check for owner's watermark
-    if hasattr(Config, "OWNER_ID"):
-        owner_id = Config.OWNER_ID
-        # Check if owner has an image watermark in the database
-        owner_data = await database.db.users.find_one(
-            {"_id": owner_id}, {"IMAGE_WATERMARK": 1}
+        # First check if the user has an image watermark in the database
+        user_data = await database.db.users.find_one(
+            {"_id": user_id}, {"IMAGE_WATERMARK": 1}
         )
-        if owner_data and "IMAGE_WATERMARK" in owner_data:
-            # Owner has an image watermark, create a temporary file
+        if user_data and "IMAGE_WATERMARK" in user_data:
+            # User has an image watermark, create a temporary file
             temp_dir = f"{os.getcwd()}/temp/watermarks"
             await makedirs(temp_dir, exist_ok=True)
-            temp_path = f"{temp_dir}/owner_{int(time())}.png"
+            temp_path = f"{temp_dir}/{user_id}_{int(time())}.png"
 
             try:
-                # Write the owner's image data to the temporary file
+                # Write the user's image data to the temporary file
                 async with aiopen(temp_path, "wb") as f:
-                    await f.write(owner_data["IMAGE_WATERMARK"])
+                    await f.write(user_data["IMAGE_WATERMARK"])
                 return temp_path
             except Exception:
                 pass
+                # Fall through to check for owner's watermark
+
+        # If user doesn't have a watermark or there was an error, check for owner's watermark
+        if hasattr(Config, "OWNER_ID"):
+            owner_id = Config.OWNER_ID
+            # Check if owner has an image watermark in the database
+            owner_data = await database.db.users.find_one(
+                {"_id": owner_id}, {"IMAGE_WATERMARK": 1}
+            )
+            if owner_data and "IMAGE_WATERMARK" in owner_data:
+                # Owner has an image watermark, create a temporary file
+                temp_dir = f"{os.getcwd()}/temp/watermarks"
+                await makedirs(temp_dir, exist_ok=True)
+                temp_path = f"{temp_dir}/owner_{int(time())}.png"
+
+                try:
+                    # Write the owner's image data to the temporary file
+                    async with aiopen(temp_path, "wb") as f:
+                        await f.write(owner_data["IMAGE_WATERMARK"])
+                    return temp_path
+                except Exception:
+                    pass
+
+    except Exception as e:
+        # Log the database error but don't fail the entire operation
+        LOGGER.warning(f"Database error in get_image_watermark_path: {e}")
+        # Fall through to check for static path
 
     # If neither user nor owner has a watermark in the database, check for static path
     if hasattr(Config, "IMAGE_WATERMARK_PATH") and Config.IMAGE_WATERMARK_PATH:

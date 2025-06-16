@@ -6,6 +6,7 @@ install()
 
 import os
 import subprocess
+import time
 from asyncio import Lock, new_event_loop, set_event_loop
 from datetime import datetime
 from logging import (
@@ -20,12 +21,17 @@ from logging import (
     basicConfig,
     getLogger,
 )
-from time import time
+from time import time as time_func
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from pytz import timezone
 
 from sabnzbdapi import SabnzbdClient
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 
 class SuppressUnclosedSessionFilter(Filter):
@@ -65,6 +71,21 @@ class SuppressZotifyNoiseFilter(Filter):
             return False
         if "Session.Receiver started" in message:
             return False
+
+        # Suppress metadata-related logs from external libraries
+        if "Metadata settings - All:" in message:
+            return False
+        if "Video metadata - Title:" in message:
+            return False
+        if "Audio metadata - Title:" in message:
+            return False
+        if "Subtitle metadata - Title:" in message:
+            return False
+        if "Using metadata-all from command line:" in message:
+            return False
+        if "Applying metadata to video file:" in message:
+            return False
+
         return "Skipping unknown command cmd:" not in message
 
 
@@ -80,6 +101,10 @@ getLogger("bot.modules.media_search").setLevel(ERROR)
 getLogger("librespot.core").setLevel(ERROR)  # Only show errors, suppress info logs
 getLogger("librespot").setLevel(WARNING)  # Suppress all librespot info logs
 
+# Suppress common external library logs that generate metadata noise
+getLogger("common").setLevel(WARNING)  # Suppress common library info logs
+getLogger("command_gen").setLevel(WARNING)  # Suppress command generation info logs
+
 # Apply the unclosed session filter to aiohttp loggers specifically
 aiohttp_client_logger = getLogger("aiohttp.client")
 aiohttp_client_logger.addFilter(SuppressUnclosedSessionFilter())
@@ -91,7 +116,7 @@ aiohttp_connector_logger.addFilter(SuppressUnclosedSessionFilter())
 aiohttp_main_logger = getLogger("aiohttp")
 aiohttp_main_logger.addFilter(SuppressUnclosedSessionFilter())
 
-bot_start_time = time()
+bot_start_time = time_func()
 
 bot_loop = new_event_loop()
 set_event_loop(bot_loop)
@@ -177,10 +202,115 @@ sabnzbd_client = SabnzbdClient(
     api_key="admin",
     port="8070",
 )
+
+
+def is_qbittorrent_running():
+    """Check if qBittorrent is already running by testing the web UI and process"""
+    # First check if the process is running
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "qbittorrent-nox|xnox"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Process is running, now check if web UI is accessible
+            if requests is not None:
+                try:
+                    response = requests.get(
+                        "http://localhost:8090/api/v2/app/version", timeout=2
+                    )
+                    return response.status_code == 200
+                except (
+                    requests.exceptions.RequestException,
+                    requests.exceptions.Timeout,
+                ):
+                    return False
+            else:
+                # If requests is not available, assume it's running if process exists
+                return True
+    except (
+        subprocess.TimeoutExpired,
+        subprocess.SubprocessError,
+        FileNotFoundError,
+    ):
+        pass
+
+    # If process check failed, try web UI check as fallback
+    if requests is not None:
+        try:
+            response = requests.get(
+                "http://localhost:8090/api/v2/app/version", timeout=2
+            )
+            if response.status_code == 200:
+                return True
+        except (requests.exceptions.RequestException, requests.exceptions.Timeout):
+            pass
+
+    return False
+
+
 try:
-    subprocess.run(["xnox", "-d", f"--profile={os.getcwd()}"], check=False)
-except (FileNotFoundError, PermissionError):
-    pass  # Ignore if xnox is not available or permission denied
+    # Check if qBittorrent is already running before starting it
+    if not is_qbittorrent_running():
+        LOGGER.info("Starting qBittorrent daemon...")
+
+        # Start qBittorrent in daemon mode
+        try:
+            process = subprocess.Popen(
+                ["xnox", "-d", f"--profile={os.getcwd()}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            # Wait for the daemon to start (daemon process exits after spawning)
+            time.sleep(3)
+
+            # For daemon mode, the parent process exits with code 0 after spawning the daemon
+            # So we need to check if the daemon is actually running by checking for the process
+            retry_count = 0
+            max_retries = 10
+            daemon_started = False
+
+            while retry_count < max_retries:
+                if is_qbittorrent_running():
+                    LOGGER.info("qBittorrent daemon started successfully")
+                    daemon_started = True
+                    break
+                time.sleep(1)
+                retry_count += 1
+
+            if not daemon_started:
+                # Check for any error output
+                stdout, stderr = process.communicate()
+                stderr_text = stderr.decode().strip() if stderr else ""
+
+                if stderr_text:
+                    if (
+                        "You cannot use -d (or --daemon): qBittorrent is already running"
+                        in stderr_text
+                    ):
+                        LOGGER.info(
+                            "qBittorrent is already running (detected from error message)"
+                        )
+                    else:
+                        LOGGER.error(f"qBittorrent startup failed: {stderr_text}")
+                else:
+                    LOGGER.warning(
+                        "qBittorrent daemon may not have started - web UI not accessible"
+                    )
+
+        except subprocess.SubprocessError as e:
+            LOGGER.error(f"Failed to start qBittorrent process: {e}")
+    else:
+        LOGGER.info("qBittorrent is already running - skipping daemon startup")
+
+except (FileNotFoundError, PermissionError) as e:
+    LOGGER.warning(f"qBittorrent binary not found or permission denied: {e}")
+except Exception as e:
+    LOGGER.error(f"Unexpected error during qBittorrent startup: {e}")
 
 try:
     subprocess.run(

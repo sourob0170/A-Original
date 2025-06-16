@@ -115,6 +115,8 @@ DEFAULT_VALUES = {
     "AD_BROADCASTER_ENABLED": False,
     "STREAMRIP_ENABLED": True,
     "MEGA_SEARCH_ENABLED": True,
+    # API Settings
+    "DEBRID_LINK_API": "",
     # Streamrip Settings
     "STREAMRIP_CONCURRENT_DOWNLOADS": 4,
     "STREAMRIP_MAX_SEARCH_RESULTS": 20,
@@ -240,6 +242,23 @@ DEFAULT_VALUES = {
     "ZOTIFY_PRINT_WARNINGS": True,
     "ZOTIFY_PRINT_SKIPS": False,
     "ZOTIFY_MATCH_EXISTING": False,
+    # DDL (Direct Download Link) Upload Settings
+    "DDL_ENABLED": True,
+    "DDL_DEFAULT_SERVER": "gofile",
+    "GOFILE_API_KEY": "",
+    "GOFILE_FOLDER_NAME": "",
+    "GOFILE_PUBLIC_LINKS": True,
+    "GOFILE_PASSWORD_PROTECTION": False,
+    "GOFILE_DEFAULT_PASSWORD": "",
+    "GOFILE_LINK_EXPIRY_DAYS": 0,
+    "STREAMTAPE_LOGIN": "",
+    "STREAMTAPE_API_KEY": "",
+    "STREAMTAPE_FOLDER_NAME": "",
+    # Google Drive Upload Settings
+    "GDRIVE_UPLOAD_ENABLED": True,
+    # MEGA Settings
+    "MEGA_ENABLED": True,
+    "MEGA_UPLOAD_ENABLED": True,
     # YouTube Upload Settings
     "YOUTUBE_UPLOAD_ENABLED": True,
     "YOUTUBE_UPLOAD_DEFAULT_PRIVACY": "unlisted",
@@ -393,6 +412,8 @@ DEFAULT_VALUES = {
     "TRIM_IMAGE_FORMAT": "none",
     # Document Trim Settings
     "TRIM_DOCUMENT_ENABLED": False,
+    "TRIM_DOCUMENT_START_PAGE": "1",
+    "TRIM_DOCUMENT_END_PAGE": "",
     "TRIM_DOCUMENT_QUALITY": "none",
     "TRIM_DOCUMENT_FORMAT": "none",
     # Subtitle Trim Settings
@@ -440,6 +461,45 @@ DEFAULT_VALUES = {
     "EXTRACT_ATTACHMENT_INDEX": None,
     "EXTRACT_ATTACHMENT_FILTER": "none",
     "EXTRACT_MAINTAIN_QUALITY": True,
+    # Remove Settings
+    "REMOVE_ENABLED": False,
+    "REMOVE_PRIORITY": 8,
+    "REMOVE_DELETE_ORIGINAL": True,
+    "REMOVE_METADATA": False,
+    "REMOVE_MAINTAIN_QUALITY": True,
+    # Video Remove Settings
+    "REMOVE_VIDEO_ENABLED": False,
+    "REMOVE_VIDEO_CODEC": "none",
+    "REMOVE_VIDEO_FORMAT": "none",
+    "REMOVE_VIDEO_INDEX": None,
+    "REMOVE_VIDEO_QUALITY": "none",
+    "REMOVE_VIDEO_PRESET": "none",
+    "REMOVE_VIDEO_BITRATE": "none",
+    "REMOVE_VIDEO_RESOLUTION": "none",
+    "REMOVE_VIDEO_FPS": "none",
+    # Audio Remove Settings
+    "REMOVE_AUDIO_ENABLED": False,
+    "REMOVE_AUDIO_CODEC": "none",
+    "REMOVE_AUDIO_FORMAT": "none",
+    "REMOVE_AUDIO_INDEX": None,
+    "REMOVE_AUDIO_BITRATE": "none",
+    "REMOVE_AUDIO_CHANNELS": "none",
+    "REMOVE_AUDIO_SAMPLING": "none",
+    "REMOVE_AUDIO_VOLUME": "none",
+    # Subtitle Remove Settings
+    "REMOVE_SUBTITLE_ENABLED": False,
+    "REMOVE_SUBTITLE_CODEC": "none",
+    "REMOVE_SUBTITLE_FORMAT": "none",
+    "REMOVE_SUBTITLE_INDEX": None,
+    "REMOVE_SUBTITLE_LANGUAGE": "none",
+    "REMOVE_SUBTITLE_ENCODING": "none",
+    "REMOVE_SUBTITLE_FONT": "none",
+    "REMOVE_SUBTITLE_FONT_SIZE": "none",
+    # Attachment Remove Settings
+    "REMOVE_ATTACHMENT_ENABLED": False,
+    "REMOVE_ATTACHMENT_FORMAT": "none",
+    "REMOVE_ATTACHMENT_INDEX": None,
+    "REMOVE_ATTACHMENT_FILTER": "none",
     # Add Settings
     "ADD_ENABLED": False,
     "ADD_PRIORITY": 7,
@@ -471,6 +531,7 @@ DEFAULT_VALUES = {
     "ADD_SUBTITLE_ENCODING": "none",
     "ADD_SUBTITLE_FONT": "none",
     "ADD_SUBTITLE_FONT_SIZE": "none",
+    "ADD_SUBTITLE_HARDSUB_ENABLED": False,
     # Attachment Add Settings
     "ADD_ATTACHMENT_ENABLED": False,
     "ADD_ATTACHMENT_INDEX": None,
@@ -608,6 +669,10 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         if Config.MEGA_ENABLED:
             buttons.data_button("☁️ MEGA", "botset mega")
 
+        # Only show DDL Settings button if DDL is enabled
+        if Config.DDL_ENABLED:
+            buttons.data_button("📤 DDL", "botset ddl")
+
         buttons.data_button("❌ Close", "botset close")
         msg = "<b>Bot Settings</b>\nSelect a category to configure:"
     elif edit_type is not None:
@@ -682,6 +747,8 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
                 buttons.data_button("Back", "botset mediatools_convert")
             elif key.startswith("EXTRACT_"):
                 buttons.data_button("Back", "botset mediatools_extract")
+            elif key.startswith("REMOVE_"):
+                buttons.data_button("Back", "botset mediatools_remove")
             elif key.startswith("ADD_"):
                 buttons.data_button("Back", "botset mediatools_add")
             elif key.startswith("TASK_MONITOR_"):
@@ -1050,6 +1117,77 @@ Set to 0 to disable interval (watermark will be applied once).
                 help_text = "Send a filter pattern for attachment extraction.\n\n<b>Examples:</b> <code>*.jpg</code>, <code>*.pdf</code>, <code>image*</code>"
             elif key == "EXTRACT_MAINTAIN_QUALITY":
                 help_text = "Send 'true' to maintain high quality during extraction or 'false' to optimize for size.\n\n<b>Examples:</b> <code>true</code> or <code>false</code>"
+            # Remove Settings Help Text
+            elif key == "REMOVE_PRIORITY":
+                help_text = "Send an integer value for remove priority. Lower values mean higher priority.\n\n<b>Example:</b> <code>8</code>"
+            elif key in {
+                "REMOVE_DELETE_ORIGINAL",
+                "REMOVE_METADATA",
+                "REMOVE_MAINTAIN_QUALITY",
+            }:
+                if key == "REMOVE_DELETE_ORIGINAL":
+                    help_text = "Send 'true' to delete original files after processing or 'false' to keep them.\n\n<b>Examples:</b> <code>true</code> or <code>false</code>"
+                elif key == "REMOVE_METADATA":
+                    help_text = "Send 'true' to remove metadata from media files or 'false' to keep metadata.\n\n<b>Examples:</b> <code>true</code> or <code>false</code>"
+                elif key == "REMOVE_MAINTAIN_QUALITY":
+                    help_text = "Send 'true' to maintain high quality during removal or 'false' to optimize for size.\n\n<b>Examples:</b> <code>true</code> or <code>false</code>"
+            elif key == "REMOVE_VIDEO_INDEX":
+                help_text = "Send the video track index to remove. Use comma-separated values for multiple tracks or 'all' for all tracks.\n\n<b>Examples:</b> <code>0</code>, <code>0,1,2</code>, or <code>all</code>"
+            elif key == "REMOVE_AUDIO_INDEX":
+                help_text = "Send the audio track index to remove. Use comma-separated values for multiple tracks or 'all' for all tracks.\n\n<b>Examples:</b> <code>0</code>, <code>0,1,2</code>, or <code>all</code>"
+            elif key == "REMOVE_SUBTITLE_INDEX":
+                help_text = "Send the subtitle track index to remove. Use comma-separated values for multiple tracks or 'all' for all tracks.\n\n<b>Examples:</b> <code>0</code>, <code>0,1,2</code>, or <code>all</code>"
+            elif key == "REMOVE_ATTACHMENT_INDEX":
+                help_text = "Send the attachment index to remove. Use comma-separated values for multiple indices or 'all' for all attachments.\n\n<b>Examples:</b> <code>0</code>, <code>0,1,2</code>, or <code>all</code>"
+            elif key == "REMOVE_VIDEO_CODEC":
+                help_text = "Send the video codec to use for removal processing.\n\n<b>Examples:</b> <code>copy</code>, <code>h264</code>, <code>libx264</code>"
+            elif key == "REMOVE_AUDIO_CODEC":
+                help_text = "Send the audio codec to use for removal processing.\n\n<b>Examples:</b> <code>copy</code>, <code>aac</code>, <code>mp3</code>"
+            elif key == "REMOVE_SUBTITLE_CODEC":
+                help_text = "Send the subtitle codec to use for removal processing.\n\n<b>Examples:</b> <code>copy</code>, <code>srt</code>, <code>ass</code>"
+            elif key in {
+                "REMOVE_VIDEO_FORMAT",
+                "REMOVE_AUDIO_FORMAT",
+                "REMOVE_SUBTITLE_FORMAT",
+                "REMOVE_ATTACHMENT_FORMAT",
+            }:
+                if key == "REMOVE_VIDEO_FORMAT":
+                    help_text = "Send video output format for removal processing.\n\n<b>Examples:</b> <code>mp4</code>, <code>mkv</code>, <code>avi</code>"
+                elif key == "REMOVE_AUDIO_FORMAT":
+                    help_text = "Send audio output format for removal processing.\n\n<b>Examples:</b> <code>mp3</code>, <code>aac</code>, <code>flac</code>"
+                elif key == "REMOVE_SUBTITLE_FORMAT":
+                    help_text = "Send subtitle output format for removal processing.\n\n<b>Examples:</b> <code>srt</code>, <code>ass</code>, <code>vtt</code>"
+                elif key == "REMOVE_ATTACHMENT_FORMAT":
+                    help_text = "Send attachment output format for removal processing.\n\n<b>Examples:</b> <code>png</code>, <code>jpg</code>, <code>pdf</code>"
+            elif key == "REMOVE_VIDEO_QUALITY":
+                help_text = "Send the video quality setting for removal processing.\n\n<b>Examples:</b> <code>high</code>, <code>medium</code>, <code>low</code>"
+            elif key == "REMOVE_VIDEO_PRESET":
+                help_text = "Send the video preset for removal processing.\n\n<b>Examples:</b> <code>ultrafast</code>, <code>veryfast</code>, <code>medium</code>, <code>slow</code>, <code>veryslow</code>"
+            elif key == "REMOVE_VIDEO_BITRATE":
+                help_text = "Send the video bitrate for removal processing.\n\n<b>Examples:</b> <code>5M</code>, <code>10M</code>, <code>20M</code>"
+            elif key in {"REMOVE_VIDEO_RESOLUTION", "REMOVE_VIDEO_FPS"}:
+                if key == "REMOVE_VIDEO_RESOLUTION":
+                    help_text = "Send the video resolution for removal processing.\n\n<b>Examples:</b> <code>1920x1080</code>, <code>1280x720</code>, <code>720p</code>, <code>1080p</code>"
+                elif key == "REMOVE_VIDEO_FPS":
+                    help_text = "Send the video frame rate for removal processing.\n\n<b>Examples:</b> <code>30</code>, <code>60</code>, <code>24</code>"
+            elif key == "REMOVE_AUDIO_BITRATE":
+                help_text = "Send the audio bitrate for removal processing.\n\n<b>Examples:</b> <code>128k</code>, <code>192k</code>, <code>320k</code>"
+            elif key == "REMOVE_AUDIO_CHANNELS":
+                help_text = "Send the number of audio channels for removal processing.\n\n<b>Examples:</b> <code>2</code> (stereo), <code>6</code> (5.1 surround)"
+            elif key == "REMOVE_AUDIO_SAMPLING":
+                help_text = "Send the audio sampling rate for removal processing.\n\n<b>Examples:</b> <code>44100</code> (CD quality), <code>48000</code> (DVD quality)"
+            elif key == "REMOVE_AUDIO_VOLUME":
+                help_text = "Send the audio volume adjustment for removal processing.\n\n<b>Examples:</b> <code>1.0</code> (normal), <code>1.5</code> (louder), <code>0.5</code> (quieter)"
+            elif key == "REMOVE_SUBTITLE_LANGUAGE":
+                help_text = "Send the subtitle language code for removal processing.\n\n<b>Examples:</b> <code>eng</code> (English), <code>spa</code> (Spanish), <code>fre</code> (French)"
+            elif key == "REMOVE_SUBTITLE_ENCODING":
+                help_text = "Send the subtitle character encoding for removal processing.\n\n<b>Examples:</b> <code>utf-8</code>, <code>ascii</code>, <code>latin1</code>"
+            elif key == "REMOVE_SUBTITLE_FONT":
+                help_text = "Send the subtitle font for removal processing (for formats that support it).\n\n<b>Examples:</b> <code>Arial</code>, <code>Times New Roman</code>, <code>Helvetica</code>"
+            elif key == "REMOVE_SUBTITLE_FONT_SIZE":
+                help_text = "Send the subtitle font size for removal processing.\n\n<b>Examples:</b> <code>24</code>, <code>32</code>, <code>18</code>"
+            elif key == "REMOVE_ATTACHMENT_FILTER":
+                help_text = "Send a filter pattern for attachment removal processing.\n\n<b>Examples:</b> <code>*.jpg</code>, <code>*.pdf</code>, <code>image*</code>"
             elif key == "MERGE_OUTPUT_FORMAT_IMAGE":
                 help_text = "Send image output format.\n\n<b>Examples:</b> <code>jpg</code>, <code>png</code>, <code>webp</code>"
             elif key == "MERGE_OUTPUT_FORMAT_DOCUMENT":
@@ -1217,6 +1355,10 @@ Send one of the following position options:
                 help_text = "Send the start time for trimming in HH:MM:SS format.\n\n<b>Example:</b> <code>00:05:30</code> (5 minutes and 30 seconds from start)\n\n<b>Default:</b> <code>00:00:00</code> (beginning of file)"
             elif key == "TRIM_END_TIME":
                 help_text = "Send the end time for trimming in HH:MM:SS format. Leave empty for end of file.\n\n<b>Example:</b> <code>00:10:00</code> (10 minutes from start)\n\n<b>Default:</b> Empty (end of file)"
+            elif key == "TRIM_DOCUMENT_START_PAGE":
+                help_text = "Send the starting page number for document trimming.\n\n<b>Example:</b> <code>5</code> (start from page 5)\n\n<b>Default:</b> <code>1</code> (first page)"
+            elif key == "TRIM_DOCUMENT_END_PAGE":
+                help_text = "Send the ending page number for document trimming. Leave empty for last page.\n\n<b>Example:</b> <code>10</code> (end at page 10)\n\n<b>Default:</b> Empty (last page)"
             else:
                 help_text = f"Send a valid value for <code>{key}</code>."
 
@@ -1275,6 +1417,19 @@ Send one of the following position options:
                 msg += "Set the API URL for Truecaller phone number lookup.\n\n"
                 msg += "<b>Example:</b> <code>https://api.example.com/truecaller</code>\n\n"
                 msg += "<b>Note:</b> No default URL is provided. You must set your own API endpoint. The Truecaller module will not work until this is configured.\n\n"
+            elif key == "DEBRID_LINK_API":
+                msg += "<b>Debrid Link API Key</b>\n\n"
+                msg += "Set your Debrid Link API key to enable premium link generation for 400+ supported file hosting sites.\n\n"
+                msg += "<b>How to get API key:</b>\n"
+                msg += "1. Visit https://debrid-link.com\n"
+                msg += "2. Register/login to your account\n"
+                msg += "3. Go to API section in your account settings\n"
+                msg += "4. Generate and copy your API key\n\n"
+                msg += (
+                    "<b>Example:</b> <code>your_debrid_link_api_key_here</code>\n\n"
+                )
+                msg += "<b>Supported sites include:</b> 1fichier, Rapidgator, Uploaded, Turbobit, Nitroflare, and 400+ more\n\n"
+                msg += "<b>Note:</b> This enables premium direct downloads from supported file hosting services.\n\n"
             # No special handling for MEDIA_TOOLS_ENABLED - it's now managed through the Media Tools menu
 
             msg += f"Send a valid value for <code>{key}</code>.\n\n<b>Current value:</b> <code>{Config.get(key)}</code>\n\n<i>Timeout: 60 seconds</i>"
@@ -1323,6 +1478,7 @@ Send one of the following position options:
                         "COMPRESSION_",
                         "TRIM_",
                         "EXTRACT_",
+                        "REMOVE_",
                         "ADD_",
                         "SCREENSHOT_",
                         "TASK_MONITOR_",
@@ -1332,6 +1488,8 @@ Send one of the following position options:
                         "ZOTIFY_",  # Added ZOTIFY_ to exclude zotify configs from main config menu
                         "YOUTUBE_UPLOAD_",  # Added YOUTUBE_UPLOAD_ to exclude youtube upload configs from main config menu
                         "MEGA_",  # Added MEGA_ to exclude mega configs from main config menu
+                        "GOFILE_",  # Added GOFILE_ to exclude gofile configs from main config menu
+                        "STREAMTAPE_",  # Added STREAMTAPE_ to exclude streamtape configs from main config menu
                     )
                 )
                 or k
@@ -1345,6 +1503,7 @@ Send one of the following position options:
                     "MEGA_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_CLONE_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_SEARCH_ENABLED",  # Keep only the enabled toggle in mega menu
+                    "DDL_DEFAULT_SERVER",  # Keep only in DDL section
                 ]
             )
         ]
@@ -1360,6 +1519,7 @@ Send one of the following position options:
         # Add API settings to the config menu
         api_keys = [
             "TRUECALLER_API_URL",
+            "DEBRID_LINK_API",
         ]
 
         # Add module control settings to the config menu
@@ -1755,6 +1915,8 @@ Send one of the following position options:
             buttons.data_button("✂️ Trim", "botset mediatools_trim")
         if is_media_tool_enabled("extract"):
             buttons.data_button("📤 Extract", "botset mediatools_extract")
+        if is_media_tool_enabled("remove"):
+            buttons.data_button("🗑️ Remove", "botset mediatools_remove")
 
         # Media Enhancement Tools
         if is_media_tool_enabled("add"):
@@ -1770,6 +1932,7 @@ Send one of the following position options:
             "compression",
             "trim",
             "extract",
+            "remove",
             "add",
             "metadata",
             "xtra",
@@ -1797,6 +1960,7 @@ Configure global settings for media processing tools.
 • <b>Compression</b> - Reduce file sizes while preserving quality
 • <b>Trim</b> - Cut sections from media files
 • <b>Extract</b> - Extract components from media files
+• <b>Remove</b> - Remove tracks or metadata from media files
 • <b>Add</b> - Add elements to media files
 • <b>Screenshot</b> - Take screenshots from videos (enabled via -ss flag)
 • <b>Metadata</b> - Modify file metadata
@@ -3540,8 +3704,10 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             "RCLONE_ENABLED",
             "STREAMRIP_ENABLED",
             "ZOTIFY_ENABLED",
+            "GDRIVE_UPLOAD_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
             "MEGA_ENABLED",
+            "DDL_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
@@ -3595,10 +3761,14 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
         )
         zotify_enabled = "✅ Enabled" if Config.ZOTIFY_ENABLED else "❌ Disabled"
+        gdrive_upload_enabled = (
+            "✅ Enabled" if Config.GDRIVE_UPLOAD_ENABLED else "❌ Disabled"
+        )
         youtube_upload_enabled = (
             "✅ Enabled" if Config.YOUTUBE_UPLOAD_ENABLED else "❌ Disabled"
         )
         mega_enabled = "✅ Enabled" if Config.MEGA_ENABLED else "❌ Disabled"
+        ddl_enabled = "✅ Enabled" if Config.DDL_ENABLED else "❌ Disabled"
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
         )
@@ -3673,12 +3843,20 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             f"botset toggle ZOTIFY_ENABLED {not Config.ZOTIFY_ENABLED}",
         )
         buttons.data_button(
+            f"🗂️ Gdrive Upload: {gdrive_upload_enabled}",
+            f"botset toggle GDRIVE_UPLOAD_ENABLED {not Config.GDRIVE_UPLOAD_ENABLED}",
+        )
+        buttons.data_button(
             f"📺 YouTube Upload: {youtube_upload_enabled}",
             f"botset toggle YOUTUBE_UPLOAD_ENABLED {not Config.YOUTUBE_UPLOAD_ENABLED}",
         )
         buttons.data_button(
             f"☁️ MEGA Operations: {mega_enabled}",
             f"botset toggle MEGA_ENABLED {not Config.MEGA_ENABLED}",
+        )
+        buttons.data_button(
+            f"📤 DDL Operations: {ddl_enabled}",
+            f"botset toggle DDL_ENABLED {not Config.DDL_ENABLED}",
         )
         buttons.data_button(
             f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
@@ -3714,8 +3892,10 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 <b>Rclone Operations:</b> {rclone_enabled}
 <b>Streamrip Downloads:</b> {streamrip_enabled}
 <b>Zotify Downloads:</b> {zotify_enabled}
+<b>Gdrive Upload:</b> {gdrive_upload_enabled}
 <b>YouTube Upload:</b> {youtube_upload_enabled}
 <b>MEGA Operations:</b> {mega_enabled}
+<b>DDL Operations:</b> {ddl_enabled}
 <b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
 <b>VirusTotal Scan:</b> {virustotal_enabled}
 <b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
@@ -3738,6 +3918,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 • <b>Streamrip Downloads:</b> Controls whether users can download music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud)
 • <b>Zotify Downloads:</b> Controls whether users can download music from Spotify using Zotify
 • <b>YouTube Upload:</b> Controls whether users can upload videos directly to YouTube after downloading
+• <b>DDL Operations:</b> Controls whether users can upload files to Direct Download Link servers (Gofile, Streamtape)
 • <b>Command Warnings:</b> Controls whether warnings are shown for wrong command suffixes
 • <b>VirusTotal Scan:</b> Controls whether users can scan files and URLs for viruses using VirusTotal
 • <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users</blockquote>"""
@@ -4096,6 +4277,211 @@ Clone operations copy files directly between MEGA accounts without downloading l
 
 <b>Note:</b>
 These are advanced security features. Leave empty for standard MEGA encryption."""
+
+    elif key == "ddl":
+        # DDL main menu with subsections for each server
+        buttons.data_button("📤 General Settings", "botset ddl_general")
+        buttons.data_button("📁 Gofile Settings", "botset ddl_gofile")
+        buttons.data_button("🎬 Streamtape Settings", "botset ddl_streamtape")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit ddl")
+        else:
+            buttons.data_button("👁️ View", "botset view ddl")
+
+        buttons.data_button("🔄 Reset to Default", "botset default_ddl")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current DDL settings
+        ddl_enabled = "✅ Enabled" if Config.DDL_ENABLED else "❌ Disabled"
+        ddl_default_server = Config.DDL_DEFAULT_SERVER or "gofile (Default)"
+
+        # Get API key status
+        gofile_api_status = "✅ Set" if Config.GOFILE_API_KEY else "❌ Not Set"
+        streamtape_api_status = (
+            "✅ Set"
+            if (Config.STREAMTAPE_LOGIN and Config.STREAMTAPE_API_KEY)
+            else "❌ Not Set"
+        )
+
+        msg = f"""<b>📤 DDL (Direct Download Link) Settings</b> | State: {state}
+
+<b>General Settings:</b>
+• <b>DDL Status:</b> {ddl_enabled}
+• <b>Default Server:</b> <code>{ddl_default_server}</code>
+
+<b>Gofile Server:</b>
+• <b>API Key:</b> {gofile_api_status}
+• <b>Public Links:</b> {"✅ Enabled" if Config.GOFILE_PUBLIC_LINKS else "❌ Disabled"}
+• <b>Password Protection:</b> {"✅ Enabled" if Config.GOFILE_PASSWORD_PROTECTION else "❌ Disabled"}
+
+<b>Streamtape Server:</b>
+• <b>API Credentials:</b> {streamtape_api_status}
+
+<b>Usage:</b>
+• Use <code>-up ddl</code> to upload to default DDL server
+• Use <code>-up ddl:gofile</code> to upload specifically to Gofile
+• Use <code>-up ddl:streamtape</code> to upload specifically to Streamtape
+
+<b>Supported Formats:</b>
+• <b>Gofile:</b> All file types supported
+• <b>Streamtape:</b> Video files only (.mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v)
+
+<i>Configure each server's settings using the buttons above.</i>"""
+
+    elif key == "ddl_general":
+        # DDL General Settings
+        general_settings = [
+            "DDL_DEFAULT_SERVER",
+        ]
+
+        for setting in general_settings:
+            display_name = setting.replace("DDL_", "").replace("_", " ").title()
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit ddl_general")
+        else:
+            buttons.data_button("👁️ View", "botset view ddl_general")
+
+        buttons.data_button("🔄 Reset to Default", "botset default_ddl_general")
+        buttons.data_button("⬅️ Back", "botset ddl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        ddl_default_server = Config.DDL_DEFAULT_SERVER or "gofile (Default)"
+
+        msg = f"""<b>📤 DDL General Settings</b> | State: {state}
+
+<b>Server Configuration:</b>
+• <b>Default Server:</b> <code>{ddl_default_server}</code>
+
+<b>Available Servers:</b>
+• <b>gofile</b> - Supports all file types, free tier available
+• <b>streamtape</b> - Video files only, requires account
+
+<b>Note:</b>
+The default server will be used when users specify <code>-up ddl</code> without a specific server."""
+
+    elif key == "ddl_gofile":
+        # Gofile Settings
+        gofile_settings = [
+            "GOFILE_API_KEY",
+            "GOFILE_FOLDER_NAME",
+            "GOFILE_DEFAULT_PASSWORD",
+            "GOFILE_LINK_EXPIRY_DAYS",
+        ]
+
+        for setting in gofile_settings:
+            display_name = setting.replace("GOFILE_", "").replace("_", " ").title()
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add toggle buttons for boolean settings
+
+        public_links_status = "✅ ON" if Config.GOFILE_PUBLIC_LINKS else "❌ OFF"
+        buttons.data_button(
+            f"🔗 Public Links: {public_links_status}",
+            f"botset toggle GOFILE_PUBLIC_LINKS {not Config.GOFILE_PUBLIC_LINKS}",
+        )
+
+        password_protection_status = (
+            "✅ ON" if Config.GOFILE_PASSWORD_PROTECTION else "❌ OFF"
+        )
+        buttons.data_button(
+            f"🔒 Password Protection: {password_protection_status}",
+            f"botset toggle GOFILE_PASSWORD_PROTECTION {not Config.GOFILE_PASSWORD_PROTECTION}",
+        )
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit ddl_gofile")
+        else:
+            buttons.data_button("👁️ View", "botset view ddl_gofile")
+
+        buttons.data_button("🔄 Reset to Default", "botset default_ddl_gofile")
+        buttons.data_button("⬅️ Back", "botset ddl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current Gofile settings
+        gofile_api_key = "✅ Set" if Config.GOFILE_API_KEY else "❌ Not Set"
+        gofile_folder = Config.GOFILE_FOLDER_NAME or "None (Use filename)"
+        gofile_public = "✅ Enabled" if Config.GOFILE_PUBLIC_LINKS else "❌ Disabled"
+        gofile_password_protection = (
+            "✅ Enabled" if Config.GOFILE_PASSWORD_PROTECTION else "❌ Disabled"
+        )
+        gofile_default_password = Config.GOFILE_DEFAULT_PASSWORD or "None"
+        gofile_expiry = Config.GOFILE_LINK_EXPIRY_DAYS or "0 (No expiry)"
+
+        msg = f"""<b>📁 Gofile Server Settings</b> | State: {state}
+
+<b>Authentication:</b>
+• <b>API Key:</b> {gofile_api_key}
+
+<b>Upload Settings:</b>
+• <b>Folder Name:</b> <code>{gofile_folder}</code>
+• <b>Public Links:</b> {gofile_public}
+• <b>Password Protection:</b> {gofile_password_protection}
+• <b>Default Password:</b> <code>{gofile_default_password}</code>
+• <b>Link Expiry (Days):</b> <code>{gofile_expiry}</code>
+
+<b>Features:</b>
+• Supports all file types
+• Free tier available (with limitations)
+• Premium accounts get better speeds and storage
+• Password protection available
+• Custom expiry dates
+
+<b>Note:</b>
+Get your API key from <a href="https://gofile.io/myProfile">Gofile Profile</a>"""
+
+    elif key == "ddl_streamtape":
+        # Streamtape Settings
+        streamtape_settings = [
+            "STREAMTAPE_LOGIN",
+            "STREAMTAPE_API_KEY",
+            "STREAMTAPE_FOLDER_NAME",
+        ]
+
+        for setting in streamtape_settings:
+            display_name = (
+                setting.replace("STREAMTAPE_", "").replace("_", " ").title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit ddl_streamtape")
+        else:
+            buttons.data_button("👁️ View", "botset view ddl_streamtape")
+
+        buttons.data_button("🔄 Reset to Default", "botset default_ddl_streamtape")
+        buttons.data_button("⬅️ Back", "botset ddl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current Streamtape settings
+        streamtape_login = "✅ Set" if Config.STREAMTAPE_LOGIN else "❌ Not Set"
+        streamtape_api_key = "✅ Set" if Config.STREAMTAPE_API_KEY else "❌ Not Set"
+        streamtape_folder = Config.STREAMTAPE_FOLDER_NAME or "None (Root folder)"
+
+        msg = f"""<b>🎬 Streamtape Server Settings</b> | State: {state}
+
+<b>Authentication:</b>
+• <b>Login Username:</b> {streamtape_login}
+• <b>API Key:</b> {streamtape_api_key}
+
+<b>Upload Settings:</b>
+• <b>Folder Name:</b> <code>{streamtape_folder}</code>
+
+<b>Supported Formats:</b>
+• Video files only: .mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v
+• Maximum file size depends on account type
+
+<b>Features:</b>
+• Fast video streaming
+• Direct download links
+• Folder organization
+• Account required for uploads
+
+<b>Note:</b>
+Get your API credentials from <a href="https://streamtape.com/accpanel">Streamtape Account Panel</a>"""
 
     elif key == "mediatools_watermark":
         # Add buttons for each watermark setting in a 2-column layout
@@ -5175,6 +5561,247 @@ Current page shows: {category_text} settings."""
 
 Configure global extract settings that will be used when user settings are not available."""
 
+    elif key == "mediatools_remove":
+        # Add buttons for remove settings
+        # General remove settings
+        general_settings = [
+            "REMOVE_ENABLED",
+            "REMOVE_PRIORITY",
+            "REMOVE_DELETE_ORIGINAL",
+            "REMOVE_METADATA",
+            "REMOVE_MAINTAIN_QUALITY",
+        ]
+
+        # Video remove settings
+        video_settings = [
+            "REMOVE_VIDEO_ENABLED",
+            "REMOVE_VIDEO_CODEC",
+            "REMOVE_VIDEO_FORMAT",
+            "REMOVE_VIDEO_INDEX",
+            "REMOVE_VIDEO_QUALITY",
+            "REMOVE_VIDEO_PRESET",
+            "REMOVE_VIDEO_BITRATE",
+            "REMOVE_VIDEO_RESOLUTION",
+            "REMOVE_VIDEO_FPS",
+        ]
+
+        # Audio remove settings
+        audio_settings = [
+            "REMOVE_AUDIO_ENABLED",
+            "REMOVE_AUDIO_CODEC",
+            "REMOVE_AUDIO_FORMAT",
+            "REMOVE_AUDIO_INDEX",
+            "REMOVE_AUDIO_BITRATE",
+            "REMOVE_AUDIO_CHANNELS",
+            "REMOVE_AUDIO_SAMPLING",
+            "REMOVE_AUDIO_VOLUME",
+        ]
+
+        # Subtitle remove settings
+        subtitle_settings = [
+            "REMOVE_SUBTITLE_ENABLED",
+            "REMOVE_SUBTITLE_CODEC",
+            "REMOVE_SUBTITLE_FORMAT",
+            "REMOVE_SUBTITLE_INDEX",
+            "REMOVE_SUBTITLE_LANGUAGE",
+            "REMOVE_SUBTITLE_ENCODING",
+            "REMOVE_SUBTITLE_FONT",
+            "REMOVE_SUBTITLE_FONT_SIZE",
+        ]
+
+        # Attachment remove settings
+        attachment_settings = [
+            "REMOVE_ATTACHMENT_ENABLED",
+            "REMOVE_ATTACHMENT_FORMAT",
+            "REMOVE_ATTACHMENT_INDEX",
+            "REMOVE_ATTACHMENT_FILTER",
+        ]
+
+        # Combine all settings
+        remove_settings = (
+            general_settings
+            + video_settings
+            + audio_settings
+            + subtitle_settings
+            + attachment_settings
+        )
+
+        for setting in remove_settings:
+            # Create display name based on setting type with emojis for better UI
+            if setting.startswith("REMOVE_VIDEO_"):
+                prefix = "🎬"
+                display_name = (
+                    f"{prefix} Video "
+                    + setting.replace("REMOVE_VIDEO_", "").replace("_", " ").title()
+                )
+            elif setting.startswith("REMOVE_AUDIO_"):
+                prefix = "🎵"
+                display_name = (
+                    f"{prefix} Audio "
+                    + setting.replace("REMOVE_AUDIO_", "").replace("_", " ").title()
+                )
+            elif setting.startswith("REMOVE_SUBTITLE_"):
+                prefix = "📝"
+                display_name = (
+                    f"{prefix} Subtitle "
+                    + setting.replace("REMOVE_SUBTITLE_", "")
+                    .replace("_", " ")
+                    .title()
+                )
+            elif setting.startswith("REMOVE_ATTACHMENT_"):
+                prefix = "📎"
+                display_name = (
+                    f"{prefix} Attachment "
+                    + setting.replace("REMOVE_ATTACHMENT_", "")
+                    .replace("_", " ")
+                    .title()
+                )
+            else:
+                # General settings
+                display_name = (
+                    setting.replace("REMOVE_", "").replace("_", " ").title()
+                )
+
+            # For boolean settings, add toggle buttons with status
+            if setting.endswith("_ENABLED") or setting in [
+                "REMOVE_DELETE_ORIGINAL",
+                "REMOVE_METADATA",
+                "REMOVE_MAINTAIN_QUALITY",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+            else:
+                # For non-boolean settings, use editvar
+                buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit mediatools_remove")
+        else:
+            buttons.data_button("👁️ View", "botset view mediatools_remove")
+
+        buttons.data_button("🔄 Reset to Default", "botset default_remove")
+
+        buttons.data_button("⬅️ Back", "botset mediatools", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current remove settings
+        remove_enabled = "✅ Enabled" if Config.REMOVE_ENABLED else "❌ Disabled"
+        remove_priority = f"{Config.REMOVE_PRIORITY}"
+        remove_delete_original = (
+            "✅ Enabled" if Config.REMOVE_DELETE_ORIGINAL else "❌ Disabled"
+        )
+        remove_metadata = "✅ Enabled" if Config.REMOVE_METADATA else "❌ Disabled"
+        maintain_quality = (
+            "✅ Enabled" if Config.REMOVE_MAINTAIN_QUALITY else "❌ Disabled"
+        )
+
+        # Video remove settings
+        video_enabled = (
+            "✅ Enabled" if Config.REMOVE_VIDEO_ENABLED else "❌ Disabled"
+        )
+        video_codec = Config.REMOVE_VIDEO_CODEC or "None"
+        video_format = Config.REMOVE_VIDEO_FORMAT or "None"
+        video_index = Config.REMOVE_VIDEO_INDEX or "All"
+        video_quality = Config.REMOVE_VIDEO_QUALITY or "None"
+        video_preset = Config.REMOVE_VIDEO_PRESET or "None"
+        video_bitrate = Config.REMOVE_VIDEO_BITRATE or "None"
+        video_resolution = Config.REMOVE_VIDEO_RESOLUTION or "None"
+        video_fps = Config.REMOVE_VIDEO_FPS or "None"
+
+        # Audio remove settings
+        audio_enabled = (
+            "✅ Enabled" if Config.REMOVE_AUDIO_ENABLED else "❌ Disabled"
+        )
+        audio_codec = Config.REMOVE_AUDIO_CODEC or "None"
+        audio_format = Config.REMOVE_AUDIO_FORMAT or "None"
+        audio_index = Config.REMOVE_AUDIO_INDEX or "All"
+        audio_bitrate = Config.REMOVE_AUDIO_BITRATE or "None"
+        audio_channels = Config.REMOVE_AUDIO_CHANNELS or "None"
+        audio_sampling = Config.REMOVE_AUDIO_SAMPLING or "None"
+        audio_volume = Config.REMOVE_AUDIO_VOLUME or "None"
+
+        # Subtitle remove settings
+        subtitle_enabled = (
+            "✅ Enabled" if Config.REMOVE_SUBTITLE_ENABLED else "❌ Disabled"
+        )
+        subtitle_codec = Config.REMOVE_SUBTITLE_CODEC or "None"
+        subtitle_format = Config.REMOVE_SUBTITLE_FORMAT or "None"
+        subtitle_index = Config.REMOVE_SUBTITLE_INDEX or "All"
+        subtitle_language = Config.REMOVE_SUBTITLE_LANGUAGE or "None"
+        subtitle_encoding = Config.REMOVE_SUBTITLE_ENCODING or "None"
+        subtitle_font = Config.REMOVE_SUBTITLE_FONT or "None"
+        subtitle_font_size = Config.REMOVE_SUBTITLE_FONT_SIZE or "None"
+
+        # Attachment remove settings
+        attachment_enabled = (
+            "✅ Enabled" if Config.REMOVE_ATTACHMENT_ENABLED else "❌ Disabled"
+        )
+        attachment_format = Config.REMOVE_ATTACHMENT_FORMAT or "None"
+        attachment_index = Config.REMOVE_ATTACHMENT_INDEX or "All"
+        attachment_filter = Config.REMOVE_ATTACHMENT_FILTER or "None"
+
+        msg = f"""<b>Remove Settings</b> | State: {state}
+
+<b>General Settings:</b>
+• <b>Status:</b> {remove_enabled}
+• <b>Priority:</b> <code>{remove_priority}</code>
+• <b>RO:</b> {remove_delete_original}
+• <b>Metadata:</b> {remove_metadata}
+• <b>Quality:</b> {maintain_quality}
+
+<b>Video Remove Settings:</b>
+• <b>Status:</b> {video_enabled}
+• <b>Codec:</b> <code>{video_codec}</code>
+• <b>Format:</b> <code>{video_format}</code>
+• <b>Index:</b> <code>{video_index}</code>
+• <b>Quality:</b> <code>{video_quality}</code>
+• <b>Preset:</b> <code>{video_preset}</code>
+• <b>Bitrate:</b> <code>{video_bitrate}</code>
+• <b>Resolution:</b> <code>{video_resolution}</code>
+• <b>FPS:</b> <code>{video_fps}</code>
+
+<b>Audio Remove Settings:</b>
+• <b>Status:</b> {audio_enabled}
+• <b>Codec:</b> <code>{audio_codec}</code>
+• <b>Format:</b> <code>{audio_format}</code>
+• <b>Index:</b> <code>{audio_index}</code>
+• <b>Bitrate:</b> <code>{audio_bitrate}</code>
+• <b>Channels:</b> <code>{audio_channels}</code>
+• <b>Sampling:</b> <code>{audio_sampling}</code>
+• <b>Volume:</b> <code>{audio_volume}</code>
+
+<b>Subtitle Remove Settings:</b>
+• <b>Status:</b> {subtitle_enabled}
+• <b>Codec:</b> <code>{subtitle_codec}</code>
+• <b>Format:</b> <code>{subtitle_format}</code>
+• <b>Index:</b> <code>{subtitle_index}</code>
+• <b>Language:</b> <code>{subtitle_language}</code>
+• <b>Encoding:</b> <code>{subtitle_encoding}</code>
+• <b>Font:</b> <code>{subtitle_font}</code>
+• <b>Font Size:</b> <code>{subtitle_font_size}</code>
+
+<b>Attachment Remove Settings:</b>
+• <b>Status:</b> {attachment_enabled}
+• <b>Format:</b> <code>{attachment_format}</code>
+• <b>Index:</b> <code>{attachment_index}</code>
+• <b>Filter:</b> <code>{attachment_filter}</code>
+
+<b>Usage:</b>
+• Main Remove toggle must be enabled
+• Enable specific track types to remove them
+• Use <code>-remove</code> to enable removal
+• Use <code>-remove-video</code>, <code>-remove-audio</code>, etc. for specific track types
+• Use <code>-remove-video-index 0</code> to remove specific track by index
+• Use <code>-remove-metadata</code> to remove metadata
+• Add <code>-del</code> to delete original files after removal
+• Settings with value 'None' will not be used in command generation
+
+Configure global remove settings that will be used when user settings are not available."""
+
     elif key == "mediatools_add":
         # Add buttons for add settings
         # General add settings
@@ -5221,6 +5848,7 @@ Configure global extract settings that will be used when user settings are not a
             "ADD_SUBTITLE_ENCODING",
             "ADD_SUBTITLE_FONT",
             "ADD_SUBTITLE_FONT_SIZE",
+            "ADD_SUBTITLE_HARDSUB_ENABLED",
         ]
 
         # Attachment add settings
@@ -5272,6 +5900,7 @@ Configure global extract settings that will be used when user settings are not a
                 "ADD_VIDEO_ENABLED",
                 "ADD_AUDIO_ENABLED",
                 "ADD_SUBTITLE_ENABLED",
+                "ADD_SUBTITLE_HARDSUB_ENABLED",
                 "ADD_ATTACHMENT_ENABLED",
                 "ADD_DELETE_ORIGINAL",
                 "ADD_PRESERVE_TRACKS",
@@ -5290,6 +5919,8 @@ Configure global extract settings that will be used when user settings are not a
                     display_name = f"🔊 Audio Enabled: {status}"
                 elif setting == "ADD_SUBTITLE_ENABLED":
                     display_name = f"💬 Subtitle Enabled: {status}"
+                elif setting == "ADD_SUBTITLE_HARDSUB_ENABLED":
+                    display_name = f"🔥 Hardsub Enabled: {status}"
                 elif setting == "ADD_ATTACHMENT_ENABLED":
                     display_name = f"📎 Attachment Enabled: {status}"
                 elif setting == "ADD_DELETE_ORIGINAL":
@@ -5358,6 +5989,9 @@ Configure global extract settings that will be used when user settings are not a
         subtitle_encoding = Config.ADD_SUBTITLE_ENCODING or "None"
         subtitle_font = Config.ADD_SUBTITLE_FONT or "None"
         subtitle_font_size = Config.ADD_SUBTITLE_FONT_SIZE or "None"
+        subtitle_hardsub_enabled = (
+            "✅ Enabled" if Config.ADD_SUBTITLE_HARDSUB_ENABLED else "❌ Disabled"
+        )
 
         # Attachment settings
         attachment_enabled = (
@@ -5398,6 +6032,7 @@ Configure global extract settings that will be used when user settings are not a
 • <b>Status:</b> {subtitle_enabled}
 • <b>Codec:</b> <code>{subtitle_codec}</code>
 • <b>Index:</b> <code>{subtitle_index}</code>
+• <b>Hardsub:</b> {subtitle_hardsub_enabled}
 • <b>Language:</b> <code>{subtitle_language}</code>
 • <b>Encoding:</b> <code>{subtitle_encoding}</code>
 • <b>Font:</b> <code>{subtitle_font}</code>
@@ -5460,6 +6095,8 @@ Configure global add settings that will be used when user settings are not avail
         # Document trim settings
         document_settings = [
             "TRIM_DOCUMENT_ENABLED",
+            "TRIM_DOCUMENT_START_PAGE",
+            "TRIM_DOCUMENT_END_PAGE",
             "TRIM_DOCUMENT_QUALITY",
             "TRIM_DOCUMENT_FORMAT",
         ]
@@ -5510,10 +6147,17 @@ Configure global add settings that will be used when user settings are not avail
                 )
             elif setting.startswith("TRIM_DOCUMENT_"):
                 prefix = "📄"
-                display_name = (
-                    f"{prefix} Document "
-                    + setting.replace("TRIM_DOCUMENT_", "").replace("_", " ").title()
-                )
+                if setting == "TRIM_DOCUMENT_START_PAGE":
+                    display_name = f"{prefix} Document Start Page"
+                elif setting == "TRIM_DOCUMENT_END_PAGE":
+                    display_name = f"{prefix} Document End Page"
+                else:
+                    display_name = (
+                        f"{prefix} Document "
+                        + setting.replace("TRIM_DOCUMENT_", "")
+                        .replace("_", " ")
+                        .title()
+                    )
             elif setting.startswith("TRIM_SUBTITLE_"):
                 prefix = "💬"
                 display_name = (
@@ -5621,6 +6265,8 @@ Configure global add settings that will be used when user settings are not avail
         document_enabled = (
             "✅ Enabled" if Config.TRIM_DOCUMENT_ENABLED else "❌ Disabled"
         )
+        document_start_page = Config.TRIM_DOCUMENT_START_PAGE or "1 (Default)"
+        document_end_page = Config.TRIM_DOCUMENT_END_PAGE or "Last page (Default)"
         document_quality = Config.TRIM_DOCUMENT_QUALITY or "90 (Default)"
         document_format = Config.TRIM_DOCUMENT_FORMAT or "None"
 
@@ -5664,6 +6310,8 @@ Configure global add settings that will be used when user settings are not avail
 
 <b>Document Trim Settings:</b>
 • <b>Status:</b> {document_enabled}
+• <b>Start Page:</b> <code>{document_start_page}</code>
+• <b>End Page:</b> <code>{document_end_page}</code>
 • <b>Quality:</b> <code>{document_quality}</code>
 • <b>Format:</b> <code>{document_format}</code>
 
@@ -5680,8 +6328,9 @@ Configure global add settings that will be used when user settings are not avail
 • Main Trim toggle must be enabled
 • Media type specific toggles must be enabled for respective trims
 • Use <code>-trim</code> to enable trimming
-• Use <code>-trim-start HH:MM:SS</code> to set start time
-• Use <code>-trim-end HH:MM:SS</code> to set end time
+• Use <code>-trim-start HH:MM:SS</code> to set start time for media
+• Use <code>-trim-end HH:MM:SS</code> to set end time for media
+• Use <code>-trim start-page end-page</code> for documents
 • Add <code>-del</code> to delete original files after trimming
 
 Configure global trim settings that will be used when user settings are not available."""
@@ -7846,6 +8495,8 @@ async def edit_variable(_, message, pre_message, key):
             value = max(2, int(value))  # Minimum 2 seconds to prevent FloodWait
         except ValueError:
             value = 3  # Default to 3 seconds if invalid input
+    elif key in {"LOGIN_PASS", "DEBRID_LINK_API"}:
+        value = str(value)
     elif value.isdigit():
         value = int(value)
     elif (value.startswith("[") and value.endswith("]")) or (
@@ -7889,6 +8540,8 @@ async def edit_variable(_, message, pre_message, key):
         return_menu = "mediatools_trim"
     elif key.startswith("EXTRACT_"):
         return_menu = "mediatools_extract"
+    elif key.startswith("REMOVE_"):
+        return_menu = "mediatools_remove"
     elif key.startswith("TASK_MONITOR_"):
         return_menu = "taskmonitor"
     elif key == "DEFAULT_AI_PROVIDER" or key.startswith(("MISTRAL_", "DEEPSEEK_")):
@@ -8915,7 +9568,18 @@ async def event_handler(client, query, pfunc, rfunc, document=False, photo=False
         if time() - start_time > 60:
             handler_dict[chat_id] = False
             await rfunc()
-    client.remove_handler(*handler)
+
+    # Safely remove the handler
+    try:
+        if isinstance(handler, tuple) and len(handler) >= 2:
+            client.remove_handler(handler[0], handler[1])
+        else:
+            # Fallback: try to remove with just the handler
+            client.remove_handler(handler)
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.error(f"Error removing handler: {e}")
 
 
 @new_task
@@ -8926,6 +9590,14 @@ async def edit_bot_settings(client, query):
     data = query.data.split()
     message = query.message
     user_id = message.chat.id
+
+    # Safety check for callback data
+    if len(data) < 2:
+        from bot import LOGGER
+
+        LOGGER.error(f"Invalid callback data: {query.data}")
+        await query.answer("Invalid callback data", show_alert=True)
+        return
 
     # Helper function to safely answer queries
     async def safe_answer(text=None, show_alert=False):
@@ -8966,6 +9638,10 @@ async def edit_bot_settings(client, query):
                     "Bot Settings",
                     "Streamrip Settings",
                     "Zotify Settings",
+                    "DDL (Direct Download Link) Settings",
+                    "YouTube API Settings",
+                    "MEGA Settings",
+                    "Operations Settings",
                 ]
             ):
                 # If we're in a main menu, return to the main settings menu
@@ -9008,6 +9684,37 @@ async def edit_bot_settings(client, query):
                 ]
             ):
                 return_menu = "zotify"
+            # Check for DDL submenu detection
+            elif any(
+                x in message.text
+                for x in [
+                    "DDL General Settings",
+                    "Gofile Settings",
+                    "Streamtape Settings",
+                ]
+            ):
+                return_menu = "ddl"
+            # Check for YouTube submenu detection
+            elif any(
+                x in message.text
+                for x in [
+                    "YouTube General Settings",
+                    "YouTube Upload Settings",
+                    "YouTube Authentication Settings",
+                ]
+            ):
+                return_menu = "youtube"
+            # Check for MEGA submenu detection
+            elif any(
+                x in message.text
+                for x in [
+                    "MEGA General Settings",
+                    "MEGA Upload Settings",
+                    "MEGA Clone Settings",
+                    "MEGA Security Settings",
+                ]
+            ):
+                return_menu = "mega"
             # Otherwise check the message title for submenu detection
             elif "Watermark" in message.text:
                 return_menu = "mediatools_watermark"
@@ -9130,6 +9837,20 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mega")
 
+    elif data[1] == "ddl":
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if DDL is enabled
+        if not Config.DDL_ENABLED:
+            await query.answer("DDL is disabled by the bot owner.", show_alert=True)
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "ddl")
+
     elif data[1] in [
         "streamrip_general",
         "streamrip_quality",
@@ -9216,6 +9937,24 @@ async def edit_bot_settings(client, query):
         # Check if MEGA is enabled
         if not Config.MEGA_ENABLED:
             await query.answer("MEGA is disabled by the bot owner.", show_alert=True)
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, data[1])
+
+    elif data[1] in [
+        "ddl_general",
+        "ddl_gofile",
+        "ddl_streamtape",
+    ]:
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if DDL is enabled
+        if not Config.DDL_ENABLED:
+            await query.answer("DDL is disabled by the bot owner.", show_alert=True)
             return
 
         # Set the state back to what it was
@@ -10523,6 +11262,8 @@ async def edit_bot_settings(client, query):
 
         # Document trim settings
         Config.TRIM_DOCUMENT_ENABLED = DEFAULT_VALUES["TRIM_DOCUMENT_ENABLED"]
+        Config.TRIM_DOCUMENT_START_PAGE = DEFAULT_VALUES["TRIM_DOCUMENT_START_PAGE"]
+        Config.TRIM_DOCUMENT_END_PAGE = DEFAULT_VALUES["TRIM_DOCUMENT_END_PAGE"]
         Config.TRIM_DOCUMENT_QUALITY = DEFAULT_VALUES["TRIM_DOCUMENT_QUALITY"]
         Config.TRIM_DOCUMENT_FORMAT = DEFAULT_VALUES["TRIM_DOCUMENT_FORMAT"]
 
@@ -10560,6 +11301,10 @@ async def edit_bot_settings(client, query):
                 "TRIM_IMAGE_FORMAT": DEFAULT_VALUES["TRIM_IMAGE_FORMAT"],
                 # Document trim settings
                 "TRIM_DOCUMENT_ENABLED": DEFAULT_VALUES["TRIM_DOCUMENT_ENABLED"],
+                "TRIM_DOCUMENT_START_PAGE": DEFAULT_VALUES[
+                    "TRIM_DOCUMENT_START_PAGE"
+                ],
+                "TRIM_DOCUMENT_END_PAGE": DEFAULT_VALUES["TRIM_DOCUMENT_END_PAGE"],
                 "TRIM_DOCUMENT_QUALITY": DEFAULT_VALUES["TRIM_DOCUMENT_QUALITY"],
                 "TRIM_DOCUMENT_FORMAT": DEFAULT_VALUES["TRIM_DOCUMENT_FORMAT"],
                 # Subtitle trim settings
@@ -10742,6 +11487,121 @@ async def edit_bot_settings(client, query):
         Config.ADD_PRESERVE_TRACKS = DEFAULT_VALUES["ADD_PRESERVE_TRACKS"]
         Config.ADD_REPLACE_TRACKS = DEFAULT_VALUES["ADD_REPLACE_TRACKS"]
 
+    elif data[1] == "default_remove":
+        await query.answer("Resetting all remove settings to default...")
+        # Reset all remove settings to default using DEFAULT_VALUES
+
+        # General remove settings
+        Config.REMOVE_ENABLED = DEFAULT_VALUES["REMOVE_ENABLED"]
+        Config.REMOVE_PRIORITY = DEFAULT_VALUES["REMOVE_PRIORITY"]
+        Config.REMOVE_DELETE_ORIGINAL = DEFAULT_VALUES["REMOVE_DELETE_ORIGINAL"]
+        Config.REMOVE_METADATA = DEFAULT_VALUES["REMOVE_METADATA"]
+        Config.REMOVE_MAINTAIN_QUALITY = DEFAULT_VALUES["REMOVE_MAINTAIN_QUALITY"]
+
+        # Video remove settings
+        Config.REMOVE_VIDEO_ENABLED = DEFAULT_VALUES["REMOVE_VIDEO_ENABLED"]
+        Config.REMOVE_VIDEO_CODEC = DEFAULT_VALUES["REMOVE_VIDEO_CODEC"]
+        Config.REMOVE_VIDEO_FORMAT = DEFAULT_VALUES["REMOVE_VIDEO_FORMAT"]
+        Config.REMOVE_VIDEO_INDEX = DEFAULT_VALUES["REMOVE_VIDEO_INDEX"]
+        Config.REMOVE_VIDEO_QUALITY = DEFAULT_VALUES["REMOVE_VIDEO_QUALITY"]
+        Config.REMOVE_VIDEO_PRESET = DEFAULT_VALUES["REMOVE_VIDEO_PRESET"]
+        Config.REMOVE_VIDEO_BITRATE = DEFAULT_VALUES["REMOVE_VIDEO_BITRATE"]
+        Config.REMOVE_VIDEO_RESOLUTION = DEFAULT_VALUES["REMOVE_VIDEO_RESOLUTION"]
+        Config.REMOVE_VIDEO_FPS = DEFAULT_VALUES["REMOVE_VIDEO_FPS"]
+
+        # Audio remove settings
+        Config.REMOVE_AUDIO_ENABLED = DEFAULT_VALUES["REMOVE_AUDIO_ENABLED"]
+        Config.REMOVE_AUDIO_CODEC = DEFAULT_VALUES["REMOVE_AUDIO_CODEC"]
+        Config.REMOVE_AUDIO_FORMAT = DEFAULT_VALUES["REMOVE_AUDIO_FORMAT"]
+        Config.REMOVE_AUDIO_INDEX = DEFAULT_VALUES["REMOVE_AUDIO_INDEX"]
+        Config.REMOVE_AUDIO_BITRATE = DEFAULT_VALUES["REMOVE_AUDIO_BITRATE"]
+        Config.REMOVE_AUDIO_CHANNELS = DEFAULT_VALUES["REMOVE_AUDIO_CHANNELS"]
+        Config.REMOVE_AUDIO_SAMPLING = DEFAULT_VALUES["REMOVE_AUDIO_SAMPLING"]
+        Config.REMOVE_AUDIO_VOLUME = DEFAULT_VALUES["REMOVE_AUDIO_VOLUME"]
+
+        # Subtitle remove settings
+        Config.REMOVE_SUBTITLE_ENABLED = DEFAULT_VALUES["REMOVE_SUBTITLE_ENABLED"]
+        Config.REMOVE_SUBTITLE_CODEC = DEFAULT_VALUES["REMOVE_SUBTITLE_CODEC"]
+        Config.REMOVE_SUBTITLE_FORMAT = DEFAULT_VALUES["REMOVE_SUBTITLE_FORMAT"]
+        Config.REMOVE_SUBTITLE_INDEX = DEFAULT_VALUES["REMOVE_SUBTITLE_INDEX"]
+        Config.REMOVE_SUBTITLE_LANGUAGE = DEFAULT_VALUES["REMOVE_SUBTITLE_LANGUAGE"]
+        Config.REMOVE_SUBTITLE_ENCODING = DEFAULT_VALUES["REMOVE_SUBTITLE_ENCODING"]
+        Config.REMOVE_SUBTITLE_FONT = DEFAULT_VALUES["REMOVE_SUBTITLE_FONT"]
+        Config.REMOVE_SUBTITLE_FONT_SIZE = DEFAULT_VALUES[
+            "REMOVE_SUBTITLE_FONT_SIZE"
+        ]
+
+        # Attachment remove settings
+        Config.REMOVE_ATTACHMENT_ENABLED = DEFAULT_VALUES[
+            "REMOVE_ATTACHMENT_ENABLED"
+        ]
+        Config.REMOVE_ATTACHMENT_FORMAT = DEFAULT_VALUES["REMOVE_ATTACHMENT_FORMAT"]
+        Config.REMOVE_ATTACHMENT_INDEX = DEFAULT_VALUES["REMOVE_ATTACHMENT_INDEX"]
+        Config.REMOVE_ATTACHMENT_FILTER = DEFAULT_VALUES["REMOVE_ATTACHMENT_FILTER"]
+
+        # Update the database with all remove settings
+        await database.update_config(
+            {
+                # General remove settings
+                "REMOVE_ENABLED": DEFAULT_VALUES["REMOVE_ENABLED"],
+                "REMOVE_PRIORITY": DEFAULT_VALUES["REMOVE_PRIORITY"],
+                "REMOVE_DELETE_ORIGINAL": DEFAULT_VALUES["REMOVE_DELETE_ORIGINAL"],
+                "REMOVE_METADATA": DEFAULT_VALUES["REMOVE_METADATA"],
+                "REMOVE_MAINTAIN_QUALITY": DEFAULT_VALUES["REMOVE_MAINTAIN_QUALITY"],
+                # Video remove settings
+                "REMOVE_VIDEO_ENABLED": DEFAULT_VALUES["REMOVE_VIDEO_ENABLED"],
+                "REMOVE_VIDEO_CODEC": DEFAULT_VALUES["REMOVE_VIDEO_CODEC"],
+                "REMOVE_VIDEO_FORMAT": DEFAULT_VALUES["REMOVE_VIDEO_FORMAT"],
+                "REMOVE_VIDEO_INDEX": DEFAULT_VALUES["REMOVE_VIDEO_INDEX"],
+                "REMOVE_VIDEO_QUALITY": DEFAULT_VALUES["REMOVE_VIDEO_QUALITY"],
+                "REMOVE_VIDEO_PRESET": DEFAULT_VALUES["REMOVE_VIDEO_PRESET"],
+                "REMOVE_VIDEO_BITRATE": DEFAULT_VALUES["REMOVE_VIDEO_BITRATE"],
+                "REMOVE_VIDEO_RESOLUTION": DEFAULT_VALUES["REMOVE_VIDEO_RESOLUTION"],
+                "REMOVE_VIDEO_FPS": DEFAULT_VALUES["REMOVE_VIDEO_FPS"],
+                # Audio remove settings
+                "REMOVE_AUDIO_ENABLED": DEFAULT_VALUES["REMOVE_AUDIO_ENABLED"],
+                "REMOVE_AUDIO_CODEC": DEFAULT_VALUES["REMOVE_AUDIO_CODEC"],
+                "REMOVE_AUDIO_FORMAT": DEFAULT_VALUES["REMOVE_AUDIO_FORMAT"],
+                "REMOVE_AUDIO_INDEX": DEFAULT_VALUES["REMOVE_AUDIO_INDEX"],
+                "REMOVE_AUDIO_BITRATE": DEFAULT_VALUES["REMOVE_AUDIO_BITRATE"],
+                "REMOVE_AUDIO_CHANNELS": DEFAULT_VALUES["REMOVE_AUDIO_CHANNELS"],
+                "REMOVE_AUDIO_SAMPLING": DEFAULT_VALUES["REMOVE_AUDIO_SAMPLING"],
+                "REMOVE_AUDIO_VOLUME": DEFAULT_VALUES["REMOVE_AUDIO_VOLUME"],
+                # Subtitle remove settings
+                "REMOVE_SUBTITLE_ENABLED": DEFAULT_VALUES["REMOVE_SUBTITLE_ENABLED"],
+                "REMOVE_SUBTITLE_CODEC": DEFAULT_VALUES["REMOVE_SUBTITLE_CODEC"],
+                "REMOVE_SUBTITLE_FORMAT": DEFAULT_VALUES["REMOVE_SUBTITLE_FORMAT"],
+                "REMOVE_SUBTITLE_INDEX": DEFAULT_VALUES["REMOVE_SUBTITLE_INDEX"],
+                "REMOVE_SUBTITLE_LANGUAGE": DEFAULT_VALUES[
+                    "REMOVE_SUBTITLE_LANGUAGE"
+                ],
+                "REMOVE_SUBTITLE_ENCODING": DEFAULT_VALUES[
+                    "REMOVE_SUBTITLE_ENCODING"
+                ],
+                "REMOVE_SUBTITLE_FONT": DEFAULT_VALUES["REMOVE_SUBTITLE_FONT"],
+                "REMOVE_SUBTITLE_FONT_SIZE": DEFAULT_VALUES[
+                    "REMOVE_SUBTITLE_FONT_SIZE"
+                ],
+                # Attachment remove settings
+                "REMOVE_ATTACHMENT_ENABLED": DEFAULT_VALUES[
+                    "REMOVE_ATTACHMENT_ENABLED"
+                ],
+                "REMOVE_ATTACHMENT_FORMAT": DEFAULT_VALUES[
+                    "REMOVE_ATTACHMENT_FORMAT"
+                ],
+                "REMOVE_ATTACHMENT_INDEX": DEFAULT_VALUES["REMOVE_ATTACHMENT_INDEX"],
+                "REMOVE_ATTACHMENT_FILTER": DEFAULT_VALUES[
+                    "REMOVE_ATTACHMENT_FILTER"
+                ],
+            }
+        )
+
+        # Get the current state before making changes
+        current_state = globals()["state"]
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mediatools_remove")
+
     elif data[1] == "default_add_setting":
         # Get the current state before making changes
         current_state = globals()["state"]
@@ -10794,6 +11654,9 @@ async def edit_bot_settings(client, query):
         Config.ADD_SUBTITLE_ENCODING = DEFAULT_VALUES["ADD_SUBTITLE_ENCODING"]
         Config.ADD_SUBTITLE_FONT = DEFAULT_VALUES["ADD_SUBTITLE_FONT"]
         Config.ADD_SUBTITLE_FONT_SIZE = DEFAULT_VALUES["ADD_SUBTITLE_FONT_SIZE"]
+        Config.ADD_SUBTITLE_HARDSUB_ENABLED = DEFAULT_VALUES[
+            "ADD_SUBTITLE_HARDSUB_ENABLED"
+        ]
 
         # Reset attachment add settings
         Config.ADD_ATTACHMENT_ENABLED = DEFAULT_VALUES["ADD_ATTACHMENT_ENABLED"]
@@ -11776,6 +12639,110 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "mega")
 
+    elif data[1] == "default_ddl":
+        await query.answer("Resetting all DDL settings to default...")
+        # Reset all DDL settings to default
+        Config.DDL_ENABLED = DEFAULT_VALUES["DDL_ENABLED"]
+        Config.DDL_DEFAULT_SERVER = DEFAULT_VALUES["DDL_DEFAULT_SERVER"]
+        Config.GOFILE_API_KEY = DEFAULT_VALUES["GOFILE_API_KEY"]
+        Config.GOFILE_FOLDER_NAME = DEFAULT_VALUES["GOFILE_FOLDER_NAME"]
+        Config.GOFILE_PUBLIC_LINKS = DEFAULT_VALUES["GOFILE_PUBLIC_LINKS"]
+        Config.GOFILE_PASSWORD_PROTECTION = DEFAULT_VALUES[
+            "GOFILE_PASSWORD_PROTECTION"
+        ]
+        Config.GOFILE_DEFAULT_PASSWORD = DEFAULT_VALUES["GOFILE_DEFAULT_PASSWORD"]
+        Config.GOFILE_LINK_EXPIRY_DAYS = DEFAULT_VALUES["GOFILE_LINK_EXPIRY_DAYS"]
+        Config.STREAMTAPE_LOGIN = DEFAULT_VALUES["STREAMTAPE_LOGIN"]
+        Config.STREAMTAPE_API_KEY = DEFAULT_VALUES["STREAMTAPE_API_KEY"]
+        Config.STREAMTAPE_FOLDER_NAME = DEFAULT_VALUES["STREAMTAPE_FOLDER_NAME"]
+
+        # Update database
+        await database.update_config(
+            {
+                "DDL_ENABLED": Config.DDL_ENABLED,
+                "DDL_DEFAULT_SERVER": Config.DDL_DEFAULT_SERVER,
+                "GOFILE_API_KEY": Config.GOFILE_API_KEY,
+                "GOFILE_FOLDER_NAME": Config.GOFILE_FOLDER_NAME,
+                "GOFILE_PUBLIC_LINKS": Config.GOFILE_PUBLIC_LINKS,
+                "GOFILE_PASSWORD_PROTECTION": Config.GOFILE_PASSWORD_PROTECTION,
+                "GOFILE_DEFAULT_PASSWORD": Config.GOFILE_DEFAULT_PASSWORD,
+                "GOFILE_LINK_EXPIRY_DAYS": Config.GOFILE_LINK_EXPIRY_DAYS,
+                "STREAMTAPE_LOGIN": Config.STREAMTAPE_LOGIN,
+                "STREAMTAPE_API_KEY": Config.STREAMTAPE_API_KEY,
+                "STREAMTAPE_FOLDER_NAME": Config.STREAMTAPE_FOLDER_NAME,
+            }
+        )
+
+        # Update the UI - go back to DDL main menu
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "ddl")
+
+    elif data[1] == "default_ddl_general":
+        await query.answer("Resetting DDL general settings to default...")
+        # Reset DDL general settings to default
+        Config.DDL_DEFAULT_SERVER = DEFAULT_VALUES["DDL_DEFAULT_SERVER"]
+
+        # Update database
+        await database.update_config(
+            {"DDL_DEFAULT_SERVER": Config.DDL_DEFAULT_SERVER}
+        )
+
+        # Update the UI - stay in DDL general section
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "ddl_general")
+
+    elif data[1] == "default_ddl_gofile":
+        await query.answer("Resetting Gofile settings to default...")
+        # Reset Gofile settings to default
+        Config.GOFILE_API_KEY = DEFAULT_VALUES["GOFILE_API_KEY"]
+        Config.GOFILE_FOLDER_NAME = DEFAULT_VALUES["GOFILE_FOLDER_NAME"]
+        Config.GOFILE_PUBLIC_LINKS = DEFAULT_VALUES["GOFILE_PUBLIC_LINKS"]
+        Config.GOFILE_PASSWORD_PROTECTION = DEFAULT_VALUES[
+            "GOFILE_PASSWORD_PROTECTION"
+        ]
+        Config.GOFILE_DEFAULT_PASSWORD = DEFAULT_VALUES["GOFILE_DEFAULT_PASSWORD"]
+        Config.GOFILE_LINK_EXPIRY_DAYS = DEFAULT_VALUES["GOFILE_LINK_EXPIRY_DAYS"]
+
+        # Update database
+        await database.update_config(
+            {
+                "GOFILE_API_KEY": Config.GOFILE_API_KEY,
+                "GOFILE_FOLDER_NAME": Config.GOFILE_FOLDER_NAME,
+                "GOFILE_PUBLIC_LINKS": Config.GOFILE_PUBLIC_LINKS,
+                "GOFILE_PASSWORD_PROTECTION": Config.GOFILE_PASSWORD_PROTECTION,
+                "GOFILE_DEFAULT_PASSWORD": Config.GOFILE_DEFAULT_PASSWORD,
+                "GOFILE_LINK_EXPIRY_DAYS": Config.GOFILE_LINK_EXPIRY_DAYS,
+            }
+        )
+
+        # Update the UI - stay in DDL gofile section
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "ddl_gofile")
+
+    elif data[1] == "default_ddl_streamtape":
+        await query.answer("Resetting Streamtape settings to default...")
+        # Reset Streamtape settings to default
+        Config.STREAMTAPE_LOGIN = DEFAULT_VALUES["STREAMTAPE_LOGIN"]
+        Config.STREAMTAPE_API_KEY = DEFAULT_VALUES["STREAMTAPE_API_KEY"]
+        Config.STREAMTAPE_FOLDER_NAME = DEFAULT_VALUES["STREAMTAPE_FOLDER_NAME"]
+
+        # Update database
+        await database.update_config(
+            {
+                "STREAMTAPE_LOGIN": Config.STREAMTAPE_LOGIN,
+                "STREAMTAPE_API_KEY": Config.STREAMTAPE_API_KEY,
+                "STREAMTAPE_FOLDER_NAME": Config.STREAMTAPE_FOLDER_NAME,
+            }
+        )
+
+        # Update the UI - stay in DDL streamtape section
+        current_state = globals()["state"]
+        globals()["state"] = current_state
+        await update_buttons(message, "ddl_streamtape")
+
     elif data[1] == "default_taskmonitor":
         await query.answer("Resetting all task monitoring settings to default...")
         # Reset all task monitoring settings to default
@@ -11980,6 +12947,10 @@ async def edit_bot_settings(client, query):
         "mega_upload",
         "mega_clone",
         "mega_security",
+        "ddl",
+        "ddl_general",
+        "ddl_gofile",
+        "ddl_streamtape",
     ]:
         await query.answer()
         # Set the global state to edit mode
@@ -12042,6 +13013,10 @@ async def edit_bot_settings(client, query):
         "mega_upload",
         "mega_clone",
         "mega_security",
+        "ddl",
+        "ddl_general",
+        "ddl_gofile",
+        "ddl_streamtape",
     ]:
         await query.answer()
         # Set the global state to view mode
@@ -12530,6 +13505,20 @@ async def edit_bot_settings(client, query):
                 help_text = "Send the audio sampling rate in Hz.\n\n<b>Examples:</b> <code>44100</code>, <code>48000</code>\n\n<b>Default:</b> <code>none</code>\n\n"
             elif data[2] == "ADD_AUDIO_VOLUME":
                 help_text = "Send the volume adjustment factor.\n\n<b>Examples:</b> <code>1.0</code> (normal), <code>0.5</code> (half), <code>2.0</code> (double)\n\n<b>Default:</b> <code>none</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_CODEC":
+                help_text = "Send the subtitle codec to use for adding subtitle tracks.\n\n<b>Examples:</b> <code>copy</code>, <code>srt</code>, <code>ass</code>, <code>vtt</code>\n\n<b>Default:</b> <code>copy</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_INDEX":
+                help_text = "Send the index position to add the subtitle track at. Leave empty to append.\n\n<b>Examples:</b> <code>0</code> (first position), <code>1</code> (second position)\n\n<b>Default:</b> Empty (append)\n\n"
+            elif data[2] == "ADD_SUBTITLE_LANGUAGE":
+                help_text = "Send the language code for the subtitle track.\n\n<b>Examples:</b> <code>eng</code>, <code>spa</code>, <code>fre</code>\n\n<b>Default:</b> <code>none</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_ENCODING":
+                help_text = "Send the character encoding for subtitle files.\n\n<b>Examples:</b> <code>UTF-8</code>, <code>latin1</code>, <code>cp1252</code>\n\n<b>Default:</b> <code>none</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_FONT":
+                help_text = "Send the font name for ASS/SSA subtitles.\n\n<b>Examples:</b> <code>Arial</code>, <code>Times New Roman</code>, <code>DejaVu Sans</code>\n\n<b>Default:</b> <code>none</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_FONT_SIZE":
+                help_text = "Send the font size for ASS/SSA subtitles.\n\n<b>Examples:</b> <code>24</code>, <code>18</code>, <code>32</code>\n\n<b>Default:</b> <code>none</code>\n\n"
+            elif data[2] == "ADD_SUBTITLE_HARDSUB_ENABLED":
+                help_text = "Enable or disable hardsub (burning subtitles into video).\n\n<b>Hardsub:</b> Subtitles are permanently burned into the video (cannot be turned off)\n<b>Soft subtitles:</b> Subtitles are separate tracks (can be toggled on/off)\n\n<b>Note:</b> Hardsub requires video re-encoding and may reduce quality.\n\n<b>Default:</b> <code>False</code>\n\n"
             elif data[2].startswith("ADD_SUBTITLE_"):
                 help_text = "Send a valid value for subtitle settings.\n\n<b>Default:</b> <code>none</code>\n\n"
             elif data[2].startswith("ADD_ATTACHMENT_"):
@@ -12604,6 +13593,8 @@ async def edit_bot_settings(client, query):
             return_menu = "mediatools_trim"
         elif data[2].startswith("EXTRACT_"):
             return_menu = "mediatools_extract"
+        elif data[2].startswith("REMOVE_"):
+            return_menu = "mediatools_remove"
         elif data[2].startswith("ADD_"):
             return_menu = "mediatools_add"
         elif data[2].startswith("TASK_MONITOR_"):
@@ -13075,6 +14066,7 @@ async def edit_bot_settings(client, query):
         "mediatools_compression",
         "mediatools_trim",
         "mediatools_extract",
+        "mediatools_remove",
         "mediatools_add",
         "ai",
         "taskmonitor",
@@ -13230,6 +14222,8 @@ async def edit_bot_settings(client, query):
             previous_menu = "mediatools_trim"
         elif data[2].startswith("EXTRACT_"):
             previous_menu = "mediatools_extract"
+        elif data[2].startswith("REMOVE_"):
+            previous_menu = "mediatools_remove"
         elif data[2].startswith("ADD_"):
             previous_menu = "mediatools_add"
         elif data[2].startswith("TASK_MONITOR_"):
@@ -13403,6 +14397,8 @@ async def edit_bot_settings(client, query):
                 previous_menu = "mediatools_trim"
             elif "Extract" in message.text:
                 previous_menu = "mediatools_extract"
+            elif "Remove" in message.text:
+                previous_menu = "mediatools_remove"
             elif "Add" in message.text:
                 previous_menu = "mediatools_add"
             elif "Task Monitor" in message.text:
@@ -14213,6 +15209,11 @@ No database-only files found."""
                 "icon": "📤",
                 "desc": "Extract components from media",
             },
+            {
+                "name": "remove",
+                "icon": "🗑️",
+                "desc": "Remove tracks or metadata from media files",
+            },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
@@ -14483,7 +15484,10 @@ No database-only files found."""
         current_state = globals()["state"]
 
         index = int(data[2])
-        # Check if index is valid before accessing Config.USENET_SERVERS
+        # Check if data[3] exists and index is valid before accessing Config.USENET_SERVERS
+        if len(data) <= 3:
+            await query.answer("Invalid server data", show_alert=True)
+            return
         if 0 <= index < len(Config.USENET_SERVERS):
             res = await sabnzbd_client.add_server(
                 {"name": Config.USENET_SERVERS[index]["name"], data[3]: ""},
@@ -14548,6 +15552,10 @@ No database-only files found."""
     elif data[1] == "toggle_tool":
         await query.answer()
         key = data[2]  # MEDIA_TOOLS_ENABLED
+        # Check if data[3] exists before accessing it
+        if len(data) <= 3:
+            await query.answer("Invalid toggle tool data", show_alert=True)
+            return
         tool = data[3]  # The tool to toggle
 
         # No need to track state for media tools configuration
@@ -14574,6 +15582,11 @@ No database-only files found."""
                 "name": "extract",
                 "icon": "📤",
                 "desc": "Extract components from media",
+            },
+            {
+                "name": "remove",
+                "icon": "🗑️",
+                "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
@@ -14809,6 +15822,11 @@ No database-only files found."""
                 "icon": "📤",
                 "desc": "Extract components from media",
             },
+            {
+                "name": "remove",
+                "icon": "🗑️",
+                "desc": "Remove tracks or metadata from media files",
+            },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
@@ -14926,6 +15944,11 @@ No database-only files found."""
                 "name": "extract",
                 "icon": "📤",
                 "desc": "Extract components from media",
+            },
+            {
+                "name": "remove",
+                "icon": "🗑️",
+                "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
@@ -15053,7 +16076,8 @@ No database-only files found."""
         # Get the current state before making changes
         current_state = globals()["state"]
 
-        if start != int(data[3]):
+        # Check if data[3] exists before accessing it
+        if len(data) > 3 and start != int(data[3]):
             globals()["start"] = int(data[3])
 
             # Set the state back to what it was
@@ -15243,6 +16267,10 @@ No database-only files found."""
     elif data[1] == "toggle":
         await query.answer()
         key = data[2]
+        # Check if data[3] exists before accessing it
+        if len(data) <= 3:
+            await query.answer("Invalid toggle data", show_alert=True)
+            return
         value = data[3].lower() == "true"
 
         # Force refresh the setting from database before toggling to ensure accurate status
@@ -15484,6 +16512,22 @@ No database-only files found."""
                 # Zotify operations enabled without logging
                 pass
 
+        # Special handling for GDRIVE_UPLOAD_ENABLED
+        elif key == "GDRIVE_UPLOAD_ENABLED":
+            # Update the config first
+            Config.set(key, value)
+            await database.update_config({key: value})
+            if not value:
+                # If Google Drive upload is being disabled, reset all Google Drive-related configs
+                from bot.helper.ext_utils.config_utils import (
+                    reset_gdrive_upload_configs,
+                )
+
+                await reset_gdrive_upload_configs(database)
+            else:
+                # Google Drive upload operations enabled without logging
+                pass
+
         # Special handling for YOUTUBE_UPLOAD_ENABLED
         elif key == "YOUTUBE_UPLOAD_ENABLED":
             # Set the value in Config
@@ -15497,6 +16541,21 @@ No database-only files found."""
                 await reset_youtube_configs(database)
             else:
                 # YouTube upload operations enabled without logging
+                pass
+
+        # Special handling for DDL_ENABLED
+        elif key == "DDL_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database
+            await database.update_config({key: value})
+            if not value:
+                # If DDL is being disabled, reset all DDL-related configs
+                from bot.helper.ext_utils.config_utils import reset_ddl_configs
+
+                await reset_ddl_configs(database)
+            else:
+                # DDL operations enabled without logging
                 pass
 
         # Special handling for MEGA_ENABLED
@@ -15573,8 +16632,7 @@ No database-only files found."""
         else:
             # For all other toggles, just set the value directly
             Config.set(key, value)
-            # Update the database with the new setting
-            await database.update_config({key: value})
+            # Database update will be done later in the function
 
         # Special handling for ENABLE_EXTRA_MODULES
         if key == "ENABLE_EXTRA_MODULES":
@@ -15635,6 +16693,8 @@ No database-only files found."""
             return_menu = "mediatools_trim"
         elif key.startswith("EXTRACT_"):
             return_menu = "mediatools_extract"
+        elif key.startswith("REMOVE_"):
+            return_menu = "mediatools_remove"
         elif key.startswith("ADD_"):
             # For ADD_ settings, return to the mediatools_add menu
             return_menu = "mediatools_add"
@@ -15827,11 +16887,24 @@ No database-only files found."""
             "ZOTIFY_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
             "MEGA_ENABLED",
+            "DDL_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
         }:
             return_menu = "operations"
+        elif (
+            key.startswith(("GOFILE_", "STREAMTAPE_")) or key == "DDL_DEFAULT_SERVER"
+        ):
+            # For DDL settings, determine which submenu to return to
+            if key == "DDL_DEFAULT_SERVER":
+                return_menu = "ddl_general"
+            elif key.startswith("GOFILE_"):
+                return_menu = "ddl_gofile"
+            elif key.startswith("STREAMTAPE_"):
+                return_menu = "ddl_streamtape"
+            else:
+                return_menu = "ddl"
         elif key in {"ENABLE_EXTRA_MODULES", "MEDIA_TOOLS_ENABLED"}:
             return_menu = "var"
         elif key == "DEFAULT_AI_PROVIDER" or key.startswith(

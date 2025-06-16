@@ -245,9 +245,11 @@ def get_mime_type_sync(file_path):
         # Explicitly delete the Magic object to free resources
         if mime:
             del mime
-        # Force garbage collection after handling large files
-        if ospath.getsize(file_path) > 100 * 1024 * 1024:  # 100MB
-            gc.collect()
+        # Optimized garbage collection only for very large files
+        if (
+            ospath.getsize(file_path) > 500 * 1024 * 1024
+        ):  # Increased threshold to 500MB
+            gc.collect(0)  # Only collect generation 0 for better performance
 
 
 async def remove_excluded_files(fpath, ee):

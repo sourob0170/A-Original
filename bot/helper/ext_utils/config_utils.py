@@ -32,9 +32,23 @@ async def reset_mirror_configs(database):
                 user_dict.pop(key, None)
                 user_configs_to_reset = True
 
-        # Set DEFAULT_UPLOAD to "gd" if it was "rc"
+        # Set DEFAULT_UPLOAD to first available service if it was "rc"
         if user_dict.get("DEFAULT_UPLOAD") == "rc":
-            user_dict["DEFAULT_UPLOAD"] = "gd"
+            from bot.core.config_manager import Config
+
+            # Find first available service as fallback
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "gd"
+            elif Config.YOUTUBE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "yt"
+            elif Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "mg"
+            elif Config.DDL_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "ddl"
+            else:
+                user_dict["DEFAULT_UPLOAD"] = (
+                    "gd"  # Keep as gd if no other service available
+                )
             user_configs_to_reset = True
 
         # Update the database if there are user configurations to reset
@@ -124,9 +138,23 @@ async def reset_rclone_configs(database):
     for user_id, user_dict in list(user_data.items()):
         user_configs_to_reset = False
 
-        # Reset user's DEFAULT_UPLOAD to "gd" if it's not already
-        if user_dict.get("DEFAULT_UPLOAD", "") != "gd":
-            user_dict["DEFAULT_UPLOAD"] = "gd"
+        # Reset user's DEFAULT_UPLOAD to first available service
+        if user_dict.get("DEFAULT_UPLOAD", "") == "rc":
+            from bot.core.config_manager import Config
+
+            # Find first available service as fallback
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "gd"
+            elif Config.YOUTUBE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "yt"
+            elif Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "mg"
+            elif Config.DDL_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "ddl"
+            else:
+                user_dict["DEFAULT_UPLOAD"] = (
+                    "gd"  # Keep as gd if no other service available
+                )
             user_configs_to_reset = True
 
         # Rclone-related keys to reset
@@ -234,6 +262,66 @@ async def reset_jd_configs(database):
     # JDownloader operations disabled without logging
 
 
+async def reset_gdrive_upload_configs(database):
+    """Reset all Google Drive upload-related configurations to their default values when Gdrive upload is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    # Reset user-specific Google Drive upload configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Google Drive upload-related keys to reset
+        gdrive_keys = [
+            "GDRIVE_ID",
+            "INDEX_URL",
+            "TOKEN_PICKLE",
+            "DEFAULT_UPLOAD",  # Reset if set to Google Drive
+        ]
+
+        # Reset each Google Drive-related key
+        for key in gdrive_keys:
+            if key in user_dict:
+                # Special handling for DEFAULT_UPLOAD
+                if key == "DEFAULT_UPLOAD" and user_dict[key] == "gd":
+                    # Find first available service as fallback
+                    from bot.core.config_manager import Config
+
+                    if Config.RCLONE_ENABLED:
+                        user_dict[key] = "rc"
+                    elif Config.YOUTUBE_UPLOAD_ENABLED:
+                        user_dict[key] = "yt"
+                    elif Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                        user_dict[key] = "mg"
+                    elif Config.DDL_ENABLED:
+                        user_dict[key] = "ddl"
+                    else:
+                        user_dict[key] = (
+                            "gd"  # Keep as gd if no other service available
+                        )
+                    user_configs_to_reset = True
+                elif key != "DEFAULT_UPLOAD":
+                    user_dict.pop(key, None)
+                    user_configs_to_reset = True
+
+        # Remove the user's Google Drive token file if it exists
+        token_path = f"tokens/{user_id}.pickle"
+        if await aiopath.exists(token_path):
+            try:
+                await aioremove(token_path)
+            except Exception as e:
+                from bot import LOGGER
+
+                LOGGER.error(
+                    f"Error removing Google Drive token for user {user_id}: {e}"
+                )
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+
 async def reset_mega_configs(database):
     """Reset all MEGA-related configurations to their default values when MEGA is disabled.
 
@@ -262,6 +350,25 @@ async def reset_mega_configs(database):
                 elif key != "DEFAULT_UPLOAD":
                     user_dict.pop(key, None)
                     user_configs_to_reset = True
+
+        # Reset user's DEFAULT_UPLOAD to first available service if it's set to MEGA
+        if user_dict.get("DEFAULT_UPLOAD") == "mg":
+            from bot.core.config_manager import Config
+
+            # Find first available service as fallback
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "gd"
+            elif Config.RCLONE_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "rc"
+            elif Config.YOUTUBE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "yt"
+            elif Config.DDL_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "ddl"
+            else:
+                user_dict["DEFAULT_UPLOAD"] = (
+                    "gd"  # Keep as gd if no other service available
+                )
+            user_configs_to_reset = True
 
         # Update the database if there are user configurations to reset
         if user_configs_to_reset:
@@ -608,6 +715,7 @@ async def reset_tool_configs(tool_name, database):
         "compression": ["COMPRESSION_"],
         "trim": ["TRIM_"],
         "extract": ["EXTRACT_"],
+        "remove": ["REMOVE_"],
         "add": ["ADD_"],
         "metadata": ["METADATA_"],
         "xtra": ["FFMPEG_CMDS"],  # Reset FFMPEG_CMDS for users
@@ -802,6 +910,8 @@ async def reset_tool_configs(tool_name, database):
         "TRIM_IMAGE_FORMAT": "none",
         # Document Trim Settings
         "TRIM_DOCUMENT_ENABLED": False,
+        "TRIM_DOCUMENT_START_PAGE": "1",
+        "TRIM_DOCUMENT_END_PAGE": "",
         "TRIM_DOCUMENT_QUALITY": 90,
         "TRIM_DOCUMENT_FORMAT": "none",
         # Subtitle Trim Settings
@@ -869,6 +979,46 @@ async def reset_tool_configs(tool_name, database):
         "METADATA_SUBTITLE_COMMENT": "",
         # FFmpeg Settings
         "FFMPEG_CMDS": {},  # Dictionary of FFmpeg commands
+        # Remove Settings
+        "REMOVE_ENABLED": False,
+        "REMOVE_PRIORITY": 8,
+        "REMOVE_DELETE_ORIGINAL": True,
+        "REMOVE_REMOVE_ORIGINAL": True,
+        "REMOVE_METADATA": False,
+        "REMOVE_MAINTAIN_QUALITY": True,
+        # Video Remove Settings
+        "REMOVE_VIDEO_ENABLED": False,
+        "REMOVE_VIDEO_CODEC": "none",
+        "REMOVE_VIDEO_FORMAT": "none",
+        "REMOVE_VIDEO_INDEX": None,
+        "REMOVE_VIDEO_QUALITY": "none",
+        "REMOVE_VIDEO_PRESET": "none",
+        "REMOVE_VIDEO_BITRATE": "none",
+        "REMOVE_VIDEO_RESOLUTION": "none",
+        "REMOVE_VIDEO_FPS": "none",
+        # Audio Remove Settings
+        "REMOVE_AUDIO_ENABLED": False,
+        "REMOVE_AUDIO_CODEC": "none",
+        "REMOVE_AUDIO_FORMAT": "none",
+        "REMOVE_AUDIO_INDEX": None,
+        "REMOVE_AUDIO_BITRATE": "none",
+        "REMOVE_AUDIO_CHANNELS": "none",
+        "REMOVE_AUDIO_SAMPLING": "none",
+        "REMOVE_AUDIO_VOLUME": "none",
+        # Subtitle Remove Settings
+        "REMOVE_SUBTITLE_ENABLED": False,
+        "REMOVE_SUBTITLE_CODEC": "none",
+        "REMOVE_SUBTITLE_FORMAT": "none",
+        "REMOVE_SUBTITLE_INDEX": None,
+        "REMOVE_SUBTITLE_LANGUAGE": "none",
+        "REMOVE_SUBTITLE_ENCODING": "none",
+        "REMOVE_SUBTITLE_FONT": "none",
+        "REMOVE_SUBTITLE_FONT_SIZE": "none",
+        # Attachment Remove Settings
+        "REMOVE_ATTACHMENT_ENABLED": False,
+        "REMOVE_ATTACHMENT_FORMAT": "none",
+        "REMOVE_ATTACHMENT_INDEX": None,
+        "REMOVE_ATTACHMENT_FILTER": "none",
         # Add Settings
         "ADD_ENABLED": False,
         "ADD_PRIORITY": 7,
@@ -905,6 +1055,7 @@ async def reset_tool_configs(tool_name, database):
         "ADD_SUBTITLE_ENCODING": "none",
         "ADD_SUBTITLE_FONT": "none",
         "ADD_SUBTITLE_FONT_SIZE": "none",
+        "ADD_SUBTITLE_HARDSUB_ENABLED": False,
         # Attachment Add Settings
         "ADD_ATTACHMENT_ENABLED": False,
         # "ADD_ATTACHMENT_PATH": "none", # Removed
@@ -1080,7 +1231,7 @@ async def reset_zotify_configs(database):
         "ZOTIFY_ALBUM_LIBRARY": "Music/Zotify Albums",
         "ZOTIFY_PODCAST_LIBRARY": "Music/Zotify Podcasts",
         "ZOTIFY_PLAYLIST_LIBRARY": "Music/Zotify Playlists",
-        "ZOTIFY_OUTPUT_ALBUM": "{album_artist}/{album}/{track_num:02d}. {artists} - {title}",
+        "ZOTIFY_OUTPUT_ALBUM": "{album_artist}/{album}/{track_number}. {artists} - {title}",
         "ZOTIFY_OUTPUT_PLAYLIST_TRACK": "{playlist}/{artists} - {title}",
         "ZOTIFY_OUTPUT_PLAYLIST_EPISODE": "{playlist}/{episode_number} - {title}",
         "ZOTIFY_OUTPUT_PODCAST": "{podcast}/{episode_number} - {title}",
@@ -1141,3 +1292,87 @@ async def reset_zotify_configs(database):
                 LOGGER.error(
                     f"Error removing zotify credentials for user {user_id}: {e}"
                 )
+
+
+async def reset_ddl_configs(database):
+    """Reset all DDL-related configurations to their default values when DDL is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    from bot.core.config_manager import Config
+
+    # Reset owner DDL configurations to default values
+    ddl_configs = {
+        "DDL_ENABLED": False,
+        "DDL_DEFAULT_SERVER": "gofile",
+        "GOFILE_ENABLED": True,
+        "GOFILE_API_KEY": "",
+        "GOFILE_FOLDER_NAME": "",
+        "GOFILE_PUBLIC_LINKS": True,
+        "GOFILE_PASSWORD_PROTECTION": False,
+        "GOFILE_DEFAULT_PASSWORD": "",
+        "GOFILE_LINK_EXPIRY_DAYS": 0,
+        "STREAMTAPE_ENABLED": True,
+        "STREAMTAPE_LOGIN": "",
+        "STREAMTAPE_API_KEY": "",
+        "STREAMTAPE_FOLDER_NAME": "",
+    }
+
+    # Update Config object
+    for key, value in ddl_configs.items():
+        setattr(Config, key, value)
+
+    # Update database
+    await database.update_config(ddl_configs)
+
+    # Reset all user DDL configurations
+    from bot import user_data
+
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # DDL-related keys to reset
+        ddl_keys = [
+            "DDL_SERVER",
+            "GOFILE_API_KEY",
+            "GOFILE_FOLDER_NAME",
+            "GOFILE_PUBLIC_LINKS",
+            "GOFILE_PASSWORD_PROTECTION",
+            "GOFILE_DEFAULT_PASSWORD",
+            "GOFILE_LINK_EXPIRY_DAYS",
+            "STREAMTAPE_LOGIN",
+            "STREAMTAPE_API_KEY",
+            "STREAMTAPE_FOLDER_NAME",
+        ]
+
+        # Reset each DDL-related key
+        for key in ddl_keys:
+            if key in user_dict:
+                user_dict.pop(key, None)
+                user_configs_to_reset = True
+
+        # Reset user's DEFAULT_UPLOAD to first available service if it's set to DDL
+        if user_dict.get("DEFAULT_UPLOAD") == "ddl":
+            from bot.core.config_manager import Config
+
+            # Find first available service as fallback
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "gd"
+            elif Config.RCLONE_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "rc"
+            elif Config.YOUTUBE_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "yt"
+            elif Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                user_dict["DEFAULT_UPLOAD"] = "mg"
+            else:
+                user_dict["DEFAULT_UPLOAD"] = (
+                    "gd"  # Keep as gd if no other service available
+                )
+            user_configs_to_reset = True
+
+        # Update the database if there are user configurations to reset
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # DDL operations disabled without logging

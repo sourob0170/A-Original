@@ -345,11 +345,43 @@ async def queue_task(mid: int, reason: str):
                 return
 
             task = task_dict[mid]
-            if not hasattr(task, "listener"):
+
+            # Get listener from different sources depending on task type
+            listener = None
+            if hasattr(task, "listener"):
+                listener = task.listener
+            elif hasattr(task, "message"):
+                # For status classes that don't have listener but have message
+                # We'll create a minimal listener-like object for compatibility
+                class MinimalListener:
+                    def __init__(self, message):
+                        self.message = message
+                        self.mid = message.id
+                        self.is_cancelled = False
+                        self.name = (
+                            getattr(task, "name", lambda: "Unknown Task")()
+                            if callable(getattr(task, "name", None))
+                            else "Unknown Task"
+                        )
+                        self.user_id = (
+                            message.from_user.id
+                            if hasattr(message, "from_user") and message.from_user
+                            else None
+                        )
+
+                listener = MinimalListener(task.message)
+
+            if not listener:
                 return
 
-            listener = task.listener
-            if hasattr(listener, "is_cancelled") and listener.is_cancelled:
+            # Check if task is cancelled
+            is_cancelled = False
+            if (hasattr(listener, "is_cancelled") and listener.is_cancelled) or (
+                hasattr(listener, "isCancelled") and listener.isCancelled
+            ):
+                is_cancelled = True
+
+            if is_cancelled:
                 return
 
             # Mark as queued by monitor
@@ -375,16 +407,31 @@ async def queue_task(mid: int, reason: str):
 
             # Send notification
             if hasattr(listener, "message"):
-                user_tag = (
-                    f"@{listener.user.username}"
-                    if hasattr(listener.user, "username") and listener.user.username
-                    else f"<a href='tg://user?id={listener.user_id}'>{listener.user_id}</a>"
-                )
+                # Get user tag safely
+                user_tag = ""
+                if hasattr(listener, "user_id") and listener.user_id:
+                    user_tag = f"<a href='tg://user?id={listener.user_id}'>{listener.user_id}</a>"
+                elif (
+                    hasattr(listener, "user")
+                    and hasattr(listener.user, "username")
+                    and listener.user.username
+                ):
+                    user_tag = f"@{listener.user.username}"
+                elif hasattr(listener, "user") and hasattr(listener.user, "id"):
+                    user_tag = f"<a href='tg://user?id={listener.user.id}'>{listener.user.id}</a>"
+
+                # Get task name safely
+                task_name = getattr(listener, "name", "Unknown Task")
+                if callable(task_name):
+                    try:
+                        task_name = task_name()
+                    except Exception:
+                        task_name = "Unknown Task"
 
                 queue_msg = await send_message(
                     listener.message,
                     f"⚠️ <b>Task Queued</b> ⚠️\n\n"
-                    f"<b>Name:</b> <code>{listener.name}</code>\n"
+                    f"<b>Name:</b> <code>{task_name}</code>\n"
                     f"<b>Reason:</b> {reason}\n\n"
                     f"Task will resume automatically when resources are available.\n\n{user_tag}",
                 )
@@ -484,10 +531,20 @@ async def is_task_slow(task, gid: str) -> bool:
 async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
     """Determine if task should be cancelled - lightweight version"""
     try:
-        if not hasattr(task, "status") or not hasattr(task, "listener"):
+        if not hasattr(task, "status"):
             return False, ""
 
-        if hasattr(task.listener, "is_cancelled") and task.listener.is_cancelled:
+        # Check if task is cancelled (handle different listener types)
+        is_cancelled = False
+        if hasattr(task, "listener"):
+            if (
+                hasattr(task.listener, "is_cancelled") and task.listener.is_cancelled
+            ) or (
+                hasattr(task.listener, "isCancelled") and task.listener.isCancelled
+            ):
+                is_cancelled = True
+
+        if is_cancelled:
             return False, ""
 
         status_method = task.status
@@ -522,23 +579,55 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
 async def cancel_task(task, gid: str, reason: str):
     """Cancel a task efficiently"""
     try:
-        if not hasattr(task, "listener"):
-            return
+        # Get listener from different sources depending on task type
+        listener = None
+        if hasattr(task, "listener"):
+            listener = task.listener
+        elif hasattr(task, "message"):
+            # For status classes that don't have listener but have message
+            class MinimalListener:
+                def __init__(self, message):
+                    self.message = message
+                    self.name = (
+                        getattr(task, "name", lambda: "Unknown Task")()
+                        if callable(getattr(task, "name", None))
+                        else "Unknown Task"
+                    )
+                    self.user_id = (
+                        message.from_user.id
+                        if hasattr(message, "from_user") and message.from_user
+                        else None
+                    )
 
-        listener = task.listener
+            listener = MinimalListener(task.message)
 
         # Send cancellation message
-        if hasattr(listener, "message"):
-            user_tag = (
-                f"@{listener.user.username}"
-                if hasattr(listener.user, "username") and listener.user.username
-                else f"<a href='tg://user?id={listener.user_id}'>{listener.user_id}</a>"
-            )
+        if listener and hasattr(listener, "message"):
+            # Get user tag safely
+            user_tag = ""
+            if hasattr(listener, "user_id") and listener.user_id:
+                user_tag = f"<a href='tg://user?id={listener.user_id}'>{listener.user_id}</a>"
+            elif (
+                hasattr(listener, "user")
+                and hasattr(listener.user, "username")
+                and listener.user.username
+            ):
+                user_tag = f"@{listener.user.username}"
+            elif hasattr(listener, "user") and hasattr(listener.user, "id"):
+                user_tag = f"<a href='tg://user?id={listener.user.id}'>{listener.user.id}</a>"
+
+            # Get task name safely
+            task_name = getattr(listener, "name", "Unknown Task")
+            if callable(task_name):
+                try:
+                    task_name = task_name()
+                except Exception:
+                    task_name = "Unknown Task"
 
             cancel_msg = await send_message(
                 listener.message,
                 f"❌ <b>Task Cancelled</b> ❌\n\n"
-                f"<b>Name:</b> <code>{listener.name}</code>\n"
+                f"<b>Name:</b> <code>{task_name}</code>\n"
                 f"<b>Reason:</b> {reason}\n\n{user_tag}",
             )
 
@@ -568,8 +657,8 @@ async def monitor_tasks():
         cpu_history.append(cpu)
         memory_history.append(memory)
 
-        # Periodic logging (every 10 minutes)
-        if int(time.time()) % 600 < get_check_interval():
+        # Optimized periodic logging (every 20 minutes to reduce log spam)
+        if int(time.time()) % 1200 < get_check_interval():
             LOGGER.info(
                 f"Monitor: {len(task_dict)} tasks, {len(queued_by_monitor)} queued by monitor"
             )
@@ -597,20 +686,51 @@ async def monitor_tasks():
 
         for gid, task in tasks_to_check:
             try:
-                if not hasattr(task, "listener"):
-                    continue
+                # Get task ID (mid) from different sources depending on task type
+                mid = None
 
-                mid = task.listener.mid
+                if hasattr(task, "listener") and hasattr(task.listener, "mid"):
+                    mid = task.listener.mid
+                elif hasattr(task, "listener") and hasattr(task.listener, "uid"):
+                    # Some listeners use uid instead of mid
+                    mid = task.listener.uid
+                elif hasattr(task, "message") and hasattr(task.message, "id"):
+                    # For status classes that store message directly (like DDLStatus)
+                    mid = task.message.id
+                elif hasattr(task, "gid") and callable(task.gid):
+                    # Try to extract mid from gid if it's available
+                    try:
+                        task_gid = task.gid()
+                        # Some gids might be the mid directly or contain it
+                        if (
+                            isinstance(task_gid, int | str)
+                            and str(task_gid).isdigit()
+                        ):
+                            mid = int(task_gid)
+                    except Exception:
+                        pass
+
+                # If we couldn't get a valid mid, skip this task
+                if mid is None:
+                    continue
 
                 # Skip already queued tasks
                 if mid in queued_by_monitor or await is_task_in_global_queue(mid):
                     continue
 
-                # Skip cancelled tasks
-                if (
-                    hasattr(task.listener, "is_cancelled")
-                    and task.listener.is_cancelled
-                ):
+                # Skip cancelled tasks (check different possible cancellation attributes)
+                is_cancelled = False
+                if hasattr(task, "listener"):
+                    if (
+                        hasattr(task.listener, "is_cancelled")
+                        and task.listener.is_cancelled
+                    ) or (
+                        hasattr(task.listener, "isCancelled")
+                        and task.listener.isCancelled
+                    ):
+                        is_cancelled = True
+
+                if is_cancelled:
                     continue
 
                 # Check for cancellation
@@ -658,25 +778,29 @@ async def start_monitoring():
             break
 
         try:
-            # Use longer intervals during startup
+            # Use longer intervals during startup for better resource efficiency
             if startup_cycles < max_startup_cycles:
-                interval = get_check_interval() * 2  # 2x instead of 3x
+                interval = (
+                    get_check_interval() * 3
+                )  # Increased from 2x to 3x for better startup performance
                 startup_cycles += 1
                 if startup_cycles == max_startup_cycles:
                     LOGGER.info("Task monitoring startup completed")
             else:
-                # Adaptive interval based on system load
+                # Optimized adaptive interval based on system load
                 level = resource_manager.get_constraint_level()
                 if level == ResourceLevel.CRITICAL:
-                    interval = (
-                        get_check_interval() // 2
-                    )  # More frequent when critical
-                elif level == ResourceLevel.MODERATE:
                     interval = int(
                         get_check_interval() * 0.75
-                    )  # Slightly more frequent
+                    )  # Less frequent than before to reduce overhead
+                elif level == ResourceLevel.MODERATE:
+                    interval = (
+                        get_check_interval()
+                    )  # Normal interval for moderate load
                 else:
-                    interval = get_check_interval()  # Normal interval
+                    interval = int(
+                        get_check_interval() * 1.5
+                    )  # Longer interval for normal conditions
 
             await monitor_tasks()
             await asyncio.sleep(interval)

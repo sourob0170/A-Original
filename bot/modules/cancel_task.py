@@ -41,6 +41,10 @@ async def cancel(_, message):
             return
     elif len(msg) == 1:
         return
+    # Check if task and listener exist before accessing user_id
+    if not task or not hasattr(task, "listener") or not task.listener:
+        return
+
     if user_id not in (Config.OWNER_ID, task.listener.user_id) and (
         user_id not in user_data or not user_data[user_id].get("SUDO")
     ):

@@ -39,9 +39,23 @@ headers = {
 }
 
 
+def is_rss_enabled():
+    """Check if RSS functionality is enabled via configuration with caching."""
+    from bot.core.config_manager import get_config_bool
+
+    return get_config_bool("RSS_ENABLED", True)
+
+
 async def rss_menu(event):
     user_id = event.from_user.id
     buttons = ButtonMaker()
+
+    # Check if RSS is enabled
+    if not is_rss_enabled():
+        buttons.data_button("Close", f"rss close {user_id}")
+        button = buttons.build_menu(1)
+        msg = "RSS functionality is disabled via configuration."
+        return msg, button
 
     # Check if user is owner
     is_owner = await CustomFilters.owner("", event)
@@ -87,6 +101,13 @@ async def get_rss_menu(_, message):
 
 @new_task
 async def rss_sub(_, message, pre_event):
+    # Check if RSS is enabled
+    if not is_rss_enabled():
+        await send_message(
+            message, "RSS functionality is disabled via configuration."
+        )
+        return
+
     user_id = message.from_user.id
     handler_dict[user_id] = False
     if username := message.from_user.username:
@@ -329,6 +350,13 @@ async def get_user_id(title):
 
 @new_task
 async def rss_update(_, message, pre_event, state):
+    # Check if RSS is enabled
+    if not is_rss_enabled():
+        await send_message(
+            message, "RSS functionality is disabled via configuration."
+        )
+        return
+
     user_id = message.from_user.id
     handler_dict[user_id] = False
     titles = message.text.split()
@@ -439,6 +467,13 @@ async def rss_list(query, start, all_users=False):
 
 @new_task
 async def rss_get(_, message, pre_event):
+    # Check if RSS is enabled
+    if not is_rss_enabled():
+        await send_message(
+            message, "RSS functionality is disabled via configuration."
+        )
+        return
+
     user_id = message.from_user.id
     handler_dict[user_id] = False
     args = message.text.split()
@@ -1109,22 +1144,42 @@ async def rss_monitor():
 
 
 def add_job():
-    # Use a longer interval to reduce memory pressure
-    rss_delay = max(600, Config.RSS_DELAY)  # Minimum 10 minutes
+    # Check if RSS is enabled using cached config
+    from bot.core.config_manager import get_config_bool, get_config_int
+
+    if not get_config_bool("RSS_ENABLED", True):
+        LOGGER.info("RSS functionality is disabled via configuration")
+        return
+
+    # Use RSS_JOB_INTERVAL if available, otherwise fall back to RSS_DELAY
+    rss_interval = get_config_int(
+        "RSS_JOB_INTERVAL", get_config_int("RSS_DELAY", 600)
+    )
+    rss_delay = max(600, rss_interval)  # Minimum 10 minutes
 
     scheduler.add_job(
         rss_monitor,
         trigger=IntervalTrigger(seconds=rss_delay),
         id="0",
         name="RSS",
-        misfire_grace_time=120,  # Increased grace time to handle longer executions
+        misfire_grace_time=300,  # Increased grace time to handle longer executions
         max_instances=1,
-        next_run_time=datetime.now() + timedelta(seconds=30),
+        next_run_time=datetime.now()
+        + timedelta(seconds=60),  # Delayed start to reduce startup load
         replace_existing=True,
         coalesce=True,  # Combine missed executions into a single one
     )
-    LOGGER.info(f"RSS job scheduled with interval of {rss_delay} seconds")
+    LOGGER.info(
+        f"RSS job scheduled with interval of {rss_delay} seconds (RSS_ENABLED: {get_config_bool('RSS_ENABLED', True)})"
+    )
 
 
-add_job()
-scheduler.start()
+# Only start RSS if enabled
+from bot.core.config_manager import get_config_bool
+
+if get_config_bool("RSS_ENABLED", True):
+    add_job()
+    scheduler.start()
+    LOGGER.info("RSS system started")
+else:
+    LOGGER.info("RSS system disabled via configuration")

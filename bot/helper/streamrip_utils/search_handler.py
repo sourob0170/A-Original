@@ -3484,6 +3484,7 @@ async def handle_streamrip_callback(_, callback_query):
                 thumb=None,
                 disable_notification=True,
                 progress=None,
+                parse_mode=None,
             ):
                 """Fake reply_audio method that sends audio to user's private chat"""
                 return await TgClient.bot.send_audio(
@@ -3496,6 +3497,7 @@ async def handle_streamrip_callback(_, callback_query):
                     thumb=thumb,
                     disable_notification=disable_notification,
                     progress=progress,
+                    parse_mode=parse_mode,
                 )
 
             async def fake_reply_video(
@@ -3509,6 +3511,7 @@ async def handle_streamrip_callback(_, callback_query):
                 supports_streaming=True,
                 disable_notification=True,
                 progress=None,
+                parse_mode=None,
             ):
                 """Fake reply_video method that sends video to user's private chat"""
                 return await TgClient.bot.send_video(
@@ -3522,6 +3525,7 @@ async def handle_streamrip_callback(_, callback_query):
                     supports_streaming=supports_streaming,
                     disable_notification=disable_notification,
                     progress=progress,
+                    parse_mode=parse_mode,
                 )
 
             async def fake_reply_document(
@@ -3532,6 +3536,7 @@ async def handle_streamrip_callback(_, callback_query):
                 force_document=True,
                 disable_notification=True,
                 progress=None,
+                parse_mode=None,
             ):
                 """Fake reply_document method that sends document to user's private chat"""
                 return await TgClient.bot.send_document(
@@ -3542,6 +3547,7 @@ async def handle_streamrip_callback(_, callback_query):
                     force_document=force_document,
                     disable_notification=disable_notification,
                     progress=progress,
+                    parse_mode=parse_mode,
                 )
 
             async def fake_reply_photo(
@@ -3550,6 +3556,7 @@ async def handle_streamrip_callback(_, callback_query):
                 caption=None,
                 disable_notification=True,
                 progress=None,
+                parse_mode=None,
             ):
                 """Fake reply_photo method that sends photo to user's private chat"""
                 return await TgClient.bot.send_photo(
@@ -3558,6 +3565,7 @@ async def handle_streamrip_callback(_, callback_query):
                     caption=caption,
                     disable_notification=disable_notification,
                     progress=progress,
+                    parse_mode=parse_mode,
                 )
 
             fake_message.reply_audio = fake_reply_audio

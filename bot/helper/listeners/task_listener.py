@@ -1,6 +1,7 @@
 # ruff: noqa: RUF006
 from asyncio import create_task, gather, sleep
 from html import escape
+from pathlib import Path
 
 from aioshutil import move
 from requests import utils as rutils
@@ -364,13 +365,16 @@ class TaskListener(TaskConfig):
     async def on_download_complete(self):
         await sleep(2)
         if self.is_cancelled:
+            LOGGER.info("Download was cancelled, skipping upload")
             return
         multi_links = False
+
         if (
             self.folder_name
             and self.same_dir
             and self.mid in self.same_dir[self.folder_name]["tasks"]
         ):
+            LOGGER.info("Entering same_dir processing logic")
             async with same_directory_lock:
                 while True:
                     async with task_dict_lock:
@@ -448,6 +452,9 @@ class TaskListener(TaskConfig):
                                 multi_links = True
                             break
                     await sleep(1)
+        else:
+            pass
+
         async with task_dict_lock:
             if self.is_cancelled:
                 return
@@ -457,7 +464,16 @@ class TaskListener(TaskConfig):
                 gid = download.gid()
             else:
                 return
-        LOGGER.info(f"Download completed: {self.name}")
+        # Check directory contents immediately after download completion
+        if await aiopath.exists(self.dir):
+            try:
+                files = await listdir(self.dir)
+            except Exception as e:
+                LOGGER.error(f"Error listing download directory: {e}")
+        else:
+            LOGGER.error(
+                f"Download directory does not exist immediately after completion: {self.dir}"
+            )
 
         if not (self.is_torrent or self.is_qbit):
             self.seed = False
@@ -472,67 +488,181 @@ class TaskListener(TaskConfig):
         if self.folder_name:
             self.name = self.folder_name.strip("/").split("/", 1)[0]
 
-        if not await aiopath.exists(f"{self.dir}/{self.name}"):
-            try:
-                # Check if directory exists before listing
-                # Skip directory check for clone operations (they don't create local directories)
-                if not await aiopath.exists(self.dir):
-                    # Check if this is a clone operation by looking at the task type
-                    is_clone_operation = hasattr(self, "is_clone") and self.is_clone
-                    if not is_clone_operation:
-                        # Also check if the name suggests it's a clone operation
-                        is_clone_operation = (
-                            hasattr(self, "name")
-                            and self.name
-                            and (
-                                "MEGA_File" in self.name
-                                or "clone" in str(self.name).lower()
+        # Check if this is a clone operation by looking at the task type
+        is_clone_operation = hasattr(self, "is_clone") and self.is_clone
+        if not is_clone_operation:
+            # Also check if the name suggests it's a clone operation
+            is_clone_operation = (
+                hasattr(self, "name")
+                and self.name
+                and ("MEGA_File" in self.name or "clone" in str(self.name).lower())
+            )
+
+        if is_clone_operation:
+            LOGGER.info(
+                f"Clone operation detected - proceeding to upload phase for: {self.name}"
+            )
+            LOGGER.info(
+                f"Clone operation - checking paths: dir={self.dir}, name={self.name}"
+            )
+
+            # For clone operations, we need to find the actual downloaded content
+            # Try multiple path combinations to find the downloaded files
+            possible_paths = [
+                f"{self.dir}/{self.name}",  # Standard path
+                self.dir,  # Direct directory
+                f"{self.dir}",  # Just the directory
+            ]
+
+            dl_path = None
+            for path in possible_paths:
+                LOGGER.info(f"Clone operation - checking path: {path}")
+                if await aiopath.exists(path):
+                    dl_path = path
+                    self.size = await get_path_size(path)
+                    self.is_file = await aiopath.isfile(path)
+                    LOGGER.info(
+                        f"Clone operation - found downloaded content at: {path}"
+                    )
+                    break
+
+            if not dl_path:
+                # Last resort: check if files are in the download directory
+                try:
+                    LOGGER.info(
+                        f"Clone operation - checking directory contents: {self.dir}"
+                    )
+                    LOGGER.info(
+                        f"Clone operation - directory exists check: {await aiopath.exists(self.dir)}"
+                    )
+
+                    # Add a small delay to ensure any filesystem operations are complete
+                    await sleep(1)
+                    LOGGER.info(
+                        f"Clone operation - directory exists after delay: {await aiopath.exists(self.dir)}"
+                    )
+
+                    if await aiopath.exists(self.dir):
+                        files = await listdir(self.dir)
+                        LOGGER.info(f"Clone operation - directory contents: {files}")
+                        if files:
+                            # Use the first file/folder found
+                            self.name = files[0]
+                            dl_path = f"{self.dir}/{self.name}"
+                            self.size = await get_path_size(dl_path)
+                            self.is_file = await aiopath.isfile(dl_path)
+                            LOGGER.info(
+                                f"Clone operation - using found content: {dl_path}"
                             )
+                        else:
+                            LOGGER.error(
+                                f"Clone operation - directory exists but is empty: {self.dir}"
+                            )
+                            await self.on_upload_error(
+                                f"Download directory is empty: {self.dir}"
+                            )
+                            return
+                    else:
+                        LOGGER.error(
+                            f"Clone operation - download directory does not exist: {self.dir}"
                         )
 
-                    if is_clone_operation:
+                        # Check if there are any directories in the parent directory
+                        parent_dir = str(Path(self.dir).parent)
                         LOGGER.info(
-                            f"Skipping directory check for clone operation: {self.name}"
+                            f"Clone operation - checking parent directory: {parent_dir}"
                         )
-                        # For clone operations, we don't need local files, so skip to upload phase
+                        if await aiopath.exists(parent_dir):
+                            try:
+                                parent_files = await listdir(parent_dir)
+                                LOGGER.info(
+                                    f"Clone operation - parent directory contents: {parent_files}"
+                                )
+
+                                # Look for directories that might contain our download
+                                for item in parent_files:
+                                    item_path = f"{parent_dir}/{item}"
+                                    if await aiopath.isdir(item_path):
+                                        LOGGER.info(
+                                            f"Clone operation - checking potential download dir: {item_path}"
+                                        )
+                                        try:
+                                            item_contents = await listdir(item_path)
+                                            LOGGER.info(
+                                                f"Clone operation - {item_path} contents: {item_contents}"
+                                            )
+                                        except Exception as e:
+                                            LOGGER.info(
+                                                f"Clone operation - error checking {item_path}: {e}"
+                                            )
+                            except Exception as e:
+                                LOGGER.error(
+                                    f"Clone operation - error checking parent directory: {e}"
+                                )
+
+                        await self.on_upload_error(
+                            f"Download directory does not exist: {self.dir}"
+                        )
                         return
+                except Exception as e:
+                    LOGGER.error(
+                        f"Clone operation - error checking download directory: {e}"
+                    )
+                    await self.on_upload_error(
+                        f"Error checking download directory: {e}"
+                    )
+                    return
+        else:
+            # Normal file/directory processing for non-clone operations
+            if not await aiopath.exists(f"{self.dir}/{self.name}"):
+                try:
+                    # Check if directory exists before listing
+                    if not await aiopath.exists(self.dir):
+                        LOGGER.error(f"Directory does not exist: {self.dir}")
+                        await self.on_upload_error(
+                            f"Directory does not exist: {self.dir}"
+                        )
+                        return
+
+                    files = await listdir(self.dir)
+                    if not files:
+                        LOGGER.error(f"Directory is empty: {self.dir}")
+                        await self.on_upload_error(f"Directory is empty: {self.dir}")
+                        return
+
+                    self.name = files[-1]
+                    if self.name == "yt-dlp-thumb":
+                        if len(files) > 1:
+                            self.name = files[0]
+                        else:
+                            LOGGER.error(
+                                f"No valid files found in directory: {self.dir}"
+                            )
+                            await self.on_upload_error(
+                                f"No valid files found in directory: {self.dir}"
+                            )
+                            return
+                except FileNotFoundError:
                     LOGGER.error(f"Directory does not exist: {self.dir}")
                     await self.on_upload_error(
                         f"Directory does not exist: {self.dir}"
                     )
                     return
-
-                files = await listdir(self.dir)
-                if not files:
-                    LOGGER.error(f"Directory is empty: {self.dir}")
-                    await self.on_upload_error(f"Directory is empty: {self.dir}")
+                except Exception as e:
+                    LOGGER.error(f"Error listing directory {self.dir}: {e}")
+                    await self.on_upload_error(str(e))
                     return
 
-                self.name = files[-1]
-                if self.name == "yt-dlp-thumb":
-                    if len(files) > 1:
-                        self.name = files[0]
-                    else:
-                        LOGGER.error(
-                            f"No valid files found in directory: {self.dir}"
-                        )
-                        await self.on_upload_error(
-                            f"No valid files found in directory: {self.dir}"
-                        )
-                        return
-            except FileNotFoundError:
-                LOGGER.error(f"Directory does not exist: {self.dir}")
-                await self.on_upload_error(f"Directory does not exist: {self.dir}")
-                return
-            except Exception as e:
-                LOGGER.error(f"Error listing directory {self.dir}: {e}")
-                await self.on_upload_error(str(e))
-                return
+            dl_path = f"{self.dir}/{self.name}"
+            self.size = await get_path_size(dl_path)
+            self.is_file = await aiopath.isfile(dl_path)
 
-        dl_path = f"{self.dir}/{self.name}"
-        self.size = await get_path_size(dl_path)
-        self.is_file = await aiopath.isfile(dl_path)
-        if self.seed:
+        # Set upload paths based on operation type
+        if is_clone_operation:
+            # For clone operations, use the actual downloaded file/folder path
+            up_dir = self.dir
+            up_path = dl_path  # Use the dl_path we determined above
+        elif self.seed:
             up_dir = self.up_dir = f"{self.dir}10000"
             up_path = f"{self.up_dir}/{self.name}"
             await create_recursive_symlink(self.dir, self.up_dir)
@@ -592,6 +722,12 @@ class TaskListener(TaskConfig):
         if self.extract_enabled:
             media_tools.append(
                 (self.extract_priority, "extract", self.proceed_extract_tracks)
+            )
+
+        # Check if remove is enabled
+        if self.remove_enabled:
+            media_tools.append(
+                (self.remove_priority, "remove", self.proceed_remove_tracks)
             )
 
         # Check if add is enabled
@@ -662,6 +798,14 @@ class TaskListener(TaskConfig):
         up_path = await self.remove_www_prefix(up_path)
         self.is_file = await aiopath.isfile(up_path)
         self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
+
+        # Apply universal filename for mirror files (if not leech and no -n flag was used)
+        if not self.is_leech:
+            up_path = await self.apply_universal_filename(up_path, up_dir)
+            if self.is_cancelled:
+                return
+            self.is_file = await aiopath.isfile(up_path)
+            self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
 
         if self.screen_shots:
             up_path = await self.generate_screenshots(up_path)
@@ -889,15 +1033,52 @@ class TaskListener(TaskConfig):
                 )
                 return
 
-            # Check if MEGA credentials are configured
-            if not Config.MEGA_EMAIL or not Config.MEGA_PASSWORD:
+            # Check if MEGA credentials are configured (user or bot-wide)
+            user_mega_email = self.user_dict.get("MEGA_EMAIL")
+            user_mega_password = self.user_dict.get("MEGA_PASSWORD")
+
+            has_user_credentials = user_mega_email and user_mega_password
+            has_bot_credentials = Config.MEGA_EMAIL and Config.MEGA_PASSWORD
+
+            if not has_user_credentials and not has_bot_credentials:
                 await self.on_upload_error(
-                    "❌ MEGA credentials not configured. Please set MEGA_EMAIL and MEGA_PASSWORD."
+                    "❌ MEGA credentials not configured. Please set your MEGA credentials in /settings → MEGA Settings or contact the administrator."
                 )
                 return
 
             await add_mega_upload(self, up_path)
+        elif self.up_dest == "ddl" or self.up_dest.startswith("ddl:"):
+            # DDL upload using DDL engine
+            from bot.helper.common import validate_ddl_config
+            from bot.helper.mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
+            from bot.helper.mirror_leech_utils.status_utils.ddl_status import (
+                DDLStatus,
+            )
+
+            # Validate DDL configuration
+            is_valid, error_msg = validate_ddl_config(self.user_id)
+            if not is_valid:
+                await self.on_upload_error(error_msg)
+                return
+
+            LOGGER.info(f"DDL Upload Name: {self.name}")
+            size = await get_path_size(up_path)
+            ddl = DDLUploader(self, self.name, up_dir)
+            async with task_dict_lock:
+                task_dict[self.mid] = DDLStatus(ddl, size, self.message, gid, None)
+            await gather(
+                update_status_message(self.message.chat.id),
+                ddl.upload(self.name, size),
+            )
+            del ddl
         elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
+            # Check if Google Drive upload is enabled
+            if not Config.GDRIVE_UPLOAD_ENABLED:
+                await self.on_upload_error(
+                    "❌ Google Drive upload is disabled by the administrator."
+                )
+                return
+
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             # If up_dest is "gd", use the configured GDRIVE_ID
             if self.up_dest == "gd":
@@ -1205,6 +1386,48 @@ class TaskListener(TaskConfig):
                         "📺 Watch on YouTube", youtube_result["video_url"]
                     )
                     button = buttons.build_menu(1)
+            elif isinstance(link, dict) and any(
+                key in ["GoFile", "StreamTape"] for key in link
+            ):
+                # DDL upload result
+                msg += "\n\n<b>Type: </b>DDL Upload"
+                if mime_type == "Folder":
+                    msg += f"\n<b>SubFolders: </b>{folders}"
+                    msg += f"\n<b>Files: </b>{files}"
+
+                # Add MediaInfo link for DDL uploads if enabled
+                user_mediainfo_enabled = self.user_dict.get(
+                    "MEDIAINFO_ENABLED", None
+                )
+                if user_mediainfo_enabled is None:
+                    user_mediainfo_enabled = Config.MEDIAINFO_ENABLED
+                if (
+                    user_mediainfo_enabled
+                    and hasattr(self, "mediainfo_link")
+                    and self.mediainfo_link
+                    and self.mediainfo_link.strip()
+                ):
+                    msg += f"\n<b>MediaInfo</b> → <a href='https://graph.org/{self.mediainfo_link}'>View</a>"
+
+                # Create buttons for DDL links
+                buttons = ButtonMaker()
+                for server_name, server_link in link.items():
+                    if server_link:
+                        if server_name == "GoFile":
+                            buttons.url_button("📁 Gofile Link", server_link)
+                        elif server_name == "StreamTape":
+                            buttons.url_button("🎬 StreamTape Link", server_link)
+                        else:
+                            buttons.url_button(f"🔗 {server_name}", server_link)
+
+                # Check if ButtonMaker has any buttons before building
+                has_buttons = (
+                    len(buttons._button) > 0
+                    or len(buttons._header_button) > 0
+                    or len(buttons._footer_button) > 0
+                    or len(buttons._page_button) > 0
+                )
+                button = buttons.build_menu(1) if has_buttons else None
             else:
                 # Regular cloud upload
                 msg += f"\n\n<b>Type: </b>{mime_type}"
@@ -1280,12 +1503,15 @@ class TaskListener(TaskConfig):
             def is_mega_destination(dest):
                 return dest == "mg" or dest.startswith("mg:")
 
+            from bot.helper.common import is_ddl_destination
+
             if (
                 self.up_dest
                 and not is_gdrive_id(self.up_dest)
                 and not is_rclone_path(self.up_dest)
                 and not is_youtube_destination(self.up_dest)
                 and not is_mega_destination(self.up_dest)
+                and not is_ddl_destination(self.up_dest)
             ):
                 # If user specified a destination with -up flag, it takes precedence
                 try:
@@ -1567,3 +1793,88 @@ class TaskListener(TaskConfig):
             await clean_download(self.up_dir)
         if self.thumb and await aiopath.exists(self.thumb):
             await remove(self.thumb)
+
+    async def proceed_add(self, up_path, gid):
+        """Process add functionality for media files."""
+        from bot.helper.aeon_utils.command_gen import get_add_cmd
+
+        LOGGER.info(f"Starting add processing for: {up_path}")
+
+        if self.is_cancelled:
+            return up_path
+
+        # Check if any add functionality is enabled
+        if not (
+            self.add_video_enabled
+            or self.add_audio_enabled
+            or self.add_subtitle_enabled
+            or self.add_attachment_enabled
+        ):
+            LOGGER.info("No add functionality enabled, skipping add processing")
+            return up_path
+
+        try:
+            # Prepare multi-files list if available
+            multi_files = None
+            if hasattr(self, "multi_files") and self.multi_files:
+                multi_files = self.multi_files
+
+            # Generate add command
+            cmd, temp_file = await get_add_cmd(
+                file_path=up_path,
+                add_video=self.add_video_enabled,
+                add_audio=self.add_audio_enabled,
+                add_subtitle=self.add_subtitle_enabled,
+                add_attachment=self.add_attachment_enabled,
+                video_index=self.add_video_index,
+                audio_index=self.add_audio_index,
+                subtitle_index=self.add_subtitle_index,
+                attachment_index=self.add_attachment_index,
+                video_codec=self.add_video_codec,
+                audio_codec=self.add_audio_codec,
+                subtitle_codec=self.add_subtitle_codec,
+                video_quality=self.add_video_quality,
+                video_preset=self.add_video_preset,
+                video_bitrate=self.add_video_bitrate,
+                video_resolution=self.add_video_resolution,
+                video_fps=self.add_video_fps,
+                audio_bitrate=self.add_audio_bitrate,
+                audio_channels=self.add_audio_channels,
+                audio_sampling=self.add_audio_sampling,
+                audio_volume=self.add_audio_volume,
+                subtitle_language=self.add_subtitle_language,
+                subtitle_encoding=self.add_subtitle_encoding,
+                subtitle_font=self.add_subtitle_font,
+                subtitle_font_size=self.add_subtitle_font_size,
+                subtitle_hardsub_enabled=self.add_subtitle_hardsub_enabled,
+                attachment_mimetype=self.add_attachment_mimetype,
+                delete_original=self.add_delete_original,
+                preserve_tracks=self.add_preserve_tracks,
+                replace_tracks=self.add_replace_tracks,
+                multi_files=multi_files,
+            )
+
+            if not cmd:
+                LOGGER.warning("Failed to generate add command")
+                return up_path
+
+            LOGGER.info(f"Generated add command: {' '.join(cmd[:10])}...")
+
+            # Process the command using FFMpeg
+            from bot.helper.ext_utils.media_utils import FFMpeg
+
+            processor = FFMpeg(self)
+            result = await processor.ffmpeg_cmds(cmd, up_path)
+
+            if result and isinstance(result, list) and result:
+                # Return the first processed file
+                processed_file = result[0]
+                LOGGER.info(f"Add processing completed: {processed_file}")
+                return processed_file
+
+            LOGGER.error("Add processing failed")
+            return up_path
+
+        except Exception as e:
+            LOGGER.error(f"Error during add processing: {e}")
+            return up_path

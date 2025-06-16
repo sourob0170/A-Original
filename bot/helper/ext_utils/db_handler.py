@@ -134,7 +134,17 @@ class DbManager:
         if smart_garbage_collection is not None:
             smart_garbage_collection(aggressive=True)
 
-    async def update_deploy_config(self):
+    async def update_deploy_config(self, sync_runtime_config=True):
+        """
+        Update deploy config and overwrite runtime config
+
+        When deploy config changes:
+        1. Update deploy config with new timestamp
+        2. Overwrite runtime config with changed/new values and same timestamp
+
+        Args:
+            sync_runtime_config: Whether to sync runtime config with deploy config changes
+        """
         if not await self.ensure_connection():
             return
         settings = import_module("config")
@@ -143,10 +153,13 @@ class DbManager:
             for key, value in vars(settings).items()
             if not key.startswith("__")
         }
-        # Add timestamp to track when deploy config was updated
+
         from time import time
 
-        config_file["_deploy_timestamp"] = time()
+        current_time = time()
+
+        # Step 1: Update deploy config with new timestamp
+        config_file["_deploy_timestamp"] = current_time
 
         try:
             await self.db.settings.deployConfig.replace_one(
@@ -154,28 +167,115 @@ class DbManager:
                 config_file,
                 upsert=True,
             )
+
+            # Step 2: Overwrite runtime config with changed/new values and same timestamp
+            if sync_runtime_config:
+                # Get current runtime config
+                current_runtime = (
+                    await self.db.settings.config.find_one(
+                        {"_id": TgClient.ID}, {"_id": 0}
+                    )
+                    or {}
+                )
+
+                # Update runtime config with deploy changes (excluding timestamp fields)
+                config_changes = {
+                    k: v for k, v in config_file.items() if not k.startswith("_")
+                }
+                current_runtime.update(config_changes)
+
+                # Set same timestamp as deploy config
+                current_runtime["_runtime_timestamp"] = current_time
+
+                await self.db.settings.config.replace_one(
+                    {"_id": TgClient.ID},
+                    current_runtime,
+                    upsert=True,
+                )
+
+                LOGGER.info(
+                    f"Synced runtime config from deploy config changes: {list(config_changes.keys())}"
+                )
+
         except PyMongoError as e:
             LOGGER.error(f"Error updating deploy config: {e}")
             await self.ensure_connection()  # Try to reconnect for next operation
 
-    async def update_config(self, dict_):
+    async def update_config(self, dict_, sync_deploy_config=True):
+        """
+        Update runtime config and overwrite deploy config
+
+        When runtime config changes:
+        1. Update runtime config with new timestamp
+        2. Overwrite deploy config with changed values and same timestamp
+
+        Args:
+            dict_: Configuration dictionary to update
+            sync_deploy_config: Whether to sync deploy config with runtime config changes
+        """
         if not await self.ensure_connection():
             return
         try:
-            # Add timestamp to track when runtime config was manually updated
             from time import time
 
+            current_time = time()
+
+            # Step 1: Update runtime config with new timestamp
             dict_with_timestamp = dict_.copy()
-            dict_with_timestamp["_runtime_timestamp"] = time()
+            dict_with_timestamp["_runtime_timestamp"] = current_time
 
             await self.db.settings.config.update_one(
                 {"_id": TgClient.ID},
                 {"$set": dict_with_timestamp},
                 upsert=True,
             )
+
+            # Step 2: Overwrite deploy config with changed values and same timestamp
+            if sync_deploy_config:
+                # Get current deploy config
+                current_deploy = (
+                    await self.db.settings.deployConfig.find_one(
+                        {"_id": TgClient.ID}, {"_id": 0}
+                    )
+                    or {}
+                )
+
+                # Update deploy config with runtime changes (excluding timestamp fields)
+                config_changes = {
+                    k: v for k, v in dict_.items() if not k.startswith("_")
+                }
+                current_deploy.update(config_changes)
+
+                # Set same timestamp as runtime config
+                current_deploy["_deploy_timestamp"] = current_time
+
+                await self.db.settings.deployConfig.replace_one(
+                    {"_id": TgClient.ID},
+                    current_deploy,
+                    upsert=True,
+                )
+
+                LOGGER.info(
+                    f"Synced deploy config from runtime config changes: {list(config_changes.keys())}"
+                )
+
         except PyMongoError as e:
             LOGGER.error(f"Error updating config: {e}")
             await self.ensure_connection()  # Try to reconnect for next operation
+
+    async def update_config_no_sync(self, dict_):
+        """
+        Update runtime config without syncing to deploy config
+        Used for internal operations where sync is not desired
+        """
+        return await self.update_config(dict_, sync_deploy_config=False)
+
+    async def update_deploy_config_no_sync(self):
+        """
+        Update deploy config without syncing to runtime config
+        Used for internal operations where sync is not desired
+        """
+        return await self.update_deploy_config(sync_runtime_config=False)
 
     async def update_aria2(self, key, value):
         if not await self.ensure_connection():

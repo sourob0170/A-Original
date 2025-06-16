@@ -441,26 +441,17 @@ async def generate_caption(
                 # Extract clean text from HTML prefix for comparison
                 clean_prefix = re.sub(r"<.*?>", "", html_prefix)
                 # If the filename starts with the clean prefix, replace it with HTML version
-                if clean_filename.startswith(clean_prefix + " "):
+                if clean_filename.startswith(clean_prefix):
                     html_filename = clean_filename.replace(
-                        clean_prefix + " ", html_prefix + " ", 1
+                        clean_prefix, html_prefix, 1
                     )
 
             if html_suffix:
                 # Extract clean text from HTML suffix for comparison
                 clean_suffix = re.sub(r"<.*?>", "", html_suffix)
                 # If the filename ends with the clean suffix, replace it with HTML version
-                # Handle both cases: suffix in middle and suffix at end
-                if html_filename.endswith(" " + clean_suffix):
-                    # Suffix at the end
-                    html_filename = (
-                        html_filename[: -len(" " + clean_suffix)] + " " + html_suffix
-                    )
-                elif " " + clean_suffix + " " in html_filename:
-                    # Suffix in the middle
-                    html_filename = html_filename.replace(
-                        " " + clean_suffix + " ", " " + html_suffix + " "
-                    )
+                if html_filename.endswith(clean_suffix):
+                    html_filename = html_filename[: -len(clean_suffix)] + html_suffix
 
             return html_filename
 

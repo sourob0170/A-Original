@@ -16,6 +16,14 @@ from .check_deletion import (
     force_delete_all_messages,
 )
 from .clone import clone_node
+from .encoding import (
+    decode_command,
+    encode_command,
+    encoding_callback,
+    encoding_help_command,
+    handle_encoding_message,
+    list_methods_command,
+)
 from .exec import aioexecute, clear, execute
 from .file_selector import confirm_selection, select
 from .font_styles import font_styles_cmd
@@ -26,7 +34,6 @@ from .gd_search import gdrive_search, select_type
 from .gen_session import (
     gen_session,
     handle_cancel_button,
-    handle_cancel_command,
     handle_command,
     handle_group_gensession,
     handle_session_input,
@@ -53,6 +60,12 @@ from .mirror_leech import (
 )
 from .nzb_search import hydra_search
 from .paste import paste_text
+from .quickinfo import (
+    handle_forwarded_message,
+    handle_shared_entities,
+    quickinfo_callback,
+    quickinfo_command,
+)
 from .restart import (
     confirm_restart,
     restart_bot,
@@ -98,11 +111,16 @@ __all__ = [
     "confirm_restart",
     "confirm_selection",
     "count_node",
+    "decode_command",
     "delete_file",
     "delete_pending_messages",
     "edit_bot_settings",
     "edit_media_tools_settings",
     "edit_user_settings",
+    # Encoding/Decoding functions
+    "encode_command",
+    "encoding_callback",
+    "encoding_help_command",
     "execute",
     "font_styles_cmd",
     "force_delete_all_messages",
@@ -115,12 +133,14 @@ __all__ = [
     "handle_broadcast_media",
     "handle_cancel_broadcast_command",
     "handle_cancel_button",
-    "handle_cancel_command",
     "handle_command",
+    "handle_encoding_message",
+    "handle_forwarded_message",
     "handle_group_gensession",
     "handle_no_suffix_commands",
     "handle_qb_commands",
     "handle_session_input",
+    "handle_shared_entities",
     "hydra_search",
     "imdb_callback",
     "imdb_search",
@@ -129,6 +149,7 @@ __all__ = [
     "jd_leech",
     "jd_mirror",
     "leech",
+    "list_methods_command",
     "log",
     "login",
     "media_cancel_callback",
@@ -143,6 +164,9 @@ __all__ = [
     "nzb_mirror",
     "paste_text",
     "ping",
+    "quickinfo_callback",
+    # QuickInfo functions
+    "quickinfo_command",
     "remove_from_queue",
     "remove_sudo",
     "restart_bot",

@@ -13,9 +13,9 @@ from re import search as re_search
 from time import time
 
 import aiofiles
+import fitz  # PyMuPDF
 from aioshutil import rmtree
 from PIL import Image, ImageDraw, ImageFont
-from pypdf import PdfMerger, PdfReader, PdfWriter
 
 from bot import DOWNLOAD_DIR, LOGGER, cpu_no
 from bot.core.config_manager import Config
@@ -30,15 +30,15 @@ try:
 except ImportError:
     smart_garbage_collection = None
 
-# Media information cache
+# Optimized media information cache with reduced memory footprint
 # This cache stores information about media files to avoid repeated ffprobe calls
 # The key is the file path and modification time, and the value is the media information
 MEDIA_INFO_CACHE = {}
 MEDIA_STREAMS_CACHE = {}
 MEDIA_TYPE_CACHE = {}
 
-# Maximum cache size (number of entries)
-MAX_CACHE_SIZE = 100
+# Reduced maximum cache size to save memory
+MAX_CACHE_SIZE = 50  # Reduced from 100 to 50
 
 
 def limit_memory_for_pil():
@@ -1427,6 +1427,473 @@ async def extract_all_tracks(
         extracted_files.extend(attachment_files)
 
     return extracted_files
+
+
+async def remove_track(
+    file_path: str,
+    output_path: str,
+    track_type: str,
+    track_indices: int | list[int] | None = None,
+    remove_metadata: bool = False,
+) -> bool:
+    """Remove specific track(s) from a media file.
+
+    Args:
+        file_path: Path to the input file
+        output_path: Path for the output file
+        track_type: Type of track to remove ('video', 'audio', 'subtitle', 'attachment')
+        track_indices: Specific track index or list of indices to remove (None = all tracks of the type)
+        remove_metadata: Whether to remove metadata from the file
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Get media info to understand the file structure
+        media_info = await get_media_info(file_path)
+        if not media_info:
+            LOGGER.error(f"Could not get media info for {file_path}")
+            return False
+
+        # Build FFmpeg command
+        cmd = [
+            "xtra",  # Using xtra instead of ffmpeg
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            file_path,
+        ]
+
+        # Map all streams first, then remove specific ones
+        stream_maps = []
+
+        # Get all streams from media info
+        all_streams = media_info[1].get("streams", [])
+
+        for stream in all_streams:
+            stream_index = stream.get("index", 0)
+            codec_type = stream.get("codec_type", "")
+
+            # Determine if this stream should be included
+            should_include = True
+
+            if track_type == "video" and codec_type == "video":
+                if track_indices is None:
+                    # Remove all video tracks
+                    should_include = False
+                elif isinstance(track_indices, int):
+                    if stream_index == track_indices:
+                        should_include = False
+                elif isinstance(track_indices, list):
+                    if stream_index in track_indices:
+                        should_include = False
+            elif track_type == "audio" and codec_type == "audio":
+                if track_indices is None:
+                    # Remove all audio tracks
+                    should_include = False
+                elif isinstance(track_indices, int):
+                    if stream_index == track_indices:
+                        should_include = False
+                elif isinstance(track_indices, list):
+                    if stream_index in track_indices:
+                        should_include = False
+            elif track_type == "subtitle" and codec_type == "subtitle":
+                if track_indices is None:
+                    # Remove all subtitle tracks
+                    should_include = False
+                elif isinstance(track_indices, int):
+                    if stream_index == track_indices:
+                        should_include = False
+                elif isinstance(track_indices, list):
+                    if stream_index in track_indices:
+                        should_include = False
+            elif track_type == "attachment" and codec_type == "attachment":
+                if track_indices is None:
+                    # Remove all attachment tracks
+                    should_include = False
+                elif isinstance(track_indices, int):
+                    if stream_index == track_indices:
+                        should_include = False
+                elif isinstance(track_indices, list):
+                    if stream_index in track_indices:
+                        should_include = False
+
+            # Add stream to map if it should be included
+            if should_include:
+                stream_maps.extend(["-map", f"0:{stream_index}"])
+
+        # If no streams to keep, return False
+        if not stream_maps:
+            LOGGER.error("No streams would remain after removal")
+            return False
+
+        # Add stream maps to command
+        cmd.extend(stream_maps)
+
+        # Copy all streams by default
+        cmd.extend(["-c", "copy"])
+
+        # Remove metadata if requested
+        if remove_metadata:
+            cmd.extend(["-map_metadata", "-1"])
+
+        # Add output file
+        cmd.extend(["-y", output_path])
+
+        LOGGER.info(f"Removing {track_type} tracks from {file_path}")
+        LOGGER.info(f"Command: {' '.join(cmd)}")
+
+        # Execute the command
+        stdout, stderr, code = await cmd_exec(cmd)
+
+        if code == 0 and await aiopath.exists(output_path):
+            file_size = await aiopath.getsize(output_path)
+            if file_size > 0:
+                LOGGER.info(
+                    f"Successfully removed {track_type} tracks to {output_path}"
+                )
+                return True
+            LOGGER.error(f"Output file {output_path} is empty")
+            return False
+        LOGGER.error(f"FFmpeg failed with code {code}: {stderr}")
+        return False
+
+    except Exception as e:
+        LOGGER.error(f"Error removing {track_type} track: {e}")
+        return False
+
+
+async def remove_all_tracks(
+    file_path: str,
+    output_path: str,
+    remove_video: bool = False,
+    remove_audio: bool = False,
+    remove_subtitle: bool = False,
+    remove_attachment: bool = False,
+    remove_metadata: bool = False,
+    video_indices: int | list[int] | None = None,
+    audio_indices: int | list[int] | None = None,
+    subtitle_indices: int | list[int] | None = None,
+    attachment_indices: int | list[int] | None = None,
+    # Keep single index parameters for backward compatibility
+    video_index: int | None = None,
+    audio_index: int | None = None,
+    subtitle_index: int | None = None,
+    attachment_index: int | None = None,
+) -> bool:
+    """Remove all specified tracks from a media file.
+
+    Args:
+        file_path: Path to the input file
+        output_path: Path for the output file
+        remove_video: Whether to remove video tracks
+        remove_audio: Whether to remove audio tracks
+        remove_subtitle: Whether to remove subtitle tracks
+        remove_attachment: Whether to remove attachment tracks
+        remove_metadata: Whether to remove metadata
+        video_indices: List of video track indices to remove
+        audio_indices: List of audio track indices to remove
+        subtitle_indices: List of subtitle track indices to remove
+        attachment_indices: List of attachment track indices to remove
+        video_index: Single video track index to remove (backward compatibility)
+        audio_index: Single audio track index to remove (backward compatibility)
+        subtitle_index: Single subtitle track index to remove (backward compatibility)
+        attachment_index: Single attachment track index to remove (backward compatibility)
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Handle backward compatibility for single indices
+        if video_index is not None:
+            video_indices = [video_index] if video_indices is None else video_indices
+        if audio_index is not None:
+            audio_indices = [audio_index] if audio_indices is None else audio_indices
+        if subtitle_index is not None:
+            subtitle_indices = (
+                [subtitle_index] if subtitle_indices is None else subtitle_indices
+            )
+        if attachment_index is not None:
+            attachment_indices = (
+                [attachment_index]
+                if attachment_indices is None
+                else attachment_indices
+            )
+
+        # Get media info to understand the file structure
+        media_info = await get_media_info(file_path)
+        if not media_info:
+            LOGGER.error(f"Could not get media info for {file_path}")
+            return False
+
+        # Build FFmpeg command
+        cmd = [
+            "xtra",  # Using xtra instead of ffmpeg
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            file_path,
+        ]
+
+        # Map all streams first, then remove specific ones
+        stream_maps = []
+
+        # Get all streams from media info
+        all_streams = media_info[1].get("streams", [])
+
+        for stream in all_streams:
+            stream_index = stream.get("index", 0)
+            codec_type = stream.get("codec_type", "")
+
+            # Determine if this stream should be included
+            should_include = True
+
+            if remove_video and codec_type == "video":
+                if video_indices is None:
+                    # Remove all video tracks
+                    should_include = False
+                elif stream_index in video_indices:
+                    should_include = False
+            elif remove_audio and codec_type == "audio":
+                if audio_indices is None:
+                    # Remove all audio tracks
+                    should_include = False
+                elif stream_index in audio_indices:
+                    should_include = False
+            elif remove_subtitle and codec_type == "subtitle":
+                if subtitle_indices is None:
+                    # Remove all subtitle tracks
+                    should_include = False
+                elif stream_index in subtitle_indices:
+                    should_include = False
+            elif remove_attachment and codec_type == "attachment":
+                if attachment_indices is None:
+                    # Remove all attachment tracks
+                    should_include = False
+                elif stream_index in attachment_indices:
+                    should_include = False
+
+            # Add stream to map if it should be included
+            if should_include:
+                stream_maps.extend(["-map", f"0:{stream_index}"])
+
+        # If no streams to keep, return False
+        if not stream_maps:
+            LOGGER.error("No streams would remain after removal")
+            return False
+
+        # Add stream maps to command
+        cmd.extend(stream_maps)
+
+        # Copy all streams by default
+        cmd.extend(["-c", "copy"])
+
+        # Remove metadata if requested
+        if remove_metadata:
+            cmd.extend(["-map_metadata", "-1"])
+
+        # Add output file
+        cmd.extend(["-y", output_path])
+
+        LOGGER.info(f"Removing tracks from {file_path}")
+        LOGGER.info(f"Command: {' '.join(cmd)}")
+
+        # Execute the command
+        stdout, stderr, code = await cmd_exec(cmd)
+
+        if code == 0 and await aiopath.exists(output_path):
+            file_size = await aiopath.getsize(output_path)
+            if file_size > 0:
+                LOGGER.info(f"Successfully removed tracks to {output_path}")
+                return True
+            LOGGER.error(f"Output file {output_path} is empty")
+            return False
+        LOGGER.error(f"FFmpeg failed with code {code}: {stderr}")
+        return False
+
+    except Exception as e:
+        LOGGER.error(f"Error removing tracks: {e}")
+        return False
+
+
+async def proceed_remove(
+    file_path: str,
+    output_dir: str,
+    remove_video: bool = False,
+    remove_audio: bool = False,
+    remove_subtitle: bool = False,
+    remove_attachment: bool = False,
+    remove_metadata: bool = False,
+    video_index: int | None = None,
+    audio_index: int | None = None,
+    subtitle_index: int | None = None,
+    attachment_index: int | None = None,
+    ffmpeg_path: str = "xtra",  # Using xtra instead of ffmpeg
+    delete_original: bool = False,
+    # Parameters for multiple indices
+    video_indices: list[int] | None = None,
+    audio_indices: list[int] | None = None,
+    subtitle_indices: list[int] | None = None,
+    attachment_indices: list[int] | None = None,
+) -> str | None:
+    """Remove tracks from a media file and save to output directory.
+
+    Args:
+        file_path: Path to the input file
+        output_dir: Directory to save the processed file
+        remove_video: Whether to remove video tracks
+        remove_audio: Whether to remove audio tracks
+        remove_subtitle: Whether to remove subtitle tracks
+        remove_attachment: Whether to remove attachment tracks
+        remove_metadata: Whether to remove metadata
+        video_index: Single video track index to remove (backward compatibility)
+        audio_index: Single audio track index to remove (backward compatibility)
+        subtitle_index: Single subtitle track index to remove (backward compatibility)
+        attachment_index: Single attachment track index to remove (backward compatibility)
+        ffmpeg_path: Path to FFmpeg executable
+        delete_original: Whether to delete the original file after processing
+        video_indices: List of video track indices to remove
+        audio_indices: List of audio track indices to remove
+        subtitle_indices: List of subtitle track indices to remove
+        attachment_indices: List of attachment track indices to remove
+
+    Returns:
+        str: Path to the processed file if successful, None otherwise
+    """
+    try:
+        # Ensure output directory exists
+        await makedirs(output_dir, exist_ok=True)
+
+        # Generate output filename
+        base_name = await aiopath.basename(file_path)
+        name, ext = await aiopath.splitext(base_name)
+        output_path = await aiopath.join(output_dir, f"{name}_removed{ext}")
+
+        # Handle backward compatibility for single indices
+        if video_index is not None:
+            video_indices = [video_index] if video_indices is None else video_indices
+        if audio_index is not None:
+            audio_indices = [audio_index] if audio_indices is None else audio_indices
+        if subtitle_index is not None:
+            subtitle_indices = (
+                [subtitle_index] if subtitle_indices is None else subtitle_indices
+            )
+        if attachment_index is not None:
+            attachment_indices = (
+                [attachment_index]
+                if attachment_indices is None
+                else attachment_indices
+            )
+
+        # Remove tracks from the file
+        success = await remove_all_tracks(
+            file_path,
+            output_path,
+            remove_video=remove_video,
+            remove_audio=remove_audio,
+            remove_subtitle=remove_subtitle,
+            remove_attachment=remove_attachment,
+            remove_metadata=remove_metadata,
+            video_indices=video_indices,
+            audio_indices=audio_indices,
+            subtitle_indices=subtitle_indices,
+            attachment_indices=attachment_indices,
+        )
+
+        if success:
+            # Delete original file if requested
+            if delete_original and await aiopath.exists(file_path):
+                try:
+                    await remove(file_path)
+                    LOGGER.info(f"Deleted original file: {file_path}")
+                except Exception as e:
+                    LOGGER.error(f"Failed to delete original file {file_path}: {e}")
+
+            return output_path
+        # Clean up failed output file
+        if await aiopath.exists(output_path):
+            with contextlib.suppress(Exception):
+                await remove(output_path)
+        return None
+
+    except Exception as e:
+        LOGGER.error(f"Error in proceed_remove: {e}")
+        return None
+
+
+async def remove_tracks(
+    file_path: str,
+    output_dir: str,
+    remove_video: bool = False,
+    remove_audio: bool = False,
+    remove_subtitle: bool = False,
+    remove_attachment: bool = False,
+    remove_metadata: bool = False,
+    video_indices: list[int] | None = None,
+    audio_indices: list[int] | None = None,
+    subtitle_indices: list[int] | None = None,
+    attachment_indices: list[int] | None = None,
+    video_codec: str = "copy",
+    audio_codec: str = "copy",
+    subtitle_codec: str = "copy",
+    delete_original: bool = False,
+) -> list[str]:
+    """Remove tracks from a media file and save to output directory.
+
+    Args:
+        file_path: Path to the input file
+        output_dir: Directory to save the processed file
+        remove_video: Whether to remove video tracks
+        remove_audio: Whether to remove audio tracks
+        remove_subtitle: Whether to remove subtitle tracks
+        remove_attachment: Whether to remove attachment tracks
+        remove_metadata: Whether to remove metadata
+        video_indices: List of video track indices to remove
+        audio_indices: List of audio track indices to remove
+        subtitle_indices: List of subtitle track indices to remove
+        attachment_indices: List of attachment track indices to remove
+        video_codec: Codec for video tracks (not used in removal)
+        audio_codec: Codec for audio tracks (not used in removal)
+        subtitle_codec: Codec for subtitle tracks (not used in removal)
+        delete_original: Whether to delete the original file after processing
+
+    Returns:
+        list[str]: List of paths to processed files
+    """
+    try:
+        # Ensure output directory exists
+        await makedirs(output_dir, exist_ok=True)
+
+        # Generate output filename
+        base_name = await aiopath.basename(file_path)
+        name, ext = await aiopath.splitext(base_name)
+        await aiopath.join(output_dir, f"{name}_removed{ext}")
+
+        # Use proceed_remove function to process the file
+        result_path = await proceed_remove(
+            file_path,
+            output_dir,
+            remove_video=remove_video,
+            remove_audio=remove_audio,
+            remove_subtitle=remove_subtitle,
+            remove_attachment=remove_attachment,
+            remove_metadata=remove_metadata,
+            video_indices=video_indices,
+            audio_indices=audio_indices,
+            subtitle_indices=subtitle_indices,
+            attachment_indices=attachment_indices,
+            delete_original=delete_original,
+        )
+
+        if result_path:
+            return [result_path]
+        return []
+
+    except Exception as e:
+        LOGGER.error(f"Error in remove_tracks: {e}")
+        return []
 
 
 async def proceed_extract(
@@ -3160,6 +3627,269 @@ async def proceed_extract(
         pass
 
     return extracted_files
+
+
+async def remove_tracks(
+    file_path: str,
+    output_dir: str,
+    remove_video: bool = False,
+    remove_audio: bool = False,
+    remove_subtitle: bool = False,
+    remove_attachment: bool = False,
+    remove_metadata: bool = False,
+    video_indices: list[int] | None = None,
+    audio_indices: list[int] | None = None,
+    subtitle_indices: list[int] | None = None,
+    attachment_indices: list[int] | None = None,
+    video_codec: str = "copy",
+    audio_codec: str = "copy",
+    subtitle_codec: str = "copy",
+    delete_original: bool = True,
+) -> list[str]:
+    """Remove specific tracks from media files using FFmpeg.
+
+    Args:
+        file_path: Path to the input media file
+        output_dir: Directory to save the output file
+        remove_video: Whether to remove video tracks
+        remove_audio: Whether to remove audio tracks
+        remove_subtitle: Whether to remove subtitle tracks
+        remove_attachment: Whether to remove attachment tracks
+        remove_metadata: Whether to remove metadata
+        video_indices: List of video track indices to remove (None = remove all)
+        audio_indices: List of audio track indices to remove (None = remove all)
+        subtitle_indices: List of subtitle track indices to remove (None = remove all)
+        attachment_indices: List of attachment track indices to remove (None = remove all)
+        video_codec: Video codec for remaining tracks
+        audio_codec: Audio codec for remaining tracks
+        subtitle_codec: Subtitle codec for remaining tracks
+        delete_original: Whether to delete the original file after processing
+
+    Returns:
+        List of output file paths
+    """
+    import asyncio
+
+    # Check if file exists
+    if not await aiopath.exists(file_path):
+        LOGGER.error(f"File not found: {file_path}")
+        return []
+
+    # Check if any removal options are enabled
+    if not (
+        remove_video
+        or remove_audio
+        or remove_subtitle
+        or remove_attachment
+        or remove_metadata
+    ):
+        LOGGER.info("No removal options enabled, returning original file")
+        return [file_path]
+
+    # Get track information
+    tracks = await get_track_info(file_path)
+    if not tracks:
+        LOGGER.error(f"Could not get track information for: {file_path}")
+        return []
+
+    # Determine FFmpeg path
+    ffmpeg_path = "xtra"  # Use xtra alias for FFmpeg
+
+    # Create output filename
+    base_name = os.path.splitext(os.path.basename(file_path))[0]
+    file_ext = os.path.splitext(file_path)[1]
+    output_file = os.path.join(output_dir, f"{base_name}_removed{file_ext}")
+
+    # Ensure output file doesn't overwrite input
+    if output_file == file_path:
+        output_file = os.path.join(
+            output_dir, f"{base_name}_removed_tracks{file_ext}"
+        )
+
+    # Build FFmpeg command
+    cmd = [
+        ffmpeg_path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        file_path,
+        "-y",  # Overwrite output file
+    ]
+
+    # Build map arguments to include/exclude tracks
+    map_args = []
+
+    # Handle video tracks
+    if tracks["video"]:
+        for track in tracks["video"]:
+            track_index = track["index"]
+            should_remove = False
+
+            if remove_video:
+                if video_indices is None:
+                    # Remove all video tracks
+                    should_remove = True
+                elif track_index in video_indices:
+                    # Remove specific video track
+                    should_remove = True
+
+            if not should_remove:
+                # Keep this video track
+                map_args.extend(["-map", f"0:{track_index}"])
+
+    # Handle audio tracks
+    if tracks["audio"]:
+        for track in tracks["audio"]:
+            track_index = track["index"]
+            should_remove = False
+
+            if remove_audio:
+                if audio_indices is None:
+                    # Remove all audio tracks
+                    should_remove = True
+                elif track_index in audio_indices:
+                    # Remove specific audio track
+                    should_remove = True
+
+            if not should_remove:
+                # Keep this audio track
+                map_args.extend(["-map", f"0:{track_index}"])
+
+    # Handle subtitle tracks
+    if tracks["subtitle"]:
+        for track in tracks["subtitle"]:
+            track_index = track["index"]
+            should_remove = False
+
+            if remove_subtitle:
+                if subtitle_indices is None:
+                    # Remove all subtitle tracks
+                    should_remove = True
+                elif track_index in subtitle_indices:
+                    # Remove specific subtitle track
+                    should_remove = True
+
+            if not should_remove:
+                # Keep this subtitle track
+                map_args.extend(["-map", f"0:{track_index}"])
+
+    # Handle attachment tracks
+    if tracks["attachment"]:
+        for track in tracks["attachment"]:
+            track_index = track["index"]
+            should_remove = False
+
+            if remove_attachment:
+                if attachment_indices is None:
+                    # Remove all attachment tracks
+                    should_remove = True
+                elif track_index in attachment_indices:
+                    # Remove specific attachment track
+                    should_remove = True
+
+            if not should_remove:
+                # Keep this attachment track
+                map_args.extend(["-map", f"0:{track_index}"])
+
+    # If no tracks are mapped, map everything except what we want to remove
+    if not map_args:
+        # Start with mapping all streams
+        cmd.extend(["-map", "0"])
+
+        # Then exclude specific tracks
+        if remove_video and video_indices is None:
+            cmd.extend(["-map", "-0:v"])  # Remove all video
+        elif remove_video and video_indices:
+            for idx in video_indices:
+                cmd.extend(["-map", f"-0:{idx}"])  # Remove specific video tracks
+
+        if remove_audio and audio_indices is None:
+            cmd.extend(["-map", "-0:a"])  # Remove all audio
+        elif remove_audio and audio_indices:
+            for idx in audio_indices:
+                cmd.extend(["-map", f"-0:{idx}"])  # Remove specific audio tracks
+
+        if remove_subtitle and subtitle_indices is None:
+            cmd.extend(["-map", "-0:s"])  # Remove all subtitles
+        elif remove_subtitle and subtitle_indices:
+            for idx in subtitle_indices:
+                cmd.extend(["-map", f"-0:{idx}"])  # Remove specific subtitle tracks
+
+        if remove_attachment and attachment_indices is None:
+            cmd.extend(["-map", "-0:t"])  # Remove all attachments
+        elif remove_attachment and attachment_indices:
+            for idx in attachment_indices:
+                cmd.extend(
+                    ["-map", f"-0:{idx}"]
+                )  # Remove specific attachment tracks
+    else:
+        # Add the mapped tracks
+        cmd.extend(map_args)
+
+    # Add codec settings
+    if video_codec and video_codec.lower() != "none":
+        cmd.extend(["-c:v", video_codec])
+    if audio_codec and audio_codec.lower() != "none":
+        cmd.extend(["-c:a", audio_codec])
+    if subtitle_codec and subtitle_codec.lower() != "none":
+        cmd.extend(["-c:s", subtitle_codec])
+
+    # Handle metadata removal
+    if remove_metadata:
+        cmd.extend(["-map_metadata", "-1"])  # Remove all metadata
+        cmd.extend(["-map_chapters", "-1"])  # Remove chapters
+
+    # Add thread count for better performance
+    cmd.extend(["-threads", f"{max(1, cpu_no // 2)}"])
+
+    # Add output file
+    cmd.append(output_file)
+
+    LOGGER.info(f"Removing tracks from: {file_path}")
+    LOGGER.info(f"Output file: {output_file}")
+
+    try:
+        # Run FFmpeg command
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        _, stderr = await proc.communicate()
+
+        if proc.returncode == 0 and await aiopath.exists(output_file):
+            LOGGER.info(f"Successfully removed tracks from: {file_path}")
+
+            # Delete original file if requested
+            if delete_original and output_file != file_path:
+                try:
+                    await remove(file_path)
+                    LOGGER.info(f"Deleted original file: {file_path}")
+                except Exception as e:
+                    LOGGER.error(f"Failed to delete original file: {e}")
+
+            return [output_file]
+        stderr_text = stderr.decode() if stderr else "Unknown error"
+        LOGGER.error(f"Failed to remove tracks: {stderr_text}")
+
+        # Clean up failed output file
+        if await aiopath.exists(output_file):
+            with contextlib.suppress(Exception):
+                await remove(output_file)
+
+        return []
+
+    except Exception as e:
+        LOGGER.error(f"Error running FFmpeg for track removal: {e}")
+
+        # Clean up failed output file
+        if await aiopath.exists(output_file):
+            with contextlib.suppress(Exception):
+                await remove(output_file)
+
+        return []
 
 
 async def create_default_audio_thumbnail(output_dir, user_id=None):
@@ -6392,6 +7122,61 @@ class FFMpeg:
                 else:
                     cmd.extend(["-crf", "23"])  # Quality level (lower is better)
 
+                # Add format-specific optimizations for Telegram compatibility
+                if ext == "mp4":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                elif ext == "mkv":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-disposition:v:0",
+                            "default",  # Set video as default
+                            "-disposition:a:0",
+                            "default",  # Set audio as default
+                        ]
+                    )
+                elif ext == "webm":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-deadline",
+                            "good",  # VP9 optimization
+                            "-cpu-used",
+                            "2",  # VP9 speed/quality balance
+                            "-row-mt",
+                            "1",  # VP9 multithreading
+                        ]
+                    )
+                elif ext == "mov":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                else:
+                    # Universal compatibility for other formats
+                    cmd.extend(["-pix_fmt", "yuv420p"])
+
                 # Add threads
                 cmd.extend(["-threads", f"{max(1, cpu_no // 2)}"])
 
@@ -6441,6 +7226,61 @@ class FFMpeg:
                 cmd.extend(["-preset", video_preset])
             else:
                 cmd.extend(["-preset", "medium"])  # Default preset
+
+            # Add format-specific optimizations for Telegram compatibility
+            if ext == "mp4":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            elif ext == "mkv":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-disposition:v:0",
+                        "default",  # Set video as default
+                        "-disposition:a:0",
+                        "default",  # Set audio as default
+                    ]
+                )
+            elif ext == "webm":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-deadline",
+                        "good",  # VP9 optimization
+                        "-cpu-used",
+                        "2",  # VP9 speed/quality balance
+                        "-row-mt",
+                        "1",  # VP9 multithreading
+                    ]
+                )
+            elif ext == "mov":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            else:
+                # Universal compatibility for other formats
+                cmd.extend(["-pix_fmt", "yuv420p"])
 
             # Add threads
             cmd.extend(["-threads", f"{max(1, cpu_no // 2)}"])
@@ -6497,6 +7337,61 @@ class FFMpeg:
             ):
                 cmd.extend(["-preset", video_preset])
 
+            # Add format-specific optimizations for Telegram compatibility
+            if ext == "mp4":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            elif ext == "mkv":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-disposition:v:0",
+                        "default",  # Set video as default
+                        "-disposition:a:0",
+                        "default",  # Set audio as default
+                    ]
+                )
+            elif ext == "webm":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-deadline",
+                        "good",  # VP9 optimization
+                        "-cpu-used",
+                        "2",  # VP9 speed/quality balance
+                        "-row-mt",
+                        "1",  # VP9 multithreading
+                    ]
+                )
+            elif ext == "mov":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            else:
+                # Universal compatibility for other formats
+                cmd.extend(["-pix_fmt", "yuv420p"])
+
             # Add threads
             cmd.extend(["-threads", f"{max(1, cpu_no // 2)}"])
 
@@ -6518,10 +7413,70 @@ class FFMpeg:
                 "-ignore_unknown",
                 "-c",
                 "copy",
-                "-threads",
-                f"{max(1, cpu_no // 2)}",
-                output,
             ]
+
+            # Add format-specific optimizations for Telegram compatibility
+            if ext == "mp4":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            elif ext == "mkv":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-disposition:v:0",
+                        "default",  # Set video as default
+                        "-disposition:a:0",
+                        "default",  # Set audio as default
+                    ]
+                )
+            elif ext == "webm":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-deadline",
+                        "good",  # VP9 optimization
+                        "-cpu-used",
+                        "2",  # VP9 speed/quality balance
+                        "-row-mt",
+                        "1",  # VP9 multithreading
+                    ]
+                )
+            elif ext == "mov":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            else:
+                # Universal compatibility for other formats
+                cmd.extend(["-pix_fmt", "yuv420p"])
+
+            cmd.extend(
+                [
+                    "-threads",
+                    f"{max(1, cpu_no // 2)}",
+                    output,
+                ]
+            )
 
         if self._listener.is_cancelled:
             return False
@@ -7504,10 +8459,72 @@ class FFMpeg:
             "libx264",
             "-c:a",
             "aac",
-            "-threads",
-            f"{max(1, cpu_no // 2)}",
-            output_file,
         ]
+
+        # Add format-specific optimizations for Telegram compatibility
+        # Check output file format for optimization
+        output_ext = os.path.splitext(output_file)[1].lower()
+        if output_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif output_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif output_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif output_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
+        cmd.extend(
+            [
+                "-threads",
+                f"{max(1, cpu_no // 2)}",
+                output_file,
+            ]
+        )
 
         if self._listener.is_cancelled:
             return False
@@ -7601,10 +8618,71 @@ class FFMpeg:
                     "-2",
                     "-c",
                     "copy",
-                    "-threads",
-                    f"{max(1, cpu_no // 2)}",
-                    out_path,
                 ]
+
+                # Add format-specific optimizations for Telegram compatibility
+                out_ext = os.path.splitext(out_path)[1].lower()
+                if out_ext == ".mp4":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                elif out_ext == ".mkv":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-disposition:v:0",
+                            "default",  # Set video as default
+                            "-disposition:a:0",
+                            "default",  # Set audio as default
+                        ]
+                    )
+                elif out_ext == ".webm":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-deadline",
+                            "good",  # VP9 optimization
+                            "-cpu-used",
+                            "2",  # VP9 speed/quality balance
+                            "-row-mt",
+                            "1",  # VP9 multithreading
+                        ]
+                    )
+                elif out_ext == ".mov":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                else:
+                    # Universal compatibility for other formats
+                    cmd.extend(["-pix_fmt", "yuv420p"])
+
+                cmd.extend(
+                    [
+                        "-threads",
+                        f"{max(1, cpu_no // 2)}",
+                        out_path,
+                    ]
+                )
 
                 # Process this part
                 if self._listener.is_cancelled:
@@ -7690,10 +8768,71 @@ class FFMpeg:
                 "-2",
                 "-c",
                 "copy",
-                "-threads",
-                f"{max(1, cpu_no // 2)}",
-                out_path,
             ]
+
+            # Add format-specific optimizations for Telegram compatibility
+            out_ext = os.path.splitext(out_path)[1].lower()
+            if out_ext == ".mp4":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            elif out_ext == ".mkv":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-disposition:v:0",
+                        "default",  # Set video as default
+                        "-disposition:a:0",
+                        "default",  # Set audio as default
+                    ]
+                )
+            elif out_ext == ".webm":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-deadline",
+                        "good",  # VP9 optimization
+                        "-cpu-used",
+                        "2",  # VP9 speed/quality balance
+                        "-row-mt",
+                        "1",  # VP9 multithreading
+                    ]
+                )
+            elif out_ext == ".mov":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            else:
+                # Universal compatibility for other formats
+                cmd.extend(["-pix_fmt", "yuv420p"])
+
+            cmd.extend(
+                [
+                    "-threads",
+                    f"{max(1, cpu_no // 2)}",
+                    out_path,
+                ]
+            )
             if not multi_streams:
                 # Remove the mapping arguments (2 entries)
                 del cmd[12]
@@ -7834,7 +8973,7 @@ async def apply_document_metadata(file_path, title=None, author=None, comment=No
 async def apply_pdf_metadata(
     file_path, temp_file, title=None, author=None, comment=None
 ):
-    """Apply metadata to PDF files using pdftk or exiftool.
+    """Apply metadata to PDF files using PyMuPDF or exiftool.
 
     Args:
         file_path: Path to the PDF file
@@ -7847,45 +8986,46 @@ async def apply_pdf_metadata(
         bool: True if metadata was successfully applied, False otherwise
     """
     try:
-        # Check if pdftk is available
-        pdftk_check = await cmd_exec(["which", "pdftk"])
+        # Try using PyMuPDF first for better performance and reliability
+        try:
+            LOGGER.info(f"Using PyMuPDF to apply metadata to {file_path}")
 
-        if pdftk_check[0]:  # pdftk is available
-            LOGGER.info(f"Using pdftk to apply metadata to {file_path}")
+            # Open the PDF document
+            doc = fitz.open(file_path)
 
-            # Create a temporary info file
-            info_file = f"{file_path}.info"
-            with open(info_file, "w") as f:
-                if title:
-                    f.write(f"InfoKey: Title\nInfoValue: {title}\n")
-                if author:
-                    f.write(f"InfoKey: Author\nInfoValue: {author}\n")
-                if comment:
-                    f.write(f"InfoKey: Subject\nInfoValue: {comment}\n")
+            # Get current metadata
+            metadata = doc.metadata
 
-            # Apply metadata
-            cmd = ["pdftk", file_path, "update_info", info_file, "output", temp_file]
+            # Update metadata with new values
+            if title:
+                metadata["title"] = title
+            if author:
+                metadata["author"] = author
+            if comment:
+                metadata["subject"] = comment
 
-            result = await cmd_exec(cmd)
+            # Set the updated metadata
+            doc.set_metadata(metadata)
 
-            # Clean up
-            if await aiopath.exists(info_file):
-                await remove(info_file)
+            # Save to temporary file
+            doc.save(temp_file)
+            doc.close()
 
-            if result[2] == 0 and await aiopath.exists(temp_file):
-                os.replace(temp_file, file_path)
-                return True
+            # Replace original file with updated file
             if await aiopath.exists(temp_file):
-                await remove(temp_file)
-            LOGGER.error(f"pdftk failed: {result[1]}")
+                os.replace(temp_file, file_path)
+                LOGGER.info("Successfully applied PDF metadata using PyMuPDF")
+                return True
+
+            LOGGER.error(f"Failed to save PDF with metadata: {temp_file}")
+            return False
+
+        except Exception as pymupdf_error:
+            LOGGER.warning(f"PyMuPDF metadata application failed: {pymupdf_error}")
             # Fall back to exiftool
             return await apply_exiftool_metadata(
                 file_path, temp_file, title, author, comment
             )
-        # Fall back to exiftool
-        return await apply_exiftool_metadata(
-            file_path, temp_file, title, author, comment
-        )
 
     except Exception as e:
         LOGGER.error(f"Error applying PDF metadata: {e}")
@@ -8087,40 +9227,43 @@ async def merge_pdfs(files, output_filename="merged.pdf"):
         # Use files in the order they were provided
         # (No sorting to preserve user's intended order)
 
-        # Create a PDF merger object
-        merger = PdfMerger()
+        # Create a new PDF document for the merged output
+        merged_doc = fitz.open()
 
-        # Add each PDF to the merger with error handling
+        # Add each PDF to the merged document with error handling
         valid_pdfs = 0
         for pdf in files:
             try:
-                # Check if the PDF is valid and not password-protected
-                with open(pdf, "rb") as pdf_file:
-                    reader = PdfReader(pdf_file)
-                    if reader.is_encrypted:
-                        continue
+                # Open the PDF document
+                doc = fitz.open(pdf)
 
-                # Add the PDF to the merger
-                merger.append(pdf)
+                # Check if the PDF is password-protected
+                if doc.needs_pass:
+                    LOGGER.warning(f"Skipping password-protected PDF: {pdf}")
+                    doc.close()
+                    continue
+
+                # Insert all pages from this PDF
+                merged_doc.insert_pdf(doc)
+                doc.close()
                 valid_pdfs += 1
+
             except Exception as pdf_error:
                 LOGGER.error(f"Error processing PDF {pdf}: {pdf_error}")
                 continue
 
         if valid_pdfs == 0:
             LOGGER.error("No valid PDFs found for merging")
+            merged_doc.close()
             return None
 
         # Determine output path
         base_dir = os.path.dirname(files[0])
         output_file = os.path.join(base_dir, output_filename)
 
-        # Write the merged PDF to file
-        with open(output_file, "wb") as f:
-            merger.write(f)
-
-        # Close the merger
-        merger.close()
+        # Save the merged PDF
+        merged_doc.save(output_file)
+        merged_doc.close()
 
         LOGGER.info(f"Successfully merged {valid_pdfs} PDFs into {output_file}")
 
@@ -8166,8 +9309,8 @@ async def create_pdf_from_images(
         # Use files in the order they were provided
         # (No sorting to preserve user's intended order)
 
-        # Create a PDF writer
-        writer = PdfWriter()
+        # Create a new PDF document
+        doc = fitz.open()
 
         # Process each image
         valid_images = 0
@@ -8187,18 +9330,25 @@ async def create_pdf_from_images(
                 elif img.mode != "RGB":
                     img = img.convert("RGB")
 
-                # Create a temporary file for the image
-                temp_pdf = f"{img_path}.temp.pdf"
+                # Convert PIL image to bytes
+                import io
 
-                # Save the image as a PDF with better quality
-                img.save(temp_pdf, "PDF", resolution=300.0, quality=95)
+                img_bytes = io.BytesIO()
+                img.save(img_bytes, format="JPEG", quality=95)
+                img_bytes.seek(0)
 
-                # Add the PDF to the writer
-                reader = PdfReader(temp_pdf)
-                writer.add_page(reader.pages[0])
+                # Create a new page with appropriate size
+                # Calculate page size based on image dimensions and DPI
+                img_width, img_height = img.size
+                # Use 72 DPI as default for PDF (standard)
+                page_width = img_width * 72 / 300  # Assuming 300 DPI source
+                page_height = img_height * 72 / 300
 
-                # Remove the temporary file
-                os.remove(temp_pdf)
+                # Create page with calculated dimensions
+                page = doc.new_page(width=page_width, height=page_height)
+                img_rect = page.rect
+                page.insert_image(img_rect, stream=img_bytes.getvalue())
+
                 valid_images += 1
 
             except Exception as e:
@@ -8207,11 +9357,12 @@ async def create_pdf_from_images(
 
         if valid_images == 0:
             LOGGER.error("No valid images could be processed for PDF creation")
+            doc.close()
             return None
 
-        # Write the output PDF
-        with open(output_file, "wb") as f:
-            writer.write(f)
+        # Save the output PDF
+        doc.save(output_file)
+        doc.close()
 
         LOGGER.info(
             f"Successfully created PDF with {valid_images} images: {output_file}"
@@ -8716,25 +9867,28 @@ async def merge_documents(files, output_format="pdf"):
     # Case 3: Mixed file types (PDFs and images)
     LOGGER.info("Processing mixed file types (PDFs and images)")
 
-    # Create a PDF writer for the final output
-    writer = PdfWriter()
+    # Create a new PDF document for the final output
+    merged_doc = fitz.open()
 
     # Process PDF files first
     pdf_count = 0
     if "pdf" in file_groups:
         for pdf_path in file_groups["pdf"]:
             try:
-                # Check if the PDF is valid and not password-protected
-                with open(pdf_path, "rb") as pdf_file:
-                    reader = PdfReader(pdf_file)
-                    if reader.is_encrypted:
-                        continue
+                # Open the PDF document
+                doc = fitz.open(pdf_path)
 
-                    # Add all pages from this PDF
-                    for page in reader.pages:
-                        writer.add_page(page)
+                # Check if the PDF is password-protected
+                if doc.needs_pass:
+                    LOGGER.warning(f"Skipping password-protected PDF: {pdf_path}")
+                    doc.close()
+                    continue
 
-                    pdf_count += 1
+                # Insert all pages from this PDF
+                merged_doc.insert_pdf(doc)
+                doc.close()
+                pdf_count += 1
+
             except Exception as e:
                 LOGGER.error(f"Error processing PDF {pdf_path}: {e}")
                 continue
@@ -8757,18 +9911,25 @@ async def merge_documents(files, output_format="pdf"):
             elif img.mode != "RGB":
                 img = img.convert("RGB")
 
-            # Create a temporary file for the image
-            temp_pdf = f"{img_path}.temp.pdf"
+            # Convert PIL image to bytes
+            import io
 
-            # Save the image as a PDF with better quality
-            img.save(temp_pdf, "PDF", resolution=300.0, quality=95)
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format="JPEG", quality=95)
+            img_bytes.seek(0)
 
-            # Add the PDF to the writer
-            reader = PdfReader(temp_pdf)
-            writer.add_page(reader.pages[0])
+            # Create a new page with appropriate size
+            # Calculate page size based on image dimensions and DPI
+            img_width, img_height = img.size
+            # Use 72 DPI as default for PDF (standard)
+            page_width = img_width * 72 / 300  # Assuming 300 DPI source
+            page_height = img_height * 72 / 300
 
-            # Remove the temporary file
-            os.remove(temp_pdf)
+            # Create page with calculated dimensions
+            page = merged_doc.new_page(width=page_width, height=page_height)
+            img_rect = page.rect
+            page.insert_image(img_rect, stream=img_bytes.getvalue())
+
             image_count += 1
 
         except Exception as e:
@@ -8778,12 +9939,13 @@ async def merge_documents(files, output_format="pdf"):
     # Check if we have any valid files to merge
     if pdf_count == 0 and image_count == 0:
         LOGGER.error("No valid files found for merging")
+        merged_doc.close()
         return None
 
-    # Write the merged PDF
+    # Save the merged PDF
     try:
-        with open(output_file, "wb") as f:
-            writer.write(f)
+        merged_doc.save(output_file)
+        merged_doc.close()
 
         LOGGER.info(
             f"Successfully merged {pdf_count} PDFs and {image_count} images into {output_file}"
@@ -8799,4 +9961,48 @@ async def merge_documents(files, output_format="pdf"):
         return output_file
     except Exception as e:
         LOGGER.error(f"Error writing merged PDF: {e}")
+        return None
+
+
+async def get_pdf_info(pdf_path):
+    """
+    Get detailed information about a PDF file using PyMuPDF.
+
+    Args:
+        pdf_path: Path to the PDF file
+
+    Returns:
+        dict: Dictionary containing PDF information or None if error
+    """
+    try:
+        doc = fitz.open(pdf_path)
+
+        info = {
+            "page_count": doc.page_count,
+            "is_encrypted": doc.needs_pass,
+            "metadata": doc.metadata,
+            "file_size": os.path.getsize(pdf_path),
+            "pages_info": [],
+        }
+
+        # Get information about each page
+        for page_num in range(
+            min(doc.page_count, 10)
+        ):  # Limit to first 10 pages for performance
+            page = doc[page_num]
+            page_info = {
+                "page_number": page_num + 1,
+                "width": page.rect.width,
+                "height": page.rect.height,
+                "rotation": page.rotation,
+                "has_images": len(page.get_images()) > 0,
+                "has_text": len(page.get_text().strip()) > 0,
+            }
+            info["pages_info"].append(page_info)
+
+        doc.close()
+        return info
+
+    except Exception as e:
+        LOGGER.error(f"Error getting PDF info for {pdf_path}: {e}")
         return None

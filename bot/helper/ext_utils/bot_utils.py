@@ -169,10 +169,17 @@ def arg_parser(items, arg_base):
         "-extract-subtitle",
         "-extract-attachment",
         "-extract-priority",
+        "-remove",
+        "-remove-video",
+        "-remove-audio",
+        "-remove-subtitle",
+        "-remove-attachment",
+        "-remove-metadata",
         "-add",
         "-add-video",
         "-add-audio",
         "-add-subtitle",
+        "-add-subtitle-hardsub",
         "-add-attachment",
         "-del",
         "-preserve",
@@ -228,10 +235,17 @@ def arg_parser(items, arg_base):
                 "-extract-audio",
                 "-extract-subtitle",
                 "-extract-attachment",
+                "-remove",
+                "-remove-video",
+                "-remove-audio",
+                "-remove-subtitle",
+                "-remove-attachment",
+                "-remove-metadata",
                 "-add",
                 "-add-video",
                 "-add-audio",
                 "-add-subtitle",
+                "-add-subtitle-hardsub",
                 "-add-attachment",
                 "-del",
                 "-preserve",
@@ -851,6 +865,7 @@ def is_media_tool_enabled(tool_name):
         "compression",
         "trim",
         "extract",
+        "remove",
         "add",
         "metadata",
         "xtra",
@@ -954,7 +969,7 @@ def is_flag_enabled(flag_name):
         return Config.LEECH_ENABLED
 
     # Check for ytdlp-related flags
-    ytdlp_flags = ["opt"]
+    ytdlp_flags = ["opt", "range"]
     if clean_flag in ytdlp_flags:
         # If ytdlp is disabled, these flags should be disabled too
         return Config.YTDLP_ENABLED
@@ -999,6 +1014,20 @@ def is_flag_enabled(flag_name):
         "ai": "extract",  # Short for extract-audio-index
         "si": "extract",  # Short for extract-subtitle-index
         "ati": "extract",  # Short for extract-attachment-index
+        "remove": "remove",
+        "remove-video": "remove",
+        "remove-audio": "remove",
+        "remove-subtitle": "remove",
+        "remove-attachment": "remove",
+        "remove-metadata": "remove",
+        "remove-video-index": "remove",
+        "remove-audio-index": "remove",
+        "remove-subtitle-index": "remove",
+        "remove-attachment-index": "remove",
+        "rvi": "remove",  # Short for remove-video-index
+        "rai": "remove",  # Short for remove-audio-index
+        "rsi": "remove",  # Short for remove-subtitle-index
+        "rati": "remove",  # Short for remove-attachment-index
         "add": "add",
         "add-video": "add",
         "add-audio": "add",

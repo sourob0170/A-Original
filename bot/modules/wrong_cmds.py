@@ -34,16 +34,20 @@ async def handle_qb_commands(_, message):
     await auto_delete_message(reply, message, time=300)
 
 
-async def handle_no_suffix_commands(client, message):
-    """Handle commands without suffix and show warning messages.
+async def handle_no_suffix_commands(client, message):  # noqa: ARG001
+    """Handle commands with incorrect suffixes and show warning messages.
 
-    When CMD_SUFFIX is set:
-    - No warning for standard commands with CMD_SUFFIX (like "/leech{CMD_SUFFIX}")
-    - Warning for standard commands without CMD_SUFFIX (like "/leech")
+    Logic:
+    - If CMD_SUFFIX is set (e.g., "4") and CORRECT_CMD_SUFFIX is set (e.g., "2,3,none"):
+      - /sox1 -> Warning: use /sox4 (current CMD_SUFFIX)
+      - /sox2 -> No warning (allowed in CORRECT_CMD_SUFFIX)
+      - /sox3 -> No warning (allowed in CORRECT_CMD_SUFFIX)
+      - /sox4 -> No warning (current CMD_SUFFIX)
+      - /sox -> No warning (if "none" in CORRECT_CMD_SUFFIX)
 
-    When CMD_SUFFIX is not set:
-    - Warning for commands with non-standard suffix (like "/leech3")
-    - No warning for standard commands (like "/leech")
+    - If CMD_SUFFIX is not set:
+      - /sox3 -> Warning: use /sox
+      - /sox -> No warning (standard command)
 
     Args:
         client: The client instance
@@ -52,6 +56,7 @@ async def handle_no_suffix_commands(client, message):
     # Check if command warnings are enabled
     if not Config.WRONG_CMD_WARNINGS_ENABLED:
         return
+
     # Get the full command text (including any suffix)
     full_command = message.text.split()[0].lower()
     # Extract the base command without the leading slash
@@ -136,29 +141,53 @@ async def handle_no_suffix_commands(client, message):
         "zsearch",
         "streamripsearch",
         "srsearch",
+        "srs",
         "virustotal",
+        "mediatools",
+        "mt",
+        "mthelp",
+        "mth",
+        "fontstyles",
+        "fonts",
+        "settings",
+        "usettings",
+        "us",
+        "gensession",
+        "gs",
+        "megasearch",
+        "mgs",
+        # Encoding/Decoding commands
+        "encode",
+        "enc",
+        "decode",
+        "dec",
+        # QuickInfo commands
+        "quickinfo",
+        "qi",
     ]
 
-    # Check if this is a standard command with a non-standard suffix
+    # Find the base command (without any suffix)
+    # Sort commands by length in descending order to match longer commands first
+    # This prevents "s" from matching "sox4" before "sox" gets a chance
+    sorted_commands = sorted(standard_commands, key=len, reverse=True)
+
     found_standard_cmd = None
-    for std_cmd in standard_commands:
-        if base_command.startswith(std_cmd) and base_command != std_cmd:
+    command_suffix = ""
+
+    for std_cmd in sorted_commands:
+        if base_command == std_cmd:
+            # Exact match - this is a standard command without suffix
             found_standard_cmd = std_cmd
+            command_suffix = ""
+            break
+        if base_command.startswith(std_cmd) and len(base_command) > len(std_cmd):
+            # Command with some suffix
+            found_standard_cmd = std_cmd
+            command_suffix = base_command[len(std_cmd) :]
             break
 
-    # CASE: When CMD_SUFFIX is not set
-    if not cmd_suffix:
-        # Only show warning if command has a non-standard suffix (like /leech3)
-        if found_standard_cmd:
-            warning_msg = f"⚠️ <b>Warning:</b> Please use /{found_standard_cmd} command instead of /{base_command}."
-            reply = await send_message(message, warning_msg)
-            await auto_delete_message(reply, message, time=300)
-        return
-
-    # CASE: When CMD_SUFFIX is set
-    # Check if the command already has the correct suffix
-    if base_command.endswith(cmd_suffix):
-        # Command already has the correct suffix, no warning needed
+    # If no standard command found, ignore (not our concern)
+    if not found_standard_cmd:
         return
 
     # Get the list of correct command suffixes (if any)
@@ -168,19 +197,38 @@ async def handle_no_suffix_commands(client, message):
             suffix.strip() for suffix in Config.CORRECT_CMD_SUFFIX.split(",")
         ]
 
-    # Check if the command has a suffix that's in the list of correct suffixes
-    for suffix in correct_cmd_suffixes:
-        if suffix and base_command.endswith(suffix):
-            # This is an allowed suffix, no warning needed
-            return
+    # CASE: When CMD_SUFFIX is not set
+    if not cmd_suffix:
+        # Only show warning if command has a non-standard suffix (like /leech3)
+        if command_suffix:  # Command has some suffix when it shouldn't
+            warning_msg = f"⚠️ <b>Warning:</b> Please use /{found_standard_cmd} command instead of /{base_command}."
+            reply = await send_message(message, warning_msg)
+            await auto_delete_message(reply, message, time=300)
+        return
 
-    # Command with non-standard suffix (like /leech3 or /mirrorz)
-    if found_standard_cmd:
+    # CASE: When CMD_SUFFIX is set
+    # Check if the command already has the correct current suffix
+    if command_suffix == cmd_suffix:
+        # Command has the current CMD_SUFFIX, no warning needed
+        return
+
+    # Check if the command has no suffix and "none" is in correct suffixes
+    if not command_suffix and "none" in correct_cmd_suffixes:
+        # Command without suffix is allowed, no warning needed
+        return
+
+    # Check if the command has a suffix that's in the list of correct suffixes
+    if command_suffix and command_suffix in correct_cmd_suffixes:
+        # This is an allowed suffix, no warning needed
+        return
+
+    # If we reach here, the command needs a warning
+    if command_suffix:
+        # Command with wrong suffix (like /sox1 when CMD_SUFFIX is 4)
         warning_msg = f"⚠️ <b>Warning:</b> For Bot <b>{cmd_suffix}</b> use /{found_standard_cmd}{cmd_suffix} instead of /{base_command}. Thank you."
-        reply = await send_message(message, warning_msg)
-        await auto_delete_message(reply, message, time=300)
-    # Standard command without the required suffix
-    elif base_command in standard_commands:
-        warning_msg = f"⚠️ <b>Warning:</b> For Bot <b>{cmd_suffix}</b> use /{base_command}{cmd_suffix}. Thank you."
-        reply = await send_message(message, warning_msg)
-        await auto_delete_message(reply, message, time=300)
+    else:
+        # Standard command without the required suffix (like /sox when CMD_SUFFIX is 4)
+        warning_msg = f"⚠️ <b>Warning:</b> For Bot <b>{cmd_suffix}</b> use /{found_standard_cmd}{cmd_suffix}. Thank you."
+
+    reply = await send_message(message, warning_msg)
+    await auto_delete_message(reply, message, time=300)

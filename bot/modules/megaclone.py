@@ -32,13 +32,69 @@ class MegaClone(TaskListener):
         self.multi_tag = multi_tag
         self.options = options
         self.bulk = bulk
+
         super().__init__()
+
+        # Initialize required attributes for TaskListener compatibility AFTER super().__init__()
+        # This ensures they don't get overridden by the parent class initialization
+        self.same_dir = {}  # Required for same_dir processing
+        self.folder_name = None  # Required for folder processing
+        self.is_clone = True  # Mark this as a clone operation
+        self.mega_upload_path = None  # Will be set during fallback
+        self.up_dest = "mg"  # Set upload destination to MEGA for clone operations
+        self.is_leech = False  # Clone operations are not leech operations
+
+        # Initialize all media processing attributes to False for clone operations
+        self.compression_enabled = False
+        self.merge_enabled = False
+        self.watermark_enabled = False
+        self.trim_enabled = False
+        self.extract_enabled = False
+        self.remove_enabled = False
+        self.add_enabled = False
+        self.extract = False
+        self.compress = False
+        self.join = False
+        self.merge_priority = 0
+        self.watermark_priority = 0
+        self.trim_priority = 0
+        self.compression_priority = 0
+        self.extract_priority = 0
+        self.remove_priority = 0
+        self.add_priority = 0
+        self.watermark = None
+        self.trim = None
+        self.metadata = None
+        self.metadata_title = None
+        self.metadata_author = None
+        self.metadata_comment = None
+        self.metadata_all = None
+        self.metadata_video_title = None
+        self.metadata_video_author = None
+        self.metadata_video_comment = None
+        self.metadata_audio_title = None
+        self.metadata_audio_author = None
+        self.metadata_audio_comment = None
+        self.metadata_subtitle_title = None
+        self.metadata_subtitle_author = None
+        self.metadata_subtitle_comment = None
+        self.ffmpeg_cmds = None
+        self.name_sub = None
+        self.screen_shots = False
+        self.convert_audio = False
+        self.convert_video = False
+        self.sample_video = False
+        self.is_nzb = False
+        self.excluded_extensions = []
 
     @new_task
     async def new_event(self):
         """Handle new MEGA clone event"""
         text = self.message.text.split("\n")
         input_list = text[0].split(" ")
+
+        # Set user tag for completion message
+        await self.get_tag(text)
 
         # Parse arguments
         args = {
@@ -97,11 +153,21 @@ class MegaClone(TaskListener):
             await delete_links(self.message)
             return await auto_delete_message(msg, time=300)
 
-        # Check if MEGA credentials are configured
-        if not Config.MEGA_EMAIL or not Config.MEGA_PASSWORD:
+        # Check if MEGA credentials are configured (user or bot-wide)
+        from bot.helper.ext_utils.db_handler import database
+
+        user_dict = await database.get_user_doc(self.user_id)
+
+        user_mega_email = user_dict.get("MEGA_EMAIL")
+        user_mega_password = user_dict.get("MEGA_PASSWORD")
+
+        has_user_credentials = user_mega_email and user_mega_password
+        has_bot_credentials = Config.MEGA_EMAIL and Config.MEGA_PASSWORD
+
+        if not has_user_credentials and not has_bot_credentials:
             msg = await send_message(
                 self.message,
-                "❌ MEGA credentials not configured. Please contact the administrator.",
+                "❌ MEGA credentials not configured. Please set your MEGA credentials in /settings → MEGA Settings or contact the administrator.",
             )
             await delete_links(self.message)
             return await auto_delete_message(msg, time=300)
@@ -120,14 +186,6 @@ class MegaClone(TaskListener):
                 self.name = "MEGA_Clone"
 
         # Check which MEGA account will be used and show folder selection if needed
-        from bot.helper.ext_utils.db_handler import database
-
-        user_dict = await database.get_user_doc(self.user_id)
-
-        # Check for user MEGA credentials first, then fall back to owner credentials
-        user_mega_email = user_dict.get("MEGA_EMAIL")
-        user_mega_password = user_dict.get("MEGA_PASSWORD")
-
         has_user_credentials = user_mega_email and user_mega_password
         has_owner_credentials = Config.MEGA_EMAIL and Config.MEGA_PASSWORD
 
@@ -162,7 +220,10 @@ class MegaClone(TaskListener):
 
         # Start MEGA clone operation
         await self.on_download_start()
-        create_task(add_mega_clone(self, self.link))
+
+        # Pass the mega_clone_path as a separate parameter to avoid listener object issues
+        clone_path = getattr(self, "mega_clone_path", None)
+        create_task(add_mega_clone(self, self.link, clone_path))
         await delete_links(self.message)
         return None
 

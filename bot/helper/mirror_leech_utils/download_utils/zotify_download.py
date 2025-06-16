@@ -799,7 +799,7 @@ class ZotifyDownloadHelper:
                 output = episode.create_output(
                     ext=file_ext,  # File extension
                     library=self._download_path,  # Library path
-                    output="{podcast}/{episode_number:02d} - {title}",  # Output template (parameter name is 'output', not 'template')
+                    output="{podcast}/{episode_number} - {title}",  # Output template (parameter name is 'output', not 'template')
                     replace=config_obj.replace_existing,  # Replace existing files
                 )
 

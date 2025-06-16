@@ -33,7 +33,10 @@ from bot.helper.telegram_helper.message_utils import (
 )
 
 handler_dict = {}
-no_thumb = Config.OWNER_THUMB
+# Only use owner thumbnail if it's actually configured (not empty/None)
+no_thumb = (
+    Config.OWNER_THUMB if Config.OWNER_THUMB and Config.OWNER_THUMB.strip() else None
+)
 
 
 async def count_user_cookies(user_id):
@@ -295,6 +298,18 @@ mega_options = [
     "MEGA_CLONE_OVERWRITE",
 ]
 yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES", "FFMPEG_CMDS"]
+ddl_options = [
+    "DDL_SERVER",
+    "GOFILE_API_KEY",
+    "GOFILE_FOLDER_NAME",
+    "GOFILE_PUBLIC_LINKS",
+    "GOFILE_PASSWORD_PROTECTION",
+    "GOFILE_DEFAULT_PASSWORD",
+    "GOFILE_LINK_EXPIRY_DAYS",
+    "STREAMTAPE_LOGIN",
+    "STREAMTAPE_API_KEY",
+    "STREAMTAPE_FOLDER_NAME",
+]
 
 
 async def get_user_settings(from_user, stype="main"):
@@ -307,6 +322,7 @@ async def get_user_settings(from_user, stype="main"):
     token_pickle = f"tokens/{user_id}.pickle"
     thumbpath = f"thumbnails/{user_id}.jpg"
     user_dict = user_data.get(user_id, {})
+    # Only show thumbnail if user has one or if owner thumbnail is configured
     thumbnail = thumbpath if await aiopath.exists(thumbpath) else no_thumb
 
     # Helper function to get MEGA settings with user priority
@@ -1216,22 +1232,317 @@ Please use /mediatools command to configure convert settings.
 
 <b>Note:</b> 'Metadata All' takes priority over all other settings when set."""
 
+    elif stype == "ddl":
+        # DDL Settings - only show if DDL is enabled
+        if not Config.DDL_ENABLED:
+            buttons.data_button("Back", f"userset {user_id} back")
+            buttons.data_button("Close", f"userset {user_id} close")
+            text = f"""<u><b>🔗 DDL Settings for {name}</b></u>
+
+<b>❌ DDL (Direct Download Link) uploads are currently disabled by the bot owner.</b>
+
+<i>Contact the bot owner to enable DDL functionality.</i>"""
+        else:
+            # DDL General Settings
+            buttons.data_button(
+                "📤 General Settings", f"userset {user_id} ddl_general"
+            )
+            buttons.data_button(
+                "📁 Gofile Settings", f"userset {user_id} ddl_gofile"
+            )
+            buttons.data_button(
+                "🎬 Streamtape Settings", f"userset {user_id} ddl_streamtape"
+            )
+
+            buttons.data_button("Back", f"userset {user_id} back")
+            buttons.data_button("Close", f"userset {user_id} close")
+
+            # Helper function to get DDL settings with user priority
+            def get_ddl_setting(setting_name, default_value=None):
+                # Check user settings first
+                user_value = user_dict.get(setting_name, None)
+                if user_value is not None:
+                    return user_value, "User"
+
+                # Fall back to owner config
+                owner_value = getattr(Config, setting_name, default_value)
+                return owner_value, "Owner"
+
+            # Get DDL settings
+            ddl_server, ddl_server_source = get_ddl_setting(
+                "DDL_SERVER", Config.DDL_DEFAULT_SERVER
+            )
+
+            # Gofile settings
+            gofile_api_key, gofile_api_source = get_ddl_setting("GOFILE_API_KEY", "")
+            gofile_folder, gofile_folder_source = get_ddl_setting(
+                "GOFILE_FOLDER_NAME", ""
+            )
+            gofile_public, gofile_public_source = get_ddl_setting(
+                "GOFILE_PUBLIC_LINKS", Config.GOFILE_PUBLIC_LINKS
+            )
+            gofile_password_protection, gofile_password_source = get_ddl_setting(
+                "GOFILE_PASSWORD_PROTECTION", Config.GOFILE_PASSWORD_PROTECTION
+            )
+            gofile_default_password, gofile_default_password_source = (
+                get_ddl_setting("GOFILE_DEFAULT_PASSWORD", "")
+            )
+            gofile_expiry, gofile_expiry_source = get_ddl_setting(
+                "GOFILE_LINK_EXPIRY_DAYS", Config.GOFILE_LINK_EXPIRY_DAYS
+            )
+
+            # Streamtape settings
+            streamtape_login, streamtape_login_source = get_ddl_setting(
+                "STREAMTAPE_LOGIN", ""
+            )
+            streamtape_api_key, streamtape_api_source = get_ddl_setting(
+                "STREAMTAPE_API_KEY", ""
+            )
+            streamtape_folder, streamtape_folder_source = get_ddl_setting(
+                "STREAMTAPE_FOLDER_NAME", ""
+            )
+
+            # Status indicators
+            gofile_status = "✅ Ready" if gofile_api_key else "❌ API Key Required"
+            streamtape_status = (
+                "✅ Ready"
+                if (streamtape_login and streamtape_api_key)
+                else "❌ Credentials Required"
+            )
+
+            # Display values
+            gofile_api_display = "Set" if gofile_api_key else "Not Set"
+            gofile_folder_display = gofile_folder or "None (Use filename)"
+            gofile_password_display = gofile_default_password or "None"
+            gofile_expiry_display = (
+                f"{gofile_expiry} days" if gofile_expiry else "No expiry"
+            )
+
+            streamtape_login_display = "Set" if streamtape_login else "Not Set"
+            streamtape_api_display = "Set" if streamtape_api_key else "Not Set"
+            streamtape_folder_display = streamtape_folder or "None (Root folder)"
+
+            text = f"""<u><b>🔗 DDL Settings for {name}</b></u>
+
+<b>📤 General:</b>
+Default Server: <code>{ddl_server}</code> ({ddl_server_source})
+
+<b>📁 Gofile Server:</b>
+Status: <b>{gofile_status}</b>
+API Key: <code>{gofile_api_display}</code> ({gofile_api_source})
+Folder: <code>{gofile_folder_display}</code> ({gofile_folder_source})
+Public Links: <b>{"✅" if gofile_public else "❌"}</b> ({gofile_public_source})
+Password Protection: <b>{"✅" if gofile_password_protection else "❌"}</b> ({gofile_password_source})
+Default Password: <code>{gofile_password_display}</code> ({gofile_default_password_source})
+Link Expiry: <code>{gofile_expiry_display}</code> ({gofile_expiry_source})
+
+<b>🎬 Streamtape Server:</b>
+Status: <b>{streamtape_status}</b>
+Login: <code>{streamtape_login_display}</code> ({streamtape_login_source})
+API Key: <code>{streamtape_api_display}</code> ({streamtape_api_source})
+Folder: <code>{streamtape_folder_display}</code> ({streamtape_folder_source})
+
+<i>💡 Your settings override owner settings. Configure your own API keys for personalized uploads.</i>
+<i>🔗 Use -up ddl to upload to default server, or -up ddl:gofile / -up ddl:streamtape for specific servers.</i>"""
+
+    elif stype == "ddl_general":
+        # DDL General Settings
+        buttons.data_button("Default Server", f"userset {user_id} menu DDL_SERVER")
+        buttons.data_button("Back", f"userset {user_id} ddl")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get DDL server setting
+        ddl_server = user_dict.get("DDL_SERVER", Config.DDL_DEFAULT_SERVER)
+        ddl_server_source = "User" if "DDL_SERVER" in user_dict else "Owner"
+
+        text = f"""<u><b>📤 DDL General Settings for {name}</b></u>
+
+<b>Server Configuration:</b>
+Default Server: <code>{ddl_server}</code> (Set by {ddl_server_source})
+
+<b>Available Servers:</b>
+• <b>gofile</b> - Supports all file types, free tier available
+• <b>streamtape</b> - Video files only, requires account
+
+<i>The default server will be used when you specify -up ddl without a specific server.</i>"""
+
+    elif stype == "ddl_gofile":
+        # Gofile Settings
+        buttons.data_button("API Key", f"userset {user_id} menu GOFILE_API_KEY")
+        buttons.data_button(
+            "Folder Name", f"userset {user_id} menu GOFILE_FOLDER_NAME"
+        )
+        buttons.data_button(
+            "Default Password", f"userset {user_id} menu GOFILE_DEFAULT_PASSWORD"
+        )
+        buttons.data_button(
+            "Link Expiry Days", f"userset {user_id} menu GOFILE_LINK_EXPIRY_DAYS"
+        )
+
+        # Toggle buttons
+        gofile_public = user_dict.get(
+            "GOFILE_PUBLIC_LINKS", Config.GOFILE_PUBLIC_LINKS
+        )
+        buttons.data_button(
+            f"Public Links: {'✅ ON' if gofile_public else '❌ OFF'}",
+            f"userset {user_id} tog GOFILE_PUBLIC_LINKS {'f' if gofile_public else 't'}",
+        )
+
+        gofile_password_protection = user_dict.get(
+            "GOFILE_PASSWORD_PROTECTION", Config.GOFILE_PASSWORD_PROTECTION
+        )
+        buttons.data_button(
+            f"Password Protection: {'✅ ON' if gofile_password_protection else '❌ OFF'}",
+            f"userset {user_id} tog GOFILE_PASSWORD_PROTECTION {'f' if gofile_password_protection else 't'}",
+        )
+
+        buttons.data_button("Back", f"userset {user_id} ddl")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get Gofile settings with user priority
+        def get_gofile_setting(setting_name, default_value=None):
+            # Check user settings first
+            user_value = user_dict.get(setting_name, None)
+            if user_value is not None:
+                return user_value, "User"
+
+            # Fall back to owner config
+            owner_value = getattr(Config, setting_name, default_value)
+            return owner_value, "Owner"
+
+        gofile_api_key, gofile_api_source = get_gofile_setting("GOFILE_API_KEY", "")
+        gofile_folder, gofile_folder_source = get_gofile_setting(
+            "GOFILE_FOLDER_NAME", ""
+        )
+        gofile_public, gofile_public_source = get_gofile_setting(
+            "GOFILE_PUBLIC_LINKS", Config.GOFILE_PUBLIC_LINKS
+        )
+        gofile_password_protection, gofile_password_source = get_gofile_setting(
+            "GOFILE_PASSWORD_PROTECTION", Config.GOFILE_PASSWORD_PROTECTION
+        )
+        gofile_default_password, gofile_default_password_source = get_gofile_setting(
+            "GOFILE_DEFAULT_PASSWORD", ""
+        )
+        gofile_expiry, gofile_expiry_source = get_gofile_setting(
+            "GOFILE_LINK_EXPIRY_DAYS", Config.GOFILE_LINK_EXPIRY_DAYS
+        )
+
+        # Display values
+        gofile_api_display = "Set" if gofile_api_key else "Not Set"
+        gofile_folder_display = gofile_folder or "None (Use filename)"
+        gofile_password_display = gofile_default_password or "None"
+        gofile_expiry_display = (
+            f"{gofile_expiry} days" if gofile_expiry else "No expiry"
+        )
+
+        text = f"""<u><b>📁 Gofile Settings for {name}</b></u>
+
+<b>Authentication:</b>
+API Key: <code>{gofile_api_display}</code> ({gofile_api_source})
+
+<b>Upload Settings:</b>
+Folder Name: <code>{gofile_folder_display}</code> ({gofile_folder_source})
+Public Links: <b>{"✅ Enabled" if gofile_public else "❌ Disabled"}</b> ({gofile_public_source})
+Password Protection: <b>{"✅ Enabled" if gofile_password_protection else "❌ Disabled"}</b> ({gofile_password_source})
+Default Password: <code>{gofile_password_display}</code> ({gofile_default_password_source})
+Link Expiry: <code>{gofile_expiry_display}</code> ({gofile_expiry_source})
+
+<b>Features:</b>
+• Supports all file types
+• Free tier available (with limitations)
+• Premium accounts get better speeds and storage
+• Password protection available
+• Custom expiry dates
+
+<i>Get your API key from <a href="https://gofile.io/myProfile">Gofile Profile</a></i>"""
+
+    elif stype == "ddl_streamtape":
+        # Streamtape Settings
+        buttons.data_button(
+            "Login Username", f"userset {user_id} menu STREAMTAPE_LOGIN"
+        )
+        buttons.data_button("API Key", f"userset {user_id} menu STREAMTAPE_API_KEY")
+        buttons.data_button(
+            "Folder Name", f"userset {user_id} menu STREAMTAPE_FOLDER_NAME"
+        )
+
+        buttons.data_button("Back", f"userset {user_id} ddl")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get Streamtape settings with user priority
+        def get_streamtape_setting(setting_name, default_value=None):
+            # Check user settings first
+            user_value = user_dict.get(setting_name, None)
+            if user_value is not None:
+                return user_value, "User"
+
+            # Fall back to owner config
+            owner_value = getattr(Config, setting_name, default_value)
+            return owner_value, "Owner"
+
+        streamtape_login, streamtape_login_source = get_streamtape_setting(
+            "STREAMTAPE_LOGIN", ""
+        )
+        streamtape_api_key, streamtape_api_source = get_streamtape_setting(
+            "STREAMTAPE_API_KEY", ""
+        )
+        streamtape_folder, streamtape_folder_source = get_streamtape_setting(
+            "STREAMTAPE_FOLDER_NAME", ""
+        )
+
+        # Display values
+        streamtape_login_display = "Set" if streamtape_login else "Not Set"
+        streamtape_api_display = "Set" if streamtape_api_key else "Not Set"
+        streamtape_folder_display = streamtape_folder or "None (Root folder)"
+
+        text = f"""<u><b>🎬 Streamtape Settings for {name}</b></u>
+
+<b>Authentication:</b>
+Login Username: <code>{streamtape_login_display}</code> ({streamtape_login_source})
+API Key: <code>{streamtape_api_display}</code> ({streamtape_api_source})
+
+<b>Upload Settings:</b>
+Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source})
+
+<b>Supported Formats:</b>
+• Video files only: .mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v
+• Maximum file size depends on account type
+
+<b>Features:</b>
+• Fast video streaming
+• Direct download links
+• Folder organization
+• Account required for uploads
+
+<i>Get your API credentials from <a href="https://streamtape.com/accpanel">Streamtape Account Panel</a></i>"""
+
     else:
+        # Show service buttons based on individual service availability
         # Only show Leech button if Leech operations are enabled
         if Config.LEECH_ENABLED:
             buttons.data_button("Leech", f"userset {user_id} leech")
-        # Only show Rclone button if Rclone operations are enabled
-        if Config.RCLONE_ENABLED:
-            buttons.data_button("Rclone", f"userset {user_id} rclone")
-        # Only show Gdrive API button if Mirror operations are enabled
+
+        # Show upload service buttons only if mirror operations are enabled
         if Config.MIRROR_ENABLED:
-            buttons.data_button("Gdrive API", f"userset {user_id} gdrive")
-        # Only show YouTube API button if YouTube upload is enabled
-        if Config.YOUTUBE_UPLOAD_ENABLED:
-            buttons.data_button("YouTube API", f"userset {user_id} youtube")
-        # Only show MEGA Settings button if MEGA and MEGA upload are enabled
-        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
-            buttons.data_button("☁️ MEGA", f"userset {user_id} mega")
+            # Only show Gdrive API button if Gdrive upload is enabled
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                buttons.data_button("Gdrive API", f"userset {user_id} gdrive")
+
+            # Only show Rclone button if Rclone operations are enabled
+            if Config.RCLONE_ENABLED:
+                buttons.data_button("Rclone", f"userset {user_id} rclone")
+
+            # Only show YouTube API button if YouTube upload is enabled
+            if Config.YOUTUBE_UPLOAD_ENABLED:
+                buttons.data_button("YouTube API", f"userset {user_id} youtube")
+
+            # Only show MEGA Settings button if MEGA and MEGA upload are enabled
+            if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                buttons.data_button("☁️ MEGA", f"userset {user_id} mega")
+
+            # Only show DDL Settings button if DDL is enabled
+            if Config.DDL_ENABLED:
+                buttons.data_button("🔗 DDL", f"userset {user_id} ddl")
         # Only show AI Settings button if Extra Modules are enabled
         if Config.ENABLE_EXTRA_MODULES:
             buttons.data_button("AI Settings", f"userset {user_id} ai")
@@ -1253,27 +1564,43 @@ Please use /mediatools command to configure convert settings.
         elif "DEFAULT_UPLOAD" not in user_dict:
             default_upload = Config.DEFAULT_UPLOAD
 
-        # If Rclone is disabled or Mirror is disabled and default upload is set to Rclone, change it to Gdrive
-        if (
-            not Config.RCLONE_ENABLED or not Config.MIRROR_ENABLED
-        ) and default_upload not in ["gd", "yt"]:
-            default_upload = "gd"
-            # Update the user's settings
-            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
+        # Reset default upload if the selected service is disabled
+        # Find first available service as fallback (only if mirror operations are enabled)
+        fallback_upload = None
+        if Config.MIRROR_ENABLED:
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                fallback_upload = "gd"
+            elif Config.RCLONE_ENABLED:
+                fallback_upload = "rc"
+            elif Config.YOUTUBE_UPLOAD_ENABLED:
+                fallback_upload = "yt"
+            elif Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                fallback_upload = "mg"
+            elif Config.DDL_ENABLED:
+                fallback_upload = "ddl"
 
-        # If YouTube upload is disabled and default upload is set to YouTube, change it to Gdrive
-        if not Config.YOUTUBE_UPLOAD_ENABLED and default_upload == "yt":
-            default_upload = "gd"
-            # Update the user's settings
-            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
+        # Check if current default upload is available, if not reset to fallback
+        reset_needed = False
+        if not Config.MIRROR_ENABLED:
+            # If mirror is disabled, reset to None (no upload service available)
+            reset_needed = True
+            fallback_upload = None
+        elif (
+            (default_upload == "gd" and not Config.GDRIVE_UPLOAD_ENABLED)
+            or (default_upload == "rc" and not Config.RCLONE_ENABLED)
+            or (default_upload == "yt" and not Config.YOUTUBE_UPLOAD_ENABLED)
+            or (
+                default_upload == "mg"
+                and (not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED)
+            )
+            or (default_upload == "ddl" and not Config.DDL_ENABLED)
+        ):
+            reset_needed = True
 
-        # If MEGA is disabled or MEGA upload is disabled and default upload is set to MEGA, change it to Gdrive
-        if (
-            not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED
-        ) and default_upload == "mg":
-            default_upload = "gd"
+        if reset_needed and fallback_upload:
+            default_upload = fallback_upload
             # Update the user's settings
-            update_user_ldata(user_id, "DEFAULT_UPLOAD", "gd")
+            update_user_ldata(user_id, "DEFAULT_UPLOAD", fallback_upload)
 
         if default_upload == "gd":
             du = "Gdrive API"
@@ -1281,22 +1608,34 @@ Please use /mediatools command to configure convert settings.
             du = "YouTube"
         elif default_upload == "mg":
             du = "MEGA"
+        elif default_upload == "ddl":
+            du = "DDL"
         else:
             du = "Rclone"
 
-        # Show upload toggle buttons based on enabled services
+        # Show upload toggle buttons only if mirror operations are enabled
         available_uploads = []
         if Config.MIRROR_ENABLED:
-            available_uploads.append(("gd", "Gdrive API"))
-        if Config.RCLONE_ENABLED and Config.MIRROR_ENABLED:
-            available_uploads.append(("rc", "Rclone"))
-        if Config.YOUTUBE_UPLOAD_ENABLED:
-            available_uploads.append(("yt", "YouTube"))
-        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
-            available_uploads.append(("mg", "MEGA"))
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                available_uploads.append(("gd", "Gdrive API"))
+            if Config.RCLONE_ENABLED:
+                available_uploads.append(("rc", "Rclone"))
+            if Config.YOUTUBE_UPLOAD_ENABLED:
+                available_uploads.append(("yt", "YouTube"))
+            if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                available_uploads.append(("mg", "MEGA"))
+            if Config.DDL_ENABLED:
+                available_uploads.append(("ddl", "DDL"))
 
-        # Only show toggle if there are multiple upload options
+        # Only show toggle if there are multiple upload options available
         if len(available_uploads) > 1:
+            # Ensure default_upload is valid for current available services
+            available_codes = [code for code, _ in available_uploads]
+            if default_upload not in available_codes:
+                # If current default is not available, reset to first available service
+                default_upload = available_codes[0]
+                update_user_ldata(user_id, "DEFAULT_UPLOAD", default_upload)
+
             # Find next upload option
             current_index = next(
                 (
@@ -1311,15 +1650,21 @@ Please use /mediatools command to configure convert settings.
 
             buttons.data_button(
                 f"Upload using {next_name}",
-                f"userset {user_id} {default_upload}",
+                f"userset {user_id} upload_toggle {next_code}",
             )
 
         user_tokens = user_dict.get("USER_TOKENS", False)
         tr = "MY" if user_tokens else "OWNER"
         trr = "OWNER" if user_tokens else "MY"
 
-        # Only show the token/config toggle if Mirror is enabled
-        if Config.MIRROR_ENABLED:
+        # Show the token/config toggle only if mirror operations are enabled and any upload service is enabled
+        if Config.MIRROR_ENABLED and (
+            Config.GDRIVE_UPLOAD_ENABLED
+            or Config.RCLONE_ENABLED
+            or Config.YOUTUBE_UPLOAD_ENABLED
+            or Config.DDL_ENABLED
+            or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+        ):
             buttons.data_button(
                 f"{trr} Token/Config",
                 f"userset {user_id} tog USER_TOKENS {'f' if user_tokens else 't'}",
@@ -1340,6 +1685,15 @@ Please use /mediatools command to configure convert settings.
         buttons.data_button(
             "Name Subtitute",
             f"userset {user_id} menu NAME_SUBSTITUTE",
+        )
+
+        # Universal Filename button
+        universal_filename_msg = (
+            "Added" if user_dict.get("UNIVERSAL_FILENAME", False) else "None"
+        )
+        buttons.data_button(
+            "Filename",
+            f"userset {user_id} menu UNIVERSAL_FILENAME",
         )
 
         # Only show YT-DLP Options button if YT-DLP operations are enabled
@@ -1445,55 +1799,103 @@ Please use /mediatools command to configure convert settings.
             mediainfo_source = "User"
         mediainfo_status = f"{'Enabled' if mediainfo_enabled else 'Disabled'} (Set by {mediainfo_source})"
 
-        # Adjust display text based on mirror and leech status
-        if Config.MIRROR_ENABLED and Config.LEECH_ENABLED:
-            text = f"""<u><b>Settings for {name}</B></u>
--> Default Package: <b>{du}</b>
--> Upload Paths: <code><b>{upload_paths}</b></code>
--> Using <b>{tr}</b> Token/Config
--> Name Substitution: <code>{ns_msg}</code>
--> Excluded Extensions: <code>{ex_ex}</code>
--> YT-DLP Options: <code>{ytopt}</code>
--> User Cookies: <b>{cookies_status}</b>
--> FFMPEG Commands: <code>{ffc}</code>
--> MediaInfo: <b>{mediainfo_status}</b>
--> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
-        elif not Config.MIRROR_ENABLED and Config.LEECH_ENABLED:
-            text = f"""<u><b>Settings for {name}</B></u>
--> Upload Paths: <code><b>{upload_paths}</b></code>
--> Mirror operations are disabled by admin
--> Name Substitution: <code>{ns_msg}</code>
--> Excluded Extensions: <code>{ex_ex}</code>
--> YT-DLP Options: <code>{ytopt}</code>
--> User Cookies: <b>{cookies_status}</b>
--> FFMPEG Commands: <code>{ffc}</code>
--> MediaInfo: <b>{mediainfo_status}</b>
--> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
-        elif Config.MIRROR_ENABLED and not Config.LEECH_ENABLED:
-            text = f"""<u><b>Settings for {name}</B></u>
--> Default Package: <b>{du}</b>
--> Upload Paths: <code><b>{upload_paths}</b></code>
--> Using <b>{tr}</b> Token/Config
--> Leech operations are disabled by admin
--> Name Substitution: <code>{ns_msg}</code>
--> Excluded Extensions: <code>{ex_ex}</code>
--> YT-DLP Options: <code>{ytopt}</code>
--> User Cookies: <b>{cookies_status}</b>
--> FFMPEG Commands: <code>{ffc}</code>
--> MediaInfo: <b>{mediainfo_status}</b>
--> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
-        else:
-            text = f"""<u><b>Settings for {name}</B></u>
--> Upload Paths: <code><b>{upload_paths}</b></code>
--> Mirror operations are disabled by admin
--> Leech operations are disabled by admin
--> Name Substitution: <code>{ns_msg}</code>
--> Excluded Extensions: <code>{ex_ex}</code>
--> YT-DLP Options: <code>{ytopt}</code>
--> User Cookies: <b>{cookies_status}</b>
--> FFMPEG Commands: <code>{ffc}</code>
--> MediaInfo: <b>{mediainfo_status}</b>
--> Metadata Text: <code>{mdt}</code>{f" ({mdt_source})" if mdt != "None" and mdt_source else ""}"""
+        # Get DDL status for display
+        ddl_status = ""
+        if Config.DDL_ENABLED:
+            # Check if user has DDL settings
+            user_ddl_settings = any(
+                key.startswith(("GOFILE_", "STREAMTAPE_", "DDL_"))
+                for key in user_dict
+            )
+            if user_ddl_settings:
+                ddl_status = "\n-> DDL Settings: <b>User configured</b>"
+            else:
+                ddl_status = "\n-> DDL Settings: <b>Using owner settings</b>"
+
+        # Generate display text based on available services
+        # Show default upload only if mirror operations are enabled and any upload service is available
+        upload_services_available = Config.MIRROR_ENABLED and (
+            Config.GDRIVE_UPLOAD_ENABLED
+            or Config.RCLONE_ENABLED
+            or Config.YOUTUBE_UPLOAD_ENABLED
+            or Config.DDL_ENABLED
+            or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+        )
+
+        # Show token/config status if any upload service is enabled
+        token_config_line = ""
+        if upload_services_available:
+            token_config_line = f"\n-> Using <b>{tr}</b> Token/Config{ddl_status}"
+
+        # Build the main text
+        text = f"""<u><b>Settings for {name}</B></u>"""
+
+        # Add default upload line only if upload services are available
+        if upload_services_available:
+            text += f"\n-> Default Upload: <b>{du}</b>"
+
+        # Build dynamic text based on available services
+        text_parts = []
+
+        # Always show upload paths if upload services are available
+        if upload_services_available:
+            text_parts.append(
+                f"-> Upload Paths: <code><b>{upload_paths}</b></code>{token_config_line}"
+            )
+
+        # Always show these settings regardless of upload services
+        text_parts.extend(
+            [
+                f"-> Name Substitution: <code>{ns_msg}</code>",
+                f"-> Universal Filename: <code>{universal_filename_msg}</code>",
+                f"-> Excluded Extensions: <code>{ex_ex}</code>",
+            ]
+        )
+
+        # Only show YT-DLP related settings if YT-DLP is enabled
+        if Config.YTDLP_ENABLED:
+            text_parts.extend(
+                [
+                    f"-> YT-DLP Options: <code>{ytopt}</code>",
+                    f"-> User Cookies: <b>{cookies_status}</b>",
+                ]
+            )
+
+        # Only show FFmpeg settings if media tools are enabled
+        if is_media_tool_enabled("xtra"):
+            text_parts.append(f"-> FFMPEG Commands: <code>{ffc}</code>")
+
+        # Always show MediaInfo and Metadata
+        text_parts.extend(
+            [
+                f"-> MediaInfo: <b>{mediainfo_status}</b>",
+                f"-> Metadata Text: <code>{mdt}</code>{f' ({mdt_source})' if mdt != 'None' and mdt_source else ''}",
+            ]
+        )
+
+        # Join all parts with newlines
+        if text_parts:
+            text += "\n" + "\n".join(text_parts)
+
+        # Add service status information - only show if any services are disabled
+        disabled_services = []
+        if not Config.LEECH_ENABLED:
+            disabled_services.append("Leech")
+        if not Config.GDRIVE_UPLOAD_ENABLED:
+            disabled_services.append("Gdrive Upload")
+        if not Config.RCLONE_ENABLED:
+            disabled_services.append("Rclone")
+        if not Config.YOUTUBE_UPLOAD_ENABLED:
+            disabled_services.append("YouTube Upload")
+        if not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED:
+            disabled_services.append("MEGA Upload")
+        if not Config.DDL_ENABLED:
+            disabled_services.append("DDL Upload")
+        if not Config.YTDLP_ENABLED:
+            disabled_services.append("YT-DLP")
+
+        if disabled_services:
+            text += f"\n\n<i>Disabled services: {', '.join(disabled_services)}</i>"
 
     return text, buttons.build_menu(2), thumbnail
 
@@ -1817,6 +2219,13 @@ async def set_option(_, message, option):
                 auto_delete_message(error_msg, time=300)
             )  # Auto-delete after 5 minutes
             return
+    elif option in ["GOFILE_API_KEY", "STREAMTAPE_API_KEY", "STREAMTAPE_LOGIN"]:
+        # Special handling for DDL credentials - store in regular user settings
+        # This ensures compatibility with the display functions
+        update_user_ldata(user_id, option, value)
+        await delete_message(message)
+        await database.update_user_data(user_id)
+        return
     update_user_ldata(user_id, option, value)
     await delete_message(message)
     await database.update_user_data(user_id)
@@ -1864,11 +2273,11 @@ async def get_menu(option, message, user_id):
         # If leech is disabled, go back to main menu
         back_to = "leech" if Config.LEECH_ENABLED else "back"
     elif option in rclone_options:
-        # If mirror is disabled, go back to main menu
-        back_to = "rclone" if Config.MIRROR_ENABLED else "back"
+        # If rclone is disabled, go back to main menu
+        back_to = "rclone" if Config.RCLONE_ENABLED else "back"
     elif option in gdrive_options:
-        # If mirror is disabled, go back to main menu
-        back_to = "gdrive" if Config.MIRROR_ENABLED else "back"
+        # If gdrive upload is disabled, go back to main menu
+        back_to = "gdrive" if Config.GDRIVE_UPLOAD_ENABLED else "back"
     elif option in youtube_options:
         # If YouTube upload is disabled, go back to main menu
         back_to = "youtube" if Config.YOUTUBE_UPLOAD_ENABLED else "back"
@@ -1886,6 +2295,10 @@ async def get_menu(option, message, user_id):
         back_to = "ai"
     elif option in yt_dlp_options:
         back_to = "back"  # Go back to main menu
+    elif option in ddl_options:
+        back_to = "ddl"
+    elif option in ["NAME_SUBSTITUTE", "EXCLUDED_EXTENSIONS", "UNIVERSAL_FILENAME"]:
+        back_to = "back"  # Go back to main menu for general options
     else:
         back_to = "back"
     buttons.data_button("Back", f"userset {user_id} {back_to}")
@@ -2028,12 +2441,17 @@ async def edit_user_settings(client, query):
         "youtube_basic",
         "youtube_advanced",
         "cookies_main",
+        "ddl",
+        "ddl_general",
+        "ddl_gofile",
+        "ddl_streamtape",
     ]:
         await query.answer()
         # Redirect to main menu if trying to access disabled features
         if (
             (data[2] == "leech" and not Config.LEECH_ENABLED)
-            or (data[2] in ["gdrive", "rclone"] and not Config.MIRROR_ENABLED)
+            or (data[2] == "gdrive" and not Config.GDRIVE_UPLOAD_ENABLED)
+            or (data[2] == "rclone" and not Config.RCLONE_ENABLED)
             or (
                 data[2] == "mega"
                 and (not Config.MEGA_ENABLED or not Config.MEGA_UPLOAD_ENABLED)
@@ -2042,6 +2460,11 @@ async def edit_user_settings(client, query):
                 data[2] in ["youtube", "youtube_basic", "youtube_advanced"]
                 and not Config.YOUTUBE_UPLOAD_ENABLED
             )
+            or (
+                data[2] in ["ddl", "ddl_general", "ddl_gofile", "ddl_streamtape"]
+                and not Config.DDL_ENABLED
+            )
+            or (data[2] == "cookies_main" and not Config.YTDLP_ENABLED)
         ):
             await update_user_settings(query, "main")
         else:
@@ -2096,6 +2519,8 @@ Cookies allow you to access restricted YouTube content and other sites that requ
     elif data[2] == "cookies_confirm_remove_all":
         await query.answer()
         # Remove all user cookies from both database and filesystem
+        from bot import LOGGER
+
         cookies_list = await get_user_cookies_list(user_id)
         removed_count = 0
 
@@ -2154,6 +2579,8 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         removed_db = False
 
         # Remove from filesystem
+        from bot import LOGGER
+
         try:
             if await aiopath.exists(cookie_path):
                 await remove(cookie_path)
@@ -2208,6 +2635,11 @@ Cookies allow you to access restricted YouTube content and other sites that requ
             "YOUTUBE_UPLOAD_STABILIZE",
         ]:
             back_to = "youtube_advanced"
+        elif data[3] in [
+            "GOFILE_PUBLIC_LINKS",
+            "GOFILE_PASSWORD_PROTECTION",
+        ]:
+            back_to = "ddl_gofile"
         # Convert settings have been moved to Media Tools settings
         else:
             back_to = "leech"
@@ -2287,13 +2719,26 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
             elif data[3] in leech_options:
                 back_to = "leech" if Config.LEECH_ENABLED else "back"
             elif data[3] in gdrive_options:
-                back_to = "gdrive" if Config.MIRROR_ENABLED else "back"
+                back_to = "gdrive" if Config.GDRIVE_UPLOAD_ENABLED else "back"
             elif data[3] in rclone_options:
-                back_to = "rclone" if Config.MIRROR_ENABLED else "back"
+                back_to = "rclone" if Config.RCLONE_ENABLED else "back"
             elif data[3] in metadata_options:
                 back_to = "metadata"
             elif data[3] in ai_options:
                 back_to = "ai"
+            elif data[3] in ddl_options:
+                # Determine which DDL subsection to return to (only if DDL is enabled)
+                if Config.DDL_ENABLED:
+                    if data[3] == "DDL_SERVER":
+                        back_to = "ddl_general"
+                    elif data[3].startswith("GOFILE_"):
+                        back_to = "ddl_gofile"
+                    elif data[3].startswith("STREAMTAPE_"):
+                        back_to = "ddl_streamtape"
+                    else:
+                        back_to = "ddl"
+                else:
+                    back_to = "back"
             else:
                 back_to = "back"
 
@@ -2366,6 +2811,8 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 fpath = rclone_conf
             elif data[3] == "USER_COOKIES":
                 # Remove all user cookies from both database and filesystem
+                from bot import LOGGER
+
                 cookies_list = await get_user_cookies_list(user_id)
                 for cookie in cookies_list:
                     try:
@@ -2505,27 +2952,40 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
                 create_task(  # noqa: RUF006
                     auto_delete_message(msg, time=10),
                 )  # Delete after 10 seconds
-    elif data[2] in ["gd", "rc", "yt", "mg"]:
+    elif data[2] == "upload_toggle" and len(data) > 3:
         await query.answer()
-        # Cycle through available upload options
+        # Cycle through available upload options only if mirror operations are enabled
         available_uploads = []
         if Config.MIRROR_ENABLED:
-            available_uploads.append("gd")
-        if Config.RCLONE_ENABLED and Config.MIRROR_ENABLED:
-            available_uploads.append("rc")
-        if Config.YOUTUBE_UPLOAD_ENABLED:
-            available_uploads.append("yt")
-        if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
-            available_uploads.append("mg")
+            if Config.GDRIVE_UPLOAD_ENABLED:
+                available_uploads.append(("gd", "Gdrive API"))
+            if Config.RCLONE_ENABLED:
+                available_uploads.append(("rc", "Rclone"))
+            if Config.YOUTUBE_UPLOAD_ENABLED:
+                available_uploads.append(("yt", "YouTube"))
+            if Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED:
+                available_uploads.append(("mg", "MEGA"))
+            if Config.DDL_ENABLED:
+                available_uploads.append(("ddl", "DDL"))
 
-        # Find current index and get next option
-        current_index = (
-            available_uploads.index(data[2]) if data[2] in available_uploads else 0
-        )
-        next_index = (current_index + 1) % len(available_uploads)
-        du = available_uploads[next_index]
+        # Only proceed if there are multiple upload options available
+        if len(available_uploads) <= 1:
+            # If no services or only one service available, don't allow toggle
+            await update_user_settings(query)
+            return
 
-        update_user_ldata(user_id, "DEFAULT_UPLOAD", du)
+        # The clicked service is what the user wants to set as their new default
+        clicked_service = data[3]
+
+        # Ensure clicked_service is valid for current available services
+        available_codes = [code for code, _ in available_uploads]
+        if clicked_service not in available_codes:
+            # If clicked service is not available, use first available service
+            clicked_service = available_codes[0] if available_codes else "gd"
+
+        update_user_ldata(user_id, "DEFAULT_UPLOAD", clicked_service)
+
+        # Force refresh the user settings to ensure button updates properly
         await update_user_settings(query)
         await database.update_user_data(user_id)
     elif data[2] == "ffvar":

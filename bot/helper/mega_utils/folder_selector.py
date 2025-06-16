@@ -17,31 +17,73 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-# Try to import MEGA SDK at module level, but don't fail if not available
+# Try to import MEGA SDK with system-wide detection
+MEGA_SDK_AVAILABLE = False
+MEGA_IMPORT_ERROR = None
+
+
+def _detect_and_import_mega():
+    """Detect MEGA SDK installation system-wide and import"""
+    import sys
+    from pathlib import Path
+
+    # System-wide search paths for MEGA SDK
+    search_paths = [
+        "/usr/local/lib/python3.13/dist-packages",
+        "/usr/lib/python3/dist-packages",
+        "/usr/lib/python3.13/dist-packages",
+        "/usr/local/lib/python3.12/dist-packages",
+        "/usr/lib/python3.12/dist-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
+        "/usr/src/app/.venv/lib/python3.13/site-packages",
+        "/opt/megasdk/lib/python3.13/site-packages",
+    ]
+
+    # Try standard import first
+    try:
+        from mega import MegaApi, MegaError, MegaListener, MegaRequest
+
+        # Test basic functionality
+        api = MegaApi("test")
+        api.getVersion()
+        return True, None, (MegaApi, MegaError, MegaListener, MegaRequest)
+    except ImportError:
+        pass
+    except Exception as e:
+        return False, f"MEGA SDK validation failed: {e}", None
+
+    # Search system-wide paths
+    for path in search_paths:
+        mega_path = Path(path) / "mega"
+        if mega_path.exists():
+            try:
+                if str(Path(path)) not in sys.path:
+                    sys.path.insert(0, str(Path(path)))
+
+                from mega import MegaApi, MegaError, MegaListener, MegaRequest
+
+                # Test basic functionality
+                api = MegaApi("test")
+                api.getVersion()
+                return True, None, (MegaApi, MegaError, MegaListener, MegaRequest)
+            except Exception:
+                continue
+
+    return False, "MEGA SDK not found in system-wide search", None
+
+
+# Perform detection
 try:
-    from mega import MegaApi, MegaError, MegaListener, MegaRequest
-
-    MEGA_SDK_AVAILABLE = True
-    MEGA_IMPORT_ERROR = None
-except ImportError as e:
-    # Create dummy classes to prevent import errors
-    class MegaApi:
-        pass
-
-    class MegaListener:
-        pass
-
-    class MegaRequest:
-        TYPE_LOGIN = 1
-        TYPE_FETCH_NODES = 2
-
-    class MegaError:
-        pass
-
-    MEGA_SDK_AVAILABLE = False
-    MEGA_IMPORT_ERROR = str(e)
+    success, error, classes = _detect_and_import_mega()
+    if success:
+        MegaApi, MegaError, MegaListener, MegaRequest = classes
+        MEGA_SDK_AVAILABLE = True
+        MEGA_IMPORT_ERROR = None
+    else:
+        raise ImportError(error)
 except Exception as e:
-    # Handle other import errors
+    # Create dummy classes to prevent import errors
     class MegaApi:
         pass
 
@@ -76,7 +118,24 @@ class MegaFolderListener(MegaListener):
         """Called when a request finishes - with exception handling to prevent SWIG errors"""
         try:
             if error.getErrorCode() != 0:
-                self.error = error.getErrorString()
+                # Handle MEGA SDK v4.8.0 getErrorString() method signature changes
+                try:
+                    # Try the instance method first (no parameters)
+                    self.error = error.getErrorString()
+                except Exception:
+                    try:
+                        # Try with error code parameter
+                        error_code = error.getErrorCode()
+                        self.error = error.getErrorString(error_code)
+                    except Exception:
+                        try:
+                            # Try static method with error code
+                            error_code = error.getErrorCode()
+                            self.error = MegaError.getErrorString(error_code)
+                        except Exception:
+                            # Fallback to error code if all methods fail
+                            self.error = f"MEGA Error Code: {error.getErrorCode()}"
+
                 LOGGER.error(f"MEGA request error: {self.error}")
             elif request.getType() == MegaRequest.TYPE_LOGIN:
                 LOGGER.info("MEGA login successful")

@@ -60,9 +60,15 @@ class StreamripListener(TaskListener):
         try:
             await self.before_start()
         except Exception as e:
-            LOGGER.error(
-                f"Error initializing media tools for StreamripListener: {e}"
-            )
+            # Check if this is a database connection error
+            if "AsyncMongoClient" in str(e) or "Cannot use" in str(e):
+                LOGGER.warning(
+                    f"Database connection issue during media tools initialization for StreamripListener: {e}. Using default values."
+                )
+            else:
+                LOGGER.error(
+                    f"Error initializing media tools for StreamripListener: {e}"
+                )
             # Set default values to prevent AttributeError
             self.compression_enabled = False
             self.extract_enabled = False

@@ -47,6 +47,11 @@ By reply to task cmd:
 """
         await send_message(message, msg)
         return
+    # Check if task and listener exist before accessing user_id
+    if not task or not hasattr(task, "listener") or not task.listener:
+        await send_message(message, "Task or listener not found!")
+        return
+
     if user_id not in (Config.OWNER_ID, task.listener.user_id) and (
         user_id not in user_data or not user_data[user_id].get("SUDO")
     ):

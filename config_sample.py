@@ -28,15 +28,15 @@ AUTHORIZED_CHATS = (
 SUDO_USERS = (
     ""  # List of sudo user IDs who can use admin commands, separated by space
 )
-DEFAULT_UPLOAD = (
-    "gd"  # Default upload destination: 'rc' for rclone or 'gd' for Google Drive
-)
+DEFAULT_UPLOAD = "gd"  # Default upload destination: 'gd' for Google Drive, 'rc' for rclone, 'ddl' for Direct Download Links
 FILELION_API = ""  # FileLion API key for direct links
 STREAMWISH_API = ""  # StreamWish API key for direct links
+DEBRID_LINK_API = ""  # Debrid Link API key for premium link generation
 EXCLUDED_EXTENSIONS = (
     ""  # File extensions to exclude from processing, separated by space
 )
 INCOMPLETE_TASK_NOTIFIER = False  # Notify about incomplete tasks on bot restart
+SCHEDULED_DELETION_ENABLED = True  # Enable/disable scheduled deletion functionality
 YT_DLP_OPTIONS = {}  # Additional yt-dlp options as a JSON string
 
 NAME_SUBSTITUTE = r""  # Regex pattern to substitute in filenames
@@ -79,6 +79,7 @@ BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
 
 # GDrive Tools
 GDRIVE_ID = ""  # Google Drive folder/TeamDrive ID where files will be uploaded
+GDRIVE_UPLOAD_ENABLED = True  # Enable/disable Google Drive upload feature
 IS_TEAM_DRIVE = False  # Whether the GDRIVE_ID is a TeamDrive
 STOP_DUPLICATE = False  # Skip uploading files that are already in the drive
 INDEX_URL = ""  # Index URL for Google Drive
@@ -120,6 +121,25 @@ MEGA_CLONE_OVERWRITE = False  # Overwrite existing files when cloning
 
 # MEGA Search Settings
 MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
+
+# DDL (Direct Download Link) Upload Settings
+DDL_ENABLED = True  # Enable/disable DDL upload feature
+DDL_DEFAULT_SERVER = "gofile"  # Default DDL server: gofile, streamtape
+
+# Gofile Settings
+GOFILE_ENABLED = True  # Enable/disable Gofile uploads
+GOFILE_API_KEY = ""  # Default Gofile API key (can be overridden per user)
+GOFILE_FOLDER_NAME = ""  # Default folder name for uploads (empty = use filename)
+GOFILE_PUBLIC_LINKS = True  # Generate public links by default
+GOFILE_PASSWORD_PROTECTION = False  # Enable password protection
+GOFILE_DEFAULT_PASSWORD = ""  # Default password for protected uploads
+GOFILE_LINK_EXPIRY_DAYS = 0  # Link expiry in days (0 = no expiry)
+
+# Streamtape Settings
+STREAMTAPE_ENABLED = True  # Enable/disable Streamtape uploads
+STREAMTAPE_LOGIN = ""  # Default Streamtape login
+STREAMTAPE_API_KEY = ""  # Default Streamtape API key
+STREAMTAPE_FOLDER_NAME = ""  # Default folder name for uploads
 
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
@@ -163,6 +183,7 @@ LEECH_FILENAME = ""  # Custom filename template for leeched files
 LEECH_FILENAME_CAPTION = (
     ""  # Caption template for leeched files (max 1024 characters)
 )
+UNIVERSAL_FILENAME = ""  # Universal filename template for both mirror and leech files (supports all template variables)
 LEECH_DUMP_CHAT = []  # Chat IDs ["-100123456789", "b:@mychannel", "u:-100987654321", "h:@mygroup|123456"] where leeched files will be sent
 THUMBNAIL_LAYOUT = ""  # Layout for thumbnails: empty, top, bottom, or custom
 EQUAL_SPLITS = False  # Create equal-sized parts when splitting files
@@ -187,17 +208,23 @@ QUEUE_UPLOAD = 0  # Maximum number of concurrent uploads (0 = unlimited)
 HEROKU_APP_NAME = ""
 HEROKU_API_KEY = ""
 
-# RSS
-RSS_DELAY = 600  # Delay between RSS feed checks in seconds
+# RSS - Optimized for better resource management
+RSS_DELAY = 900  # Increased delay to 15 minutes for better resource efficiency
 RSS_CHAT = ""  # Chat ID where RSS feed updates will be sent
 RSS_SIZE_LIMIT = 0  # Maximum size for RSS downloads in bytes (0 = unlimited)
+RSS_ENABLED = True  # Enable/disable RSS functionality completely (True=enabled, False=disabled)
+RSS_JOB_INTERVAL = 600  # RSS job periodic runtime interval in seconds (default: 600)
 
 # Resource Management Settings
 PIL_MEMORY_LIMIT = 2048  # Memory limit for PIL image processing in MB
 
-# Auto Restart Settings
-AUTO_RESTART_ENABLED = False  # Enable automatic bot restart
-AUTO_RESTART_INTERVAL = 24  # Restart interval in hours
+# Auto Restart Settings - Optimized for stability
+AUTO_RESTART_ENABLED = (
+    False  # Enable automatic bot restart (disabled by default for better stability)
+)
+AUTO_RESTART_INTERVAL = (
+    48  # Increased restart interval to 48 hours for better resource management
+)
 
 # Limits Settings
 STORAGE_THRESHOLD = (
@@ -229,26 +256,38 @@ STATUS_UPDATE_INTERVAL = (
 STATUS_LIMIT = 10  # Number of tasks to display in status message (recommended: 4-10)
 SEARCH_LIMIT = 0  # Maximum number of search results to display (0 = unlimited)
 
-# Task Monitoring Settings
-TASK_MONITOR_ENABLED = True  # Master switch to enable/disable task monitoring
-TASK_MONITOR_INTERVAL = 60  # Interval between task monitoring checks in seconds
-TASK_MONITOR_CONSECUTIVE_CHECKS = 20  # Number of consecutive checks for monitoring
+# Task Monitoring Settings - Optimized for reduced resource usage
+TASK_MONITOR_ENABLED = (
+    False  # Disabled by default for better performance (enable only if needed)
+)
+TASK_MONITOR_INTERVAL = 120  # Increased interval to 2 minutes to reduce CPU usage
+TASK_MONITOR_CONSECUTIVE_CHECKS = 10  # Reduced from 20 to 10 to save memory
 TASK_MONITOR_SPEED_THRESHOLD = 50  # Speed threshold in KB/s
 TASK_MONITOR_ELAPSED_THRESHOLD = 3600  # Elapsed time threshold in seconds (1 hour)
 TASK_MONITOR_ETA_THRESHOLD = 86400  # ETA threshold in seconds (24 hours)
-TASK_MONITOR_WAIT_TIME = (
-    600  # Wait time before canceling a task in seconds (10 minutes)
-)
+TASK_MONITOR_WAIT_TIME = 900  # Increased wait time to 15 minutes to reduce overhead
 TASK_MONITOR_COMPLETION_THRESHOLD = (
-    86400  # Completion threshold in seconds (4 hours)
+    86400  # Completion threshold in seconds (24 hours)
 )
-TASK_MONITOR_CPU_HIGH = 90  # High CPU usage threshold percentage
-TASK_MONITOR_CPU_LOW = 60  # Low CPU usage threshold percentage
-TASK_MONITOR_MEMORY_HIGH = 75  # High memory usage threshold percentage
-TASK_MONITOR_MEMORY_LOW = 60  # Low memory usage threshold percentage
+TASK_MONITOR_CPU_HIGH = 85  # Reduced threshold for better responsiveness
+TASK_MONITOR_CPU_LOW = 50  # Reduced threshold
+TASK_MONITOR_MEMORY_HIGH = 70  # Reduced threshold for better memory management
+TASK_MONITOR_MEMORY_LOW = 50  # Reduced threshold
+
+# Garbage Collection Settings - Control memory management behavior
+GC_ENABLED = True  # Enable/disable garbage collection completely (True=enabled, False=disabled)
+GC_INTERVAL = 60  # Minimum interval between GC operations in seconds (default: 60)
+GC_THRESHOLD_MB = 150  # Memory threshold in MB to trigger GC (default: 150)
+GC_AGGRESSIVE_MODE = (
+    False  # Enable aggressive GC by default (True=more frequent, False=balanced)
+)
 
 # Extra Modules Settings
 ENABLE_EXTRA_MODULES = True  # Enable additional modules and features
+
+# Encoding/Decoding Settings
+ENCODING_ENABLED = True  # Enable/disable encoding functionality
+DECODING_ENABLED = True  # Enable/disable decoding functionality
 
 # Security Tools Settings
 VT_API_KEY = ""  # VirusTotal API key for malware scanning
@@ -450,7 +489,7 @@ ZOTIFY_PLAYLIST_LIBRARY = (
 )
 
 # Zotify Output Templates - How files and folders are named
-ZOTIFY_OUTPUT_ALBUM = "{album_artist}/{album}/{track_num:02d}. {artists} - {title}"  # Album track naming template
+ZOTIFY_OUTPUT_ALBUM = "{album_artist}/{album}/{track_number}. {artists} - {title}"  # Album track naming template
 ZOTIFY_OUTPUT_PLAYLIST_TRACK = (
     "{playlist}/{artists} - {title}"  # Playlist track naming template
 )
@@ -801,6 +840,10 @@ TRIM_IMAGE_FORMAT = "none"  # Output format: none, jpg, png, webp, etc.
 
 # Document Trim Settings
 TRIM_DOCUMENT_ENABLED = False  # Enable/disable document trimming (page range)
+TRIM_DOCUMENT_START_PAGE = "1"  # Starting page number for document trimming
+TRIM_DOCUMENT_END_PAGE = (
+    ""  # Ending page number for document trimming (empty for last page)
+)
 TRIM_DOCUMENT_QUALITY = 90  # Document quality: 0-100 (higher is better quality)
 TRIM_DOCUMENT_FORMAT = "none"  # Output format: none, pdf, docx, etc.
 
@@ -868,6 +911,34 @@ EXTRACT_ATTACHMENT_INDEX = (
 EXTRACT_ATTACHMENT_FILTER = "none"  # Filter pattern: none, *.ttf, *.png, etc.
 EXTRACT_MAINTAIN_QUALITY = True  # Maintain original quality during extraction
 
+# Remove Settings
+REMOVE_ENABLED = False  # Master switch to enable/disable remove feature
+REMOVE_PRIORITY = 8  # Processing priority in pipeline (lower numbers run earlier)
+REMOVE_DELETE_ORIGINAL = (
+    True  # Delete original files after successful remove operation
+)
+REMOVE_METADATA = False  # Remove metadata from files
+
+# Video Remove Settings
+REMOVE_VIDEO_ENABLED = False  # Enable/disable video track removal
+REMOVE_VIDEO_INDEX = None  # Video track index to remove: None (all), 0, 1, 2, etc.
+
+# Audio Remove Settings
+REMOVE_AUDIO_ENABLED = False  # Enable/disable audio track removal
+REMOVE_AUDIO_INDEX = None  # Audio track index to remove: None (all), 0, 1, 2, etc.
+
+# Subtitle Remove Settings
+REMOVE_SUBTITLE_ENABLED = False  # Enable/disable subtitle track removal
+REMOVE_SUBTITLE_INDEX = (
+    None  # Subtitle track index to remove: None (all), 0, 1, 2, etc.
+)
+
+# Attachment Remove Settings
+REMOVE_ATTACHMENT_ENABLED = False  # Enable/disable attachment removal
+REMOVE_ATTACHMENT_INDEX = (
+    None  # Attachment index to remove: None (all), 0, 1, 2, etc.
+)
+
 # Add Settings
 ADD_ENABLED = False  # Master switch to enable/disable add feature
 ADD_PRIORITY = 7  # Processing priority in pipeline (lower numbers run earlier)
@@ -909,6 +980,9 @@ ADD_SUBTITLE_LANGUAGE = "none"  # Language code: none, eng, spa, etc.
 ADD_SUBTITLE_ENCODING = "none"  # Character encoding: none, utf-8, utf-16, etc.
 ADD_SUBTITLE_FONT = "none"  # Font for subtitles: none, Arial, Times New Roman, etc.
 ADD_SUBTITLE_FONT_SIZE = "none"  # Font size: none, 12, 16, etc.
+ADD_SUBTITLE_HARDSUB_ENABLED = (
+    False  # Enable hardsub (burn subtitles into video): True/False
+)
 
 # Attachment Add Settings
 ADD_ATTACHMENT_ENABLED = False  # Enable/disable attachment addition

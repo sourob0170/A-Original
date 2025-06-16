@@ -158,8 +158,7 @@ async def load_settings():
             runtime_timestamp = runtime_config.get("_runtime_timestamp", 0)
             current_time = time()
 
-            # Only update deploy config timestamp if the actual config content changed
-            # Compare config content without timestamps
+            # Check if code config actually changed from what's in database
             old_deploy_content = {
                 k: v for k, v in old_deploy_config.items() if not k.startswith("_")
             }
@@ -169,89 +168,125 @@ async def load_settings():
                 if not k.startswith("_")
             }
 
-            if old_deploy_content != current_deploy_content:
-                # Deploy config content actually changed - update timestamp
+            # CRITICAL FIX: Check if configs were previously synced
+            # If timestamps are equal, it means configs were synced - preserve user changes!
+            configs_were_synced = (
+                deploy_timestamp == runtime_timestamp and deploy_timestamp != 0
+            )
+
+            # Only consider it a real "code change" if:
+            # 1. The code config differs from what's in the database, AND
+            # 2. The configs were NOT previously synced (meaning this is a genuine code update)
+            code_actually_changed = (
+                old_deploy_content != current_deploy_content
+                and not configs_were_synced
+            )
+
+            # Simple bidirectional synchronization logic
+            if configs_were_synced:
+                # Equal timestamps - configs were previously synced
+                # This means user made runtime changes that were synced to deploy config
+                # We should NOT overwrite these changes unless code actually changed
+                if old_deploy_content != current_deploy_content:
+                    # Code defaults differ from database, but configs were synced
+                    # This means user made changes - preserve them!
+                    current_deploy_config = (
+                        old_deploy_config.copy()
+                    )  # Use database version
+                    LOGGER.info(
+                        f"Configs were synced (timestamp: {deploy_timestamp}) - preserving user changes"
+                    )
+                else:
+                    # Code and database match, configs were synced - no changes needed
+                    current_deploy_config["_deploy_timestamp"] = deploy_timestamp
+                    LOGGER.info(
+                        f"Deploy and runtime configs have equal timestamps ({deploy_timestamp}) - no sync needed"
+                    )
+
+            elif code_actually_changed:
+                # Code actually changed (and configs were not synced) - update both configs
                 current_deploy_config["_deploy_timestamp"] = current_time
-                LOGGER.info("Deploy config content changed - updating timestamp")
-            else:
-                # Deploy config content unchanged - preserve existing timestamp
+
+                # Step 1: Save deploy config with new timestamp
+                await database.db.settings.deployConfig.replace_one(
+                    {"_id": BOT_ID},
+                    current_deploy_config,
+                    upsert=True,
+                )
+
+                # Step 2: Overwrite runtime config with deploy changes and same timestamp
+                runtime_config.update(
+                    {
+                        k: v
+                        for k, v in current_deploy_config.items()
+                        if not k.startswith("_")
+                    }
+                )
+                runtime_config["_runtime_timestamp"] = current_time
+
+                await database.db.settings.config.replace_one(
+                    {"_id": BOT_ID},
+                    runtime_config,
+                    upsert=True,
+                )
+
+                LOGGER.info(
+                    f"Code changed - overwritten runtime config with same timestamp: {current_time}"
+                )
+
+            elif runtime_timestamp > deploy_timestamp:
+                # Runtime config is newer - overwrite deploy config with runtime changes
+                LOGGER.info(
+                    f"Runtime config is newer than deploy config - overwriting deploy config. "
+                    f"Runtime timestamp: {runtime_timestamp}, Deploy timestamp: {deploy_timestamp}"
+                )
+
+                # Overwrite deploy config with runtime changes and same timestamp
+                current_deploy_config.update(
+                    {
+                        k: v
+                        for k, v in runtime_config.items()
+                        if not k.startswith("_")
+                    }
+                )
+                current_deploy_config["_deploy_timestamp"] = runtime_timestamp
+
+                await database.db.settings.deployConfig.replace_one(
+                    {"_id": BOT_ID},
+                    current_deploy_config,
+                    upsert=True,
+                )
+
+                LOGGER.info(
+                    f"Overwritten deploy config from runtime config with same timestamp: {runtime_timestamp}"
+                )
+
+            elif not code_actually_changed:
+                # No code changes and configs were not synced - just update deploy config timestamp to match database
                 current_deploy_config["_deploy_timestamp"] = deploy_timestamp
                 LOGGER.info(
-                    "Deploy config content unchanged - preserving existing timestamp"
+                    "No code changes detected - preserving existing config state"
                 )
 
-            # Only update runtime config if deploy config is newer than runtime config
-            # This preserves manual changes made to runtime config
-            if (
-                deploy_timestamp == 0
-                or runtime_timestamp == 0
-                or deploy_timestamp > runtime_timestamp
-            ):
-                # Deploy config is newer or timestamps are missing - proceed with update
-                LOGGER.info(
-                    f"Deploy config is newer than runtime config. "
-                    f"Deploy timestamp: {deploy_timestamp}, Runtime timestamp: {runtime_timestamp}"
-                )
-
-                # Remove timestamp fields from comparison (they're metadata, not config)
-                deploy_config_for_comparison = {
-                    k: v
-                    for k, v in current_deploy_config.items()
-                    if not k.startswith("_")
-                }
-                runtime_config_for_comparison = {
-                    k: v for k, v in runtime_config.items() if not k.startswith("_")
-                }
-
-                # Find new variables that don't exist in runtime config
-                new_vars = {
-                    k: v
-                    for k, v in deploy_config_for_comparison.items()
-                    if k not in runtime_config_for_comparison
-                }
-
-                # Find changed variables that exist in both but have different values
-                changed_vars = {
-                    k: v
-                    for k, v in deploy_config_for_comparison.items()
-                    if k in runtime_config_for_comparison
-                    and runtime_config_for_comparison[k] != v
-                }
-
-                # Update runtime config with both new and changed variables
-                if new_vars or changed_vars:
-                    runtime_config.update(new_vars)
-                    runtime_config.update(changed_vars)
-                    # Update runtime timestamp
-                    runtime_config["_runtime_timestamp"] = current_time
-                    await database.db.settings.config.replace_one(
-                        {"_id": BOT_ID},
-                        runtime_config,
-                        upsert=True,
-                    )
-                    if new_vars:
-                        LOGGER.info(f"Added new variables: {list(new_vars.keys())}")
-                    if changed_vars:
-                        LOGGER.info(
-                            f"Updated changed variables: {list(changed_vars.keys())}"
-                        )
-                else:
-                    LOGGER.info(
-                        "Deploy config changed but no runtime config updates needed"
-                    )
             else:
-                # Runtime config is newer - preserve manual changes
+                # Both timestamps are 0 or missing - initialize both with current time
+                current_deploy_config["_deploy_timestamp"] = current_time
+                runtime_config["_runtime_timestamp"] = current_time
                 LOGGER.info(
-                    f"Runtime config is newer than deploy config - preserving manual changes. "
-                    f"Deploy timestamp: {deploy_timestamp}, Runtime timestamp: {runtime_timestamp}"
+                    "Missing timestamps - initializing both configs with current time"
                 )
 
-            # Always update deploy config with current values and timestamp
-            await database.db.settings.deployConfig.replace_one(
-                {"_id": BOT_ID},
-                current_deploy_config,
-                upsert=True,
-            )
+                # Update both configs with synchronized timestamps
+                await database.db.settings.deployConfig.replace_one(
+                    {"_id": BOT_ID},
+                    current_deploy_config,
+                    upsert=True,
+                )
+                await database.db.settings.config.replace_one(
+                    {"_id": BOT_ID},
+                    runtime_config,
+                    upsert=True,
+                )
 
         runtime_config = await database.db.settings.config.find_one(
             {"_id": BOT_ID},
@@ -263,6 +298,11 @@ async def load_settings():
                 k: v for k, v in runtime_config.items() if not k.startswith("_")
             }
             Config.load_dict(config_values_only)
+
+            # Warm the configuration cache for better performance
+            from bot.core.config_manager import warm_config_cache
+
+            warm_config_cache()
 
         if pf_dict := await database.db.settings.files.find_one(
             {"_id": BOT_ID},
@@ -612,6 +652,12 @@ async def load_configurations():
 
 async def process_pending_deletions():
     """Process messages that were scheduled for deletion"""
+    from bot.core.config_manager import get_config_bool
+
+    # Check if scheduled deletion is enabled
+    if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+        return
+
     if database.db is None:
         LOGGER.info("Database is None, skipping pending deletions check")
         return
@@ -735,16 +781,36 @@ async def process_pending_deletions():
 
 
 async def scheduled_deletion_checker():
-    LOGGER.info("Scheduled deletion checker started")
+    from bot.core.config_manager import get_config_bool
+
+    LOGGER.info("Optimized scheduled deletion checker started")
     while True:
         try:
+            # Check if scheduled deletion is still enabled during runtime
+            if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+                LOGGER.info(
+                    "Scheduled deletion has been disabled via configuration - stopping checker"
+                )
+                break
+
             await process_pending_deletions()
         except Exception as e:
             LOGGER.error(f"Error in scheduled deletion checker: {e}")
-        await sleep(600)  # Check every 10 minutes
+        await sleep(
+            900
+        )  # Optimized: Check every 15 minutes to reduce resource usage
+
+    LOGGER.info("Scheduled deletion checker stopped")
 
 
 async def start_bot():
+    # Check if scheduled deletion is enabled via configuration
+    from bot.core.config_manager import get_config_bool
+
+    if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+        LOGGER.info("Scheduled deletion is disabled via configuration")
+        return
+
     # Only start the scheduled deletion checker after TgClient is initialized
     if hasattr(TgClient, "bot") and TgClient.bot is not None:
         LOGGER.info("Starting scheduled deletion checker")
@@ -756,6 +822,15 @@ async def start_bot():
 
 async def wait_for_bot_and_start_checker():
     """Wait for TgClient.bot to be initialized and then start the scheduled deletion checker"""
+    # Check if scheduled deletion is enabled via configuration
+    from bot.core.config_manager import get_config_bool
+
+    if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+        LOGGER.info(
+            "Scheduled deletion is disabled via configuration - not starting checker"
+        )
+        return
+
     # Check immediately and then with short intervals
     # The bot initialization is a one-time event that happens during startup
 

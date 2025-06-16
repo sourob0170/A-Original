@@ -1,11 +1,121 @@
 import ast
 import logging
 import os
+import time
+from functools import lru_cache
 from importlib import import_module
 from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+class ConfigCache:
+    """High-performance configuration caching system"""
+
+    def __init__(self):
+        self._cache = {}
+        self._cache_timestamps = {}
+        self._cache_ttl = 300  # 5 minutes default TTL
+        self._access_count = {}
+        self._hit_count = 0
+        self._miss_count = 0
+        self._last_cleanup = time.time()
+        self._cleanup_interval = 60  # Cleanup every minute
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get cached configuration value with performance tracking"""
+        current_time = time.time()
+
+        # Track access patterns
+        self._access_count[key] = self._access_count.get(key, 0) + 1
+
+        # Periodic cleanup of expired entries
+        if current_time - self._last_cleanup > self._cleanup_interval:
+            self._cleanup_expired()
+            self._last_cleanup = current_time
+
+        # Check if cached value exists and is still valid
+        if (
+            key in self._cache
+            and key in self._cache_timestamps
+            and current_time - self._cache_timestamps[key] < self._cache_ttl
+        ):
+            self._hit_count += 1
+            return self._cache[key]
+
+        # Cache miss - get fresh value
+        self._miss_count += 1
+        try:
+            value = getattr(Config, key, default)
+        except AttributeError:
+            value = default
+
+        # Cache the value
+        self._cache[key] = value
+        self._cache_timestamps[key] = current_time
+        return value
+
+    def set(self, key: str, value: Any):
+        """Set configuration value and update cache"""
+        # Update the actual Config class
+        if hasattr(Config, key):
+            setattr(Config, key, value)
+
+        # Update cache
+        self._cache[key] = value
+        self._cache_timestamps[key] = time.time()
+
+    def invalidate(self, key: str | None = None):
+        """Invalidate cache entries"""
+        if key:
+            self._cache.pop(key, None)
+            self._cache_timestamps.pop(key, None)
+        else:
+            self._cache.clear()
+            self._cache_timestamps.clear()
+
+    def _cleanup_expired(self):
+        """Remove expired cache entries"""
+        current_time = time.time()
+        expired_keys = [
+            key
+            for key, timestamp in self._cache_timestamps.items()
+            if current_time - timestamp > self._cache_ttl
+        ]
+        for key in expired_keys:
+            self._cache.pop(key, None)
+            self._cache_timestamps.pop(key, None)
+
+    def get_stats(self) -> dict:
+        """Get cache performance statistics"""
+        total_requests = self._hit_count + self._miss_count
+        hit_rate = (
+            (self._hit_count / total_requests * 100) if total_requests > 0 else 0
+        )
+
+        return {
+            "hit_count": self._hit_count,
+            "miss_count": self._miss_count,
+            "hit_rate": f"{hit_rate:.1f}%",
+            "cache_size": len(self._cache),
+            "most_accessed": sorted(
+                self._access_count.items(), key=lambda x: x[1], reverse=True
+            )[:10],
+        }
+
+    def log_stats(self):
+        """Log cache performance statistics"""
+        stats = self.get_stats()
+        logger.info(
+            f"Config Cache Stats: {stats['hit_rate']} hit rate, "
+            f"{stats['cache_size']} entries, "
+            f"{stats['hit_count']} hits, {stats['miss_count']} misses"
+        )
+
+
+# Global cache instance
+_config_cache = ConfigCache()
 
 
 class Config:
@@ -16,11 +126,16 @@ class Config:
     BOT_TOKEN: str = ""
     CMD_SUFFIX: str = ""
     DATABASE_URL: str = ""
-    DEFAULT_UPLOAD: str = "rc"
+    DEFAULT_UPLOAD: str = "gd"
+    DEBRID_LINK_API = ""
     EXCLUDED_EXTENSIONS: str = ""
     FFMPEG_CMDS: ClassVar[dict[str, list[str]]] = {}
     FILELION_API: str = ""
     GDRIVE_ID: str = ""
+
+    # Google Drive Upload Settings
+    GDRIVE_UPLOAD_ENABLED: bool = True  # Enable/disable Google Drive upload feature
+
     HELPER_TOKENS: str = ""
     HYPER_THREADS: int = 0
     INCOMPLETE_TASK_NOTIFIER: bool = False
@@ -63,6 +178,9 @@ class Config:
     LEECH_SUFFIX: str = ""
     LEECH_FONT: str = ""
     LEECH_FILENAME: str = ""
+    UNIVERSAL_FILENAME: str = (
+        ""  # Universal filename template for both mirror and leech
+    )
     LEECH_SPLIT_SIZE: int = 2097152000
     EQUAL_SPLITS: bool = False
     LOGIN_PASS: str = ""
@@ -85,6 +203,11 @@ class Config:
     RSS_CHAT: str = ""
     RSS_DELAY: int = 600
     RSS_SIZE_LIMIT: int = 0
+    RSS_ENABLED: bool = True  # Enable/disable RSS functionality completely
+    RSS_JOB_INTERVAL: int = 600  # RSS job periodic runtime interval in seconds
+    SCHEDULED_DELETION_ENABLED: bool = (
+        True  # Enable/disable scheduled deletion functionality
+    )
     STOP_DUPLICATE: bool = False
     STREAMWISH_API: str = ""
     SUDO_USERS: str = ""
@@ -204,7 +327,7 @@ class Config:
 
     # Zotify Output Templates (from OUTPUT_PATHS and CONFIG_VALUES)
     ZOTIFY_OUTPUT_ALBUM: str = (
-        "{album_artist}/{album}/{track_num:02d}. {artists} - {title}"
+        "{album_artist}/{album}/{track_number}. {artists} - {title}"
     )
     ZOTIFY_OUTPUT_PLAYLIST_TRACK: str = "{playlist}/{artists} - {title}"
     ZOTIFY_OUTPUT_PLAYLIST_EPISODE: str = "{playlist}/{episode_number} - {title}"
@@ -366,6 +489,45 @@ class Config:
     MEDIA_TOOLS_ENABLED: bool = True
     MEDIAINFO_ENABLED: bool = False
 
+    # DDL (Direct Download Link) Upload Settings
+    DDL_ENABLED: bool = True  # Enable/disable DDL upload feature
+    DDL_DEFAULT_SERVER: str = "gofile"  # Default DDL server: gofile, streamtape
+
+    # Gofile Settings
+    GOFILE_API_KEY: str = ""  # Default Gofile API key (can be overridden per user)
+    GOFILE_FOLDER_NAME: str = (
+        ""  # Default folder name for uploads (empty = use filename)
+    )
+    GOFILE_PUBLIC_LINKS: bool = True  # Generate public links by default
+    GOFILE_PASSWORD_PROTECTION: bool = False  # Enable password protection
+    GOFILE_DEFAULT_PASSWORD: str = ""  # Default password for protected uploads
+    GOFILE_LINK_EXPIRY_DAYS: int = 0  # Link expiry in days (0 = no expiry)
+
+    # Streamtape Settings
+    STREAMTAPE_LOGIN: str = ""  # Default Streamtape login
+    STREAMTAPE_API_KEY: str = ""  # Default Streamtape API key
+    STREAMTAPE_FOLDER_NAME: str = ""  # Default folder name for uploads
+    STREAMTAPE_ALLOWED_EXTENSIONS: ClassVar[list[str]] = [
+        ".avi",
+        ".mkv",
+        ".mpg",
+        ".mpeg",
+        ".vob",
+        ".wmv",
+        ".flv",
+        ".mp4",
+        ".mov",
+        ".m4v",
+        ".m2v",
+        ".divx",
+        ".3gp",
+        ".webm",
+        ".ogv",
+        ".ogg",
+        ".ts",
+        ".ogm",
+    ]  # Allowed video extensions for Streamtape
+
     # YouTube Upload Settings
     YOUTUBE_UPLOAD_ENABLED: bool = True  # Enable/disable YouTube upload feature
     YOUTUBE_UPLOAD_DEFAULT_PRIVACY: str = (
@@ -509,6 +671,10 @@ class Config:
 
     # Document Trim Settings
     TRIM_DOCUMENT_ENABLED: bool = False
+    TRIM_DOCUMENT_START_PAGE: str = "1"  # Starting page number for document trimming
+    TRIM_DOCUMENT_END_PAGE: str = (
+        ""  # Ending page number for document trimming (empty for last page)
+    )
     TRIM_DOCUMENT_QUALITY: int = 90
     TRIM_DOCUMENT_FORMAT: str = (
         "none"  # Output format for document trimming (e.g., pdf)
@@ -594,6 +760,50 @@ class Config:
     # Extract Quality Settings
     EXTRACT_MAINTAIN_QUALITY: bool = True
 
+    # Remove Settings
+    REMOVE_ENABLED: bool = False
+    REMOVE_PRIORITY: int = 8
+    REMOVE_DELETE_ORIGINAL: bool = True
+    REMOVE_METADATA: bool = False
+    REMOVE_MAINTAIN_QUALITY: bool = True
+
+    # Video Remove Settings
+    REMOVE_VIDEO_ENABLED: bool = False
+    REMOVE_VIDEO_CODEC: str = "none"
+    REMOVE_VIDEO_FORMAT: str = "none"
+    REMOVE_VIDEO_INDEX: int | None = None
+    REMOVE_VIDEO_QUALITY: str = "none"
+    REMOVE_VIDEO_PRESET: str = "none"
+    REMOVE_VIDEO_BITRATE: str = "none"
+    REMOVE_VIDEO_RESOLUTION: str = "none"
+    REMOVE_VIDEO_FPS: str = "none"
+
+    # Audio Remove Settings
+    REMOVE_AUDIO_ENABLED: bool = False
+    REMOVE_AUDIO_CODEC: str = "none"
+    REMOVE_AUDIO_FORMAT: str = "none"
+    REMOVE_AUDIO_INDEX: int | None = None
+    REMOVE_AUDIO_BITRATE: str = "none"
+    REMOVE_AUDIO_CHANNELS: str = "none"
+    REMOVE_AUDIO_SAMPLING: str = "none"
+    REMOVE_AUDIO_VOLUME: str = "none"
+
+    # Subtitle Remove Settings
+    REMOVE_SUBTITLE_ENABLED: bool = False
+    REMOVE_SUBTITLE_CODEC: str = "none"
+    REMOVE_SUBTITLE_FORMAT: str = "none"
+    REMOVE_SUBTITLE_INDEX: int | None = None
+    REMOVE_SUBTITLE_LANGUAGE: str = "none"
+    REMOVE_SUBTITLE_ENCODING: str = "none"
+    REMOVE_SUBTITLE_FONT: str = "none"
+    REMOVE_SUBTITLE_FONT_SIZE: str = "none"
+
+    # Attachment Remove Settings
+    REMOVE_ATTACHMENT_ENABLED: bool = False
+    REMOVE_ATTACHMENT_FORMAT: str = "none"
+    REMOVE_ATTACHMENT_INDEX: int | None = None
+    REMOVE_ATTACHMENT_FILTER: str = "none"
+
     # Add Settings
     ADD_ENABLED: bool = False
     ADD_PRIORITY: int = 7
@@ -628,6 +838,7 @@ class Config:
     ADD_SUBTITLE_ENCODING: str = "none"
     ADD_SUBTITLE_FONT: str = "none"
     ADD_SUBTITLE_FONT_SIZE: str = "none"
+    ADD_SUBTITLE_HARDSUB_ENABLED: bool = False
 
     # Attachment Add Settings
     ADD_ATTACHMENT_ENABLED: bool = False
@@ -767,26 +978,36 @@ class Config:
     # Resource Management Settings
     PIL_MEMORY_LIMIT: int = 2048
 
-    # Auto Restart Settings
-    AUTO_RESTART_ENABLED: bool = False
-    AUTO_RESTART_INTERVAL: int = 24  # in hours
+    # Auto Restart Settings - Optimized for better resource management
+    AUTO_RESTART_ENABLED: bool = False  # Disabled by default for better stability
+    AUTO_RESTART_INTERVAL: int = (
+        48  # Increased to 48 hours to reduce restart frequency
+    )
+
+    # Garbage Collection Settings
+    GC_ENABLED: bool = True  # Enable/disable garbage collection completely
+    GC_INTERVAL: int = 60  # Minimum interval between GC operations in seconds
+    GC_THRESHOLD_MB: int = 150  # Memory threshold in MB to trigger GC
+    GC_AGGRESSIVE_MODE: bool = False  # Enable aggressive GC by default
 
     # Bulk Operation Settings
     BULK_ENABLED: bool = True  # Enable/disable bulk operations (-b flag)
 
-    # Task Monitoring Settings
-    TASK_MONITOR_ENABLED: bool = False
-    TASK_MONITOR_INTERVAL: int = 60  # in seconds
-    TASK_MONITOR_CONSECUTIVE_CHECKS: int = 20
+    # Task Monitoring Settings - Optimized for reduced resource usage
+    TASK_MONITOR_ENABLED: bool = False  # Disabled by default for better performance
+    TASK_MONITOR_INTERVAL: int = 120  # Increased to 2 minutes to reduce CPU usage
+    TASK_MONITOR_CONSECUTIVE_CHECKS: int = 10  # Reduced from 20 to save memory
     TASK_MONITOR_SPEED_THRESHOLD: int = 50  # in KB/s
     TASK_MONITOR_ELAPSED_THRESHOLD: int = 3600  # in seconds (1 hour)
     TASK_MONITOR_ETA_THRESHOLD: int = 86400  # in seconds (24 hours)
-    TASK_MONITOR_WAIT_TIME: int = 600  # in seconds (10 minutes)
-    TASK_MONITOR_COMPLETION_THRESHOLD: int = 86400  # in seconds (4 hours)
-    TASK_MONITOR_CPU_HIGH: int = 90  # percentage
-    TASK_MONITOR_CPU_LOW: int = 60  # percentage
-    TASK_MONITOR_MEMORY_HIGH: int = 75  # percentage
-    TASK_MONITOR_MEMORY_LOW: int = 60  # percentage
+    TASK_MONITOR_WAIT_TIME: int = 900  # Increased to 15 minutes to reduce overhead
+    TASK_MONITOR_COMPLETION_THRESHOLD: int = 86400  # in seconds (24 hours)
+    TASK_MONITOR_CPU_HIGH: int = 85  # Reduced threshold for better responsiveness
+    TASK_MONITOR_CPU_LOW: int = 50  # Reduced threshold
+    TASK_MONITOR_MEMORY_HIGH: int = (
+        70  # Reduced threshold for better memory management
+    )
+    TASK_MONITOR_MEMORY_LOW: int = 50  # Reduced threshold
 
     # Limits Settings
     STORAGE_THRESHOLD: float = 0  # GB
@@ -876,6 +1097,13 @@ class Config:
         True  # Enable/disable warnings for wrong command suffixes
     )
 
+    # QuickInfo Settings
+    QUICKINFO_ENABLED: bool = True  # Enable/disable QuickInfo feature
+
+    # Encoding/Decoding Settings
+    ENCODING_ENABLED: bool = True  # Enable/disable encoding functionality
+    DECODING_ENABLED: bool = True  # Enable/disable decoding functionality
+
     # VirusTotal Settings
     VT_API_KEY: str = ""
     VT_API_TIMEOUT: int = 500
@@ -883,7 +1111,7 @@ class Config:
     VT_MAX_FILE_SIZE: int = 32 * 1024 * 1024  # 32MB default limit
 
     # Terabox Proxy Settings
-    TERABOX_PROXY: str = "https://teradlrobot.cheemsbackup.workers.dev/"
+    TERABOX_PROXY: str = "https://wdzone-terabox-api.vercel.app/"
 
     HEROKU_APP_NAME: str = ""
     HEROKU_API_KEY: str = ""
@@ -944,6 +1172,7 @@ class Config:
                     "compression",
                     "trim",
                     "extract",
+                    "remove",
                     "add",
                     "metadata",
                     "xtra",
@@ -1054,7 +1283,7 @@ class Config:
         if isinstance(value, str):
             value = value.strip()
 
-        if key == "DEFAULT_UPLOAD" and value not in ["gd", "yt", "mg", "rc"]:
+        if key == "DEFAULT_UPLOAD" and value not in ["gd", "yt", "mg", "rc", "ddl"]:
             return "gd"
 
         if key in {"BASE_URL", "RCLONE_SERVE_URL", "INDEX_URL"}:
@@ -1071,8 +1300,9 @@ class Config:
         return value
 
     @classmethod
-    def get(cls, key: str) -> Any:
-        return getattr(cls, key, None)
+    def get(cls, key: str, default: Any = None) -> Any:
+        """Get configuration value with caching for improved performance"""
+        return _config_cache.get(key, default)
 
     @classmethod
     def set(cls, key: str, value: Any):
@@ -1081,6 +1311,31 @@ class Config:
         converted = cls._convert(key, value)
         normalized = cls._normalize_value(key, converted)
         setattr(cls, key, normalized)
+
+        # Update cache when config is changed
+        _config_cache.set(key, normalized)
+
+    @classmethod
+    @lru_cache(maxsize=512)
+    def get_cached(cls, key: str) -> Any:
+        """Get configuration value with LRU caching (for frequently accessed configs)"""
+        return getattr(cls, key, None)
+
+    @classmethod
+    def get_with_fallback(cls, key: str, *fallback_keys, default: Any = None) -> Any:
+        """Get configuration with fallback keys and caching"""
+        # Try primary key first
+        value = _config_cache.get(key, None)
+        if value is not None:
+            return value
+
+        # Try fallback keys
+        for fallback_key in fallback_keys:
+            value = _config_cache.get(fallback_key, None)
+            if value is not None:
+                return value
+
+        return default
 
     @classmethod
     def get_all(cls) -> dict:
@@ -1093,6 +1348,9 @@ class Config:
         except ModuleNotFoundError:
             logger.warning("No config.py module found.")
             return
+
+        # Clear cache before loading new configuration
+        _config_cache.invalidate()
 
         for attr in dir(settings):
             if not cls._is_valid_config_attr(settings, attr):
@@ -1107,6 +1365,8 @@ class Config:
             except Exception as e:
                 logger.warning(f"Skipping config '{attr}' due to error: {e}")
 
+        logger.info("Configuration loaded and cached successfully")
+
     @classmethod
     def load_dict(cls, config_dict: dict[str, Any]):
         for key, value in config_dict.items():
@@ -1114,6 +1374,24 @@ class Config:
                 cls.set(key, value)
             except Exception as e:
                 logger.warning(f"Skipping config '{key}' due to error: {e}")
+
+    @classmethod
+    def invalidate_cache(cls, key: str | None = None):
+        """Invalidate configuration cache"""
+        _config_cache.invalidate(key)
+        if key is None:
+            # Also clear LRU cache
+            cls.get_cached.cache_clear()
+
+    @classmethod
+    def get_cache_stats(cls) -> dict:
+        """Get configuration cache performance statistics"""
+        return _config_cache.get_stats()
+
+    @classmethod
+    def log_cache_stats(cls):
+        """Log configuration cache performance statistics"""
+        _config_cache.log_stats()
 
     @classmethod
     def _is_valid_config_attr(cls, module, attr: str) -> bool:
@@ -1127,10 +1405,105 @@ class Config:
 class SystemEnv:
     @classmethod
     def load(cls):
+        env_overrides = 0
         for key in Config.__annotations__:
             env_value = os.getenv(key)
             if env_value is not None:
                 try:
                     Config.set(key, env_value)
+                    env_overrides += 1
                 except Exception as e:
                     logger.warning(f"Env override failed for '{key}': {e}")
+
+        if env_overrides > 0:
+            logger.info(f"Applied {env_overrides} environment variable overrides")
+
+
+# Optimized configuration access functions for frequently used configs
+def get_config_cached(key: str, default: Any = None) -> Any:
+    """
+    High-performance configuration access function.
+    Use this for frequently accessed configuration values.
+    """
+    return Config.get(key, default)
+
+
+def get_config_bool(key: str, default: bool = False) -> bool:
+    """Get boolean configuration with caching"""
+    value = Config.get(key, default)
+    return bool(value) if value is not None else default
+
+
+def get_config_int(key: str, default: int = 0) -> int:
+    """Get integer configuration with caching"""
+    value = Config.get(key, default)
+    try:
+        return int(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
+def get_config_str(key: str, default: str = "") -> str:
+    """Get string configuration with caching"""
+    value = Config.get(key, default)
+    return str(value) if value is not None else default
+
+
+def get_config_list(key: str, default: list | None = None) -> list:
+    """Get list configuration with caching"""
+    if default is None:
+        default = []
+    value = Config.get(key, default)
+    return value if isinstance(value, list) else default
+
+
+def get_config_dict(key: str, default: dict | None = None) -> dict:
+    """Get dictionary configuration with caching"""
+    if default is None:
+        default = {}
+    value = Config.get(key, default)
+    return value if isinstance(value, dict) else default
+
+
+# Performance monitoring function
+def log_config_performance():
+    """Log configuration cache performance statistics"""
+    Config.log_cache_stats()
+
+
+# Cache warming function for startup optimization
+def warm_config_cache():
+    """Pre-load frequently accessed configurations into cache"""
+    # Most frequently accessed configs based on codebase analysis
+    frequently_accessed = [
+        "BOT_TOKEN",
+        "DATABASE_URL",
+        "OWNER_ID",
+        "TELEGRAM_API",
+        "TELEGRAM_HASH",
+        "RSS_ENABLED",
+        "RSS_JOB_INTERVAL",
+        "GC_ENABLED",
+        "GC_INTERVAL",
+        "SCHEDULED_DELETION_ENABLED",
+        "TASK_MONITOR_ENABLED",
+        "DEFAULT_UPLOAD",
+        "QUEUE_ALL",
+        "QUEUE_DOWNLOAD",
+        "QUEUE_UPLOAD",
+        "LEECH_SPLIT_SIZE",
+        "TORRENT_TIMEOUT",
+        "CMD_SUFFIX",
+        "AUTHORIZED_CHATS",
+        "SUDO_USERS",
+        "LOG_CHAT_ID",
+        "INCOMPLETE_TASK_NOTIFIER",
+    ]
+
+    # Pre-load these configs into cache
+    for config_key in frequently_accessed:
+        Config.get(config_key)
+
+    logger.info(
+        f"Warmed configuration cache with {len(frequently_accessed)} frequently accessed configs"
+    )

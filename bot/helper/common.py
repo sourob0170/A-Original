@@ -130,6 +130,8 @@ class TaskConfig:
         self.trim_image_enabled = False
         self.trim_image_quality = "none"
         self.trim_document_enabled = False
+        self.trim_document_start_page = "1"
+        self.trim_document_end_page = ""
         self.trim_document_quality = "none"
         self.trim_subtitle_enabled = False
         self.trim_subtitle_encoding = ""
@@ -196,6 +198,7 @@ class TaskConfig:
         self.add_subtitle_encoding = "none"
         self.add_subtitle_font = "none"
         self.add_subtitle_font_size = "none"
+        self.add_subtitle_hardsub_enabled = False
         self.add_attachment_mimetype = "none"
         self.add_delete_original = True
         self.add_preserve_tracks = False
@@ -241,6 +244,61 @@ class TaskConfig:
         # General extract settings
         self.extract_maintain_quality = True
         self.extract_delete_original = False
+
+        # Remove settings
+        self.remove_enabled = False
+        self.remove_priority = 0
+        self.remove_video_enabled = False
+        self.remove_audio_enabled = False
+        self.remove_subtitle_enabled = False
+        self.remove_attachment_enabled = False
+        self.remove_metadata = False
+
+        # Remove indices
+        self.remove_video_index = None
+        self.remove_audio_index = None
+        self.remove_subtitle_index = None
+        self.remove_attachment_index = None
+
+        # Remove indices lists (for multiple indices)
+        self.remove_video_indices = None
+        self.remove_audio_indices = None
+        self.remove_subtitle_indices = None
+        self.remove_attachment_indices = None
+
+        # Video remove settings
+        self.remove_video_codec = "copy"
+        self.remove_video_format = "none"
+        self.remove_video_quality = "none"
+        self.remove_video_preset = "none"
+        self.remove_video_bitrate = "none"
+        self.remove_video_resolution = "none"
+        self.remove_video_fps = "none"
+
+        # Audio remove settings
+        self.remove_audio_codec = "copy"
+        self.remove_audio_format = "none"
+        self.remove_audio_bitrate = "none"
+        self.remove_audio_channels = "none"
+        self.remove_audio_sampling = "none"
+        self.remove_audio_volume = "none"
+
+        # Subtitle remove settings
+        self.remove_subtitle_codec = "copy"
+        self.remove_subtitle_format = "none"
+        self.remove_subtitle_language = "none"
+        self.remove_subtitle_encoding = "none"
+        self.remove_subtitle_font = "none"
+        self.remove_subtitle_font_size = "none"
+
+        # Attachment remove settings
+        self.remove_attachment_format = "none"
+        self.remove_attachment_filter = "none"
+
+        # General remove settings
+        self.remove_delete_original = False
+        self.remove_maintain_quality = True
+
         self.thumbnail_layout = ""
         self.folder_name = ""
         self.split_size = 0
@@ -955,6 +1013,38 @@ class TaskConfig:
 
         if (
             user_trim_enabled
+            and "TRIM_DOCUMENT_START_PAGE" in self.user_dict
+            and self.user_dict["TRIM_DOCUMENT_START_PAGE"]
+        ):
+            self.trim_document_start_page = self.user_dict[
+                "TRIM_DOCUMENT_START_PAGE"
+            ]
+        elif (
+            self.trim_enabled
+            and hasattr(Config, "TRIM_DOCUMENT_START_PAGE")
+            and Config.TRIM_DOCUMENT_START_PAGE
+        ):
+            self.trim_document_start_page = Config.TRIM_DOCUMENT_START_PAGE
+        else:
+            self.trim_document_start_page = "1"
+
+        if (
+            user_trim_enabled
+            and "TRIM_DOCUMENT_END_PAGE" in self.user_dict
+            and self.user_dict["TRIM_DOCUMENT_END_PAGE"]
+        ):
+            self.trim_document_end_page = self.user_dict["TRIM_DOCUMENT_END_PAGE"]
+        elif (
+            self.trim_enabled
+            and hasattr(Config, "TRIM_DOCUMENT_END_PAGE")
+            and Config.TRIM_DOCUMENT_END_PAGE
+        ):
+            self.trim_document_end_page = Config.TRIM_DOCUMENT_END_PAGE
+        else:
+            self.trim_document_end_page = ""
+
+        if (
+            user_trim_enabled
             and "TRIM_DOCUMENT_QUALITY" in self.user_dict
             and self.user_dict["TRIM_DOCUMENT_QUALITY"]
         ):
@@ -1148,8 +1238,369 @@ class TaskConfig:
         # Initialize extract settings
         await self.initialize_extract_settings()
 
+        # Initialize remove settings
+        await self.initialize_remove_settings()
+
         # Initialize add settings
         await self.initialize_add_settings()
+
+    async def initialize_remove_settings(self):
+        """Initialize remove settings with priority logic."""
+        # Get user and owner settings
+        user_remove_enabled = self.user_dict.get("REMOVE_ENABLED", False)
+        owner_remove_enabled = (
+            hasattr(Config, "REMOVE_ENABLED") and Config.REMOVE_ENABLED
+        )
+
+        # Set remove_enabled based on priority logic
+        if user_remove_enabled or (
+            owner_remove_enabled and "REMOVE_ENABLED" not in self.user_dict
+        ):
+            self.remove_enabled = True
+        else:
+            self.remove_enabled = False
+
+        # Initialize remove priority setting
+        if (
+            user_remove_enabled
+            and "REMOVE_PRIORITY" in self.user_dict
+            and self.user_dict["REMOVE_PRIORITY"]
+        ):
+            self.remove_priority = self.user_dict["REMOVE_PRIORITY"]
+        elif (
+            self.remove_enabled
+            and hasattr(Config, "REMOVE_PRIORITY")
+            and Config.REMOVE_PRIORITY
+        ):
+            self.remove_priority = Config.REMOVE_PRIORITY
+        else:
+            self.remove_priority = 7
+
+        # Initialize video remove settings
+        if user_remove_enabled and "REMOVE_VIDEO_ENABLED" in self.user_dict:
+            self.remove_video_enabled = self.user_dict["REMOVE_VIDEO_ENABLED"]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_VIDEO_ENABLED"):
+            self.remove_video_enabled = Config.REMOVE_VIDEO_ENABLED
+        else:
+            self.remove_video_enabled = False
+
+        # Initialize audio remove settings
+        if user_remove_enabled and "REMOVE_AUDIO_ENABLED" in self.user_dict:
+            self.remove_audio_enabled = self.user_dict["REMOVE_AUDIO_ENABLED"]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_AUDIO_ENABLED"):
+            self.remove_audio_enabled = Config.REMOVE_AUDIO_ENABLED
+        else:
+            self.remove_audio_enabled = False
+
+        # Initialize subtitle remove settings
+        if user_remove_enabled and "REMOVE_SUBTITLE_ENABLED" in self.user_dict:
+            self.remove_subtitle_enabled = self.user_dict["REMOVE_SUBTITLE_ENABLED"]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_SUBTITLE_ENABLED"):
+            self.remove_subtitle_enabled = Config.REMOVE_SUBTITLE_ENABLED
+        else:
+            self.remove_subtitle_enabled = False
+
+        # Initialize attachment remove settings
+        if user_remove_enabled and "REMOVE_ATTACHMENT_ENABLED" in self.user_dict:
+            self.remove_attachment_enabled = self.user_dict[
+                "REMOVE_ATTACHMENT_ENABLED"
+            ]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_ATTACHMENT_ENABLED"):
+            self.remove_attachment_enabled = Config.REMOVE_ATTACHMENT_ENABLED
+        else:
+            self.remove_attachment_enabled = False
+
+        # Initialize metadata remove setting
+        if user_remove_enabled and "REMOVE_METADATA" in self.user_dict:
+            self.remove_metadata = self.user_dict["REMOVE_METADATA"]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_METADATA"):
+            self.remove_metadata = Config.REMOVE_METADATA
+        else:
+            self.remove_metadata = False
+
+        # Initialize remove delete original setting
+        if user_remove_enabled and "REMOVE_DELETE_ORIGINAL" in self.user_dict:
+            self.remove_delete_original = self.user_dict["REMOVE_DELETE_ORIGINAL"]
+        elif self.remove_enabled and hasattr(Config, "REMOVE_DELETE_ORIGINAL"):
+            self.remove_delete_original = Config.REMOVE_DELETE_ORIGINAL
+        else:
+            self.remove_delete_original = True
+
+        # Initialize comprehensive Remove configurations
+        # Video remove configurations
+        self.remove_video_codec = self.user_dict.get("REMOVE_VIDEO_CODEC", "none")
+        if self.remove_video_codec == "none" and hasattr(
+            Config, "REMOVE_VIDEO_CODEC"
+        ):
+            self.remove_video_codec = Config.REMOVE_VIDEO_CODEC
+
+        self.remove_video_format = self.user_dict.get("REMOVE_VIDEO_FORMAT", "none")
+        if self.remove_video_format == "none" and hasattr(
+            Config, "REMOVE_VIDEO_FORMAT"
+        ):
+            self.remove_video_format = Config.REMOVE_VIDEO_FORMAT
+
+        self.remove_video_quality = self.user_dict.get(
+            "REMOVE_VIDEO_QUALITY", "none"
+        )
+        if self.remove_video_quality == "none" and hasattr(
+            Config, "REMOVE_VIDEO_QUALITY"
+        ):
+            self.remove_video_quality = Config.REMOVE_VIDEO_QUALITY
+
+        self.remove_video_preset = self.user_dict.get("REMOVE_VIDEO_PRESET", "none")
+        if self.remove_video_preset == "none" and hasattr(
+            Config, "REMOVE_VIDEO_PRESET"
+        ):
+            self.remove_video_preset = Config.REMOVE_VIDEO_PRESET
+
+        self.remove_video_bitrate = self.user_dict.get(
+            "REMOVE_VIDEO_BITRATE", "none"
+        )
+        if self.remove_video_bitrate == "none" and hasattr(
+            Config, "REMOVE_VIDEO_BITRATE"
+        ):
+            self.remove_video_bitrate = Config.REMOVE_VIDEO_BITRATE
+
+        self.remove_video_resolution = self.user_dict.get(
+            "REMOVE_VIDEO_RESOLUTION", "none"
+        )
+        if self.remove_video_resolution == "none" and hasattr(
+            Config, "REMOVE_VIDEO_RESOLUTION"
+        ):
+            self.remove_video_resolution = Config.REMOVE_VIDEO_RESOLUTION
+
+        self.remove_video_fps = self.user_dict.get("REMOVE_VIDEO_FPS", "none")
+        if self.remove_video_fps == "none" and hasattr(Config, "REMOVE_VIDEO_FPS"):
+            self.remove_video_fps = Config.REMOVE_VIDEO_FPS
+
+        # Audio remove configurations
+        self.remove_audio_codec = self.user_dict.get("REMOVE_AUDIO_CODEC", "none")
+        if self.remove_audio_codec == "none" and hasattr(
+            Config, "REMOVE_AUDIO_CODEC"
+        ):
+            self.remove_audio_codec = Config.REMOVE_AUDIO_CODEC
+
+        self.remove_audio_format = self.user_dict.get("REMOVE_AUDIO_FORMAT", "none")
+        if self.remove_audio_format == "none" and hasattr(
+            Config, "REMOVE_AUDIO_FORMAT"
+        ):
+            self.remove_audio_format = Config.REMOVE_AUDIO_FORMAT
+
+        self.remove_audio_bitrate = self.user_dict.get(
+            "REMOVE_AUDIO_BITRATE", "none"
+        )
+        if self.remove_audio_bitrate == "none" and hasattr(
+            Config, "REMOVE_AUDIO_BITRATE"
+        ):
+            self.remove_audio_bitrate = Config.REMOVE_AUDIO_BITRATE
+
+        self.remove_audio_channels = self.user_dict.get(
+            "REMOVE_AUDIO_CHANNELS", "none"
+        )
+        if self.remove_audio_channels == "none" and hasattr(
+            Config, "REMOVE_AUDIO_CHANNELS"
+        ):
+            self.remove_audio_channels = Config.REMOVE_AUDIO_CHANNELS
+
+        self.remove_audio_sampling = self.user_dict.get(
+            "REMOVE_AUDIO_SAMPLING", "none"
+        )
+        if self.remove_audio_sampling == "none" and hasattr(
+            Config, "REMOVE_AUDIO_SAMPLING"
+        ):
+            self.remove_audio_sampling = Config.REMOVE_AUDIO_SAMPLING
+
+        self.remove_audio_volume = self.user_dict.get("REMOVE_AUDIO_VOLUME", "none")
+        if self.remove_audio_volume == "none" and hasattr(
+            Config, "REMOVE_AUDIO_VOLUME"
+        ):
+            self.remove_audio_volume = Config.REMOVE_AUDIO_VOLUME
+
+        # Subtitle remove configurations
+        self.remove_subtitle_codec = self.user_dict.get(
+            "REMOVE_SUBTITLE_CODEC", "none"
+        )
+        if self.remove_subtitle_codec == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_CODEC"
+        ):
+            self.remove_subtitle_codec = Config.REMOVE_SUBTITLE_CODEC
+
+        self.remove_subtitle_format = self.user_dict.get(
+            "REMOVE_SUBTITLE_FORMAT", "none"
+        )
+        if self.remove_subtitle_format == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_FORMAT"
+        ):
+            self.remove_subtitle_format = Config.REMOVE_SUBTITLE_FORMAT
+
+        self.remove_subtitle_language = self.user_dict.get(
+            "REMOVE_SUBTITLE_LANGUAGE", "none"
+        )
+        if self.remove_subtitle_language == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_LANGUAGE"
+        ):
+            self.remove_subtitle_language = Config.REMOVE_SUBTITLE_LANGUAGE
+
+        self.remove_subtitle_encoding = self.user_dict.get(
+            "REMOVE_SUBTITLE_ENCODING", "none"
+        )
+        if self.remove_subtitle_encoding == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_ENCODING"
+        ):
+            self.remove_subtitle_encoding = Config.REMOVE_SUBTITLE_ENCODING
+
+        self.remove_subtitle_font = self.user_dict.get(
+            "REMOVE_SUBTITLE_FONT", "none"
+        )
+        if self.remove_subtitle_font == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_FONT"
+        ):
+            self.remove_subtitle_font = Config.REMOVE_SUBTITLE_FONT
+
+        self.remove_subtitle_font_size = self.user_dict.get(
+            "REMOVE_SUBTITLE_FONT_SIZE", "none"
+        )
+        if self.remove_subtitle_font_size == "none" and hasattr(
+            Config, "REMOVE_SUBTITLE_FONT_SIZE"
+        ):
+            self.remove_subtitle_font_size = Config.REMOVE_SUBTITLE_FONT_SIZE
+
+        # Attachment remove configurations
+        self.remove_attachment_format = self.user_dict.get(
+            "REMOVE_ATTACHMENT_FORMAT", "none"
+        )
+        if self.remove_attachment_format == "none" and hasattr(
+            Config, "REMOVE_ATTACHMENT_FORMAT"
+        ):
+            self.remove_attachment_format = Config.REMOVE_ATTACHMENT_FORMAT
+
+        self.remove_attachment_filter = self.user_dict.get(
+            "REMOVE_ATTACHMENT_FILTER", "none"
+        )
+        if self.remove_attachment_filter == "none" and hasattr(
+            Config, "REMOVE_ATTACHMENT_FILTER"
+        ):
+            self.remove_attachment_filter = Config.REMOVE_ATTACHMENT_FILTER
+
+        # Maintain quality setting
+        self.remove_maintain_quality = self.user_dict.get(
+            "REMOVE_MAINTAIN_QUALITY", True
+        )
+        if not self.remove_maintain_quality and hasattr(
+            Config, "REMOVE_MAINTAIN_QUALITY"
+        ):
+            self.remove_maintain_quality = Config.REMOVE_MAINTAIN_QUALITY
+
+        # Initialize remove indices
+        self.remove_video_indices = []
+        self.remove_audio_indices = []
+        self.remove_subtitle_indices = []
+        self.remove_attachment_indices = []
+
+        # Command line arguments override settings
+        if hasattr(self, "args") and self.args:
+            # Handle remove flags
+            if self.args.get("-remove") is True:
+                self.remove_enabled = True
+
+            if self.args.get("-remove-video") is True:
+                self.remove_video_enabled = True
+                self.remove_enabled = True
+
+            if self.args.get("-remove-audio") is True:
+                self.remove_audio_enabled = True
+                self.remove_enabled = True
+
+            if self.args.get("-remove-subtitle") is True:
+                self.remove_subtitle_enabled = True
+                self.remove_enabled = True
+
+            if self.args.get("-remove-attachment") is True:
+                self.remove_attachment_enabled = True
+                self.remove_enabled = True
+
+            if self.args.get("-remove-metadata") is True:
+                self.remove_metadata = True
+                self.remove_enabled = True
+
+            # Handle remove priority flag
+            if self.args.get("-remove-priority") is not None:
+                try:
+                    self.remove_priority = int(self.args.get("-remove-priority"))
+                except ValueError:
+                    self.remove_priority = 7
+
+            # Handle remove index flags
+            # Video indices
+            if self.args.get("-remove-video-index") is not None:
+                video_indices = str(self.args.get("-remove-video-index")).split(",")
+                for idx in video_indices:
+                    try:
+                        if idx.strip().lower() == "all":
+                            self.remove_video_indices = []
+                            break
+                        index = int(idx.strip())
+                        self.remove_video_indices.append(index)
+                        if self.remove_video_index is None:
+                            self.remove_video_index = index
+                        self.remove_enabled = True
+                        self.remove_video_enabled = True
+                    except ValueError:
+                        if idx.strip() and idx.strip().lower() != "all":
+                            pass
+
+            elif self.args.get("-rvi") is not None:
+                video_indices = str(self.args.get("-rvi")).split(",")
+                for idx in video_indices:
+                    try:
+                        if idx.strip().lower() == "all":
+                            self.remove_video_indices = []
+                            break
+                        index = int(idx.strip())
+                        self.remove_video_indices.append(index)
+                        if self.remove_video_index is None:
+                            self.remove_video_index = index
+                        self.remove_enabled = True
+                        self.remove_video_enabled = True
+                    except ValueError:
+                        if idx.strip() and idx.strip().lower() != "all":
+                            pass
+
+            # Audio indices
+            if self.args.get("-remove-audio-index") is not None:
+                audio_indices = str(self.args.get("-remove-audio-index")).split(",")
+                for idx in audio_indices:
+                    try:
+                        if idx.strip().lower() == "all":
+                            self.remove_audio_indices = []
+                            break
+                        index = int(idx.strip())
+                        self.remove_audio_indices.append(index)
+                        if self.remove_audio_index is None:
+                            self.remove_audio_index = index
+                        self.remove_enabled = True
+                        self.remove_audio_enabled = True
+                    except ValueError:
+                        if idx.strip() and idx.strip().lower() != "all":
+                            pass
+
+            elif self.args.get("-rai") is not None:
+                audio_indices = str(self.args.get("-rai")).split(",")
+                for idx in audio_indices:
+                    try:
+                        if idx.strip().lower() == "all":
+                            self.remove_audio_indices = []
+                            break
+                        index = int(idx.strip())
+                        self.remove_audio_indices.append(index)
+                        if self.remove_audio_index is None:
+                            self.remove_audio_index = index
+                        self.remove_enabled = True
+                        self.remove_audio_enabled = True
+                    except ValueError:
+                        if idx.strip() and idx.strip().lower() != "all":
+                            pass
 
     async def initialize_add_settings(self):
         """Initialize add settings with priority logic."""
@@ -1216,6 +1667,7 @@ class TaskConfig:
                     "ADD_SUBTITLE_ENCODING",
                     "ADD_SUBTITLE_FONT",
                     "ADD_SUBTITLE_FONT_SIZE",
+                    "ADD_SUBTITLE_HARDSUB_ENABLED",
                     "ADD_ATTACHMENT_ENABLED",
                     "ADD_ATTACHMENT_PATH",
                     "ADD_ATTACHMENT_INDEX",
@@ -1601,6 +2053,18 @@ class TaskConfig:
             self.add_subtitle_font_size = db_add_settings["ADD_SUBTITLE_FONT_SIZE"]
         else:
             self.add_subtitle_font_size = "none"
+
+        # Initialize subtitle hardsub setting
+        if user_add_enabled and "ADD_SUBTITLE_HARDSUB_ENABLED" in self.user_dict:
+            self.add_subtitle_hardsub_enabled = self.user_dict[
+                "ADD_SUBTITLE_HARDSUB_ENABLED"
+            ]
+        elif self.add_enabled and "ADD_SUBTITLE_HARDSUB_ENABLED" in db_add_settings:
+            self.add_subtitle_hardsub_enabled = db_add_settings[
+                "ADD_SUBTITLE_HARDSUB_ENABLED"
+            ]
+        else:
+            self.add_subtitle_hardsub_enabled = False
 
         # Initialize attachment add settings
         if user_add_enabled and "ADD_ATTACHMENT_ENABLED" in self.user_dict:
@@ -3420,6 +3884,11 @@ class TaskConfig:
             ) or self.up_dest == "yt":
                 # YouTube upload destination
                 self.up_dest = "yt"
+            elif (
+                not self.up_dest and default_upload == "ddl"
+            ) or self.up_dest == "ddl":
+                # DDL upload destination
+                self.up_dest = "ddl"
 
             # Check YouTube upload as fallback when no upload destination is set
             if not self.up_dest and getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
@@ -3463,6 +3932,10 @@ class TaskConfig:
                     raise ValueError("MEGA upload is disabled!")
                 if not getattr(Config, "MEGA_UPLOAD_ENABLED", False):
                     raise ValueError("MEGA upload is disabled!")
+            elif self.up_dest == "ddl" or self.up_dest.startswith("ddl:"):
+                # DDL upload destination - validate that DDL upload is enabled
+                if not getattr(Config, "DDL_ENABLED", False):
+                    raise ValueError("DDL upload is disabled!")
             else:
                 raise ValueError("Wrong Upload Destination!")
 
@@ -4688,6 +5161,123 @@ class TaskConfig:
                     continue
                 with contextlib.suppress(Exception):
                     await move(f_path, ospath.join(dirpath, new_name))
+
+        return dl_path
+
+    async def apply_universal_filename(self, dl_path, up_dir=None):
+        """Apply universal filename template for mirror files if no -n flag was used and universal filename is set"""
+        # Only apply if no custom name was set via -n flag and universal filename is configured
+        if hasattr(self, "new_name") and self.new_name:
+            # -n flag was used, don't apply universal filename
+            return dl_path
+
+        # Get universal filename template
+        universal_filename = self.user_dict.get("UNIVERSAL_FILENAME") or (
+            Config.UNIVERSAL_FILENAME
+            if "UNIVERSAL_FILENAME" not in self.user_dict
+            else ""
+        )
+
+        if not universal_filename:
+            # No universal filename configured
+            return dl_path
+
+        try:
+            from bot.helper.ext_utils.template_processor import (
+                extract_metadata_from_filename,
+                process_template,
+            )
+
+            if self.is_file:
+                # Handle single file
+                up_dir_path, original_name = dl_path.rsplit("/", 1)
+                name, ext = ospath.splitext(original_name)
+                if ext:
+                    ext = ext[1:]  # Remove the dot
+
+                # Extract metadata from filename
+                metadata = await extract_metadata_from_filename(name)
+
+                # Populate metadata dictionary
+                file_metadata = {
+                    "filename": name,
+                    "ext": ext,
+                    **metadata,  # Include all extracted metadata
+                }
+
+                # Process the template
+                processed_filename = await process_template(
+                    universal_filename, file_metadata
+                )
+                if processed_filename:
+                    # Strip HTML tags from the processed filename for file system compatibility
+                    import re
+
+                    clean_filename = re.sub(r"<[^>]+>", "", processed_filename)
+
+                    # Keep the original extension if not included in the template
+                    if ext and not clean_filename.endswith(f".{ext}"):
+                        new_filename = f"{clean_filename}.{ext}"
+                    else:
+                        new_filename = clean_filename
+
+                    new_path = ospath.join(up_dir_path, new_filename)
+                    LOGGER.info(
+                        f"Applying universal filename: {original_name} -> {new_filename}"
+                    )
+
+                    with contextlib.suppress(Exception):
+                        await move(dl_path, new_path)
+                    return new_path
+            else:
+                # Handle directory - apply to all files in the directory
+                for dirpath, _, files in await sync_to_async(
+                    walk, dl_path, topdown=False
+                ):
+                    for file_ in files:
+                        f_path = ospath.join(dirpath, file_)
+                        name, ext = ospath.splitext(file_)
+                        if ext:
+                            ext = ext[1:]  # Remove the dot
+
+                        # Extract metadata from filename
+                        metadata = await extract_metadata_from_filename(name)
+
+                        # Populate metadata dictionary
+                        file_metadata = {
+                            "filename": name,
+                            "ext": ext,
+                            **metadata,  # Include all extracted metadata
+                        }
+
+                        # Process the template
+                        processed_filename = await process_template(
+                            universal_filename, file_metadata
+                        )
+                        if processed_filename:
+                            # Strip HTML tags from the processed filename for file system compatibility
+                            import re
+
+                            clean_filename = re.sub(
+                                r"<[^>]+>", "", processed_filename
+                            )
+
+                            # Keep the original extension if not included in the template
+                            if ext and not clean_filename.endswith(f".{ext}"):
+                                new_filename = f"{clean_filename}.{ext}"
+                            else:
+                                new_filename = clean_filename
+
+                            new_f_path = ospath.join(dirpath, new_filename)
+                            if new_filename != file_:
+                                LOGGER.info(
+                                    f"Applying universal filename: {file_} -> {new_filename}"
+                                )
+                                with contextlib.suppress(Exception):
+                                    await move(f_path, new_f_path)
+
+        except Exception as e:
+            LOGGER.error(f"Error applying universal filename: {e}")
 
         return dl_path
 
@@ -9655,7 +10245,7 @@ class TaskConfig:
             if self.merge_pdf:
                 LOGGER.info("Special Flag Workflow: -merge-pdf")
 
-                # For PDF files, use PyPDF2 to merge PDFs
+                # For PDF files, use PyMuPDF to merge PDFs
                 # Using the function from ext_utils.media_utils
 
                 # Check if we have PDF files
@@ -9884,7 +10474,7 @@ class TaskConfig:
                         return dl_path
 
                     elif approach == "document_merge" and analysis["document_files"]:
-                        # For document files, use PyPDF2 to merge PDFs
+                        # For document files, use PyMuPDF to merge PDFs
                         # Using the function from ext_utils.media_utils
 
                         # Check if we have PDF files
@@ -10743,6 +11333,340 @@ class TaskConfig:
             cpu_eater_lock.release()
         return dl_path
 
+    async def proceed_remove_tracks(self, dl_path, gid):
+        """Remove media tracks from files using FFmpeg."""
+        # Skip if remove is not enabled
+        if not self.remove_enabled:
+            LOGGER.info("Remove not applied: remove is not enabled")
+            return dl_path
+
+        # Check if any remove options are enabled
+        if not (
+            self.remove_video_enabled
+            or self.remove_audio_enabled
+            or self.remove_subtitle_enabled
+            or self.remove_attachment_enabled
+            or self.remove_metadata
+        ):
+            LOGGER.info("Remove not applied: no remove options are enabled")
+            return dl_path
+
+        # Log remove settings
+        LOGGER.info(
+            f"Remove settings: delete_original={self.remove_delete_original}, metadata={self.remove_metadata}"
+        )
+
+        # Log video remove settings
+        if self.remove_video_enabled:
+            if (
+                hasattr(self, "remove_video_indices")
+                and self.remove_video_indices
+                and isinstance(self.remove_video_indices, list)
+                and self.remove_video_indices
+            ):
+                LOGGER.info(
+                    f"Video removal enabled: removing specific video tracks with indices: {self.remove_video_indices}"
+                )
+            else:
+                LOGGER.info("Video removal enabled: removing all video tracks")
+
+        # Log audio remove settings
+        if self.remove_audio_enabled:
+            if (
+                hasattr(self, "remove_audio_indices")
+                and self.remove_audio_indices
+                and isinstance(self.remove_audio_indices, list)
+                and self.remove_audio_indices
+            ):
+                LOGGER.info(
+                    f"Audio removal enabled: removing specific audio tracks with indices: {self.remove_audio_indices}"
+                )
+            else:
+                LOGGER.info("Audio removal enabled: removing all audio tracks")
+
+        # Log subtitle remove settings
+        if self.remove_subtitle_enabled:
+            if (
+                hasattr(self, "remove_subtitle_indices")
+                and self.remove_subtitle_indices
+                and isinstance(self.remove_subtitle_indices, list)
+                and self.remove_subtitle_indices
+            ):
+                LOGGER.info(
+                    f"Subtitle removal enabled: removing specific subtitle tracks with indices: {self.remove_subtitle_indices}"
+                )
+            else:
+                LOGGER.info("Subtitle removal enabled: removing all subtitle tracks")
+
+        # Log attachment remove settings
+        if self.remove_attachment_enabled:
+            if (
+                hasattr(self, "remove_attachment_indices")
+                and self.remove_attachment_indices
+                and isinstance(self.remove_attachment_indices, list)
+                and self.remove_attachment_indices
+            ):
+                LOGGER.info(
+                    f"Attachment removal enabled: removing specific attachments with indices: {self.remove_attachment_indices}"
+                )
+            else:
+                LOGGER.info(
+                    "Attachment removal enabled: removing all attachment files"
+                )
+
+        # Check if file exists
+        if not await aiopath.exists(dl_path):
+            LOGGER.error(f"File not found for removal: {dl_path}")
+            return dl_path
+
+        # Initialize variables
+        ffmpeg = FFMpeg(self)
+        checked = False
+
+        # Import the media_utils module
+
+        if self.is_file:
+            # Process a single file
+            # Set up FFmpeg status
+            if not checked:
+                checked = True
+                async with task_dict_lock:
+                    task_dict[self.mid] = FFmpegStatus(
+                        self,
+                        ffmpeg,
+                        gid,
+                        "Remove",
+                    )
+                self.progress = False
+                await cpu_eater_lock.acquire()
+                self.progress = True
+
+            self.subsize = self.size
+            LOGGER.info(f"Removing tracks from file: {dl_path}")
+
+            # Use the remove_tracks function
+            ospath.dirname(dl_path)
+
+            # Use the comprehensive get_remove_cmd function
+            from bot.helper.aeon_utils.command_gen import get_remove_cmd
+
+            # Gather comprehensive Remove configurations
+            video_codec = getattr(self, "remove_video_codec", "none")
+            audio_codec = getattr(self, "remove_audio_codec", "none")
+            subtitle_codec = getattr(self, "remove_subtitle_codec", "none")
+            video_format = getattr(self, "remove_video_format", "none")
+            audio_format = getattr(self, "remove_audio_format", "none")
+            subtitle_format = getattr(self, "remove_subtitle_format", "none")
+            attachment_format = getattr(self, "remove_attachment_format", "none")
+            video_quality = getattr(self, "remove_video_quality", "none")
+            video_preset = getattr(self, "remove_video_preset", "none")
+            video_bitrate = getattr(self, "remove_video_bitrate", "none")
+            video_resolution = getattr(self, "remove_video_resolution", "none")
+            video_fps = getattr(self, "remove_video_fps", "none")
+            audio_bitrate = getattr(self, "remove_audio_bitrate", "none")
+            audio_channels = getattr(self, "remove_audio_channels", "none")
+            audio_sampling = getattr(self, "remove_audio_sampling", "none")
+            audio_volume = getattr(self, "remove_audio_volume", "none")
+            subtitle_language = getattr(self, "remove_subtitle_language", "none")
+            subtitle_encoding = getattr(self, "remove_subtitle_encoding", "none")
+            subtitle_font = getattr(self, "remove_subtitle_font", "none")
+            subtitle_font_size = getattr(self, "remove_subtitle_font_size", "none")
+            attachment_filter = getattr(self, "remove_attachment_filter", "none")
+            maintain_quality = getattr(self, "remove_maintain_quality", True)
+
+            # Get indices
+            video_index = getattr(self, "remove_video_index", None)
+            audio_index = getattr(self, "remove_audio_index", None)
+            subtitle_index = getattr(self, "remove_subtitle_index", None)
+            attachment_index = getattr(self, "remove_attachment_index", None)
+
+            # Generate comprehensive remove command
+            cmd, output_path = await get_remove_cmd(
+                dl_path,
+                remove_video=self.remove_video_enabled,
+                remove_audio=self.remove_audio_enabled,
+                remove_subtitle=self.remove_subtitle_enabled,
+                remove_attachment=self.remove_attachment_enabled,
+                remove_metadata=self.remove_metadata,
+                video_index=video_index,
+                audio_index=audio_index,
+                subtitle_index=subtitle_index,
+                attachment_index=attachment_index,
+                video_codec=video_codec,
+                audio_codec=audio_codec,
+                subtitle_codec=subtitle_codec,
+                video_format=video_format,
+                audio_format=audio_format,
+                subtitle_format=subtitle_format,
+                attachment_format=attachment_format,
+                video_quality=video_quality,
+                video_preset=video_preset,
+                video_bitrate=video_bitrate,
+                video_resolution=video_resolution,
+                video_fps=video_fps,
+                audio_bitrate=audio_bitrate,
+                audio_channels=audio_channels,
+                audio_sampling=audio_sampling,
+                audio_volume=audio_volume,
+                subtitle_language=subtitle_language,
+                subtitle_encoding=subtitle_encoding,
+                subtitle_font=subtitle_font,
+                subtitle_font_size=subtitle_font_size,
+                attachment_filter=attachment_filter,
+                maintain_quality=maintain_quality,
+                delete_original=self.remove_delete_original,
+            )
+
+            if cmd and output_path:
+                # Execute the comprehensive remove command
+                success = await ffmpeg.run_ffmpeg_cmd(cmd, dl_path, output_path)
+                if success:
+                    LOGGER.info(f"Successfully removed tracks from: {dl_path}")
+                    # If original file was deleted, return the new file path
+                    if self.remove_delete_original:
+                        return output_path
+                else:
+                    LOGGER.warning(f"Failed to remove tracks from: {dl_path}")
+            else:
+                LOGGER.warning(f"No remove command generated for: {dl_path}")
+        else:
+            # Process all files in the directory
+            for dirpath, _, files in await sync_to_async(
+                walk,
+                dl_path,
+                topdown=False,
+            ):
+                for file_ in files:
+                    file_path = ospath.join(dirpath, file_)
+                    if self.is_cancelled:
+                        if checked:
+                            cpu_eater_lock.release()
+                        return ""
+
+                    # Set up FFmpeg status if not already done
+                    if not checked:
+                        checked = True
+                        async with task_dict_lock:
+                            task_dict[self.mid] = FFmpegStatus(
+                                self,
+                                ffmpeg,
+                                gid,
+                                "Remove",
+                            )
+                        self.progress = False
+                        await cpu_eater_lock.acquire()
+                        self.progress = True
+
+                    LOGGER.info(f"Removing tracks from file: {file_path}")
+                    self.subsize = await aiopath.getsize(file_path)
+                    self.subname = file_
+
+                    # Use the remove_tracks function
+
+                    # Use the comprehensive get_remove_cmd function
+                    from bot.helper.aeon_utils.command_gen import get_remove_cmd
+
+                    # Gather comprehensive Remove configurations
+                    video_codec = getattr(self, "remove_video_codec", "none")
+                    audio_codec = getattr(self, "remove_audio_codec", "none")
+                    subtitle_codec = getattr(self, "remove_subtitle_codec", "none")
+                    video_format = getattr(self, "remove_video_format", "none")
+                    audio_format = getattr(self, "remove_audio_format", "none")
+                    subtitle_format = getattr(self, "remove_subtitle_format", "none")
+                    attachment_format = getattr(
+                        self, "remove_attachment_format", "none"
+                    )
+                    video_quality = getattr(self, "remove_video_quality", "none")
+                    video_preset = getattr(self, "remove_video_preset", "none")
+                    video_bitrate = getattr(self, "remove_video_bitrate", "none")
+                    video_resolution = getattr(
+                        self, "remove_video_resolution", "none"
+                    )
+                    video_fps = getattr(self, "remove_video_fps", "none")
+                    audio_bitrate = getattr(self, "remove_audio_bitrate", "none")
+                    audio_channels = getattr(self, "remove_audio_channels", "none")
+                    audio_sampling = getattr(self, "remove_audio_sampling", "none")
+                    audio_volume = getattr(self, "remove_audio_volume", "none")
+                    subtitle_language = getattr(
+                        self, "remove_subtitle_language", "none"
+                    )
+                    subtitle_encoding = getattr(
+                        self, "remove_subtitle_encoding", "none"
+                    )
+                    subtitle_font = getattr(self, "remove_subtitle_font", "none")
+                    subtitle_font_size = getattr(
+                        self, "remove_subtitle_font_size", "none"
+                    )
+                    attachment_filter = getattr(
+                        self, "remove_attachment_filter", "none"
+                    )
+                    maintain_quality = getattr(self, "remove_maintain_quality", True)
+
+                    # Get indices
+                    video_index = getattr(self, "remove_video_index", None)
+                    audio_index = getattr(self, "remove_audio_index", None)
+                    subtitle_index = getattr(self, "remove_subtitle_index", None)
+                    attachment_index = getattr(self, "remove_attachment_index", None)
+
+                    # Generate comprehensive remove command
+                    cmd, output_path = await get_remove_cmd(
+                        file_path,
+                        remove_video=self.remove_video_enabled,
+                        remove_audio=self.remove_audio_enabled,
+                        remove_subtitle=self.remove_subtitle_enabled,
+                        remove_attachment=self.remove_attachment_enabled,
+                        remove_metadata=self.remove_metadata,
+                        video_index=video_index,
+                        audio_index=audio_index,
+                        subtitle_index=subtitle_index,
+                        attachment_index=attachment_index,
+                        video_codec=video_codec,
+                        audio_codec=audio_codec,
+                        subtitle_codec=subtitle_codec,
+                        video_format=video_format,
+                        audio_format=audio_format,
+                        subtitle_format=subtitle_format,
+                        attachment_format=attachment_format,
+                        video_quality=video_quality,
+                        video_preset=video_preset,
+                        video_bitrate=video_bitrate,
+                        video_resolution=video_resolution,
+                        video_fps=video_fps,
+                        audio_bitrate=audio_bitrate,
+                        audio_channels=audio_channels,
+                        audio_sampling=audio_sampling,
+                        audio_volume=audio_volume,
+                        subtitle_language=subtitle_language,
+                        subtitle_encoding=subtitle_encoding,
+                        subtitle_font=subtitle_font,
+                        subtitle_font_size=subtitle_font_size,
+                        attachment_filter=attachment_filter,
+                        maintain_quality=maintain_quality,
+                        delete_original=self.remove_delete_original,
+                    )
+
+                    if cmd and output_path:
+                        # Execute the comprehensive remove command
+                        success = await ffmpeg.run_ffmpeg_cmd(
+                            cmd, file_path, output_path
+                        )
+                        if success:
+                            LOGGER.info(
+                                f"Successfully removed tracks from: {file_path}"
+                            )
+                        else:
+                            LOGGER.warning(
+                                f"Failed to remove tracks from: {file_path}"
+                            )
+                    else:
+                        LOGGER.warning(
+                            f"No remove command generated for: {file_path}"
+                        )
+
+        if checked:
+            cpu_eater_lock.release()
+        return dl_path
+
     async def proceed_add(self, dl_path, gid):
         """Add media tracks to files using FFmpeg."""
         # Skip if add is not enabled
@@ -11250,6 +12174,20 @@ class TaskConfig:
             and self.trim_document_format.lower() != "none"
             else "none"
         )
+        document_start_page = (
+            self.trim_document_start_page
+            if self.trim_document_enabled
+            and self.trim_document_start_page
+            and self.trim_document_start_page.lower() != "none"
+            else "1"
+        )
+        document_end_page = (
+            self.trim_document_end_page
+            if self.trim_document_enabled
+            and self.trim_document_end_page
+            and self.trim_document_end_page.lower() != "none"
+            else ""
+        )
         subtitle_encoding = (
             self.trim_subtitle_encoding
             if self.trim_subtitle_enabled
@@ -11295,6 +12233,8 @@ class TaskConfig:
                 archive_format,
                 getattr(self, "trim_start_time", None),
                 getattr(self, "trim_end_time", None),
+                document_start_page,
+                document_end_page,
                 delete_original,
             )
 
@@ -11466,6 +12406,8 @@ class TaskConfig:
                         archive_format,
                         getattr(self, "trim_start_time", None),
                         getattr(self, "trim_end_time", None),
+                        document_start_page,
+                        document_end_page,
                         delete_original,
                     )
 
@@ -11724,18 +12666,18 @@ class TaskConfig:
             bool: True if successful, False otherwise
         """
         try:
-            # Import PyPDF2 for PDF manipulation
+            # Import PyMuPDF for PDF manipulation
             try:
-                from PyPDF2 import PdfReader, PdfWriter
+                import fitz  # PyMuPDF
             except ImportError:
-                LOGGER.error("PyPDF2 is not installed. Cannot trim PDF files.")
+                LOGGER.error("PyMuPDF is not installed. Cannot trim PDF files.")
                 return False
 
             # Convert page numbers to integers
             try:
                 start_page = int(start_page_str)
                 # Handle special case for end page
-                if end_page_str in {"999", "999:59:59"}:
+                if end_page_str in {"999", "999:59:59", "", None}:
                     end_page = None  # Will be set to the last page
                 else:
                     end_page = int(end_page_str)
@@ -11751,33 +12693,30 @@ class TaskConfig:
                 return False
 
             # Open the PDF file
-            with open(input_file, "rb") as f:
-                pdf = PdfReader(f)
-                total_pages = len(pdf.pages)
+            doc = fitz.open(input_file)
+            total_pages = doc.page_count
 
-                # Adjust page numbers (convert from 1-based to 0-based)
-                start_page = max(
-                    0, start_page - 1
-                )  # Ensure start_page is at least 0
-                if end_page is None:
-                    end_page = total_pages - 1
-                else:
-                    end_page = min(
-                        end_page - 1, total_pages - 1
-                    )  # Ensure end_page doesn't exceed total pages
+            # Adjust page numbers (convert from 1-based to 0-based)
+            start_page = max(0, start_page - 1)  # Ensure start_page is at least 0
+            if end_page is None:
+                end_page = total_pages - 1
+            else:
+                end_page = min(
+                    end_page - 1, total_pages - 1
+                )  # Ensure end_page doesn't exceed total pages
 
-                LOGGER.info(
-                    f"Trimming PDF from page {start_page + 1} to {end_page + 1} (total pages: {total_pages})"
-                )
+            LOGGER.info(
+                f"Trimming PDF from page {start_page + 1} to {end_page + 1} (total pages: {total_pages})"
+            )
 
-                # Create a new PDF with the selected pages
-                pdf_writer = PdfWriter()
-                for page_num in range(start_page, end_page + 1):
-                    pdf_writer.add_page(pdf.pages[page_num])
+            # Create a new PDF with the selected pages
+            new_doc = fitz.open()
+            new_doc.insert_pdf(doc, from_page=start_page, to_page=end_page)
 
-                # Write the output file
-                with open(output_file, "wb") as out_f:
-                    pdf_writer.write(out_f)
+            # Save the output file
+            new_doc.save(output_file)
+            new_doc.close()
+            doc.close()
 
             # Check if the output file was created
             if await aiopath.exists(output_file):
@@ -12003,3 +12942,116 @@ class TaskConfig:
         if checked:
             cpu_eater_lock.release()
         return dl_path
+
+
+# DDL (Direct Download Link) utility functions
+def is_ddl_destination(destination):
+    """Check if the destination is a DDL (Direct Download Link) upload destination.
+
+    Args:
+        destination (str): Upload destination string
+
+    Returns:
+        bool: True if destination is DDL, False otherwise
+    """
+    if not destination:
+        return False
+    return destination == "ddl" or destination.startswith("ddl:")
+
+
+def is_gofile_destination(destination):
+    """Check if the destination is specifically for Gofile upload.
+
+    Args:
+        destination (str): Upload destination string
+
+    Returns:
+        bool: True if destination is Gofile, False otherwise
+    """
+    if not destination:
+        return False
+    return destination == "ddl:gofile" or (
+        destination == "ddl" and Config.DDL_DEFAULT_SERVER == "gofile"
+    )
+
+
+def is_streamtape_destination(destination):
+    """Check if the destination is specifically for Streamtape upload.
+
+    Args:
+        destination (str): Upload destination string
+
+    Returns:
+        bool: True if destination is Streamtape, False otherwise
+    """
+    if not destination:
+        return False
+    return destination == "ddl:streamtape" or (
+        destination == "ddl" and Config.DDL_DEFAULT_SERVER == "streamtape"
+    )
+
+
+def validate_ddl_config(user_id=None):
+    """Validate DDL configuration for upload.
+
+    Args:
+        user_id (int, optional): User ID to check user-specific settings
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not Config.DDL_ENABLED:
+        return False, "DDL uploads are disabled"
+
+    # Helper function to get setting with user priority
+    def get_ddl_setting(user_key, owner_attr, default_value=None):
+        if user_id:
+            user_dict = user_data.get(user_id, {})
+            user_value = user_dict.get(user_key)
+            if user_value is not None:
+                return user_value
+        return getattr(Config, owner_attr, default_value)
+
+    # Check if at least one DDL server is available and configured
+    has_configured_server = False
+
+    # Check Gofile
+    gofile_api_key = get_ddl_setting("GOFILE_API_KEY", "GOFILE_API_KEY", "")
+    if gofile_api_key:
+        has_configured_server = True
+
+    # Check Streamtape
+    streamtape_login = get_ddl_setting("STREAMTAPE_LOGIN", "STREAMTAPE_LOGIN", "")
+    streamtape_api_key = get_ddl_setting(
+        "STREAMTAPE_API_KEY", "STREAMTAPE_API_KEY", ""
+    )
+    if streamtape_login and streamtape_api_key:
+        has_configured_server = True
+
+    if not has_configured_server:
+        return (
+            False,
+            "No DDL servers configured. Please set up Gofile or Streamtape credentials.",
+        )
+
+    return True, ""
+
+
+def get_ddl_server_from_destination(destination):
+    """Extract DDL server name from destination string.
+
+    Args:
+        destination (str): Upload destination string
+
+    Returns:
+        str: Server name (gofile, streamtape) or default server
+    """
+    if not destination or not is_ddl_destination(destination):
+        return None
+
+    if ":" in destination:
+        # Format: ddl:server
+        return destination.split(":", 1)[1]
+
+    # Format: ddl (use default server)
+    return Config.DDL_DEFAULT_SERVER

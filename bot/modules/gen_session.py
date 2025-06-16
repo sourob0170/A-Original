@@ -594,37 +594,6 @@ async def generate_session_string(_, status_msg, user_id):
         await cleanup_session(user_id)
 
 
-async def cancel_session_generation(_, message, user_id):
-    """Cancel the session generation process for /cancel command"""
-    # This function is now only used for the /cancel command
-    # The cancel button has its own handler
-
-    # For regular message
-    chat_id = message.chat.id
-    # Delete the cancel message
-    try:
-        await message.delete()
-    except Exception as e:
-        LOGGER.error(f"Error deleting cancel message: {e!s}")
-
-    # Clean up the session state
-    await cleanup_session(user_id)
-
-    # Create button to generate again
-    buttons = ButtonMaker()
-    buttons.data_button("Generate Again", "gensession")
-
-    # Send cancellation message
-    cancel_msg = await send_message(
-        chat_id,
-        "❌ <b>Session generation process has been cancelled.</b>\n\n"
-        "You can use /gensession or /gs command again when you're ready to generate a session.",
-        buttons.build_menu(1),
-    )
-    # Auto-delete the message after 5 minutes
-    create_task(auto_delete_message(cancel_msg, time=300))
-
-
 @new_task
 async def handle_cancel_button(_, callback_query):
     """Handle cancel button click for session generation"""
@@ -690,39 +659,6 @@ async def handle_cancel_button(_, callback_query):
         create_task(auto_delete_message(msg, time=60))
 
 
-@new_task
-async def handle_cancel_command(_, message):
-    """Handle /cancel command directly"""
-    user_id = message.from_user.id
-
-    # Mark the message as processed to prevent duplicate handling
-    message._cancel_processed = True
-
-    # Check if user is in session generation process
-    if user_id in session_state:
-        await cancel_session_generation(_, message, user_id)
-    else:
-        # Delete the command message
-        try:
-            await message.delete()
-        except Exception as e:
-            LOGGER.error(f"Error deleting cancel message: {e!s}")
-
-        # Create button to generate a session
-        buttons = ButtonMaker()
-        buttons.data_button("Generate Session", "gensession")
-
-        # Send message that there's no active session to cancel
-        msg = await send_message(
-            message.chat.id,
-            "ℹ️ <b>Info:</b> You don't have an active session generation process to cancel.",
-            buttons.build_menu(1),
-        )
-        # Auto-delete the message after 1 minute
-        # We don't need to store the task reference as it will be garbage collected properly
-        create_task(auto_delete_message(msg, time=60))
-
-
 async def cleanup_session(user_id):
     """Clean up session generation resources and securely remove sensitive data"""
     if user_id in session_state:
@@ -746,12 +682,10 @@ async def cleanup_session(user_id):
         for field in sensitive_fields:
             if field in session_state[user_id]:
                 # Overwrite with None to help with garbage collection
-                session_state[user_id][field] = (
-                    None  # Remove user from session state
-                )
-        del session_state[
-            user_id
-        ]  # We don't need to remove handlers anymore since we're using a persistent handler@new_task
+                session_state[user_id][field] = None
+
+        # Remove user from session state
+        del session_state[user_id]
 
 
 async def gen_session(_, callback_query=None, message=None):

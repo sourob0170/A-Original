@@ -20,35 +20,87 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-# Try to import MEGA SDK at module level, but don't fail if not available
+# Try to import MEGA SDK with system-wide detection
+MEGA_SDK_AVAILABLE = False
+MEGA_IMPORT_ERROR = None
+
+
+def _detect_and_import_mega():
+    """Detect MEGA SDK installation system-wide and import"""
+    import sys
+    from pathlib import Path
+
+    # System-wide search paths for MEGA SDK
+    search_paths = [
+        "/usr/local/lib/python3.13/dist-packages",
+        "/usr/lib/python3/dist-packages",
+        "/usr/lib/python3.13/dist-packages",
+        "/usr/local/lib/python3.12/dist-packages",
+        "/usr/lib/python3.12/dist-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
+        "/usr/src/app/.venv/lib/python3.13/site-packages",
+        "/opt/megasdk/lib/python3.13/site-packages",
+    ]
+
+    # Try standard import first
+    try:
+        from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+
+        # Test basic functionality
+        api = MegaApi("test")
+        api.getVersion()
+        return (
+            True,
+            None,
+            (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+        )
+    except ImportError:
+        pass
+    except Exception as e:
+        return False, f"MEGA SDK validation failed: {e}", None
+
+    # Search system-wide paths
+    for path in search_paths:
+        mega_path = Path(path) / "mega"
+        if mega_path.exists():
+            try:
+                if str(Path(path)) not in sys.path:
+                    sys.path.insert(0, str(Path(path)))
+
+                from mega import (
+                    MegaApi,
+                    MegaError,
+                    MegaListener,
+                    MegaRequest,
+                    MegaTransfer,
+                )
+
+                # Test basic functionality
+                api = MegaApi("test")
+                api.getVersion()
+                return (
+                    True,
+                    None,
+                    (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
+                )
+            except Exception:
+                continue
+
+    return False, "MEGA SDK not found in system-wide search", None
+
+
+# Perform detection
 try:
-    from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
-
-    MEGA_SDK_AVAILABLE = True
-    MEGA_IMPORT_ERROR = None
-except ImportError as e:
-    # Create dummy classes to prevent import errors
-    class MegaApi:
-        pass
-
-    class MegaListener:
-        pass
-
-    class MegaRequest:
-        TYPE_LOGIN = 1
-        TYPE_FETCH_NODES = 2
-        TYPE_SEARCH = 3
-
-    class MegaTransfer:
-        pass
-
-    class MegaError:
-        pass
-
-    MEGA_SDK_AVAILABLE = False
-    MEGA_IMPORT_ERROR = str(e)
+    success, error, classes = _detect_and_import_mega()
+    if success:
+        MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer = classes
+        MEGA_SDK_AVAILABLE = True
+        MEGA_IMPORT_ERROR = None
+    else:
+        raise ImportError(error)
 except Exception as e:
-    # Handle other import errors
+    # Create dummy classes to prevent import errors
     class MegaApi:
         pass
 
@@ -393,8 +445,10 @@ class MegaSearchHandler:
                     root_node_check = api.getRootNode()
                     if root_node_check:
                         mega_listener.nodes_fetched = True  # Ensure flag is set
-                except Exception:
-                    pass  # Ignore verification errors
+                        LOGGER.info("MEGA nodes verified immediately after fetch")
+                except Exception as verify_error:
+                    LOGGER.debug(f"Initial node verification failed: {verify_error}")
+                    # Ignore verification errors - will be handled in fallback
 
             except Exception as fetch_error:
                 if "timed out" in str(fetch_error).lower():
@@ -426,14 +480,71 @@ class MegaSearchHandler:
                     root_node_test = api.getRootNode()
                     if root_node_test:
                         mega_listener.nodes_fetched = True  # Manually set the flag
+                        LOGGER.info(
+                            "MEGA nodes verified via fallback check - proceeding with search"
+                        )
+                    # Check if we have a temporary error that should be ignored
+                    elif (
+                        mega_listener.error
+                        and "error code: -1" in str(mega_listener.error).lower()
+                    ):
+                        # Temporary error but no root node - try one more time
+                        await asyncio.sleep(2)
+                        try:
+                            root_node_test = api.getRootNode()
+                            if root_node_test:
+                                mega_listener.nodes_fetched = True
+                                LOGGER.info(
+                                    "MEGA nodes verified after retry - proceeding with search"
+                                )
+                            else:
+                                await edit_message(
+                                    search_msg,
+                                    "❌ Failed to fetch MEGA nodes after retry",
+                                )
+                                return
+                        except Exception:
+                            await edit_message(
+                                search_msg,
+                                "❌ Failed to fetch MEGA nodes after retry",
+                            )
+                            return
                     else:
                         await edit_message(
                             search_msg, "❌ Failed to fetch MEGA nodes"
                         )
                         return
-                except Exception:
-                    await edit_message(search_msg, "❌ Failed to fetch MEGA nodes")
-                    return
+                except Exception as e:
+                    # Check if we have a temporary error that should be ignored
+                    if (
+                        mega_listener.error
+                        and "error code: -1" in str(mega_listener.error).lower()
+                    ):
+                        # Temporary error - try one more time
+                        await asyncio.sleep(2)
+                        try:
+                            root_node_test = api.getRootNode()
+                            if root_node_test:
+                                mega_listener.nodes_fetched = True
+                                LOGGER.info(
+                                    "MEGA nodes verified after exception retry - proceeding with search"
+                                )
+                            else:
+                                await edit_message(
+                                    search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
+                                )
+                                return
+                        except Exception as retry_e:
+                            await edit_message(
+                                search_msg,
+                                f"❌ Failed to fetch MEGA nodes: {retry_e}",
+                            )
+                            return
+                    else:
+                        await edit_message(
+                            search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
+                        )
+                        return
 
             # Perform search
             root_node = api.getRootNode()

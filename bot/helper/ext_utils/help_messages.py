@@ -177,7 +177,7 @@ yt = """<b>Send link along with command line</b>:
 
 /cmd link
 <b>By replying to link</b>:
-/cmd -n new name -z password -opt x:y|x1:y1
+/cmd -n new name -z password -opt x:y|x1:y1 -range start_time-end_time
 
 Check here all supported <a href='https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md'>SITES</a>
 Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L212'>FILE</a> or use this <a href='https://t.me/mltb_official_channel/177'>script</a> to convert cli arguments to api options."""
@@ -270,6 +270,9 @@ To upload to cloud storage (Mirror only):
 -up rc (Upload to Rclone)
 -up yt (Upload to YouTube)
 -up mg (Upload to MEGA.nz)
+-up ddl (Upload to DDL servers - Gofile, Streamtape)
+-up ddl:gofile (Upload specifically to Gofile)
+-up ddl:streamtape (Upload specifically to Streamtape)
 
 In case you want to specify whether using token.pickle or service accounts you can add tp:gdrive_id (using token.pickle) or sa:gdrive_id (using service accounts) or mtp:gdrive_id (using token.pickle uploaded from usetting).
 DEFAULT_UPLOAD doesn't affect on leech cmds.
@@ -383,6 +386,42 @@ yt_opt = """<b>Options</b>: -opt
 /cmd link -opt {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"xtra": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
 Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184'>FILE</a> or use this <a href='https://t.me/mltb_official_channel/177'>script</a> to convert cli arguments to api options."""
 
+download_range = """<b>Download Range</b>: -range
+
+Download only a specific time range from the video/audio.
+
+<b>Usage:</b>
+/cmd link -range start_time-end_time
+/cmd link -range start_time:end_time
+
+<b>Time Format:</b>
+• <code>SS</code> - Seconds only (e.g., 30)
+• <code>MM:SS</code> - Minutes and seconds (e.g., 1:30)
+• <code>HH:MM:SS</code> - Hours, minutes and seconds (e.g., 1:30:45)
+
+<b>Examples:</b>
+• <code>/ytdl https://youtube.com/watch?v=example -range 30-90</code>
+  Download from 30 seconds to 90 seconds (1 minute clip)
+
+• <code>/ytdl https://youtube.com/watch?v=example -range 1:30-3:45</code>
+  Download from 1 minute 30 seconds to 3 minutes 45 seconds
+
+• <code>/ytdl https://youtube.com/watch?v=example -range 0:30:15-0:45:30</code>
+  Download from 30 minutes 15 seconds to 45 minutes 30 seconds
+
+• <code>/ytdl https://youtube.com/watch?v=example -range 10:</code>
+  Download from 10 seconds to the end
+
+• <code>/ytdl https://youtube.com/watch?v=example -range :120</code>
+  Download from start to 2 minutes (120 seconds)
+
+<b>Notes:</b>
+• Both start and end times are optional
+• Use either dash (-) or colon (:) as separator
+• The downloaded file will contain only the specified time range
+• Works with all supported video/audio platforms
+• Useful for extracting clips, highlights, or specific segments"""
+
 convert_media = """<b>Convert Media</b>: -ca -cv -cs -cd -cr
 
 <blockquote>Dont understand? Then follow this <a href='https://t.me/aimupdate/218'>quide</a></blockquote>
@@ -486,6 +525,11 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 - <code>-add-subtitle-encoding UTF-8</code>: Set subtitle character encoding
 - <code>-add-subtitle-font Arial</code>: Set subtitle font (for ASS/SSA)
 - <code>-add-subtitle-font-size 24</code>: Set subtitle font size (for ASS/SSA)
+- <code>-add-subtitle-hardsub</code>: Burn subtitles into video (permanent, cannot be turned off)
+
+<b>Hardsub vs Soft Subtitles:</b>
+- <b>Hardsub</b>: Subtitles are permanently burned into the video (requires re-encoding)
+- <b>Soft Subtitles</b>: Subtitles are separate tracks (can be toggled on/off by player)
 
 <b>Attachment Settings:</b>
 - <code>-add-attachment-mimetype font/ttf</code>: Set MIME type for attachment
@@ -597,6 +641,55 @@ Extract specific tracks (video, audio, subtitle, attachment) from media files.
 • Use the -del flag to delete original files after extraction (or -del f to keep original files)
 • Settings with value 'none' will not be used in command generation
 • For ASS/SSA subtitles, use 'copy' codec to preserve the original format or 'srt' to convert to SRT"""
+
+remove_tracks = """<b>Remove Tracks</b>: -remove -remove-video -remove-audio -remove-subtitle -remove-attachment -remove-metadata
+
+<b>Basic Usage:</b>
+- <code>-remove</code>: Enable remove feature (uses configured settings)
+- <code>-remove-video</code>: Remove only video tracks
+- <code>-remove-audio</code>: Remove only audio tracks
+- <code>-remove-subtitle</code>: Remove only subtitle tracks
+- <code>-remove-attachment</code>: Remove only attachment tracks
+- <code>-remove-metadata</code>: Remove metadata from file
+
+<b>Advanced Usage (Long Format):</b>
+- <code>-remove-video-index 0</code>: Remove only the first video track
+- <code>-remove-audio-index 1</code>: Remove only the second audio track
+- <code>-remove-subtitle-index 2</code>: Remove only the third subtitle track
+- <code>-remove-attachment-index 0</code>: Remove only the first attachment
+- <code>-remove -del</code>: Remove tracks and delete original file
+
+<b>Multiple Track Indices:</b>
+- <code>-remove-video-index 0,1</code>: Remove first and second video tracks
+- <code>-remove-audio-index 0,2,3</code>: Remove first, third, and fourth audio tracks
+- <code>-remove-subtitle-index 1,2</code>: Remove second and third subtitle tracks
+- <code>-remove-attachment-index 0,1</code>: Remove first and second attachments
+
+<b>Advanced Usage (Short Format):</b>
+- <code>-rvi 0</code>: Remove only the first video track
+- <code>-rai 1</code>: Remove only the second audio track
+- <code>-rsi 2</code>: Remove only the third subtitle track
+- <code>-rati 0</code>: Remove only the first attachment
+- <code>-rvi 0,1 -rai 2,3</code>: Remove multiple tracks with short format
+
+<b>Complex Examples:</b>
+- <code>-rvi 0,1 -remove-metadata</code>: Remove first two video tracks and metadata
+- <code>-remove-audio-index 0 -remove-subtitle</code>: Remove first audio track and all subtitles
+- <code>-rvi 1 -rai 0,2 -rsi 0 -remove-metadata</code>: Complex multi-track removal
+
+<b>Important Notes:</b>
+• The Remove feature must be enabled in both the bot settings and user settings
+• The main Remove toggle and the specific track type toggles must be enabled
+• Configure remove settings in Media Tools settings
+• Remove priority can be set to control when it runs in the processing pipeline
+• Track indices start from 0 (first track is index 0)
+• If no index is specified, all tracks of that type will be removed
+• You can use either long format (-remove-video-index) or short format (-rvi) flags
+• When remove is enabled through settings, original files are automatically deleted after removal
+• Only the specified track indices will be removed when indices are provided
+• Use the -del flag to delete original files after removal (or -del f to keep original files)
+• Settings with value 'none' will not be used in command generation
+• Remove feature works with all media containers (MKV, MP4, AVI, etc.)"""
 
 force_start = """<b>Force Start</b>: -f -fd -fu
 /cmd link -f (force download and upload)
@@ -946,6 +1039,7 @@ YT_HELP_DICT = {
     "Zip": zip_arg,
     "Quality": qual,
     "Options": yt_opt,
+    "Download-Range": download_range,
     "User-Cookies": user_cookies_help,
     "Multi-Link": multi_link,
     "Same-Directory": same_dir,
@@ -1583,6 +1677,157 @@ ZOTIFY_HELP_DICT = {
     "Troubleshooting": zotify_troubleshooting,
 }
 
+# QuickInfo help content
+quickinfo_main = """<b>🆔 QuickInfo</b>
+
+Get detailed information about users, bots, groups, and channels instantly.
+
+<b>Commands:</b>
+• <code>/quickinfo</code>, <code>/qi</code> - Launch QuickInfo with interactive buttons
+• <code>/quickinfo chat</code> - Get current chat information
+
+<b>Features:</b>
+• <b>Interactive Buttons</b> - Easy-to-use keyboard for different entity types
+• <b>Forwarded Messages</b> - Extract source information from any forwarded message
+• <b>Multiple Formats</b> - Choose from detailed, compact, minimal, or rich formatting
+• <b>Current Chat Info</b> - Get information about the current chat
+
+<b>Supported Entities:</b>
+• <b>Users</b> - Regular users with ID, name, username
+• <b>Bots</b> - Bot accounts with detailed information
+• <b>Premium Users</b> - Users with Telegram Premium
+• <b>Groups</b> - Public and private groups
+• <b>Channels</b> - Public and private channels
+• <b>Your Chats</b> - Groups and channels you created
+
+<b>Usage:</b>
+1. Send <code>/quickinfo</code> to open the interactive menu
+2. Click buttons to share users, bots, groups, or channels
+3. Forward any message to get source information
+4. Use <code>/quickinfo chat</code> for current chat details
+
+<b>Authorization:</b>
+This command requires authorization to use."""
+
+quickinfo_buttons = """<b>🎮 Interactive Buttons</b>
+
+The QuickInfo menu provides easy-to-use buttons for different entity types.
+
+<b>User Buttons:</b>
+• <b>👤 Users</b> - Share regular Telegram users
+• <b>🤖 Bots</b> - Share bot accounts
+• <b>⭐ Premium</b> - Share users with Telegram Premium
+
+<b>Group Buttons:</b>
+• <b>🌐 Public Group</b> - Share public groups with usernames
+• <b>🔒 Private Group</b> - Share private groups without usernames
+• <b>👥 Your Groups</b> - Share groups you created
+
+<b>Channel Buttons:</b>
+• <b>🌐 Public Channel</b> - Share public channels with usernames
+• <b>🔒 Private Channel</b> - Share private channels without usernames
+• <b>🌟 Your Channels</b> - Share channels you created
+
+<b>How to Use:</b>
+1. Click any button in the QuickInfo menu
+2. Select the user/chat from your contacts
+3. Receive detailed information instantly
+
+<b>Additional Options:</b>
+Use the inline buttons to access help and refresh the menu."""
+
+quickinfo_forwarded = """<b>📤 Forwarded Message Analysis</b>
+
+QuickInfo can extract source information from any forwarded message.
+
+<b>How it Works:</b>
+1. Forward any message to the bot
+2. QuickInfo automatically detects the forward
+3. Extracts and displays source information
+
+<b>Information Extracted:</b>
+• <b>User Sources</b> - ID, name, username, premium status
+• <b>Chat Sources</b> - ID, name, type, member count
+• <b>Channel Sources</b> - ID, name, username, type
+• <b>Hidden Sources</b> - When source is hidden or restricted
+
+<b>Supported Forwards:</b>
+• Messages from users
+• Messages from groups
+• Messages from channels
+• Messages from bots
+• Anonymous forwards (limited info)
+
+<b>Privacy Protection:</b>
+When the bot doesn't have access to the source, it will show:
+"Looks Like I Don't Have Control Over The User"
+
+This is normal behavior for privacy-protected sources."""
+
+quickinfo_formats = """<b>🎨 Format Styles</b>
+
+QuickInfo displays information in a detailed format by default.
+
+<b>Current Format:</b>
+
+<b>📝 Detailed:</b>
+Complete information with all available fields
+• Type, ID, Name, Username
+• Premium status, member count
+• All metadata available
+
+<b>Features:</b>
+• Clear and comprehensive display
+• All available information shown
+• Consistent formatting across all entity types
+• Easy to read and understand
+
+<b>Information Displayed:</b>
+• Entity type (User, Bot, Group, Channel)
+• Unique ID number
+• Display name and username
+• Premium status (for users)
+• Member count (for groups/channels)"""
+
+quickinfo_examples = """<b>📋 Usage Examples</b>
+
+Practical examples of using QuickInfo in different scenarios.
+
+<b>🔍 Basic Usage:</b>
+• <code>/quickinfo</code> - Open interactive menu
+• <code>/qi</code> - Short command for QuickInfo
+• <code>/quickinfo chat</code> - Get current chat info
+
+<b>🎮 Interactive Examples:</b>
+1. Send <code>/quickinfo</code>
+2. Click "👤 Users" button
+3. Select a user from your contacts
+4. Receive detailed user information
+
+<b>📤 Forwarded Message Examples:</b>
+1. Forward any message to the bot
+2. Automatically get source information
+3. Works with messages from any chat
+
+<b>💡 Pro Tips:</b>
+• Use <code>/quickinfo chat</code> in groups to get group info
+• Forward messages to identify anonymous sources
+• Works only with authorized users
+• Respects bot's permission system
+
+<b>🔐 Privacy Notes:</b>
+• Only works with chats the bot can access
+• Respects Telegram's privacy settings
+• Some information may be limited by permissions"""
+
+QUICKINFO_HELP_DICT = {
+    "main": quickinfo_main,
+    "Interactive-Buttons": quickinfo_buttons,
+    "Forwarded-Messages": quickinfo_forwarded,
+    "Format-Styles": quickinfo_formats,
+    "Examples": quickinfo_examples,
+}
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -1687,8 +1932,8 @@ Timeout: 60 sec""",
 * For multiple destinations, use comma-separated values: -100123456789,-100987654321
 * id/@username|topic_id(leech in specific chat and topic) add | without space and write topic id after chat id or username. Timeout: 60 sec""",
     "LOG_CHAT_ID": "Send log chat ID for mirror tasks. You can specify multiple chat IDs separated by commas (e.g., -100123456789,-100987654321). Timeout: 60 sec",
-    "LEECH_FILENAME_PREFIX": r"Send Leech Filename Prefix. You can add HTML tags. Example: <code>@mychannel</code>. Timeout: 60 sec",
-    "LEECH_SUFFIX": r"Send Leech Filename Suffix. You can add HTML tags. Example: <code>@mychannel</code>. Timeout: 60 sec",
+    "LEECH_FILENAME_PREFIX": r"Send Leech Filename Prefix. You can add HTML tags and control spacing manually. Examples: <code>@mychannel</code> (no space), <code>@mychannel </code> (space after), <code>@mychannel-</code> (hyphen), <code>@mychannel_</code> (underscore). Timeout: 60 sec",
+    "LEECH_SUFFIX": r"Send Leech Filename Suffix. You can add HTML tags and control spacing manually. Examples: <code>@mychannel</code> (no space), <code> @mychannel</code> (space before), <code>-@mychannel</code> (hyphen), <code>_@mychannel</code> (underscore). Timeout: 60 sec",
     "LEECH_FONT": "Send Leech Font Style. Options: HTML formats (bold, italic), Unicode styles (serif, sans_b), Google Fonts (Roboto, Open Sans), or emojis (🔥). Use /fontstyles for full list. Timeout: 60 sec",
     "LEECH_FILENAME": """Send Leech Filename template. This will change the actual filename of all your leech files.
 
@@ -1725,6 +1970,7 @@ Timeout: 60 sec""",
     "INDEX_URL": "Send Index URL. Timeout: 60 sec",
     "UPLOAD_PATHS": "Send Dict of keys that have path values. Example: {'path 1': 'remote:rclonefolder', 'path 2': 'gdrive1 id', 'path 3': 'tg chat id', 'path 4': 'mrcc:remote:', 'path 5': b:@username} . Timeout: 60 sec",
     "EXCLUDED_EXTENSIONS": "Send exluded extenions separated by space without dot at beginning. Timeout: 60 sec",
+    "UNIVERSAL_FILENAME": "Send universal filename template for both mirror and leech files. Supports all template variables like {filename}, {ext}, etc. Priority: -n flag > LEECH_FILENAME (for leech) > UNIVERSAL_FILENAME > original filename. Timeout: 60 sec",
     "NAME_SUBSTITUTE": r"""Word Subtitions. You can add pattern instead of normal text. Timeout: 60 sec
 NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[]{}-
 Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
@@ -1757,6 +2003,15 @@ Timeout: 60 sec""",
     "YOUTUBE_UPLOAD_DEFAULT_TAGS": "Set default tags for YouTube uploads. Separate multiple tags with commas.\n\nExample: music,entertainment,video - multiple tags\nExample: tutorial - single tag\nExample: (leave empty for no default tags)\n\nTimeout: 60 sec",
     "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Set default description for YouTube uploads.\n\nExample: Uploaded via AimLeechBot - simple description\nExample: Check out this amazing content! - custom description\nExample: (leave empty for no default description)\n\nTimeout: 60 sec",
     "YOUTUBE_UPLOAD_DEFAULT_TITLE": "Set default title template for YouTube uploads. Supports variables: {filename}, {date}, {time}, {size}.\n\nExample: {filename} - {date} - adds date to filename\nExample: My Channel - {filename} - adds channel prefix\nExample: (leave empty to use cleaned filename)\n\nVariables:\n{filename} - cleaned filename without extension\n{date} - current date (YYYY-MM-DD)\n{time} - current time (HH:MM:SS)\n{size} - file size (e.g., 1.2 GB)\n\nTimeout: 60 sec",
+    # DDL Settings
+    "DDL_SERVER": "Set your preferred DDL server for uploads. Available options: gofile, streamtape.\n\nExample: gofile - use Gofile server for uploads\nExample: streamtape - use Streamtape server for uploads\n\nThis will be used when you specify -up ddl without a specific server.\n\nTimeout: 60 sec",
+    "GOFILE_API_KEY": "Send your Gofile API key for personalized uploads. Get your API key from your Gofile profile.\n\nExample: abc123def456 - your personal API key\nExample: (leave empty to use owner's API key)\n\nWith your own API key, uploads will go to your Gofile account.\n\nTimeout: 60 sec",
+    "GOFILE_FOLDER_NAME": "Set the folder name for your Gofile uploads. Leave empty to use the filename as folder name.\n\nExample: MyBot - create a folder named 'MyBot'\nExample: Downloads/Videos - create nested folders\nExample: (leave empty to use filename)\n\nTimeout: 60 sec",
+    "GOFILE_DEFAULT_PASSWORD": "Set a default password for your Gofile uploads when password protection is enabled.\n\nExample: mySecurePassword123 - set a default password\nExample: (leave empty for no default password)\n\nThis password will be used when GOFILE_PASSWORD_PROTECTION is enabled.\n\nTimeout: 60 sec",
+    "GOFILE_LINK_EXPIRY_DAYS": "Set the number of days after which your Gofile links should expire. Set to 0 for no expiry.\n\nExample: 30 - links expire after 30 days\nExample: 7 - links expire after 1 week\nExample: 0 - links never expire\n\nTimeout: 60 sec",
+    "STREAMTAPE_LOGIN": "Send your Streamtape login username for personalized uploads.\n\nExample: myusername - your Streamtape username\nExample: (leave empty to use owner's credentials)\n\nWith your own credentials, uploads will go to your Streamtape account.\n\nTimeout: 60 sec",
+    "STREAMTAPE_API_KEY": "Send your Streamtape API key for personalized uploads. Get your API key from your Streamtape account panel.\n\nExample: abc123def456 - your personal API key\nExample: (leave empty to use owner's API key)\n\nWith your own API key, uploads will go to your Streamtape account.\n\nTimeout: 60 sec",
+    "STREAMTAPE_FOLDER_NAME": "Set the folder name for your Streamtape uploads. Leave empty to upload to root folder.\n\nExample: MyBot - create a folder named 'MyBot'\nExample: Videos - upload to Videos folder\nExample: (leave empty for root folder)\n\nTimeout: 60 sec",
 }
 
 # Media tools help text dictionary with detailed examples and consistent formatting
@@ -1940,6 +2195,8 @@ media_tools_text = {
     "TRIM_AUDIO_FORMAT": "Set the output format for audio trimming. This determines the container format of the trimmed audio file.\n\nExample: mp3 - widely compatible format\nExample: flac - lossless audio format\nExample: none - use the same format as the original file\n\nTimeout: 60 sec",
     "TRIM_IMAGE_FORMAT": "Set the output format for image trimming. This determines the format of the trimmed image file.\n\nExample: jpg - good compression, smaller files\nExample: png - lossless format with transparency support\nExample: none - use the same format as the original file\n\nTimeout: 60 sec",
     "TRIM_IMAGE_QUALITY": "Set the quality for image processing during trim operations (0-100). Higher values mean better quality but larger file size.\n\nExample: 90 - high quality (default)\nExample: 75 - good balance of quality and size\nExample: none - use original quality\n\nTimeout: 60 sec",
+    "TRIM_DOCUMENT_START_PAGE": "Set the starting page number for document trimming. This determines which page to start trimming from.\n\nExample: 1 - start from first page (default)\nExample: 5 - start from page 5\nExample: 10 - start from page 10\n\nTimeout: 60 sec",
+    "TRIM_DOCUMENT_END_PAGE": "Set the ending page number for document trimming. Leave empty to trim until the last page.\n\nExample: 10 - end at page 10\nExample: 25 - end at page 25\nExample: (empty) - trim until last page (default)\n\nTimeout: 60 sec",
     "TRIM_DOCUMENT_FORMAT": "Set the output format for document trimming. This determines the format of the trimmed document file.\n\nExample: pdf - standard document format\nExample: docx - Microsoft Word format\nExample: none - use the same format as the original file\n\nTimeout: 60 sec",
     "TRIM_DOCUMENT_QUALITY": "Set the quality for document processing during trim operations (0-100). Higher values mean better quality but larger file size.\n\nExample: 90 - high quality (default)\nExample: 75 - good balance of quality and size\nExample: none - use original quality\n\nTimeout: 60 sec",
     "TRIM_SUBTITLE_FORMAT": "Set the output format for subtitle trimming. This determines the format of the trimmed subtitle file.\n\nExample: srt - simple subtitle format\nExample: ass - advanced subtitle format with styling\nExample: none - use the same format as the original file\n\nTimeout: 60 sec",
@@ -2016,11 +2273,51 @@ media_tools_text = {
     "ADD_SUBTITLE_ENCODING": "Set the character encoding for subtitle track addition.\n\nExample: utf-8 - UTF-8 encoding\nExample: latin1 - Latin-1 encoding\nExample: none - don't set encoding\n\nTimeout: 60 sec",
     "ADD_SUBTITLE_FONT": "Set the font for subtitle track addition (for ASS/SSA subtitles).\n\nExample: Arial - use Arial font\nExample: DejaVu Sans - use DejaVu Sans font\nExample: none - don't set font\n\nTimeout: 60 sec",
     "ADD_SUBTITLE_FONT_SIZE": "Set the font size for subtitle track addition (for ASS/SSA subtitles).\n\nExample: 24 - medium size\nExample: 32 - larger size\nExample: none - don't set font size\n\nTimeout: 60 sec",
+    "ADD_SUBTITLE_HARDSUB_ENABLED": "Enable or disable hardsub (burning subtitles into video).\n\nExample: true - burn subtitles permanently into video (cannot be turned off)\nExample: false - add subtitles as separate tracks (can be toggled on/off)\n\nNote: Hardsub requires video re-encoding and may reduce quality but ensures compatibility.\n\nTimeout: 60 sec",
     # Attachment Add Settings
     "ADD_ATTACHMENT_ENABLED": "Enable or disable adding attachments to media files.\n\nExample: true - enable attachment addition\nExample: false - disable attachment addition\n\nWhen enabled, attachments will be added according to the specified settings.\n\nTimeout: 60 sec",
     # "ADD_ATTACHMENT_PATH": "Path flag has been removed",
     "ADD_ATTACHMENT_INDEX": "Set the attachment index to add. Leave empty to add all attachments.\n\nExample: 0 - add first attachment\nExample: 1 - add second attachment\nExample: none - add all attachments\n\nTimeout: 60 sec",
     "ADD_ATTACHMENT_MIMETYPE": "Set the MIME type for attachment addition.\n\nExample: font/ttf - TrueType font\nExample: image/png - PNG image\nExample: none - don't set MIME type\n\nTimeout: 60 sec",
+    # Remove Settings
+    "REMOVE_ENABLED": "Enable or disable the remove feature globally.\n\nExample: true - enable remove feature\nExample: false - disable remove feature\n\nWhen enabled, you can remove media tracks from files using the -remove flag or through the configured settings.\n\nTimeout: 60 sec",
+    "REMOVE_PRIORITY": "Set the priority of the remove process in the media processing pipeline.\n\nExample: 8 - run remove after extract (default)\nExample: 5 - run remove before extract\n\nLower numbers run earlier. Default order:\n1. Merge\n2. Watermark\n3. Convert\n4. Trim\n5. Compression\n6. Extract\n7. Add\n8. Remove (default: 8)\n\nTimeout: 60 sec",
+    "REMOVE_DELETE_ORIGINAL": "Enable or disable deleting the original file after removing tracks.\n\nExample: true - delete original file after successful remove operation\nExample: false - keep both original and modified files\n\nThis can be overridden by using the -del flag in the command.\n\nTimeout: 60 sec",
+    "REMOVE_METADATA": "Enable or disable removing metadata from media files.\n\nExample: true - remove all metadata from files\nExample: false - keep metadata intact\n\nThis can be overridden by using the -remove-metadata flag in the command.\n\nTimeout: 60 sec",
+    "REMOVE_MAINTAIN_QUALITY": "Choose whether to maintain quality when removing and re-encoding tracks. Send 'true' to maintain quality or 'false' to use default settings.\n\nExample: true - use high quality settings for remaining tracks\nExample: false - use default quality settings\n\nDefault: true\nTimeout: 60 sec",
+    # Video Remove Settings
+    "REMOVE_VIDEO_ENABLED": "Enable or disable video track removal. Send 'true' to enable or 'false' to disable.\n\nExample: true - remove video tracks\nExample: false - don't remove video tracks\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_CODEC": "Set the codec to use for remaining video tracks after removal. Common codecs: copy, libx264, libx265, libvpx-vp9.\n\nExample: copy - preserve original codec (fastest)\nExample: libx264 - convert to H.264 (widely compatible)\nExample: libx265 - convert to H.265 (better compression)\nExample: none - don't specify codec (use default)\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_FORMAT": "Set the container format for output after video track removal. Common formats: mp4, mkv, webm.\n\nExample: mp4 - use MP4 container (widely compatible)\nExample: mkv - use MKV container (supports more features)\nExample: none - use default format based on input\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_INDEX": "Specify which video track(s) to remove by index (0-based). Leave empty or set to 'none' to remove all video tracks.\n\nExample: 0 - remove first video track only\nExample: 1 - remove second video track only\nExample: 0,1,2 - remove first, second, and third video tracks\nExample: all - remove all video tracks\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_QUALITY": "Set the quality for remaining video tracks after removal (CRF value). Lower values mean higher quality.\n\nExample: 18 - high quality (larger file size)\nExample: 23 - medium quality (balanced)\nExample: 28 - lower quality (smaller file size)\nExample: none - use default quality\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_PRESET": "Set the encoding preset for remaining video tracks after removal. Affects encoding speed vs compression efficiency.\n\nExample: ultrafast - fastest encoding, lowest compression\nExample: medium - balanced speed and compression\nExample: veryslow - slowest encoding, best compression\nExample: none - use default preset\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_BITRATE": "Set the bitrate for remaining video tracks after removal. Higher values mean better quality but larger files.\n\nExample: 5M - 5 Mbps (good for 1080p)\nExample: 2M - 2 Mbps (good for 720p)\nExample: none - use default bitrate\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_RESOLUTION": "Set the resolution for remaining video tracks after removal. Lower resolution means smaller file size.\n\nExample: 1920x1080 - Full HD\nExample: 1280x720 - HD\nExample: 640x480 - SD\nExample: none - keep original resolution\n\nTimeout: 60 sec",
+    "REMOVE_VIDEO_FPS": "Set the frame rate for remaining video tracks after removal. Lower FPS means smaller file size.\n\nExample: 30 - 30 frames per second\nExample: 60 - 60 frames per second\nExample: none - keep original frame rate\n\nTimeout: 60 sec",
+    # Audio Remove Settings
+    "REMOVE_AUDIO_ENABLED": "Enable or disable audio track removal. Send 'true' to enable or 'false' to disable.\n\nExample: true - remove audio tracks\nExample: false - don't remove audio tracks\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_CODEC": "Set the codec to use for remaining audio tracks after removal. Common codecs: copy, aac, mp3, opus, flac.\n\nExample: copy - preserve original codec (fastest)\nExample: mp3 - convert to MP3 (widely compatible)\nExample: aac - convert to AAC (good quality/size ratio)\nExample: flac - convert to FLAC (lossless)\nExample: none - don't specify codec (use default)\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_FORMAT": "Set the container format for output after audio track removal. Common formats: mp3, m4a, ogg, flac.\n\nExample: mp3 - use MP3 container (widely compatible)\nExample: m4a - use M4A container (good for AAC)\nExample: none - use default format based on input\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_INDEX": "Specify which audio track(s) to remove by index (0-based). Leave empty or set to 'none' to remove all audio tracks.\n\nExample: 0 - remove first audio track only\nExample: 1 - remove second audio track only\nExample: 0,1,2 - remove first, second, and third audio tracks\nExample: all - remove all audio tracks\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_BITRATE": "Set the bitrate for remaining audio tracks after removal. Higher values mean better quality but larger files.\n\nExample: 320k - 320 kbps (high quality)\nExample: 192k - 192 kbps (good quality)\nExample: 128k - 128 kbps (acceptable quality)\nExample: none - use default bitrate\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_CHANNELS": "Set the number of audio channels for remaining audio tracks after removal.\n\nExample: 2 - stereo\nExample: 1 - mono\nExample: 6 - 5.1 surround\nExample: none - keep original channels\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_SAMPLING": "Set the sampling rate for remaining audio tracks after removal. Common values: 44100, 48000.\n\nExample: 44100 - CD quality (44.1 kHz)\nExample: 48000 - DVD quality (48 kHz)\nExample: none - keep original sampling rate\n\nTimeout: 60 sec",
+    "REMOVE_AUDIO_VOLUME": "Set the volume adjustment for remaining audio tracks after removal. Values above 1 increase volume, below 1 decrease it.\n\nExample: 1.5 - increase volume by 50%\nExample: 0.8 - decrease volume by 20%\nExample: none - keep original volume\n\nTimeout: 60 sec",
+    # Subtitle Remove Settings
+    "REMOVE_SUBTITLE_ENABLED": "Enable or disable subtitle track removal. Send 'true' to enable or 'false' to disable.\n\nExample: true - remove subtitle tracks\nExample: false - don't remove subtitle tracks\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_CODEC": "Set the codec to use for remaining subtitle tracks after removal. Common codecs: copy, srt, ass.\n\nExample: copy - preserve original codec (fastest)\nExample: srt - convert to SRT (widely compatible)\nExample: ass - convert to ASS (supports styling)\nExample: none - don't specify codec (use default)\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_FORMAT": "Set the format for remaining subtitle tracks after removal. Common formats: srt, ass, vtt.\n\nExample: srt - SubRip format (widely compatible)\nExample: ass - Advanced SubStation Alpha (supports styling)\nExample: vtt - WebVTT format (for web videos)\nExample: none - use default format based on input\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_INDEX": "Specify which subtitle track(s) to remove by index (0-based). Leave empty or set to 'none' to remove all subtitle tracks.\n\nExample: 0 - remove first subtitle track only\nExample: 1 - remove second subtitle track only\nExample: 0,1,2 - remove first, second, and third subtitle tracks\nExample: all - remove all subtitle tracks\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_LANGUAGE": "Set the language tag for remaining subtitle tracks after removal. Uses ISO 639-2 codes.\n\nExample: eng - English\nExample: spa - Spanish\nExample: fre - French\nExample: none - keep original language tag\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_ENCODING": "Set the character encoding for remaining subtitle tracks after removal. Common encodings: utf-8, latin1.\n\nExample: utf-8 - Unicode (recommended)\nExample: latin1 - Western European\nExample: none - auto-detect encoding\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_FONT": "Set the font for remaining subtitle tracks after removal (only works with ASS/SSA subtitles).\n\nExample: Arial - use Arial font\nExample: none - use default font\n\nTimeout: 60 sec",
+    "REMOVE_SUBTITLE_FONT_SIZE": "Set the font size for remaining subtitle tracks after removal (only works with ASS/SSA subtitles).\n\nExample: 24 - larger font size\nExample: 18 - medium font size\nExample: none - use default font size\n\nTimeout: 60 sec",
+    # Attachment Remove Settings
+    "REMOVE_ATTACHMENT_ENABLED": "Enable or disable attachment removal. Send 'true' to enable or 'false' to disable. When enabled, attachments (like fonts, images) will be removed from media files.\n\nExample: true - remove attachments\nExample: false - don't remove attachments\n\nTimeout: 60 sec",
+    "REMOVE_ATTACHMENT_FORMAT": "Set the format for output after attachment removal. Usually not needed as the container format is preserved.\n\nExample: none - keep original format (recommended)\n\nTimeout: 60 sec",
+    "REMOVE_ATTACHMENT_INDEX": "Specify which attachment(s) to remove by index (0-based). Leave empty or set to 'none' to remove all attachments.\n\nExample: 0 - remove first attachment only\nExample: 1 - remove second attachment only\nExample: 0,1,2 - remove first, second, and third attachments\nExample: all - remove all attachments\n\nTimeout: 60 sec",
+    "REMOVE_ATTACHMENT_FILTER": "Set a filter pattern for removing attachments. Only attachments matching the pattern will be removed.\n\nExample: *.ttf - remove only font files\nExample: *.png - remove only PNG images\nExample: none - remove all attachments\n\nTimeout: 60 sec",
     # MediaInfo Settings
     "MEDIAINFO_ENABLED": "Enable or disable the MediaInfo command for detailed media information.\n\nExample: true - enable MediaInfo command\nExample: false - disable MediaInfo command\n\nWhen enabled, you can use the /mediainfo command to get detailed information about media files.\n\nTimeout: 60 sec",
     # Sample Video Settings
@@ -2126,6 +2423,9 @@ special_commands = f"""
 
 /{BotCommands.AskCommand}: Chat with AI using the bot (Mistral or DeepSeek).
 /{BotCommands.TruecallerCommand}: Lookup phone numbers using Truecaller.
+/{BotCommands.EncodeCommand[0]} or /{BotCommands.EncodeCommand[1]} [query]: Encode text using various encoding methods (Base64, Binary, Cryptography, etc.).
+/{BotCommands.DecodeCommand[0]} or /{BotCommands.DecodeCommand[1]} [query]: Decode text using various decoding methods.
+/{BotCommands.QuickInfoCommand[0]} or /{BotCommands.QuickInfoCommand[1]} [chat]: Get chat/user information with interactive buttons.
 """
 
 # System Commands page

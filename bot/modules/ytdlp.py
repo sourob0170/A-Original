@@ -781,6 +781,7 @@ class YtDlp(TaskListener):
             "-metadata-subtitle-comment": "",
             "-tl": "",
             "-ff": set(),
+            "-range": "",
         }
 
         # Parse arguments from the command
@@ -1016,6 +1017,7 @@ class YtDlp(TaskListener):
         self.comp_document = args["-comp-document"]
         self.comp_subtitle = args["-comp-subtitle"]
         self.comp_archive = args["-comp-archive"]
+        self.download_range = args["-range"]
 
         is_bulk = args["-b"]
 
@@ -1124,6 +1126,74 @@ class YtDlp(TaskListener):
 
                 options[key] = value
         options["playlist_items"] = "0"
+
+        # Process download range if specified
+        if self.download_range:
+            try:
+                # Parse the range format: start_time-end_time or start_time:end_time
+                # Handle cases like "30-90", "1:30-3:45", "10-", "-120", etc.
+                separator = "-" if "-" in self.download_range else ":"
+                range_parts = self.download_range.split(separator, 1)
+
+                if len(range_parts) == 1:
+                    # Single time value, treat as start time only
+                    start_time_str = range_parts[0].strip()
+                    end_time_str = ""
+                elif len(range_parts) == 2:
+                    start_time_str, end_time_str = [
+                        part.strip() for part in range_parts
+                    ]
+                else:
+                    raise ValueError("Invalid range format")
+
+                # Convert time strings to seconds
+                def time_to_seconds(time_str):
+                    """Convert time string (HH:MM:SS, MM:SS, or SS) to seconds"""
+                    time_str = time_str.strip()
+                    if not time_str:
+                        return None
+
+                    parts = time_str.split(":")
+                    if len(parts) == 1:  # SS
+                        return int(parts[0])
+                    if len(parts) == 2:  # MM:SS
+                        return int(parts[0]) * 60 + int(parts[1])
+                    if len(parts) == 3:  # HH:MM:SS
+                        return (
+                            int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                        )
+                    raise ValueError("Invalid time format")
+
+                start_seconds = (
+                    time_to_seconds(start_time_str) if start_time_str else None
+                )
+                end_seconds = time_to_seconds(end_time_str) if end_time_str else None
+
+                # Create download_ranges for yt-dlp
+                download_range = {}
+                if start_seconds is not None:
+                    download_range["start_time"] = start_seconds
+                if end_seconds is not None:
+                    download_range["end_time"] = end_seconds
+
+                if download_range:
+                    options["download_ranges"] = lambda info, ytdl: [download_range]
+                    start_display = (
+                        f"{start_seconds}s" if start_seconds is not None else "start"
+                    )
+                    end_display = (
+                        f"{end_seconds}s" if end_seconds is not None else "end"
+                    )
+                    LOGGER.info(
+                        f"Download range set: {start_display} to {end_display}"
+                    )
+                else:
+                    LOGGER.warning("Invalid download range format, ignoring")
+
+            except Exception as e:
+                LOGGER.error(
+                    f"Error parsing download range '{self.download_range}': {e}"
+                )
 
         # Log which cookies file is being used
         if cookies_file == user_cookies_path:
@@ -1318,10 +1388,16 @@ async def ytdl(client, message):
             message, "❌ YT-DLP operations are disabled by the administrator."
         )
         return
-    # Check if mirror operations are enabled in the configuration
-    if not Config.MIRROR_ENABLED:
+    # Check if any upload service is available
+    if not (
+        Config.GDRIVE_UPLOAD_ENABLED
+        or Config.RCLONE_ENABLED
+        or Config.YOUTUBE_UPLOAD_ENABLED
+        or Config.DDL_ENABLED
+        or (Config.MEGA_ENABLED and Config.MEGA_UPLOAD_ENABLED)
+    ):
         await send_message(
-            message, "❌ Mirror operations are disabled by the administrator."
+            message, "❌ All upload services are disabled by the administrator."
         )
         return
     bot_loop.create_task(YtDlp(client, message).new_event())

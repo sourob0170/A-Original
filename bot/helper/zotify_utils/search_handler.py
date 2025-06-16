@@ -1012,6 +1012,11 @@ async def perform_inline_zotify_search(
 
             # Batch process items for efficiency
             batch_size = min(10, max_results - result_index, len(items))
+
+            # Skip if no more items to process or batch_size is 0
+            if batch_size <= 0 or result_index >= max_results:
+                break
+
             for i in range(
                 0, min(len(items), max_results - result_index), batch_size
             ):

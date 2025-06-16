@@ -1,6 +1,12 @@
 from functools import wraps
 
-from httpx import AsyncClient, AsyncHTTPTransport, DecodingError, Timeout
+from httpx import (
+    AsyncClient,
+    AsyncHTTPTransport,
+    DecodingError,
+    RequestError,
+    Timeout,
+)
 from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -82,9 +88,7 @@ class SabnzbdClient(JobFunctions):
                 )
                 response = res.json()
                 break
-            except DecodingError as e:
-                raise DecodingError(f"Failed to decode response!: {res.text}") from e
-            except APIConnectionError as err:
+            except (RequestError, DecodingError) as err:
                 if retry_count >= (retries - 1):
                     raise err
         if response is None:

@@ -13,6 +13,14 @@ from bot.helper.telegram_helper.message_utils import edit_message, send_message
 @new_task
 async def check_scheduled_deletions(_, message):
     """Check all scheduled deletions in the database"""
+    from bot.core.config_manager import get_config_bool
+
+    # Check if scheduled deletion is enabled
+    if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+        return await send_message(
+            message, "Scheduled deletion functionality is disabled via configuration"
+        )
+
     user_id = message.from_user.id
     if (
         user_id != Config.OWNER_ID
@@ -258,6 +266,16 @@ async def delete_pending_messages(_, callback_query):
 @new_task
 async def force_delete_all_messages(_, callback_query):
     """Force delete all scheduled messages regardless of due time"""
+    from bot.core.config_manager import get_config_bool
+
+    # Check if scheduled deletion is enabled
+    if not get_config_bool("SCHEDULED_DELETION_ENABLED", True):
+        await callback_query.answer(
+            "Scheduled deletion functionality is disabled via configuration",
+            show_alert=True,
+        )
+        return
+
     user_id = callback_query.from_user.id
     if (
         user_id != Config.OWNER_ID

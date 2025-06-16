@@ -18,7 +18,7 @@
 | `AUTHORIZED_CHATS`        | `str`          | User/chat/topic IDs to authorize. Format: `chat_id`, `chat_id|thread_id`, etc. Separate by spaces. |
 | `SUDO_USERS`              | `str`          | User IDs with sudo permission. Separate by spaces. |
 | `UPLOAD_PATHS`            | `dict`         | Dict with upload paths. Example: `{"path 1": "remote:", "path 2": "gdrive id", ...}` |
-| `DEFAULT_UPLOAD`          | `str`          | `rc` for `RCLONE_PATH`, `gd` for `GDRIVE_ID`. Default: `rc`. [Read More](https://github.com/anasty17/mirror-leech-telegram-bot/tree/master#upload). |
+| `DEFAULT_UPLOAD`          | `str`          | `rc` for `RCLONE_PATH`, `gd` for `GDRIVE_ID`, `ddl` for Direct Download Links. Default: `rc`. [Read More](https://github.com/anasty17/mirror-leech-telegram-bot/tree/master#upload). |
 | `EXCLUDED_EXTENSIONS`     | `str`          | File extensions to skip. Separate by spaces. |
 | `INCOMPLETE_TASK_NOTIFIER`| `bool`         | Notify after restart for incomplete tasks. Needs DB and supergroup. Default: `False`. |
 | `FILELION_API`            | `str`          | API key from [Filelion](https://vidhide.com/?op=my_account). |
@@ -135,7 +135,41 @@
 | `HYDRA_IP`        | `str` | IP of [nzbhydra2](https://github.com/theotherp/nzbhydra2). |
 | `HYDRA_API_KEY`   | `str` | API key from nzbhydra2. |
 
-## 13. Streamrip Integration
+## 13. DDL (Direct Download Link) Upload Settings
+
+### Basic DDL Settings
+| Variable              | Type   | Description |
+|-----------------------|--------|-------------|
+| `DDL_ENABLED`         | `bool` | Enable/disable DDL upload feature. Default: `True`. |
+| `DDL_DEFAULT_SERVER`  | `str`  | Default DDL server to use. Options: `gofile`, `streamtape`. Default: `gofile`. |
+
+### Gofile Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GOFILE_ENABLED`            | `bool` | Enable/disable Gofile uploads. Default: `True`. |
+| `GOFILE_API_KEY`            | `str`  | Default Gofile API key (can be overridden per user). Get from [Gofile](https://gofile.io/). |
+| `GOFILE_FOLDER_NAME`        | `str`  | Default folder name for uploads (empty = use filename). |
+| `GOFILE_PUBLIC_LINKS`       | `bool` | Generate public links by default. Default: `True`. |
+| `GOFILE_PASSWORD_PROTECTION`| `bool` | Enable password protection for uploads. Default: `False`. |
+| `GOFILE_DEFAULT_PASSWORD`   | `str`  | Default password for protected uploads. |
+| `GOFILE_LINK_EXPIRY_DAYS`   | `int`  | Link expiry in days (0 = no expiry). Default: `0`. |
+
+### Streamtape Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `STREAMTAPE_ENABLED`        | `bool` | Enable/disable Streamtape uploads. Default: `True`. |
+| `STREAMTAPE_LOGIN`          | `str`  | Default Streamtape login username. Get from [Streamtape](https://streamtape.com/). |
+| `STREAMTAPE_API_KEY`        | `str`  | Default Streamtape API key. Get from [Streamtape](https://streamtape.com/). |
+| `STREAMTAPE_FOLDER_NAME`    | `str`  | Default folder name for uploads. |
+
+**Note:** DDL uploads support both Gofile and Streamtape services. Users can configure their own API keys in user settings. Streamtape only supports video files with specific extensions.
+
+**Usage:**
+- Use `-up ddl` to upload to the default DDL server
+- Use `-up ddl:gofile` to upload specifically to Gofile
+- Use `-up ddl:streamtape` to upload specifically to Streamtape
+
+## 14. Streamrip Integration
 
 ### Basic Settings
 | Variable                    | Type   | Description |
@@ -385,11 +419,13 @@
 | `TRIM_IMAGE_FORMAT`     | `str`  | Output format for image trimming. Default: `none`. |
 
 ### Document Trim Settings
-| Variable                | Type   | Description |
-|-------------------------|--------|-------------|
-| `TRIM_DOCUMENT_ENABLED` | `bool` | Enable document trimming. Default: `False`. |
-| `TRIM_DOCUMENT_QUALITY` | `int`  | Document quality for trimming. Default: `90`. |
-| `TRIM_DOCUMENT_FORMAT`  | `str`  | Output format for document trimming. Default: `none`. |
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_DOCUMENT_ENABLED`     | `bool` | Enable document trimming. Default: `False`. |
+| `TRIM_DOCUMENT_START_PAGE`  | `str`  | Starting page number for document trimming. Default: `"1"`. |
+| `TRIM_DOCUMENT_END_PAGE`    | `str`  | Ending page number for document trimming (empty for last page). Default: `""`. |
+| `TRIM_DOCUMENT_QUALITY`     | `int`  | Document quality for trimming. Default: `90`. |
+| `TRIM_DOCUMENT_FORMAT`      | `str`  | Output format for document trimming. Default: `none`. |
 
 ### Subtitle Trim Settings
 | Variable                | Type   | Description |
@@ -456,6 +492,60 @@
 | `EXTRACT_ATTACHMENT_FORMAT` | `str` | Output format for attachment extraction. Default: `none`. |
 | `EXTRACT_ATTACHMENT_INDEX` | `int` | Attachment index to extract. Default: `None`. |
 | `EXTRACT_ATTACHMENT_FILTER` | `str` | Filter for attachment extraction. Default: `none`. |
+
+### Remove Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `REMOVE_ENABLED`        | `bool` | Enable remove functionality. Default: `False`. |
+| `REMOVE_PRIORITY`       | `int`  | Remove task priority. Default: `8`. |
+| `REMOVE_DELETE_ORIGINAL` | `bool` | Delete original files after removing tracks. Default: `True`. |
+| `REMOVE_METADATA`       | `bool` | Remove metadata from files. Default: `False`. |
+| `REMOVE_MAINTAIN_QUALITY` | `bool` | Maintain quality for remaining tracks. Default: `True`. |
+
+### Video Remove Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `REMOVE_VIDEO_ENABLED`  | `bool` | Enable video track removal. Default: `False`. |
+| `REMOVE_VIDEO_CODEC`    | `str`  | Video codec for remaining tracks. Default: `none`. |
+| `REMOVE_VIDEO_FORMAT`   | `str`  | Output format for video removal. Default: `none`. |
+| `REMOVE_VIDEO_INDEX`    | `int`  | Video track index to remove (supports comma-separated). Default: `None`. |
+| `REMOVE_VIDEO_QUALITY`  | `str`  | Video quality for remaining tracks. Default: `none`. |
+| `REMOVE_VIDEO_PRESET`   | `str`  | Video encoding preset for remaining tracks. Default: `none`. |
+| `REMOVE_VIDEO_BITRATE`  | `str`  | Video bitrate for remaining tracks. Default: `none`. |
+| `REMOVE_VIDEO_RESOLUTION` | `str` | Video resolution for remaining tracks. Default: `none`. |
+| `REMOVE_VIDEO_FPS`      | `str`  | Video frame rate for remaining tracks. Default: `none`. |
+
+### Audio Remove Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `REMOVE_AUDIO_ENABLED`  | `bool` | Enable audio track removal. Default: `False`. |
+| `REMOVE_AUDIO_CODEC`    | `str`  | Audio codec for remaining tracks. Default: `none`. |
+| `REMOVE_AUDIO_FORMAT`   | `str`  | Output format for audio removal. Default: `none`. |
+| `REMOVE_AUDIO_INDEX`    | `int`  | Audio track index to remove (supports comma-separated). Default: `None`. |
+| `REMOVE_AUDIO_BITRATE`  | `str`  | Audio bitrate for remaining tracks. Default: `none`. |
+| `REMOVE_AUDIO_CHANNELS` | `str`  | Audio channels for remaining tracks. Default: `none`. |
+| `REMOVE_AUDIO_SAMPLING` | `str`  | Audio sampling rate for remaining tracks. Default: `none`. |
+| `REMOVE_AUDIO_VOLUME`   | `str`  | Audio volume adjustment for remaining tracks. Default: `none`. |
+
+### Subtitle Remove Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `REMOVE_SUBTITLE_ENABLED` | `bool` | Enable subtitle track removal. Default: `False`. |
+| `REMOVE_SUBTITLE_CODEC` | `str`  | Subtitle codec for remaining tracks. Default: `none`. |
+| `REMOVE_SUBTITLE_FORMAT` | `str` | Output format for subtitle removal. Default: `none`. |
+| `REMOVE_SUBTITLE_INDEX` | `int`  | Subtitle track index to remove (supports comma-separated). Default: `None`. |
+| `REMOVE_SUBTITLE_LANGUAGE` | `str` | Language for remaining subtitle tracks. Default: `none`. |
+| `REMOVE_SUBTITLE_ENCODING` | `str` | Character encoding for remaining subtitle tracks. Default: `none`. |
+| `REMOVE_SUBTITLE_FONT`  | `str`  | Font for remaining subtitle tracks. Default: `none`. |
+| `REMOVE_SUBTITLE_FONT_SIZE` | `str` | Font size for remaining subtitle tracks. Default: `none`. |
+
+### Attachment Remove Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `REMOVE_ATTACHMENT_ENABLED` | `bool` | Enable attachment removal. Default: `False`. |
+| `REMOVE_ATTACHMENT_FORMAT` | `str` | Output format for attachment removal. Default: `none`. |
+| `REMOVE_ATTACHMENT_INDEX` | `int` | Attachment index to remove (supports comma-separated). Default: `None`. |
+| `REMOVE_ATTACHMENT_FILTER` | `str` | Filter pattern for attachment removal. Default: `none`. |
 
 ### Add Settings
 | Variable                | Type   | Description |

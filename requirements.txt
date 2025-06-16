@@ -28,7 +28,7 @@ pymongo
 pyshorteners
 python-magic
 pytz
-pypdf
+PyMuPDF
 pytdbot[tdjson]
 reportlab>=4.0.0
 requests
@@ -42,3 +42,5 @@ xattr
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev
 git+https://github.com/DraftKinner/zotify.git@dev
+cryptography>=41.0.0
+codext>=1.15.6

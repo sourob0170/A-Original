@@ -394,6 +394,62 @@ async def get_image_watermark_cmd(
             # No speed specified but fast mode is enabled
             cmd.extend(["-preset", "ultrafast"])
 
+        # Add format-specific optimizations for Telegram compatibility
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
     elif media_type in ["image", "animated_image"]:
         # For images and animated images, use a simpler approach
         if scale_filter:
@@ -813,6 +869,89 @@ async def get_watermark_cmd(
         elif use_fast_mode:
             # No speed specified but fast mode is enabled
             cmd.extend(["-preset", "ultrafast"])
+
+        # Add format-specific optimizations for Telegram compatibility
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",  # Ensure H.264 codec
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                    "-crf",
+                    "23",  # Good quality/size balance
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",  # Ensure H.264 codec for compatibility
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                    "-crf",
+                    "23",  # Good quality
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libvpx-vp9",  # Use VP9 codec
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                    "-crf",
+                    "30",  # VP9 quality
+                    "-b:v",
+                    "0",  # Variable bitrate
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",  # Ensure H.264 codec
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                    "-crf",
+                    "23",  # Good quality
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",  # Use H.264 for maximum compatibility
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-crf",
+                    "23",  # Good quality
+                ]
+            )
 
     elif media_type == "image":
         # For static images, use the drawtext filter with appropriate output format
@@ -1349,6 +1488,62 @@ async def get_watermark_cmd(
         elif use_fast_mode:
             # No speed specified but fast mode is enabled
             cmd.extend(["-preset", "ultrafast"])
+
+        # Add format-specific optimizations for Telegram compatibility
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
 
         return cmd, temp_file
 
@@ -2359,9 +2554,7 @@ async def get_metadata_cmd(
         else:
             other_count += 1
 
-    LOGGER.info(
-        f"File {file_path} has {video_count} video, {audio_count} audio, {subtitle_count} subtitle, and {other_count} other streams"
-    )
+    # Stream count logging removed for cleaner output
 
     # Second pass: map all streams and add metadata
     video_index = 0
@@ -2537,8 +2730,7 @@ async def get_metadata_cmd(
     # Add output file
     cmd.append(temp_file)
 
-    # Log the output file format
-    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+    # Output file format logging removed for cleaner output
 
     # Log the command for debugging}")
 
@@ -3020,6 +3212,63 @@ async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=No
         # Default to copy for unknown media types
         cmd.extend(["-c", "copy"])
         LOGGER.info(f"Using copy for unknown media type: {media_type}")
+
+    # Add format-specific optimizations for Telegram compatibility
+    if media_type == "video":
+        output_ext = os.path.splitext(output_file)[1].lower()
+        if output_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif output_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif output_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif output_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
 
     # Add threading and output file
     # Use default thread count
@@ -3984,10 +4233,71 @@ async def get_merge_mixed_cmd(
             "copy",
             "-metadata",
             "title=Merged Video",
-            "-threads",
-            f"{max(1, cpu_no // 2)}",
-            temp_video_output,
         ]
+
+        # Add format-specific optimizations for Telegram compatibility
+        temp_video_ext = os.path.splitext(temp_video_output)[1].lower()
+        if temp_video_ext == ".mp4":
+            video_cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_video_ext == ".mkv":
+            video_cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_video_ext == ".webm":
+            video_cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_video_ext == ".mov":
+            video_cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            video_cmd.extend(["-pix_fmt", "yuv420p"])
+
+        video_cmd.extend(
+            [
+                "-threads",
+                f"{max(1, cpu_no // 2)}",
+                temp_video_output,
+            ]
+        )
 
         # If we have audio files, add them to the merged video
         if audio_files:
@@ -4039,10 +4349,71 @@ async def get_merge_mixed_cmd(
                 *map_args,  # Map all streams including video, audio, and subtitle streams
                 "-c",
                 "copy",
-                "-threads",
-                f"{thread_count}",
-                output_file,
             ]
+
+            # Add format-specific optimizations for Telegram compatibility
+            output_ext = os.path.splitext(output_file)[1].lower()
+            if output_ext == ".mp4":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            elif output_ext == ".mkv":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-disposition:v:0",
+                        "default",  # Set video as default
+                        "-disposition:a:0",
+                        "default",  # Set audio as default
+                    ]
+                )
+            elif output_ext == ".webm":
+                cmd.extend(
+                    [
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-deadline",
+                        "good",  # VP9 optimization
+                        "-cpu-used",
+                        "2",  # VP9 speed/quality balance
+                        "-row-mt",
+                        "1",  # VP9 multithreading
+                    ]
+                )
+            elif output_ext == ".mov":
+                cmd.extend(
+                    [
+                        "-movflags",
+                        "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                        "-pix_fmt",
+                        "yuv420p",  # Compatible pixel format
+                        "-profile:v",
+                        "main",  # Compatible H.264 profile
+                        "-level",
+                        "4.0",  # Compatible H.264 level
+                    ]
+                )
+            else:
+                # Universal compatibility for other formats
+                cmd.extend(["-pix_fmt", "yuv420p"])
+
+            cmd.extend(
+                [
+                    "-threads",
+                    f"{thread_count}",
+                    output_file,
+                ]
+            )
 
             return cmd, output_file
         # Just return the merged video command
@@ -4931,6 +5302,67 @@ async def get_convert_cmd(
                 "0:s?",
                 "-map",
                 "0:t?",
+            ]
+        )
+
+        # Add format-specific optimizations for Telegram compatibility
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
+        cmd.extend(
+            [
                 "-threads",
                 f"{thread_count}",
                 temp_file,
@@ -5040,6 +5472,8 @@ async def get_trim_cmd(
     archive_format="none",
     start_time=None,
     end_time=None,
+    document_start_page=None,
+    document_end_page=None,
     delete_original=False,
 ):
     """Generate FFmpeg command for trimming media files.
@@ -5062,6 +5496,8 @@ async def get_trim_cmd(
         archive_format: Output format for archive trimming
         start_time: Start time for trimming (overrides trim_params)
         end_time: End time for trimming (overrides trim_params)
+        document_start_page: Starting page number for document trimming
+        document_end_page: Ending page number for document trimming
         delete_original: Whether to delete the original file after trimming
 
     Returns:
@@ -5179,12 +5615,14 @@ async def get_trim_cmd(
         LOGGER.error(f"Invalid time format: {time_str}")
         return None
 
-    start_time = validate_time(start_time)
-    end_time = validate_time(end_time)
+    # Skip time validation for documents since they use page parameters
+    if media_type != "document":
+        start_time = validate_time(start_time)
+        end_time = validate_time(end_time)
 
-    if start_time is None:
-        LOGGER.error("Invalid start time for trimming")
-        return None, None
+        if start_time is None:
+            LOGGER.error("Invalid start time for trimming")
+            return None, None
 
     # Determine output file extension based on input file or specified format
     file_ext = os.path.splitext(file)[1].lower()
@@ -5210,8 +5648,10 @@ async def get_trim_cmd(
 
     temp_file = f"{file}.trim{output_ext}"
 
-    # Get file information for better handling
-    streams = await get_streams(file)
+    # Get file information for better handling (skip for documents as they don't have streams)
+    streams = None
+    if media_type != "document":
+        streams = await get_streams(file)
 
     # Base command for all media types
     cmd = [
@@ -5310,10 +5750,21 @@ async def get_trim_cmd(
         # Add avoid_negative_ts to fix timestamp issues
         cmd.extend(["-avoid_negative_ts", "make_zero"])
 
-        # Add container-specific parameters
+        # Add container-specific parameters with format optimizations
         if file_ext == ".mp4":
-            # For MP4, ensure compatibility
-            cmd.extend(["-movflags", "+faststart"])
+            # For MP4, ensure compatibility and streaming
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
         elif file_ext == ".mkv":
             # For MKV, no special parameters needed
             pass
@@ -5343,8 +5794,19 @@ async def get_trim_cmd(
                     ["-c:v", "libx265", "-crf", "28", "-preset", video_preset]
                 )
 
-            # Add MP4 container flags
-            cmd.extend(["-movflags", "+faststart"])
+            # Add MP4 container flags with optimizations
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
 
     elif media_type == "audio":
         # For audio files
@@ -5563,6 +6025,8 @@ async def get_trim_cmd(
                     "18",  # High quality
                     "-preset",
                     "fast",
+                    "-movflags",
+                    "+faststart",  # Add faststart flag for MP4 videos
                     "-y",
                     temp_mp4,
                 ]
@@ -5675,13 +6139,23 @@ async def get_trim_cmd(
             # Create a temporary file with the same name but .trim extension
             temp_file = f"{file}.trim{file_ext}"
 
+            # Use document page parameters if available, otherwise fall back to time parameters
+            start_page = document_start_page or start_time or "1"
+            end_page = document_end_page or end_time or ""
+
+            # Convert empty string to None for end page (means last page)
+            if end_page == "":
+                end_page = None
+
             # We'll handle PDF trimming in the proceed_trim method
             # For now, just return a special command that will be recognized
             cmd = [
                 "pdf_trim",
                 file,
-                start_time or "0",  # Use start_time as start page
-                end_time or "999",  # Use end_time as end page
+                str(start_page),  # Start page number
+                str(end_page)
+                if end_page
+                else "",  # End page number (empty for last page)
                 temp_file,
             ]
             return cmd, temp_file
@@ -5692,11 +6166,67 @@ async def get_trim_cmd(
         # For archive files, we can't use FFmpeg
         return None, None
 
+    # Add format-specific optimizations for Telegram compatibility
+    if media_type == "video":
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
     # Add output file
     cmd.append(temp_file)
 
-    # Log the output file format
-    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+    # Output file format logging removed for cleaner output
 
     # Add -y flag to force overwrite without prompting
     if "-y" not in cmd:
@@ -6230,14 +6760,70 @@ async def get_compression_cmd(
         # For other media types
         return None, None
 
+    # Add format-specific optimizations for Telegram compatibility
+    if media_type == "video":
+        temp_file_ext = os.path.splitext(temp_file)[1].lower()
+        if temp_file_ext == ".mp4":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        elif temp_file_ext == ".mkv":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-disposition:v:0",
+                    "default",  # Set video as default
+                    "-disposition:a:0",
+                    "default",  # Set audio as default
+                ]
+            )
+        elif temp_file_ext == ".webm":
+            cmd.extend(
+                [
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-deadline",
+                    "good",  # VP9 optimization
+                    "-cpu-used",
+                    "2",  # VP9 speed/quality balance
+                    "-row-mt",
+                    "1",  # VP9 multithreading
+                ]
+            )
+        elif temp_file_ext == ".mov":
+            cmd.extend(
+                [
+                    "-movflags",
+                    "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                    "-pix_fmt",
+                    "yuv420p",  # Compatible pixel format
+                    "-profile:v",
+                    "main",  # Compatible H.264 profile
+                    "-level",
+                    "4.0",  # Compatible H.264 level
+                ]
+            )
+        else:
+            # Universal compatibility for other formats
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
     # Add threads parameter
     cmd.extend(["-threads", f"{thread_count}"])
 
     # Add output file
     cmd.append(temp_file)
 
-    # Log the output file format
-    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+    # Output file format logging removed for cleaner output
 
     return cmd, temp_file
 
@@ -6431,6 +7017,7 @@ async def get_add_cmd(
     subtitle_encoding=None,
     subtitle_font=None,
     subtitle_font_size=None,
+    subtitle_hardsub_enabled=False,
     attachment_mimetype=None,
     delete_original=False,
     preserve_tracks=False,
@@ -7595,7 +8182,16 @@ async def get_add_cmd(
                 else:
                     # Skip this input file
                     subtitle_input_idx = None
-            if subtitle_index is not None:
+
+            # Handle hardsub vs soft subtitle
+            if subtitle_hardsub_enabled:
+                # For hardsub, we need to use a video filter to burn subtitles into video
+                # This requires modifying the video codec and adding a filter
+                LOGGER.info("Hardsub enabled: burning subtitles into video")
+                # We'll handle this in the codec section below
+                # Don't add subtitle mapping for hardsub
+            # Regular soft subtitle mapping
+            elif subtitle_index is not None:
                 # Check if it's a comma-separated list of indices
                 if "," in str(subtitle_index):
                     # Handle multiple indices
@@ -8577,8 +9173,109 @@ async def get_add_cmd(
                 # Append to the end - we don't know the index, so we can't add metadata
                 pass
 
-    # Override codec settings for added tracks
-    if (
+    # Handle hardsub (burning subtitles into video)
+    if add_subtitle and subtitle_hardsub_enabled and subtitle_input_idx is not None:
+        LOGGER.info("Processing hardsub: burning subtitles into video")
+        # For hardsub, we need to use video filters and re-encode the video
+        # Force video codec to libx264 if it's copy (can't use copy with filters)
+        if not video_codec or video_codec.lower() in ["none", "copy"]:
+            codec_args.extend(["-c:v", "libx264"])
+            # Add reasonable quality settings for hardsub
+            codec_args.extend(["-crf", "23", "-preset", "medium"])
+        else:
+            codec_args.extend(["-c:v", video_codec])
+
+        # Get subtitle file path
+        subtitle_file = (
+            multi_files[2] if multi_files and len(multi_files) > 2 else file_path
+        )
+
+        # Validate subtitle file for hardsub
+        if multi_files and len(multi_files) > 2 and multi_files[2]:
+            if not os.path.exists(subtitle_file):
+                LOGGER.error(f"Subtitle file not found for hardsub: {subtitle_file}")
+                raise FileNotFoundError(f"Subtitle file not found: {subtitle_file}")
+
+            # Check subtitle format
+            subtitle_ext = (
+                subtitle_file.split(".")[-1].lower() if "." in subtitle_file else ""
+            )
+            supported_formats = [
+                "srt",
+                "ass",
+                "ssa",
+                "vtt",
+                "webvtt",
+                "sub",
+                "sbv",
+                "stl",
+            ]
+
+            if subtitle_ext not in supported_formats:
+                LOGGER.warning(
+                    f"Subtitle format '{subtitle_ext}' may not be fully supported for hardsub"
+                )
+            else:
+                LOGGER.info(f"Using subtitle format for hardsub: {subtitle_ext}")
+
+        # Build subtitle filter
+        # Use subtitles filter for external subtitle files
+        if multi_files and len(multi_files) > 2 and multi_files[2]:
+            # External subtitle file - escape path properly for different platforms
+            escaped_path = subtitle_file.replace("'", "\\'").replace(":", "\\:")
+            # Handle Windows paths
+            if os.name == "nt":
+                escaped_path = escaped_path.replace("\\", "/")
+
+            subtitle_filter = f"subtitles='{escaped_path}'"
+            LOGGER.info(f"Using external subtitle file: {subtitle_file}")
+        else:
+            # Embedded subtitle stream - use stream index 0 by default
+            escaped_path = file_path.replace("'", "\\'").replace(":", "\\:")
+            if os.name == "nt":
+                escaped_path = escaped_path.replace("\\", "/")
+
+            subtitle_filter = f"subtitles='{escaped_path}':si=0"
+            LOGGER.info(f"Using embedded subtitle stream from: {file_path}")
+
+        # Add subtitle styling if specified
+        if subtitle_font and subtitle_font.lower() != "none":
+            subtitle_filter += f":force_style='FontName={subtitle_font}"
+            if subtitle_font_size and subtitle_font_size.lower() != "none":
+                subtitle_filter += f",FontSize={subtitle_font_size}"
+            # Add additional styling for better appearance
+            subtitle_filter += ",Outline=1,Shadow=1"
+            subtitle_filter += "'"
+            LOGGER.info(
+                f"Applied custom font styling: {subtitle_font}, size {subtitle_font_size}"
+            )
+        elif subtitle_font_size and subtitle_font_size.lower() != "none":
+            subtitle_filter += (
+                f":force_style='FontSize={subtitle_font_size},Outline=1,Shadow=1'"
+            )
+            LOGGER.info(f"Applied custom font size: {subtitle_font_size}")
+
+        # Add video filter
+        codec_args.extend(["-vf", subtitle_filter])
+
+        # Add container-specific optimizations
+        output_ext = temp_file.split(".")[-1].lower() if "." in temp_file else "mp4"
+
+        if output_ext in ["mp4", "mov", "m4v"]:
+            # MP4/MOV optimizations for better streaming (especially Telegram)
+            codec_args.extend(["-movflags", "+faststart"])
+            codec_args.extend(["-pix_fmt", "yuv420p"])  # Ensure compatibility
+            LOGGER.info("Applied MP4 streaming optimizations")
+        elif output_ext == "webm":
+            # WebM optimizations
+            codec_args.extend(["-deadline", "good"])  # Better quality/speed balance
+        elif output_ext == "mkv":
+            # MKV optimizations
+            codec_args.extend(
+                ["-avoid_negative_ts", "make_zero"]
+            )  # Fix timestamp issues
+
+    elif (
         (add_video or multi_files)
         and video_codec
         and video_codec.lower() != "none"
@@ -8639,13 +9336,84 @@ async def get_add_cmd(
             # Use volume filter
             codec_args.extend(["-af", f"volume={audio_volume}"])
 
+    # Handle subtitle codec settings (only for soft subtitles, not hardsub)
     if (
         (add_subtitle or multi_files)
         and subtitle_codec
         and subtitle_codec.lower() != "none"
-        and subtitle_codec.lower() != "copy"
+        and not subtitle_hardsub_enabled  # Don't apply subtitle codec for hardsub
     ):
-        codec_args.extend(["-c:s", subtitle_codec])
+        if subtitle_codec.lower() == "copy":
+            # Smart codec selection based on container and subtitle format
+            output_ext = temp_file.split(".")[-1].lower() if "." in temp_file else ""
+
+            # Check if we have external subtitle file
+            if multi_files and len(multi_files) > 2 and multi_files[2]:
+                subtitle_ext = (
+                    multi_files[2].split(".")[-1].lower()
+                    if "." in multi_files[2]
+                    else ""
+                )
+
+                # Container-specific codec selection for better compatibility
+                if output_ext in ["mp4", "mov", "m4v"]:
+                    # MP4/MOV containers: use mov_text for text-based subtitles
+                    if subtitle_ext in ["srt", "vtt", "webvtt", "sub"]:
+                        codec_args.extend(["-c:s", "mov_text"])
+                        LOGGER.info(
+                            f"Converting {subtitle_ext.upper()} to mov_text for MP4/MOV compatibility"
+                        )
+                    elif subtitle_ext in ["ass", "ssa"]:
+                        # ASS/SSA can be copied in MP4 if supported
+                        codec_args.extend(["-c:s", "copy"])
+                    else:
+                        codec_args.extend(
+                            ["-c:s", "mov_text"]
+                        )  # Fallback to mov_text
+                        LOGGER.info(
+                            "Using mov_text fallback for MP4/MOV compatibility"
+                        )
+                elif output_ext == "avi":
+                    # AVI container: very limited subtitle support
+                    LOGGER.warning(
+                        "AVI container has very limited subtitle support."
+                    )
+                    LOGGER.info(
+                        "Recommendation: Use MKV container or enable hardsub for better subtitle support."
+                    )
+
+                    # Try to use a compatible format, but expect potential issues
+                    if subtitle_ext in ["srt"]:
+                        # Try SRT codec, but it may still fail
+                        codec_args.extend(["-c:s", "srt"])
+                        LOGGER.info("Attempting SRT codec for AVI (may fail)")
+                    else:
+                        # For non-SRT, recommend hardsub
+                        LOGGER.warning(
+                            f"Subtitle format '{subtitle_ext}' not recommended for AVI."
+                        )
+                        LOGGER.info(
+                            "Consider enabling hardsub or using MKV container instead."
+                        )
+                        # Skip subtitle for AVI with incompatible formats
+                        return None
+                elif output_ext in ["mkv", "webm"]:
+                    # MKV/WebM: excellent subtitle support, use copy
+                    codec_args.extend(["-c:s", "copy"])
+                elif output_ext in ["3gp", "flv"]:
+                    # Limited containers: use mov_text if possible
+                    codec_args.extend(["-c:s", "mov_text"])
+                    LOGGER.info(
+                        f"Using mov_text codec for {output_ext.upper()} compatibility"
+                    )
+                else:
+                    # Default: try copy first
+                    codec_args.extend(["-c:s", "copy"])
+            else:
+                codec_args.extend(["-c:s", "copy"])
+        else:
+            # Use specified codec
+            codec_args.extend(["-c:s", subtitle_codec])
 
         # Add subtitle language if specified
         if subtitle_language and subtitle_language.lower() != "none":
@@ -8655,11 +9423,11 @@ async def get_add_cmd(
         if subtitle_encoding and subtitle_encoding.lower() != "none":
             codec_args.extend(["-sub_charenc", subtitle_encoding])
 
-        # Add subtitle font if specified
+        # Add subtitle font if specified (only for certain codecs)
         if subtitle_font and subtitle_font.lower() != "none":
             codec_args.extend(["-sub_font", subtitle_font])
 
-        # Add subtitle font size if specified
+        # Add subtitle font size if specified (only for certain codecs)
         if subtitle_font_size and subtitle_font_size.lower() != "none":
             codec_args.extend(["-sub_font_size", subtitle_font_size])
 
@@ -8683,8 +9451,7 @@ async def get_add_cmd(
     # Add output file
     cmd.append(temp_file)
 
-    # Log the output file format
-    LOGGER.info(f"Output file format: {os.path.splitext(temp_file)[1]}")
+    # Output file format logging removed for cleaner output
 
     # Add -del flag if delete_original is True
     if delete_original:
@@ -8697,6 +9464,507 @@ async def get_add_cmd(
     # Add -replace flag if replace_tracks is True
     if replace_tracks:
         cmd.append("-replace")
+
+    return cmd, temp_file
+
+
+async def get_remove_cmd(
+    file_path,
+    remove_video=False,
+    remove_audio=False,
+    remove_subtitle=False,
+    remove_attachment=False,
+    remove_metadata=False,
+    video_index=None,
+    audio_index=None,
+    subtitle_index=None,
+    attachment_index=None,
+    video_codec="none",
+    audio_codec="none",
+    subtitle_codec="none",
+    video_format="none",
+    audio_format="none",
+    subtitle_format="none",
+    attachment_format="none",
+    video_quality="none",
+    video_preset="none",
+    video_bitrate="none",
+    video_resolution="none",
+    video_fps="none",
+    audio_bitrate="none",
+    audio_channels="none",
+    audio_sampling="none",
+    audio_volume="none",
+    subtitle_language="none",
+    subtitle_encoding="none",
+    subtitle_font="none",
+    subtitle_font_size="none",
+    attachment_filter="none",
+    maintain_quality=True,
+    delete_original=False,
+):
+    """Generate FFmpeg command for removing tracks from a media file.
+
+    Args:
+        file_path: Path to the input media file
+        remove_video: Whether to remove video tracks
+        remove_audio: Whether to remove audio tracks
+        remove_subtitle: Whether to remove subtitle tracks
+        remove_attachment: Whether to remove attachments
+        remove_metadata: Whether to remove metadata
+        video_index: Video track index to remove (None for all)
+        audio_index: Audio track index to remove (None for all)
+        subtitle_index: Subtitle track index to remove (None for all)
+        attachment_index: Attachment index to remove (None for all)
+        video_codec: Video codec for remaining tracks
+        audio_codec: Audio codec for remaining tracks
+        subtitle_codec: Subtitle codec for remaining tracks
+        video_format: Video output format
+        audio_format: Audio output format
+        subtitle_format: Subtitle output format
+        attachment_format: Attachment output format
+        video_quality: Video quality setting
+        video_preset: Video encoding preset
+        video_bitrate: Video bitrate
+        video_resolution: Video resolution
+        video_fps: Video frame rate
+        audio_bitrate: Audio bitrate
+        audio_channels: Audio channel count
+        audio_sampling: Audio sampling rate
+        audio_volume: Audio volume adjustment
+        subtitle_language: Subtitle language
+        subtitle_encoding: Subtitle encoding
+        subtitle_font: Subtitle font
+        subtitle_font_size: Subtitle font size
+        attachment_filter: Attachment filter pattern
+        maintain_quality: Whether to maintain quality
+        delete_original: Whether to delete original file
+
+    Returns:
+        tuple: FFmpeg command and output file path
+    """
+    import os
+
+    from bot.core.config_manager import Config
+    from bot.helper.ext_utils.media_utils import get_streams
+
+    # Check if any removal is enabled
+    if not (
+        remove_video
+        or remove_audio
+        or remove_subtitle
+        or remove_attachment
+        or remove_metadata
+    ):
+        return None, None
+
+    # Validate input file exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Input file not found: {file_path}")
+
+    # Get stream information for validation
+    try:
+        streams = await get_streams(file_path)
+        if not streams:
+            # If we can't get stream info, proceed anyway but log warning
+            from bot import LOGGER
+
+            LOGGER.warning(
+                f"Could not get stream information for {file_path}, proceeding anyway"
+            )
+            streams = []
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.warning(
+            f"Error getting stream info for {file_path}: {e}, proceeding anyway"
+        )
+        streams = []
+
+    # Categorize streams for validation
+    video_streams = []
+    audio_streams = []
+    subtitle_streams = []
+    attachment_streams = []
+
+    for i, stream in enumerate(streams):
+        codec_type = stream.get("codec_type", "unknown")
+        if codec_type == "video":
+            video_streams.append(i)
+        elif codec_type == "audio":
+            audio_streams.append(i)
+        elif codec_type == "subtitle":
+            subtitle_streams.append(i)
+        elif codec_type == "attachment":
+            attachment_streams.append(i)
+
+    # Validate removal requests against available streams and prevent empty outputs
+    if remove_video and video_index is not None and streams:
+        # Parse video indices and validate
+        if isinstance(video_index, str):
+            try:
+                video_indices = [
+                    int(x.strip())
+                    for x in video_index.split(",")
+                    if x.strip().isdigit()
+                ]
+                # Check if requested indices exist
+                for idx in video_indices:
+                    if idx not in video_streams:
+                        from bot import LOGGER
+
+                        LOGGER.warning(
+                            f"Video stream index {idx} not found in {file_path}"
+                        )
+            except ValueError:
+                from bot import LOGGER
+
+                LOGGER.warning(f"Invalid video index format: {video_index}")
+
+    if remove_audio and audio_index is not None and streams:
+        # Parse audio indices and validate
+        if isinstance(audio_index, str):
+            try:
+                audio_indices = [
+                    int(x.strip())
+                    for x in audio_index.split(",")
+                    if x.strip().isdigit()
+                ]
+                # Check if requested indices exist
+                for idx in audio_indices:
+                    if idx not in audio_streams:
+                        from bot import LOGGER
+
+                        LOGGER.warning(
+                            f"Audio stream index {idx} not found in {file_path}"
+                        )
+            except ValueError:
+                from bot import LOGGER
+
+                LOGGER.warning(f"Invalid audio index format: {audio_index}")
+
+    # Prevent creating empty output files
+    remaining_streams = 0
+
+    # Count remaining video streams
+    if not remove_video:
+        remaining_streams += len(video_streams)
+    elif video_index is not None and isinstance(video_index, str):
+        # Partial video removal
+        try:
+            video_indices = [
+                int(x.strip()) for x in video_index.split(",") if x.strip().isdigit()
+            ]
+            remaining_streams += len(video_streams) - len(video_indices)
+        except ValueError:
+            remaining_streams += len(video_streams)
+
+    # Count remaining audio streams
+    if not remove_audio:
+        remaining_streams += len(audio_streams)
+    elif audio_index is not None and isinstance(audio_index, str):
+        # Partial audio removal
+        try:
+            audio_indices = [
+                int(x.strip()) for x in audio_index.split(",") if x.strip().isdigit()
+            ]
+            remaining_streams += len(audio_streams) - len(audio_indices)
+        except ValueError:
+            remaining_streams += len(audio_streams)
+
+    # Count remaining subtitle streams
+    if not remove_subtitle:
+        remaining_streams += len(subtitle_streams)
+    elif subtitle_index is not None and isinstance(subtitle_index, str):
+        try:
+            subtitle_indices = [
+                int(x.strip())
+                for x in subtitle_index.split(",")
+                if x.strip().isdigit()
+            ]
+            remaining_streams += len(subtitle_streams) - len(subtitle_indices)
+        except ValueError:
+            remaining_streams += len(subtitle_streams)
+
+    # Count remaining attachment streams
+    if not remove_attachment:
+        remaining_streams += len(attachment_streams)
+    elif attachment_index is not None and isinstance(attachment_index, str):
+        try:
+            attachment_indices = [
+                int(x.strip())
+                for x in attachment_index.split(",")
+                if x.strip().isdigit()
+            ]
+            remaining_streams += len(attachment_streams) - len(attachment_indices)
+        except ValueError:
+            remaining_streams += len(attachment_streams)
+
+    # If no streams would remain, return error
+    if remaining_streams == 0 and not remove_metadata:
+        from bot import LOGGER
+
+        LOGGER.error(
+            f"Cannot remove all streams from {file_path} - would result in empty file"
+        )
+        return None, None
+    if remaining_streams == 0 and remove_metadata:
+        # Special case: only metadata removal on a file that would have no streams
+        # This is not a valid operation for most containers
+        from bot import LOGGER
+
+        LOGGER.warning(
+            f"Metadata-only removal on file with no remaining streams: {file_path}"
+        )
+        return None, None
+
+    # Get file info
+    file_name = os.path.basename(file_path)
+    name, ext = os.path.splitext(file_name)
+
+    # Determine output format based on settings and content
+    output_ext = ext
+
+    # Smart format selection based on what's being removed and what remains
+    if video_format != "none":
+        output_ext = f".{video_format}"
+    elif audio_format != "none":
+        output_ext = f".{audio_format}"
+    elif subtitle_format != "none":
+        output_ext = f".{subtitle_format}"
+    elif attachment_format != "none":
+        output_ext = f".{attachment_format}"
+    # Smart format selection based on remaining content
+    elif remove_video and not remove_audio and audio_streams:
+        # Only audio remains, use audio-friendly format
+        if ext.lower() in [".mkv", ".mp4", ".avi"]:
+            output_ext = ".m4a" if ext.lower() == ".mp4" else ".mka"
+    elif remove_audio and not remove_video and video_streams:
+        # Only video remains, keep video format
+        if ext.lower() in [".m4a", ".mp3", ".flac"]:
+            output_ext = ".mp4"  # Convert audio-only to video container
+        # For other cases, keep original extension
+
+    # Generate output file path with descriptive naming
+    operation_desc = []
+    if remove_video:
+        if video_index:
+            operation_desc.append(f"rv{video_index}")
+        else:
+            operation_desc.append("rv")
+    if remove_audio:
+        if audio_index:
+            operation_desc.append(f"ra{audio_index}")
+        else:
+            operation_desc.append("ra")
+    if remove_subtitle:
+        if subtitle_index:
+            operation_desc.append(f"rs{subtitle_index}")
+        else:
+            operation_desc.append("rs")
+    if remove_attachment:
+        if attachment_index:
+            operation_desc.append(f"rt{attachment_index}")
+        else:
+            operation_desc.append("rt")
+    if remove_metadata:
+        operation_desc.append("rm")
+
+    operation_suffix = "_".join(operation_desc) if operation_desc else "removed"
+    temp_file = f"{file_path.rsplit('.', 1)[0]}_{operation_suffix}{output_ext}"
+
+    # Ensure output file doesn't overwrite input
+    if temp_file == file_path:
+        temp_file = f"{file_path.rsplit('.', 1)[0]}_processed{output_ext}"
+
+    # Start building FFmpeg command
+    cmd = [
+        "xtra",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-progress",
+        "pipe:1",
+        "-i",
+        file_path,
+        "-y",  # Overwrite output files
+    ]
+
+    # Build mapping arguments to exclude specified tracks
+    map_args = []
+    codec_args = []
+
+    # If removing specific tracks by index
+    if remove_video and video_index is not None:
+        # Parse video indices (can be comma-separated)
+        if isinstance(video_index, str):
+            video_indices = [
+                int(x.strip()) for x in video_index.split(",") if x.strip().isdigit()
+            ]
+        else:
+            video_indices = [int(video_index)]
+
+        # Map all streams first, then exclude specific video tracks
+        map_args.extend(["-map", "0"])
+        for idx in video_indices:
+            map_args.extend(["-map", f"-0:v:{idx}"])
+    elif remove_video:
+        # Remove all video tracks
+        map_args.extend(["-map", "0", "-map", "-0:v"])
+
+    if remove_audio and audio_index is not None:
+        # Parse audio indices
+        if isinstance(audio_index, str):
+            audio_indices = [
+                int(x.strip()) for x in audio_index.split(",") if x.strip().isdigit()
+            ]
+        else:
+            audio_indices = [int(audio_index)]
+
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        for idx in audio_indices:
+            map_args.extend(["-map", f"-0:a:{idx}"])
+    elif remove_audio:
+        # Remove all audio tracks
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        map_args.extend(["-map", "-0:a"])
+
+    if remove_subtitle and subtitle_index is not None:
+        # Parse subtitle indices
+        if isinstance(subtitle_index, str):
+            subtitle_indices = [
+                int(x.strip())
+                for x in subtitle_index.split(",")
+                if x.strip().isdigit()
+            ]
+        else:
+            subtitle_indices = [int(subtitle_index)]
+
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        for idx in subtitle_indices:
+            map_args.extend(["-map", f"-0:s:{idx}"])
+    elif remove_subtitle:
+        # Remove all subtitle tracks
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        map_args.extend(["-map", "-0:s"])
+
+    if remove_attachment and attachment_index is not None:
+        # Parse attachment indices
+        if isinstance(attachment_index, str):
+            attachment_indices = [
+                int(x.strip())
+                for x in attachment_index.split(",")
+                if x.strip().isdigit()
+            ]
+        else:
+            attachment_indices = [int(attachment_index)]
+
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        for idx in attachment_indices:
+            map_args.extend(["-map", f"-0:t:{idx}"])
+    elif remove_attachment:
+        # Remove all attachments
+        if not map_args:
+            map_args.extend(["-map", "0"])
+        map_args.extend(["-map", "-0:t"])
+
+    # If no specific mapping was done, map all streams
+    if not map_args:
+        map_args.extend(["-map", "0"])
+
+    # Add mapping arguments to command
+    cmd.extend(map_args)
+
+    # Add codec settings for remaining tracks with smart defaults
+    if not remove_video and video_streams:
+        if video_codec != "none":
+            codec_args.extend(["-c:v", video_codec])
+        else:
+            # Use copy by default to maintain quality
+            codec_args.extend(["-c:v", "copy"])
+
+        # Add video quality settings only if not using copy codec
+        if video_codec not in ["none", "copy"]:
+            if video_quality != "none":
+                if video_quality in ["high", "medium", "low"]:
+                    quality_map = {"high": "18", "medium": "23", "low": "28"}
+                    codec_args.extend(["-crf", quality_map[video_quality]])
+                else:
+                    codec_args.extend(["-crf", str(video_quality)])
+
+            if video_preset != "none":
+                codec_args.extend(["-preset", video_preset])
+
+            if video_bitrate != "none":
+                codec_args.extend(["-b:v", video_bitrate])
+
+            if video_resolution != "none":
+                codec_args.extend(["-s", video_resolution])
+
+            if video_fps != "none":
+                codec_args.extend(["-r", str(video_fps)])
+
+    if not remove_audio and audio_streams:
+        if audio_codec != "none":
+            codec_args.extend(["-c:a", audio_codec])
+        else:
+            # Use copy by default to maintain quality
+            codec_args.extend(["-c:a", "copy"])
+
+        # Add audio quality settings only if not using copy codec
+        if audio_codec not in ["none", "copy"]:
+            if audio_bitrate != "none":
+                codec_args.extend(["-b:a", audio_bitrate])
+
+            if audio_channels != "none":
+                codec_args.extend(["-ac", str(audio_channels)])
+
+            if audio_sampling != "none":
+                codec_args.extend(["-ar", str(audio_sampling)])
+
+        # Audio volume can be applied even with copy codec
+        if audio_volume not in {"none", "1.0"}:
+            codec_args.extend(["-af", f"volume={audio_volume}"])
+
+    if not remove_subtitle and subtitle_streams:
+        if subtitle_codec != "none":
+            codec_args.extend(["-c:s", subtitle_codec])
+        else:
+            # Use copy by default
+            codec_args.extend(["-c:s", "copy"])
+
+        # Add subtitle settings only if not using copy codec
+        if subtitle_codec not in ["none", "copy"]:
+            if subtitle_encoding != "none":
+                codec_args.extend(["-sub_charenc", subtitle_encoding])
+
+            if subtitle_language != "none":
+                codec_args.extend(
+                    ["-metadata:s:s:0", f"language={subtitle_language}"]
+                )
+
+    # Remove metadata if requested
+    if remove_metadata:
+        codec_args.extend(["-map_metadata", "-1"])
+
+    # Add codec arguments to command
+    cmd.extend(codec_args)
+
+    # Add thread count for better performance
+    thread_count = max(1, getattr(Config, "CPU_COUNT", 2) // 2)
+    cmd.extend(["-threads", str(thread_count)])
+
+    # Add output file
+    cmd.append(temp_file)
+
+    # Add delete original flag if requested
+    if delete_original:
+        cmd.append("-del")
 
     return cmd, temp_file
 
@@ -8864,6 +10132,61 @@ async def get_extract_cmd(
                         elif video_codec in ["vp9", "libvpx-vp9"]:
                             cmd.extend(["-crf", "30", "-b:v", "0"])
 
+                    # Add format-specific optimizations for Telegram compatibility
+                    if output_ext == "mp4":
+                        cmd.extend(
+                            [
+                                "-movflags",
+                                "+faststart",  # Streaming optimization
+                                "-pix_fmt",
+                                "yuv420p",  # Compatible pixel format
+                                "-profile:v",
+                                "main",  # Compatible H.264 profile
+                                "-level",
+                                "4.0",  # Compatible H.264 level
+                            ]
+                        )
+                    elif output_ext == "mkv":
+                        cmd.extend(
+                            [
+                                "-pix_fmt",
+                                "yuv420p",  # Compatible pixel format
+                                "-disposition:v:0",
+                                "default",  # Set video as default
+                                "-disposition:a:0",
+                                "default",  # Set audio as default
+                            ]
+                        )
+                    elif output_ext == "webm":
+                        cmd.extend(
+                            [
+                                "-pix_fmt",
+                                "yuv420p",  # Compatible pixel format
+                                "-deadline",
+                                "good",  # VP9 optimization
+                                "-cpu-used",
+                                "2",  # VP9 speed/quality balance
+                                "-row-mt",
+                                "1",  # VP9 multithreading
+                            ]
+                        )
+                    elif output_ext == "mov":
+                        cmd.extend(
+                            [
+                                "-movflags",
+                                "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                                "-pix_fmt",
+                                "yuv420p",  # Compatible pixel format
+                                "-profile:v",
+                                "main",  # Compatible H.264 profile
+                                "-level",
+                                "4.0",  # Compatible H.264 level
+                            ]
+                        )
+                    else:
+                        # Universal compatibility for other formats
+                        cmd.extend(["-pix_fmt", "yuv420p"])
+
                     cmd.append(output_file)
                     commands.append(" ".join(cmd))
                 else:
@@ -8906,6 +10229,61 @@ async def get_extract_cmd(
                         cmd.extend(["-crf", "22", "-preset", "slow"])
                     elif video_codec in ["vp9", "libvpx-vp9"]:
                         cmd.extend(["-crf", "30", "-b:v", "0"])
+
+                # Add format-specific optimizations for Telegram compatibility
+                if output_ext == "mp4":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                elif output_ext == "mkv":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-disposition:v:0",
+                            "default",  # Set video as default
+                            "-disposition:a:0",
+                            "default",  # Set audio as default
+                        ]
+                    )
+                elif output_ext == "webm":
+                    cmd.extend(
+                        [
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-deadline",
+                            "good",  # VP9 optimization
+                            "-cpu-used",
+                            "2",  # VP9 speed/quality balance
+                            "-row-mt",
+                            "1",  # VP9 multithreading
+                        ]
+                    )
+                elif output_ext == "mov":
+                    cmd.extend(
+                        [
+                            "-movflags",
+                            "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
+                            "-pix_fmt",
+                            "yuv420p",  # Compatible pixel format
+                            "-profile:v",
+                            "main",  # Compatible H.264 profile
+                            "-level",
+                            "4.0",  # Compatible H.264 level
+                        ]
+                    )
+                else:
+                    # Universal compatibility for other formats
+                    cmd.extend(["-pix_fmt", "yuv420p"])
 
                 cmd.append(output_file)
                 commands.append(" ".join(cmd))

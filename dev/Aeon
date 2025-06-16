@@ -34,7 +34,10 @@ install_packages() {
     # Base packages for all architectures
     local base_packages=(
         python3.13
+        python3.13-dev
+        python3.13-venv
         libpython3.13
+        libpython3.13-dev
         python3-pip
         sabnzbdplus
         aria2
@@ -53,8 +56,36 @@ install_packages() {
         openjdk-21-jre-headless
     )
 
-    # MEGA SDK dependencies (only for x86_64)
-    local mega_packages=(
+    # MEGA SDK build dependencies (for both x86_64 and aarch64)
+    local mega_build_packages=(
+        autoconf
+        automake
+        build-essential
+        cmake
+        g++
+        gcc
+        gettext
+        gpg-agent
+        intltool
+        libtool
+        make
+        unzip
+        zip
+        libcurl4-openssl-dev
+        libsodium-dev
+        libssl-dev
+        libcrypto++-dev
+        libc-ares-dev
+        libsqlite3-dev
+        libfreeimage-dev
+        swig
+        libboost-all-dev
+        libpthread-stubs0-dev
+        zlib1g-dev
+    )
+
+    # MEGA SDK runtime dependencies
+    local mega_runtime_packages=(
         libcares2
         libcurl4
         libuv1
@@ -70,12 +101,10 @@ install_packages() {
     local arch=$(uname -m)
     local packages_to_install=("${base_packages[@]}")
 
-    if [ "$arch" = "x86_64" ]; then
-        echo "🏗️  Installing packages for x86_64 architecture (including MEGA SDK dependencies)"
-        packages_to_install+=("${mega_packages[@]}")
-    else
-        echo "🏗️  Installing packages for $arch architecture (excluding MEGA SDK dependencies)"
-    fi
+    # Install MEGA SDK dependencies for both architectures
+    echo "🏗️  Installing packages for $arch architecture (including MEGA SDK dependencies)"
+    packages_to_install+=("${mega_build_packages[@]}")
+    packages_to_install+=("${mega_runtime_packages[@]}")
 
     apt-get install -y --no-install-recommends "${packages_to_install[@]}"
 
@@ -84,150 +113,193 @@ install_packages() {
 }
 
 install_mega_sdk() {
-    # Check architecture - only install MEGA SDK on x86_64
     local arch=$(uname -m)
-    if [ "$arch" != "x86_64" ]; then
-        echo "⚠️  Skipping MEGA SDK installation on $arch architecture"
-        echo "ℹ️  MEGA SDK v4.8.0 is only supported on x86_64 (AMD64) architecture"
-        echo "✅ MEGA SDK installation skipped for $arch"
-        return 0
-    fi
-
-    echo "🔧 Installing MEGA SDK v4.8.0 from pre-built wheel on $arch architecture..."
+    echo "🔧 Installing MEGA SDK v4.8.0 from source on $arch architecture (Ubuntu 25.04 + Python 3.13)..."
 
     # Verify Python environment
     echo "🔍 Checking Python environment..."
     python3 --version
 
-    # Check if wheel file exists in current directory (copied by Dockerfile)
-    WHEEL_FILE="./megasdk-4.8.0-py2.py3-none-any.whl"
-    if [ ! -f "$WHEEL_FILE" ]; then
-        echo "❌ MEGA SDK wheel file not found at $WHEEL_FILE"
-        echo "🔍 Looking for wheel file in current directory..."
-        find . -name "*.whl" -type f | head -5
-        exit 1
-    fi
-
-    echo "✅ Found MEGA SDK wheel file: $WHEEL_FILE"
-
-    # Create virtual environment that matches what the main Dockerfile expects
-    # The main Dockerfile sets WORKDIR to /usr/src/app, so create venv there
-    echo "🔧 Creating virtual environment for MEGA SDK..."
-    mkdir -p /usr/src/app
-    cd /usr/src/app
-    /usr/bin/uv venv .venv || {
-        echo "❌ Failed to create virtual environment"
-        exit 1
-    }
-    # Copy the wheel file to the working directory
-    cp /megasdk-4.8.0-py2.py3-none-any.whl . 2>/dev/null || cp ./megasdk-4.8.0-py2.py3-none-any.whl . || {
-        echo "❌ Failed to copy MEGA SDK wheel file to working directory"
+    # Install setuptools (includes distutils functionality for Python 3.13)
+    echo "📦 Installing setuptools for Python 3.13 distutils support..."
+    pip3 install --break-system-packages setuptools || {
+        echo "❌ Failed to install setuptools"
         exit 1
     }
 
-    # Activate the virtual environment
-    echo "🔧 Activating virtual environment..."
-    source /usr/src/app/.venv/bin/activate || {
-        echo "❌ Failed to activate virtual environment"
+    # Clone and build MEGA SDK from source
+    echo "� Cloning MEGA SDK v4.8.0 source code..."
+    git clone https://github.com/meganz/sdk.git --depth=1 -b v4.8.0 /home/sdk || {
+        echo "❌ Failed to clone MEGA SDK repository"
         exit 1
     }
 
-    # Verify we're in the virtual environment
-    echo "🔍 Verifying virtual environment..."
-    which python3
-    python3 -c "import sys; print(f'Python executable: {sys.executable}')"
+    cd /home/sdk
+    rm -rf .git
 
-    # Verify uv can see the virtual environment
-    echo "🔍 Verifying uv virtual environment detection..."
-    /usr/bin/uv pip list --help > /dev/null 2>&1 || {
-        echo "❌ uv pip not working"
+    echo "🔧 Configuring MEGA SDK build..."
+    # Update autotools and generate configure script
+    autoupdate -fIv && ./autogen.sh || {
+        echo "❌ Failed to run autogen.sh"
         exit 1
     }
 
-    # Install setuptools in the virtual environment using uv
-    echo "📦 Installing setuptools in virtual environment..."
-    /usr/bin/uv pip install setuptools || {
-        echo "❌ Failed to install setuptools in virtual environment"
+    # Configure with Python 3.13 support and optimizations for both architectures
+    echo "⚙️  Configuring MEGA SDK for $arch architecture with Python 3.13..."
+    ./configure \
+        --disable-silent-rules \
+        --enable-python \
+        --with-sodium \
+        --disable-examples \
+        --with-python=/usr/bin/python3.13 \
+        PYTHON=/usr/bin/python3.13 \
+        PYTHON_VERSION=3.13 || {
+        echo "❌ Failed to configure MEGA SDK"
         exit 1
     }
 
-    # Install MEGA SDK from wheel in the virtual environment using uv
-    echo "📦 Installing MEGA SDK v4.8.0 from wheel in virtual environment..."
-    WHEEL_FILE="/usr/src/app/megasdk-4.8.0-py2.py3-none-any.whl"
-    /usr/bin/uv pip install "$WHEEL_FILE" || {
-        echo "❌ Failed to install MEGA SDK from wheel in virtual environment"
+    # Build MEGA SDK using all available CPU cores
+    echo "� Building MEGA SDK (this may take several minutes)..."
+    make -j$(nproc --all) || {
+        echo "❌ Failed to build MEGA SDK"
         exit 1
     }
 
-    # Copy shared libraries to system library path (still needed for system-level access)
-    echo "🔗 Setting up MEGA SDK shared libraries..."
+    # Build and install Python bindings
+    echo "� Building MEGA SDK Python bindings for Python 3.13..."
+    cd bindings/python/
 
-    # Detect architecture for correct library path
-    local arch=$(uname -m)
-    local lib_dir
-    if [ "$arch" = "x86_64" ]; then
-        lib_dir="/usr/lib/x86_64-linux-gnu"
-    elif [ "$arch" = "aarch64" ]; then
-        lib_dir="/usr/lib/aarch64-linux-gnu"
-    else
-        echo "⚠️  Unsupported architecture: $arch, using default lib path"
-        lib_dir="/usr/lib"
-    fi
+    # Build wheel
+    python3.13 setup.py bdist_wheel || {
+        echo "❌ Failed to build MEGA SDK Python wheel"
+        exit 1
+    }
 
-    echo "🏗️  Using library directory: $lib_dir for architecture: $arch"
+    # Install the wheel using pip with system packages flag for Ubuntu 25.04
+    echo "📦 Installing MEGA SDK Python bindings..."
+    pip3 install --break-system-packages --no-cache-dir dist/megasdk-4.8.0-*.whl || {
+        echo "❌ Failed to install MEGA SDK Python bindings"
+        exit 1
+    }
 
-    # Ensure the library directory exists
-    mkdir -p "$lib_dir"
+    # Set up library paths for MEGA SDK shared libraries
+    echo "🔧 Configuring MEGA SDK library paths..."
 
-    MEGA_PKG_DIR="/usr/src/app/.venv/lib/python3.13/site-packages/mega"
-    if [ -f "$MEGA_PKG_DIR/libmega.so" ]; then
-        cp "$MEGA_PKG_DIR/libmega.so" "$lib_dir/libmega.so.40800"
-        echo "✅ Copied libmega.so to system library path: $lib_dir/libmega.so.40800"
-    else
-        echo "⚠️  libmega.so not found in virtual environment, installing in system for shared libraries..."
-        # Deactivate virtual environment temporarily for system installation
-        deactivate
-        # Fallback: also install in system for shared libraries
-        python3 -m pip install "$WHEEL_FILE" --break-system-packages || {
-            echo "❌ Failed to install MEGA SDK in system for shared libraries"
-            exit 1
-        }
-        SYSTEM_MEGA_PKG_DIR="/usr/local/lib/python3.13/dist-packages/mega"
-        if [ -f "$SYSTEM_MEGA_PKG_DIR/libmega.so" ]; then
-            cp "$SYSTEM_MEGA_PKG_DIR/libmega.so" "$lib_dir/libmega.so.40800"
-            echo "✅ Copied libmega.so from system installation to system library path: $lib_dir/libmega.so.40800"
-        fi
-        # Reactivate virtual environment
-        source /usr/src/app/.venv/bin/activate
-    fi
+    # Find where MEGA SDK was installed
+    MEGA_INSTALL_PATH=$(python3 -c "
+import sys
+from pathlib import Path
+for path in sys.path:
+    mega_path = Path(path) / 'mega'
+    if mega_path.exists():
+        print(path)
+        break
+" 2>/dev/null || echo "/usr/local/lib/python3.13/dist-packages")
+
+    echo "📁 MEGA SDK installed in: $MEGA_INSTALL_PATH"
+
+    # Create library configuration for MEGA SDK
+    echo "$MEGA_INSTALL_PATH/mega" > /etc/ld.so.conf.d/megasdk.conf
 
     # Update library cache
     ldconfig
 
-    # Verify installation in virtual environment
-    echo "🔍 Verifying MEGA SDK installation in virtual environment..."
+    # Change to a different directory to avoid importing from source
+    cd /tmp
+
+    # Update library cache to ensure shared libraries are found
+    echo "🔧 Updating library cache..."
+    ldconfig
+
+    # Set library path for MEGA SDK shared libraries
+    export LD_LIBRARY_PATH="/usr/local/lib/python3.13/dist-packages/mega:/usr/lib/python3/dist-packages/mega:${LD_LIBRARY_PATH:-}"
+
+    # Verify installation with comprehensive system-wide detection
+    echo "🔍 Verifying MEGA SDK installation with system-wide detection..."
     python3 -c "
-import mega
-api = mega.MegaApi('test')
-print('✅ MEGA SDK v4.8.0 imported successfully in virtual environment')
-print(f'API version: {api.getVersion()}')
-print(f'API methods available: {len([m for m in dir(api) if not m.startswith(\"_\")])}')
-print(f'Python executable: {__import__('sys').executable}')
-print(f'MEGA module location: {mega.__file__}')
+import sys
+from pathlib import Path
+
+# System-wide search paths for MEGA SDK
+search_paths = [
+    '/usr/local/lib/python3.13/dist-packages',
+    '/usr/lib/python3/dist-packages',
+    '/usr/lib/python3.13/dist-packages',
+    '/usr/local/lib/python3.12/dist-packages',
+    '/usr/lib/python3.12/dist-packages',
+    f'{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages',
+    f'{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages',
+]
+
+print('🔍 Searching for MEGA SDK in system-wide paths...')
+mega_found = False
+mega_path = None
+
+# Try standard import first
+try:
+    import mega
+    api = mega.MegaApi('test')
+    version = api.getVersion()
+    print('✅ MEGA SDK v4.8.0 imported successfully via standard import')
+    print(f'📋 API version: {version}')
+    print(f'📊 API methods available: {len([m for m in dir(api) if not m.startswith(\"_\")])}')
+    print(f'🐍 Python executable: {sys.executable}')
+    print(f'📁 MEGA module location: {mega.__file__}')
+    mega_found = True
+except ImportError as e:
+    print(f'⚠️  Standard import failed: {e}')
+except Exception as e:
+    print(f'⚠️  Standard import validation failed: {e}')
+
+# If standard import failed, search system-wide paths
+if not mega_found:
+    for path in search_paths:
+        mega_dir = Path(path) / 'mega'
+        if mega_dir.exists():
+            print(f'🔍 Found MEGA SDK in: {path}')
+            try:
+                if str(Path(path)) not in sys.path:
+                    sys.path.insert(0, str(Path(path)))
+
+                import mega
+                api = mega.MegaApi('test')
+                version = api.getVersion()
+                print('✅ MEGA SDK v4.8.0 imported successfully via system-wide search')
+                print(f'📋 API version: {version}')
+                print(f'📊 API methods available: {len([m for m in dir(api) if not m.startswith(\"_\")])}')
+                print(f'🐍 Python executable: {sys.executable}')
+                print(f'📁 MEGA module location: {mega.__file__}')
+                mega_path = path
+                mega_found = True
+                break
+            except Exception as e:
+                print(f'⚠️  Failed to import from {path}: {e}')
+                continue
+
+if not mega_found:
+    print('❌ MEGA SDK not found in any system-wide location')
+    raise ImportError('MEGA SDK not found')
+else:
+    print('🎉 MEGA SDK verification completed successfully!')
 " || {
-        echo "❌ MEGA SDK installation verification failed in virtual environment"
+        echo "❌ MEGA SDK installation verification failed"
         echo "🔍 Debugging import issue..."
 
-        # Check installed packages in virtual environment
-        echo "📦 Installed MEGA packages in virtual environment:"
-        /usr/bin/uv pip list | grep -i mega || echo "No MEGA packages found in virtual environment"
+        # Check installed packages
+        echo "📦 Installed MEGA packages:"
+        pip3 list | grep -i mega || echo "No MEGA packages found"
 
-        # Check Python import path in virtual environment
-        echo "🐍 Python import paths in virtual environment:"
+        # Check Python import path
+        echo "🐍 Python import paths:"
         python3 -c "import sys; [print(f'  {p}') for p in sys.path if p]"
 
+        # Check for MEGA SDK files in common locations
+        echo "🔍 Searching for MEGA SDK files..."
+        find /usr -name 'mega' -type d 2>/dev/null | head -10 || echo "No MEGA directories found"
+        find /usr -name '*mega*' -name '*.so' 2>/dev/null | head -10 || echo "No MEGA shared libraries found"
+
         # Try to import and show error
-        echo "🔍 Import error details in virtual environment:"
+        echo "🔍 Import error details:"
         python3 -c "
 try:
     import mega
@@ -240,29 +312,45 @@ except Exception as e:
         exit 1
     }
 
-    # Deactivate virtual environment
-    deactivate
+    # Clean up build dependencies to reduce image size
+    echo "🧹 Cleaning up MEGA SDK build dependencies..."
+    apt-get remove -y \
+        autoconf \
+        automake \
+        build-essential \
+        cmake \
+        g++ \
+        gcc \
+        gettext \
+        gpg-agent \
+        intltool \
+        libtool \
+        make \
+        unzip \
+        zip \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libc-ares-dev \
+        libsqlite3-dev \
+        swig \
+        libboost-all-dev \
+        libpthread-stubs0-dev \
+        zlib1g-dev
+
+    apt-get autoremove -y
+    apt-get autoclean -y
+
+    # Clean up Python build tools
+    echo "🧹 Removing Python build tools..."
+    pip3 uninstall -y setuptools || echo "setuptools already removed or not found"
+
+    # Clean up source directory
+    rm -rf /home/sdk
 
     # Return to original directory
     cd /
 
-    # Final verification that the virtual environment is properly set up
-    echo "🔍 Final verification of virtual environment setup..."
-    if [ -f "/usr/src/app/.venv/bin/activate" ]; then
-        echo "✅ Virtual environment activation script found"
-    else
-        echo "❌ Virtual environment activation script not found"
-        exit 1
-    fi
-
-    if [ -f "/usr/src/app/.venv/lib/python3.13/site-packages/mega/__init__.py" ]; then
-        echo "✅ MEGA SDK installed in virtual environment"
-    else
-        echo "❌ MEGA SDK not found in virtual environment"
-        exit 1
-    fi
-
-    echo "✅ MEGA SDK v4.8.0 installed successfully in virtual environment at /usr/src/app/.venv"
+    echo "✅ MEGA SDK v4.8.0 installed successfully for $arch architecture with Python 3.13 support"
 }
 
 # Process and move files
@@ -311,13 +399,8 @@ cleanup() {
         /tmp/* \
         /var/tmp/*
 
-    # Note: Preserving .venv directory with MEGA SDK installation (if installed)
     local arch=$(uname -m)
-    if [ "$arch" = "x86_64" ]; then
-        echo "✅ Cleanup completed, virtual environment with MEGA SDK preserved"
-    else
-        echo "✅ Cleanup completed (MEGA SDK not installed on $arch architecture)"
-    fi
+    echo "✅ Cleanup completed - MEGA SDK v4.8.0 installed system-wide for $arch architecture"
 }
 
 main() {

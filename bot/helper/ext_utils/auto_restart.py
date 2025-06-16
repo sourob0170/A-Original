@@ -24,8 +24,10 @@ async def schedule_auto_restart():
             LOGGER.info("Auto-restart is disabled")
         return
 
-    # Calculate the next restart time
-    interval_hours = max(1, Config.AUTO_RESTART_INTERVAL)  # Minimum 1 hour
+    # Calculate the next restart time with optimized minimum interval
+    interval_hours = max(
+        6, Config.AUTO_RESTART_INTERVAL
+    )  # Increased minimum to 6 hours for better stability
     next_time = datetime.now() + timedelta(hours=interval_hours)
     next_restart_time = next_time
 
