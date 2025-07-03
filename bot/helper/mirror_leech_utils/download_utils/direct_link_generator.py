@@ -14,11 +14,11 @@ from requests import Session, get, post
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from ....core.config_manager import Config
-from ...ext_utils.exceptions import DirectDownloadLinkException
-from ...ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
-from ...ext_utils.links_utils import is_share_link
-from ...ext_utils.status_utils import speed_string_to_bytes
+from bot.core.config_manager import Config
+from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
+from bot.helper.ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
+from bot.helper.ext_utils.links_utils import is_share_link
+from bot.helper.ext_utils.status_utils import speed_string_to_bytes
 
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
 
@@ -545,7 +545,9 @@ def github(url):
     try:
         findall(r"\bhttps?://.*github\.com.*releases\S+", url)[0]
     except IndexError as e:
-        raise DirectDownloadLinkException("ERROR: No GitHub Releases links found") from e
+        raise DirectDownloadLinkException(
+            "ERROR: No GitHub Releases links found"
+        ) from e
     with create_scraper() as session:
         _res = session.get(url, stream=True, allow_redirects=False)
         if "location" in _res.headers:
@@ -1979,7 +1981,7 @@ def instagram(link: str) -> str:
     """
     if not Config.INSTADL_API:
         raise DirectDownloadLinkException(
-            f"ERROR: Instagram downloader API not added, Try ytdl commands"
+            "ERROR: Instagram downloader API not added, Try ytdl commands"
         )
     full_url = f"{Config.INSTADL_API}/api/video?postUrl={link}"
 
