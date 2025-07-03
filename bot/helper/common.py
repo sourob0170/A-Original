@@ -138,7 +138,6 @@ class TaskConfig:
         self.files_to_proceed = []
         self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
 
-        # YouTube specific settings, resolved later
         self.yt_privacy = None
         self.yt_mode = "playlist"
         self.yt_tags = None

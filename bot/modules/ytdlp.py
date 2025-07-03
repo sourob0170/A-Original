@@ -336,18 +336,14 @@ class YtDlp(TaskListener):
             "-md": "",
             "-tl": "",
             "-ff": set(),
-            # -ytmode removed from here
         }
 
         arg_parser(input_list[1:], args)
 
-        # self.youtube_upload_mode will be set by TaskListener based on user settings
-        # No longer parsed from command line args here.
         self.youtube_upload_mode = self.user_dict.get(
             "YT_DEFAULT_FOLDER_MODE", "playlist"
         )
 
-        # Initialize YouTube specific override attributes
         self.yt_privacy = None
         self.yt_mode = None
         self.yt_tags = None
@@ -355,17 +351,17 @@ class YtDlp(TaskListener):
         self.yt_description = None
 
         if self.up_dest and self.up_dest.startswith("yt:"):
-            self.raw_up_dest = "yt"  # Ensure it's treated as a YouTube upload
+            self.raw_up_dest = "yt"  
             parts = self.up_dest.split(":", 6)[
                 1:
-            ]  # Skip 'yt' prefix, max 6 parts for overrides
+            ]  
 
             if len(parts) > 0 and parts[0]:
                 self.yt_privacy = parts[0]
             if len(parts) > 1 and parts[1]:
                 if parts[1] in ["playlist", "individual", "playlist_and_individual"]:
                     self.yt_mode = parts[1]
-                elif parts[1]:  # If not empty and not valid, log warning
+                elif parts[1]: 
                     LOGGER.warning(
                         f"Invalid YouTube mode override '{parts[1]}' in -up. Ignoring mode override."
                     )
@@ -375,17 +371,8 @@ class YtDlp(TaskListener):
                 self.yt_category = parts[3]
             if len(parts) > 4 and parts[4]:
                 self.yt_description = parts[4]
-            if len(parts) > 5 and parts[5]:  # New part for playlist_id
+            if len(parts) > 5 and parts[5]:  
                 self.yt_playlist_id = parts[5]
-
-            # If -up was *only* for YT overrides (e.g., "yt:private"),
-            # up_dest for path purposes should be considered empty or default.
-            # The logic in task_listener.py for choosing upload service
-            # already considers self.raw_up_dest. If self.up_dest is just "yt:...",
-            # it won't be a valid path for rclone/gdrive, which is fine.
-            # If user intended to use default YT upload AND provide specific rclone path,
-            # they should use -up rclone_path and rely on default YT settings or user settings.
-            # This new yt: format is specifically for overriding YT settings.
 
         try:
             self.multi = int(args["-i"])
