@@ -371,7 +371,7 @@ class YouTubeUpload(YouTubeHelper):
                             )  
                         elif isinstance(
                             upload_result_dict, str
-                        ):  t
+                        ): 
                             raise ValueError(
                                 f"Playlist creation failed: {upload_result_dict}"
                             )
