@@ -363,8 +363,8 @@ class TaskListener(TaskConfig):
         elif upload_service == "yt":
             LOGGER.info(f"Uploading to YouTube: {self.name}")
 
-            playlist_id_to_use = self.yt_playlist_id  
-            if not playlist_id_to_use:  
+            playlist_id_to_use = self.yt_playlist_id
+            if not playlist_id_to_use:
                 user_playlist_id = self.user_dict.get("YT_ADD_TO_PLAYLIST_ID")
                 if user_playlist_id and user_playlist_id.strip().lower() not in [
                     "none",
@@ -372,7 +372,7 @@ class TaskListener(TaskConfig):
                 ]:
                     playlist_id_to_use = user_playlist_id.strip()
                 else:
-                    playlist_id_to_use = None 
+                    playlist_id_to_use = None
 
             yt = YouTubeUpload(
                 self,
@@ -381,7 +381,7 @@ class TaskListener(TaskConfig):
                 tags=self.yt_tags,
                 category=self.yt_category,
                 description=self.yt_description,
-                playlist_id=playlist_id_to_use, 
+                playlist_id=playlist_id_to_use,
                 upload_mode=self.yt_mode,
             )
             async with task_dict_lock:
@@ -491,9 +491,9 @@ class TaskListener(TaskConfig):
                 upload_result.get("video_url")
                 if isinstance(upload_result, dict)
                 else None
-            )  
+            )
 
-            if playlist_url: 
+            if playlist_url:
                 base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
                 base_msg_content += (
                     f"\n<b>Playlist Link: </b><a href='{playlist_url}'>Link</a>"
@@ -502,87 +502,16 @@ class TaskListener(TaskConfig):
                 messages_to_send = []
 
                 current_message_part = base_msg_content
-                current_message_part += (
-                    f"\n\n<b>Total Videos: </b>{folders}"  
-                )
-                if (
-                    folders == 1
-                ):  
+                current_message_part += f"\n\n<b>Total Videos: </b>{folders}"
+                if folders == 1:
                     current_message_part += "\n<b>Source: </b>Folder"
                 current_message_part += f"\n<b>cc: </b>{self.tag}"
 
                 if individual_video_urls:
                     links_header = "\n\n<b>Individual Video Links:</b>"
                     current_message_part += links_header
-                    for (
-                        video_entry
-                    ) in individual_video_urls:  
-                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"  
-                        if (
-                            len(current_message_part.encode("utf-8"))
-                            + len(link_line.encode("utf-8"))
-                            > 3900
-                        ):
-                            messages_to_send.append(current_message_part)
-                            current_message_part = (
-                                "<b>Video Links (continued):</b>" + link_line
-                            )
-                        else:
-                            current_message_part += link_line
-
-                if current_message_part:  
-                    messages_to_send.append(current_message_part)
-
-                for part in messages_to_send:
-                    await send_message(self.user_id, part)
-                    if Config.LOG_CHAT_ID:
-                        await send_message(int(Config.LOG_CHAT_ID), part)
-                    await sleep(1)  
-
-            else:  
-                base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
-
-                messages_to_send = []
-                current_message_part = base_msg_content
-
-                if video_url: 
-                    current_message_part += f"\n<b>Link: </b><a href='{video_url['url']}'>{escape(video_url['name'])}</a>" 
-
-                current_message_part += (
-                    f"\n\n<b>Total Videos: </b>{folders}" 
-                )
-                if (
-                    folders == 1
-                ):  
-                    current_message_part += "\n<b>Source: </b>Folder"
-                current_message_part += f"\n<b>cc: </b>{self.tag}"
-
-                if individual_video_urls: 
-                    links_header = "\n\n<b>Individual Video Links:</b>"
-                    if (
-                        len(current_message_part.encode("utf-8"))
-                        + len(links_header.encode("utf-8"))
-                        > 3900
-                        and video_url
-                    ):
-                        messages_to_send.append(current_message_part)
-                        current_message_part = (
-                            links_header  
-                        )
-                    elif (
-                        len(current_message_part.encode("utf-8"))
-                        + len(links_header.encode("utf-8"))
-                        > 3900
-                    ):
-                        messages_to_send.append(current_message_part)
-                        current_message_part = links_header
-                    else:
-                        current_message_part += links_header
-
-                    for (
-                        video_entry
-                    ) in individual_video_urls:  
-                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"  
+                    for video_entry in individual_video_urls:
+                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"
                         if (
                             len(current_message_part.encode("utf-8"))
                             + len(link_line.encode("utf-8"))
@@ -602,9 +531,63 @@ class TaskListener(TaskConfig):
                     await send_message(self.user_id, part)
                     if Config.LOG_CHAT_ID:
                         await send_message(int(Config.LOG_CHAT_ID), part)
-                    await sleep(1)  
+                    await sleep(1)
 
-            if isinstance(upload_result, str):  
+            else:
+                base_msg_content = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
+
+                messages_to_send = []
+                current_message_part = base_msg_content
+
+                if video_url:
+                    current_message_part += f"\n<b>Link: </b><a href='{video_url['url']}'>{escape(video_url['name'])}</a>"
+
+                current_message_part += f"\n\n<b>Total Videos: </b>{folders}"
+                if folders == 1:
+                    current_message_part += "\n<b>Source: </b>Folder"
+                current_message_part += f"\n<b>cc: </b>{self.tag}"
+
+                if individual_video_urls:
+                    links_header = "\n\n<b>Individual Video Links:</b>"
+                    if (
+                        len(current_message_part.encode("utf-8"))
+                        + len(links_header.encode("utf-8"))
+                        > 3900
+                        and video_url
+                    ) or (
+                        len(current_message_part.encode("utf-8"))
+                        + len(links_header.encode("utf-8"))
+                        > 3900
+                    ):
+                        messages_to_send.append(current_message_part)
+                        current_message_part = links_header
+                    else:
+                        current_message_part += links_header
+
+                    for video_entry in individual_video_urls:
+                        link_line = f"\n- <a href='{video_entry['url']}'>{escape(video_entry['name'])}</a>"
+                        if (
+                            len(current_message_part.encode("utf-8"))
+                            + len(link_line.encode("utf-8"))
+                            > 3900
+                        ):
+                            messages_to_send.append(current_message_part)
+                            current_message_part = (
+                                "<b>Video Links (continued):</b>" + link_line
+                            )
+                        else:
+                            current_message_part += link_line
+
+                if current_message_part:
+                    messages_to_send.append(current_message_part)
+
+                for part in messages_to_send:
+                    await send_message(self.user_id, part)
+                    if Config.LOG_CHAT_ID:
+                        await send_message(int(Config.LOG_CHAT_ID), part)
+                    await sleep(1)
+
+            if isinstance(upload_result, str):
                 error_message = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}\n\n<b>YT Upload Error: </b>{escape(upload_result)}\n\n<b>cc: </b>{self.tag}"
                 await send_message(self.user_id, error_message)
                 if Config.LOG_CHAT_ID:
@@ -644,7 +627,9 @@ class TaskListener(TaskConfig):
                         share_url = f"{INDEX_URL}/findpath?id={dir_id}"
                         buttons.url_button("Index Link", share_url)
                         if mime_type.startswith(("image", "video", "audio")):
-                            share_urls = f"{INDEX_URL}/findpath?id={dir_id}&view=true"
+                            share_urls = (
+                                f"{INDEX_URL}/findpath?id={dir_id}&view=true"
+                            )
                             buttons.url_button("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)
             else:

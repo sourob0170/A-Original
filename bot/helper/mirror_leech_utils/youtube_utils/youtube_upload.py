@@ -45,7 +45,7 @@ class YouTubeUpload(YouTubeHelper):
 
     def _upload_playlist(self, folder_path, playlist_name):
         """Uploads all videos in a folder and adds them to a new playlist."""
-        video_infos = []  
+        video_infos = []
         video_files_count = 0
         LOGGER.info(f"Starting playlist upload for folder: {folder_path}")
 
@@ -93,7 +93,7 @@ class YouTubeUpload(YouTubeHelper):
                     LOGGER.info("Playlist upload process cancelled.")
                     return None
 
-            if not video_infos:  
+            if not video_infos:
                 LOGGER.info("No videos found or uploaded in the folder.")
                 if video_files_count > 0:
                     raise ValueError(
@@ -108,7 +108,7 @@ class YouTubeUpload(YouTubeHelper):
                     "description": f"Playlist created from folder: {playlist_name}",
                     "tags": ["mirror-leech-bot", "playlist-upload"],
                 },
-                "status": {"privacyStatus": "private"},  
+                "status": {"privacyStatus": "private"},
             }
             playlist_insert_request = self.service.playlists().insert(
                 part="snippet,status", body=playlist_request_body
@@ -120,7 +120,7 @@ class YouTubeUpload(YouTubeHelper):
                 f"Playlist created: {playlist_name}, ID: {playlist_id}, URL: {playlist_url}"
             )
 
-            for video_info in video_infos:  
+            for video_info in video_infos:
                 if self.listener.is_cancelled:
                     LOGGER.info(
                         "Playlist upload cancelled before adding all videos to playlist."
@@ -147,7 +147,7 @@ class YouTubeUpload(YouTubeHelper):
                     f"Successfully added video ID {video_id_to_add} to playlist {playlist_id}"
                 )
 
-            self.total_files = len(video_infos) 
+            self.total_files = len(video_infos)
             individual_video_data = [
                 {
                     "url": f"https://www.youtube.com/watch?v={v_info['id']}",
@@ -157,15 +157,15 @@ class YouTubeUpload(YouTubeHelper):
             ]
             return {
                 "playlist_url": playlist_url,
-                "individual_video_urls": individual_video_data, 
+                "individual_video_urls": individual_video_data,
             }
 
         except HttpError as e:
             LOGGER.error(f"YouTube API error during playlist operation: {e}")
-            raise e  
+            raise e
         except Exception as e:
             LOGGER.error(f"Error during playlist creation or video addition: {e}")
-            raise e  
+            raise e
 
     def user_setting(self):
         """Handle user-specific YouTube token settings"""
@@ -192,11 +192,9 @@ class YouTubeUpload(YouTubeHelper):
         LOGGER.info(f"Uploading to YouTube: {self._path}")
         self._updater = SetInterval(self.update_interval, self.progress)
         upload_result_dict = {}
-        upload_type_str = "Unknown"  
+        upload_type_str = "Unknown"
         files_processed = 0
-        original_playlist_id = (
-            self.playlist_id
-        )  
+        original_playlist_id = self.playlist_id
 
         try:
             if os.path.isfile(self._path):
@@ -206,15 +204,13 @@ class YouTubeUpload(YouTubeHelper):
 
                 if self.upload_mode == "playlist":
                     upload_type_str = "Playlist"
-                    video_result = self._upload_video(  
+                    video_result = self._upload_video(
                         self._path,
                         self.listener.name,
                         mime_type,
                         playlist_id_override=original_playlist_id,
                     )
-                    if (
-                        not video_result and not self.listener.is_cancelled
-                    ):  
+                    if not video_result and not self.listener.is_cancelled:
                         raise ValueError(
                             "Failed to upload video or video result is null."
                         )
@@ -243,9 +239,7 @@ class YouTubeUpload(YouTubeHelper):
                         playlist_url = f"https://www.youtube.com/playlist?list={new_playlist_id}"
                         LOGGER.info(f"New playlist created: {playlist_url}")
 
-                        if video_result and video_result.get(
-                            "url"
-                        ):  
+                        if video_result and video_result.get("url"):
                             playlist_item_request_body = {
                                 "snippet": {
                                     "playlistId": new_playlist_id,
@@ -268,7 +262,7 @@ class YouTubeUpload(YouTubeHelper):
                         "playlist_url": playlist_url,
                         "individual_video_urls": [video_result]
                         if video_result
-                        else [],  
+                        else [],
                     }
                     if video_result:
                         files_processed = 1
@@ -276,15 +270,13 @@ class YouTubeUpload(YouTubeHelper):
 
                 elif self.upload_mode == "individual":
                     upload_type_str = "Video"
-                    video_result = self._upload_video(  
+                    video_result = self._upload_video(
                         self._path,
                         self.listener.name,
                         mime_type,
-                        playlist_id_override=None, 
+                        playlist_id_override=None,
                     )
-                    if (
-                        not video_result and not self.listener.is_cancelled
-                    ):  
+                    if not video_result and not self.listener.is_cancelled:
                         raise ValueError(
                             "Failed to upload video or video result is null."
                         )
@@ -294,9 +286,9 @@ class YouTubeUpload(YouTubeHelper):
                     upload_result_dict = {
                         "individual_video_urls": [video_result]
                         if video_result
-                        else []  
+                        else []
                     }
-                    if video_result:  
+                    if video_result:
                         upload_result_dict["video_url"] = video_result
                         files_processed = 1
                     LOGGER.info(f"Uploaded single file individually: {self._path}")
@@ -306,16 +298,12 @@ class YouTubeUpload(YouTubeHelper):
                     )
 
             elif os.path.isdir(self._path):
-                playlist_name_for_new = os.path.basename(
-                    self._path
-                )  
+                playlist_name_for_new = os.path.basename(self._path)
 
                 if self.upload_mode == "playlist":
                     upload_type_str = "Playlist"
-                    if original_playlist_id:  
-                        self.playlist_id = (
-                            original_playlist_id  
-                        )
+                    if original_playlist_id:
+                        self.playlist_id = original_playlist_id
                         individual_video_urls = []
                         processed_in_folder = 0
                         items = list(os.listdir(self._path))
@@ -335,13 +323,13 @@ class YouTubeUpload(YouTubeHelper):
                             if os.path.isfile(item_path):
                                 mime_type = get_mime_type(item_path)
                                 if mime_type and mime_type.startswith("video/"):
-                                    video_result = self._upload_video(  
+                                    video_result = self._upload_video(
                                         item_path,
                                         item_name,
                                         mime_type,
                                         playlist_id_override=original_playlist_id,
                                     )
-                                    if video_result:  
+                                    if video_result:
                                         individual_video_urls.append(video_result)
                                         processed_in_folder += 1
 
@@ -349,13 +337,13 @@ class YouTubeUpload(YouTubeHelper):
                             return
                         upload_result_dict = {
                             "playlist_url": f"https://www.youtube.com/playlist?list={original_playlist_id}",
-                            "individual_video_urls": individual_video_urls,  
+                            "individual_video_urls": individual_video_urls,
                         }
                         files_processed = processed_in_folder
                         LOGGER.info(
                             f"Uploaded videos from folder to existing playlist ID: {original_playlist_id}"
                         )
-                    else:  
+                    else:
                         upload_result_dict = self._upload_playlist(
                             self._path, playlist_name_for_new
                         )
@@ -366,12 +354,8 @@ class YouTubeUpload(YouTubeHelper):
                             and isinstance(upload_result_dict, dict)
                             and upload_result_dict.get("playlist_url")
                         ):
-                            files_processed = (
-                                self.total_files
-                            )  
-                        elif isinstance(
-                            upload_result_dict, str
-                        ): 
+                            files_processed = self.total_files
+                        elif isinstance(upload_result_dict, str):
                             raise ValueError(
                                 f"Playlist creation failed: {upload_result_dict}"
                             )
@@ -403,15 +387,13 @@ class YouTubeUpload(YouTubeHelper):
                             mime_type = get_mime_type(item_path)
                             if mime_type and mime_type.startswith("video/"):
                                 try:
-                                    video_result = (
-                                        self._upload_video(  
-                                            item_path,
-                                            item_name,
-                                            mime_type,
-                                            playlist_id_override=None,  
-                                        )
+                                    video_result = self._upload_video(
+                                        item_path,
+                                        item_name,
+                                        mime_type,
+                                        playlist_id_override=None,
                                     )
-                                    if video_result: 
+                                    if video_result:
                                         individual_video_urls.append(video_result)
                                         processed_in_folder += 1
                                 except Exception as e:
@@ -456,13 +438,11 @@ class YouTubeUpload(YouTubeHelper):
                     and files_processed == 0
                 )
             ):
-                if (
-                    files_processed == 0 and self.total_files > 0
-                ):  
+                if files_processed == 0 and self.total_files > 0:
                     raise ValueError(
                         f"{upload_type_str} upload: No videos were successfully processed out of {self.total_files}."
                     )
-                if files_processed == 0:  
+                if files_processed == 0:
                     raise ValueError(
                         f"{upload_type_str} upload: No video files found or processed."
                     )
@@ -482,9 +462,9 @@ class YouTubeUpload(YouTubeHelper):
                 upload_type="Error",
                 upload_result=err_msg,
             )
-            self._is_errored = True  
+            self._is_errored = True
         finally:
-            self.playlist_id = original_playlist_id  
+            self.playlist_id = original_playlist_id
             self._updater.cancel()
 
         if self.listener.is_cancelled and not self._is_errored:
@@ -517,11 +497,11 @@ class YouTubeUpload(YouTubeHelper):
 
         async_to_sync(
             self.listener.on_upload_complete,
-            None,  
-            None,  
+            None,
+            None,
             files_processed,
-            upload_type_str,  
-            upload_type=upload_type_str,  
+            upload_type_str,
+            upload_type=upload_type_str,
             upload_result=upload_result_dict,
         )
         LOGGER.info(
@@ -542,9 +522,7 @@ class YouTubeUpload(YouTubeHelper):
         If playlist_id_override is None, it will not be added to any playlist,
         regardless of self.playlist_id's original value.
         """
-        current_playlist_target = (
-            playlist_id_override  
-        )
+        current_playlist_target = playlist_id_override
 
         title = file_name
         privacy_status = self.privacy
@@ -583,7 +561,7 @@ class YouTubeUpload(YouTubeHelper):
 
         response = None
         retries = 0
-        self.upload_progress = 0  
+        self.upload_progress = 0
 
         while response is None and not self.listener.is_cancelled:
             try:
@@ -613,7 +591,7 @@ class YouTubeUpload(YouTubeHelper):
 
         if self.listener.is_cancelled:
             LOGGER.info(f"Upload of {file_name} cancelled by listener.")
-            return None  
+            return None
 
         if response:
             video_id = response["id"]
@@ -653,7 +631,7 @@ class YouTubeUpload(YouTubeHelper):
         LOGGER.warning(
             f"Upload of {file_name} finished but no response object. Cancelled: {self.listener.is_cancelled}"
         )
-        return None  
+        return None
 
     def get_upload_status(self):
         return {

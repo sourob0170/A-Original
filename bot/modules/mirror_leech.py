@@ -167,8 +167,8 @@ class Mirror(TaskListener):
         self.yt_description = None
 
         if self.up_dest and self.up_dest.startswith("yt:"):
-            self.raw_up_dest = "yt"  
-            parts = self.up_dest.split(":", 6)[1:]  
+            self.raw_up_dest = "yt"
+            parts = self.up_dest.split(":", 6)[1:]
 
             if len(parts) > 0 and parts[0]:
                 self.yt_privacy = parts[0]
@@ -180,7 +180,7 @@ class Mirror(TaskListener):
                     "playlist_and_individual",
                 ]:
                     self.yt_mode = mode_candidate
-                elif mode_candidate:  
+                elif mode_candidate:
                     LOGGER.warning(
                         f"Invalid YouTube upload mode in -up: {mode_candidate}. Ignoring mode override."
                     )
@@ -190,7 +190,7 @@ class Mirror(TaskListener):
                 self.yt_category = parts[3]
             if len(parts) > 4 and parts[4]:
                 self.yt_description = parts[4]
-            if len(parts) > 5 and parts[5]: 
+            if len(parts) > 5 and parts[5]:
                 self.yt_playlist_id = parts[5]
 
         headers = args["-h"]
@@ -414,7 +414,7 @@ class Mirror(TaskListener):
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
-            content_type = await get_content_type(self.link) 
+            content_type = await get_content_type(self.link)
             if content_type and "x-bittorrent" in content_type:
                 self.is_qbit = True
 

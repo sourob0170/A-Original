@@ -119,7 +119,7 @@ async def get_telegraph_list(telegraph_content):
     path = [
         (
             await telegraph.create_page(
-                title="Aeon-MLTB Drive Search", 
+                title="Aeon-MLTB Drive Search",
                 content=content,
             )
         )["path"]

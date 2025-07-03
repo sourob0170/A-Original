@@ -351,17 +351,15 @@ class YtDlp(TaskListener):
         self.yt_description = None
 
         if self.up_dest and self.up_dest.startswith("yt:"):
-            self.raw_up_dest = "yt"  
-            parts = self.up_dest.split(":", 6)[
-                1:
-            ]  
+            self.raw_up_dest = "yt"
+            parts = self.up_dest.split(":", 6)[1:]
 
             if len(parts) > 0 and parts[0]:
                 self.yt_privacy = parts[0]
             if len(parts) > 1 and parts[1]:
                 if parts[1] in ["playlist", "individual", "playlist_and_individual"]:
                     self.yt_mode = parts[1]
-                elif parts[1]: 
+                elif parts[1]:
                     LOGGER.warning(
                         f"Invalid YouTube mode override '{parts[1]}' in -up. Ignoring mode override."
                     )
@@ -371,7 +369,7 @@ class YtDlp(TaskListener):
                 self.yt_category = parts[3]
             if len(parts) > 4 and parts[4]:
                 self.yt_description = parts[4]
-            if len(parts) > 5 and parts[5]:  
+            if len(parts) > 5 and parts[5]:
                 self.yt_playlist_id = parts[5]
 
         try:

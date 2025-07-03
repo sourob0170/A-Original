@@ -2,12 +2,11 @@ from httpx import AsyncClient, AsyncHTTPTransport, Timeout
 from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
 
-from .job_functions import JobFunctions
 from .exception import APIConnectionError
+from .job_functions import JobFunctions
 
 
 class SabnzbdClient(JobFunctions):
-
     LOGGED_IN = False
 
     def __init__(
@@ -17,7 +16,7 @@ class SabnzbdClient(JobFunctions):
         port: str = "8070",
         VERIFY_CERTIFICATE: bool = False,
         RETRIES: int = 10,
-        HTTPX_REQUETS_ARGS: dict = None,
+        HTTPX_REQUETS_ARGS: dict | None = None,
     ):
         if HTTPX_REQUETS_ARGS is None:
             HTTPX_REQUETS_ARGS = {}
@@ -52,8 +51,8 @@ class SabnzbdClient(JobFunctions):
 
     async def call(
         self,
-        params: dict = None,
-        requests_args: dict = None,
+        params: dict | None = None,
+        requests_args: dict | None = None,
         **kwargs,
     ):
         if requests_args is None:

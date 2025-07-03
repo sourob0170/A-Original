@@ -88,7 +88,7 @@ class YouTubeHelper:
             return parse_qs(parsed.query)["v"][0]
         if "youtu.be/" in url:
             return url.split("youtu.be/")[1].split("?")[0]
-        return url  
+        return url
 
     @retry(
         wait=wait_exponential(multiplier=2, min=3, max=6),
