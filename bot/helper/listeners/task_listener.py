@@ -418,7 +418,6 @@ class TaskListener(TaskConfig):
         files,
         folders,
         mime_type,
-        upload_type="playlist",
         upload_result="",
         rclone_path="",
         dir_id="",

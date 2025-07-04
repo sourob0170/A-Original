@@ -293,7 +293,7 @@ def buzzheavier(url):
                     details["contents"].append(item)
                     size = speed_string_to_bytes(size)
                     details["total_size"] += size
-                except:
+                except Exception:
                     continue
             details["title"] = tree.xpath("//span/text()")[0].strip()
             return details
@@ -630,7 +630,7 @@ def pixeldrain(url):
         response = get("https://pd.cybar.xyz/", allow_redirects=True)
         return response.url + code
     except Exception:
-        raise DirectDownloadLinkException("ERROR: Direct link not found")
+        raise DirectDownloadLinkException("ERROR: Direct link not found") from None
 
 
 def streamtape(url):
@@ -999,8 +999,8 @@ def linkBox(url: str):
     parsed_url = urlparse(url)
     try:
         shareToken = parsed_url.path.split("/")[-1]
-    except:
-        raise DirectDownloadLinkException("ERROR: invalid URL")
+    except Exception:
+        raise DirectDownloadLinkException("ERROR: invalid URL") from None
 
     details = {"contents": [], "title": "", "total_size": 0}
 
@@ -1063,7 +1063,7 @@ def linkBox(url: str):
         try:
             if data["shareType"] == "singleItem":
                 return __singleItem(session, data["itemId"])
-        except:
+        except Exception:
             pass
         if not details["title"]:
             details["title"] = data["dirName"]
@@ -1118,7 +1118,7 @@ def gofile(url):
             _password = ""
         _id = url.split("/")[-1]
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None 
 
     def __get_token(session):
         headers = {
@@ -1150,7 +1150,7 @@ def gofile(url):
         try:
             _json = session.get(_url, headers=headers).json()
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
         if _json["status"] in "error-passwordRequired":
             raise DirectDownloadLinkException(
                 f"ERROR:\n{PASSWORD_ERROR_MESSAGE.format(url)}"
@@ -1199,12 +1199,12 @@ def gofile(url):
         try:
             token = __get_token(session)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
         details["header"] = [f"Cookie: accountToken={token}"]
         try:
             __fetch_links(session, _id)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e}")
+            raise DirectDownloadLinkException(f"ERROR: {e}") from None
 
     if len(details["contents"]) == 1:
         return (details["contents"][0]["url"], details["header"])
@@ -1221,8 +1221,8 @@ def mediafireFolder(url):
         raw = url.split("/", 4)[-1]
         folderkey = raw.split("/", 1)[0]
         folderkey = folderkey.split(",")
-    except:
-        raise DirectDownloadLinkException("ERROR: Could not parse ")
+    except Exception:
+        raise DirectDownloadLinkException("ERROR: Could not parse ") from None
     if len(folderkey) == 1:
         folderkey = folderkey[0]
     details = {"contents": [], "title": "", "total_size": 0, "header": ""}
@@ -1255,7 +1255,7 @@ def mediafireFolder(url):
         except Exception as e:
             raise DirectDownloadLinkException(
                 f"ERROR: {e.__class__.__name__} While getting info"
-            )
+            ) from None
         _res = _json["response"]
         if "folder_infos" in _res:
             folder_infos.extend(_res["folder_infos"])
@@ -1283,12 +1283,12 @@ def mediafireFolder(url):
                 html = HTML(session.get(url).text)
                 if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
                     return __scraper(f"https://mediafire.com/{new_link[0]}")
-            except:
+            except Exception:
                 return None
 
         try:
             html = HTML(session.get(url).text)
-        except:
+        except Exception:
             return None
         if html.xpath("//div[@class='passwordPrompt']"):
             if not _password:
@@ -1297,7 +1297,7 @@ def mediafireFolder(url):
                 )
             try:
                 html = HTML(session.post(url, data={"downloadp": _password}).text)
-            except:
+            except Exception:
                 return None
             if html.xpath("//div[@class='passwordPrompt']"):
                 return None
@@ -1466,7 +1466,7 @@ def send_cm(url):
             )
             if "Location" in _res.headers:
                 return _res.headers["Location"]
-        except:
+        except Exception:
             pass
 
     def __getFiles(html):
@@ -1998,7 +1998,7 @@ def instagram(link: str) -> str:
         ):
             return data["data"]["videoUrl"]
 
-        raise DirectDownloadLinkException("ERROR: Failed to retrieve video URL.")
+        raise DirectDownloadLinkException("ERROR: Failed to retrieve video URL.") from None
 
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e}")

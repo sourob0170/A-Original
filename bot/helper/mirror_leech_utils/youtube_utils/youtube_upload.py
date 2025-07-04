@@ -459,7 +459,6 @@ class YouTubeUpload(YouTubeHelper):
                 None,
                 0,
                 "Error",
-                upload_type="Error",
                 upload_result=err_msg,
             )
             self._is_errored = True
@@ -490,7 +489,6 @@ class YouTubeUpload(YouTubeHelper):
                 None,
                 0,
                 "Error",
-                upload_type="Error",
                 upload_result=final_err_msg,
             )
             return
@@ -501,7 +499,6 @@ class YouTubeUpload(YouTubeHelper):
             None,
             files_processed,
             upload_type_str,
-            upload_type=upload_type_str,
             upload_result=upload_result_dict,
         )
         LOGGER.info(

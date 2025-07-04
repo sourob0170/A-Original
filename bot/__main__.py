@@ -1,4 +1,4 @@
-# ruff: noqa: E402
+# ruff: noqa: E402, PLC0415
 from asyncio import gather
 
 from pyrogram.types import BotCommand
