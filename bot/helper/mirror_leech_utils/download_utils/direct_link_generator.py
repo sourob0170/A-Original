@@ -1118,7 +1118,7 @@ def gofile(url):
             _password = ""
         _id = url.split("/")[-1]
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None 
+        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
 
     def __get_token(session):
         headers = {
@@ -1150,7 +1150,9 @@ def gofile(url):
         try:
             _json = session.get(_url, headers=headers).json()
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            ) from None
         if _json["status"] in "error-passwordRequired":
             raise DirectDownloadLinkException(
                 f"ERROR:\n{PASSWORD_ERROR_MESSAGE.format(url)}"
@@ -1199,7 +1201,9 @@ def gofile(url):
         try:
             token = __get_token(session)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            ) from None
         details["header"] = [f"Cookie: accountToken={token}"]
         try:
             __fetch_links(session, _id)
@@ -1998,7 +2002,9 @@ def instagram(link: str) -> str:
         ):
             return data["data"]["videoUrl"]
 
-        raise DirectDownloadLinkException("ERROR: Failed to retrieve video URL.") from None
+        raise DirectDownloadLinkException(
+            "ERROR: Failed to retrieve video URL."
+        ) from None
 
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e}")
