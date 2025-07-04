@@ -1564,7 +1564,9 @@ def easyupload(url):
         try:
             _res = session.get(url)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            ) from None
         first_page_html = HTML(_res.text)
         if (
             first_page_html.xpath("//h6[contains(text(),'Password Protected')]")
@@ -1934,7 +1936,9 @@ def swisstransfer(link):
         files = data["data"]["container"]["files"]
         folder_name = data["data"]["container"]["message"] or "unknown"
     except (KeyError, IndexError, TypeError) as e:
-        raise DirectDownloadLinkException(f"ERROR: Error parsing file details {e}") from None
+        raise DirectDownloadLinkException(
+            f"ERROR: Error parsing file details {e}"
+        ) from None
 
     total_size = sum(file["fileSizeInBytes"] for file in files)
 
