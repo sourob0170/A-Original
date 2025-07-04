@@ -1273,7 +1273,7 @@ def mediafireFolder(url):
     try:
         __get_info(folderkey)
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e}")
+        raise DirectDownloadLinkException(f"ERROR: {e}") from None
 
     details["title"] = folder_infos[0]["name"]
 
@@ -1327,7 +1327,7 @@ def mediafireFolder(url):
         except Exception as e:
             raise DirectDownloadLinkException(
                 f"ERROR: {e.__class__.__name__} While getting content"
-            )
+            ) from None
         _res = _json["response"]
         if "message" in _res:
             raise DirectDownloadLinkException(f"ERROR: {_res['message']}")
@@ -1363,7 +1363,7 @@ def mediafireFolder(url):
         for folder in folder_infos:
             __get_content(folder["folderkey"], folder["name"])
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e}")
+        raise DirectDownloadLinkException(f"ERROR: {e}") from None
     finally:
         session.close()
     if len(details["contents"]) == 1:
@@ -1383,8 +1383,7 @@ def cf_bypass(url):
         if _json["status"] == "ok":
             return _json["solution"]["response"]
     except Exception as e:
-        e
-    raise DirectDownloadLinkException("ERROR: Can't bypass cloudflare")
+        raise DirectDownloadLinkException("ERROR: Can't bypass cloudflare") from e
 
 
 def send_cm_file(url, file_id=None):
@@ -1505,21 +1504,17 @@ def send_cm(url):
 
     try:
         mainHtml = HTML(cf_bypass(url))
-    except DirectDownloadLinkException as e:
-        raise e
     except Exception as e:
         raise DirectDownloadLinkException(
             f"ERROR: {e.__class__.__name__} While getting mainHtml"
-        )
+        ) from None
 
     try:
         __writeContents(mainHtml, details["title"])
-    except DirectDownloadLinkException as e:
-        raise e
     except Exception as e:
         raise DirectDownloadLinkException(
             f"ERROR: {e.__class__.__name__} While writing Contents"
-        )
+        ) from None
     finally:
         session.close()
     if len(details["contents"]) == 1:
@@ -1569,7 +1564,7 @@ def easyupload(url):
         try:
             _res = session.get(url)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from None
         first_page_html = HTML(_res.text)
         if (
             first_page_html.xpath("//h6[contains(text(),'Password Protected')]")
@@ -1854,7 +1849,7 @@ def mp4upload(url):
             direct_link = session.post(url, data=data).url
             return direct_link, header
         except Exception:
-            raise DirectDownloadLinkException("ERROR: File Not Found!")
+            raise DirectDownloadLinkException("ERROR: File Not Found!") from None
 
 
 def berkasdrive(url):
@@ -1904,7 +1899,7 @@ def swisstransfer(link):
             except ValueError:
                 raise DirectDownloadLinkException(
                     f"ERROR: Error parsing JSON response {response.text}"
-                )
+                ) from None
         raise DirectDownloadLinkException(
             f"ERROR: Error fetching file details {response.status_code}, {response.text}"
         )
@@ -1939,7 +1934,7 @@ def swisstransfer(link):
         files = data["data"]["container"]["files"]
         folder_name = data["data"]["container"]["message"] or "unknown"
     except (KeyError, IndexError, TypeError) as e:
-        raise DirectDownloadLinkException(f"ERROR: Error parsing file details {e}")
+        raise DirectDownloadLinkException(f"ERROR: Error parsing file details {e}") from None
 
     total_size = sum(file["fileSizeInBytes"] for file in files)
 
@@ -2007,4 +2002,4 @@ def instagram(link: str) -> str:
         ) from None
 
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e}")
+        raise DirectDownloadLinkException(f"ERROR: {e}") from None
