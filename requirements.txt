@@ -22,6 +22,7 @@ lxml
 natsort
 pillow
 psutil
+pymongo
 pyshorteners
 python-magic
 pytz
