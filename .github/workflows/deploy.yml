@@ -9,22 +9,7 @@ on:
         required: false
         default: false
         type: boolean
-      AUTO_REDEPLOY:
-        description: "Enable automatic redeployment on schedule"
-        required: false
-        default: false
-        type: boolean
-      REDEPLOY_INTERVAL_DAYS:
-        description: "Auto redeploy interval in days (ignored if 'Auto redeploy' is disabled or 'Use config.py' is enabled)"
-        required: false
-        default: "7"
-        type: choice
-        options:
-          - "1"
-          - "3"
-          - "7"
-          - "14"
-          - "30"
+
       HEROKU_APP_NAME:
         description: "Heroku App name (ignored if 'Use config.py' is enabled)"
         required: false
@@ -52,22 +37,7 @@ on:
       TELEGRAM_HASH:
         description: "Telegram HASH from https://my.telegram.org/ (ignored if 'Use config.py' is enabled)"
         required: false
-      UPSTREAM_REPO:
-        description: "Upstream repository URL for updates (ignored if 'Use config.py' is enabled)"
-        required: false
-        default: "https://github.com/AeonOrg/Aeon-MLTB"
-      UPSTREAM_BRANCH:
-        description: "Upstream repository branch for updates (ignored if 'Use config.py' is enabled)"
-        required: false
-        default: "extended"
-      HEROKU_REGION:
-        description: "Heroku deployment region (ignored if 'Use config.py' is enabled)"
-        required: false
-        default: "eu"
-        type: choice
-        options:
-          - "eu"
-          - "us"
+
 
   # Automatic deployment when requirements.txt or Dockerfile is updated
   push:
@@ -103,10 +73,6 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "🔧 Manual deployment triggered"
             echo "Use config.py: ${{ inputs.USE_CONFIG_PY }}"
-            echo "Auto redeploy: ${{ inputs.AUTO_REDEPLOY }}"
-            if [ "${{ inputs.AUTO_REDEPLOY }}" == "true" ]; then
-              echo "Redeploy interval: ${{ inputs.REDEPLOY_INTERVAL_DAYS }} days"
-            fi
             if [ "${{ inputs.USE_CONFIG_PY }}" == "true" ]; then
               echo "Priority: config.py > inputs > secrets"
             else
@@ -291,7 +257,7 @@ jobs:
           usedocker: true
           docker_heroku_process_type: web
           stack: "container"
-          region: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_HEROKU_REGION || inputs.HEROKU_REGION || secrets.HEROKU_REGION || 'eu') || (env.CONFIG_HEROKU_REGION || secrets.HEROKU_REGION || 'eu') }}
+          region: ${{ env.CONFIG_HEROKU_REGION || secrets.HEROKU_REGION || 'eu' }}
         env:
           # Manual deployment: config.py > inputs > secrets
           # Automatic/Scheduled deployment: config.py > secrets
@@ -302,5 +268,5 @@ jobs:
           HD_BOT_TOKEN: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_BOT_TOKEN || inputs.BOT_TOKEN || secrets.BOT_TOKEN) || (env.CONFIG_BOT_TOKEN || secrets.BOT_TOKEN) }}
           HD_HEROKU_APP_NAME: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_HEROKU_APP_NAME || inputs.HEROKU_APP_NAME || secrets.HEROKU_APP_NAME) || (env.CONFIG_HEROKU_APP_NAME || secrets.HEROKU_APP_NAME) }}
           HD_HEROKU_API_KEY: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_HEROKU_API_KEY || inputs.HEROKU_API_KEY || secrets.HEROKU_API_KEY) || (env.CONFIG_HEROKU_API_KEY || secrets.HEROKU_API_KEY) }}
-          HD_UPSTREAM_REPO: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_UPSTREAM_REPO || inputs.UPSTREAM_REPO || secrets.UPSTREAM_REPO || 'https://github.com/AeonOrg/Aeon-MLTB') || (env.CONFIG_UPSTREAM_REPO || secrets.UPSTREAM_REPO || 'https://github.com/AeonOrg/Aeon-MLTB') }}
-          HD_UPSTREAM_BRANCH: ${{ github.event_name == 'workflow_dispatch' && (env.CONFIG_UPSTREAM_BRANCH || inputs.UPSTREAM_BRANCH || secrets.UPSTREAM_BRANCH || 'extended') || (env.CONFIG_UPSTREAM_BRANCH || secrets.UPSTREAM_BRANCH || 'extended') }}
+          HD_UPSTREAM_REPO: ${{ env.CONFIG_UPSTREAM_REPO || secrets.UPSTREAM_REPO || 'https://github.com/AeonOrg/Aeon-MLTB' }}
+          HD_UPSTREAM_BRANCH: ${{ env.CONFIG_UPSTREAM_BRANCH || secrets.UPSTREAM_BRANCH || 'extended' }}
