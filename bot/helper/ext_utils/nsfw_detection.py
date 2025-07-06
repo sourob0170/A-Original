@@ -344,19 +344,23 @@ class EnhancedKeywordDetector:
                     continue
 
                 # Fuzzy matching if enabled (only for explicit content to reduce false positives)
-                if Config.NSFW_FUZZY_MATCHING and category in [
-                    "explicit",
-                    "adult_sites",
-                ]:
-                    if self.fuzzy_match(text, keyword, 0.90):  # Increased threshold
-                        matches.append(f"{keyword}~")
-                        confidence_scores.append(
-                            weight * 0.8
-                        )  # Reduced confidence for fuzzy
-                        category_matches[category] = (
-                            category_matches.get(category, 0) + 1
-                        )
-                        continue
+                if (
+                    Config.NSFW_FUZZY_MATCHING
+                    and category
+                    in [
+                        "explicit",
+                        "adult_sites",
+                    ]
+                    and self.fuzzy_match(text, keyword, 0.90)
+                ):  # Increased threshold
+                    matches.append(f"{keyword}~")
+                    confidence_scores.append(
+                        weight * 0.8
+                    )  # Reduced confidence for fuzzy
+                    category_matches[category] = (
+                        category_matches.get(category, 0) + 1
+                    )
+                    continue
 
                 # Leetspeak detection if enabled (only for explicit content)
                 if Config.NSFW_LEETSPEAK_DETECTION and category in [
@@ -1408,16 +1412,19 @@ class EnhancedNSFWDetector:
                         key = key.strip().lower()
 
                         # Extract text from relevant metadata fields
-                        if key in [
-                            "title",
-                            "artist",
-                            "album",
-                            "comment",
-                            "description",
-                            "lyrics",
-                        ]:
-                            if value.strip():
-                                metadata_text.append(value.strip())
+                        if (
+                            key
+                            in [
+                                "title",
+                                "artist",
+                                "album",
+                                "comment",
+                                "description",
+                                "lyrics",
+                            ]
+                            and value.strip()
+                        ):
+                            metadata_text.append(value.strip())
 
                 return " ".join(metadata_text)
 
