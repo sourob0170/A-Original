@@ -130,7 +130,7 @@ async def quickinfo_command(client, message: Message):
 
             # Add forum topic information if applicable
             topic_info = ""
-            if message.is_topic_message and message.message_thread_id:
+            if message.topic_message and message.message_thread_id:
                 topic_info = f"\n🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
                 if hasattr(message, "topic") and message.topic:
                     topic_info += (
@@ -202,7 +202,7 @@ async def handle_forwarded_message(client, message: Message):
                 )
 
             # Check if it's from a forum topic
-            if message.is_topic_message and message.message_thread_id:
+            if message.topic_message and message.message_thread_id:
                 forward_details.append(
                     f"🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
                 )

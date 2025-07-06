@@ -57,7 +57,7 @@ async def authorize(_, message):
                 else reply_to.sender_chat.id
             )
         else:
-            if message.is_topic_message:
+            if message.topic_message:
                 thread_id = message.message_thread_id
             chat_id = message.chat.id
 
@@ -124,7 +124,7 @@ async def unauthorize(_, message):
                 else reply_to.sender_chat.id
             )
         else:
-            if message.is_topic_message:
+            if message.topic_message:
                 thread_id = message.message_thread_id
             chat_id = message.chat.id
 
