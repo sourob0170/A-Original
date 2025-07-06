@@ -383,19 +383,15 @@ async def reset_mega_configs(database):
         "MEGA_EMAIL": "",
         "MEGA_PASSWORD": "",
         "MEGA_UPLOAD_ENABLED": True,
-        "MEGA_UPLOAD_FOLDER": "",
+        # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
         "MEGA_UPLOAD_PUBLIC": True,
-        "MEGA_UPLOAD_PRIVATE": False,
-        "MEGA_UPLOAD_UNLISTED": False,
-        "MEGA_UPLOAD_EXPIRY_DAYS": 0,
-        "MEGA_UPLOAD_PASSWORD": "",
-        "MEGA_UPLOAD_ENCRYPTION_KEY": "",
+        # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+        # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+        # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+        # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+        # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
         "MEGA_UPLOAD_THUMBNAIL": True,
-        "MEGA_UPLOAD_DELETE_AFTER": False,
-        "MEGA_CLONE_ENABLED": True,
-        "MEGA_CLONE_TO_FOLDER": "",
-        "MEGA_CLONE_PRESERVE_STRUCTURE": True,
-        "MEGA_CLONE_OVERWRITE": False,
+        # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
     }
 
     # Reset owner configurations
@@ -717,6 +713,7 @@ async def reset_tool_configs(tool_name, database):
         "extract": ["EXTRACT_"],
         "remove": ["REMOVE_"],
         "add": ["ADD_"],
+        "swap": ["SWAP_"],
         "metadata": ["METADATA_"],
         "xtra": ["FFMPEG_CMDS"],  # Reset FFMPEG_CMDS for users
         "sample": [],  # No specific configs for sample
@@ -1061,6 +1058,25 @@ async def reset_tool_configs(tool_name, database):
         # "ADD_ATTACHMENT_PATH": "none", # Removed
         "ADD_ATTACHMENT_INDEX": None,
         "ADD_ATTACHMENT_MIMETYPE": "none",
+        # Swap Settings
+        "SWAP_ENABLED": False,
+        "SWAP_PRIORITY": 6,
+        "SWAP_REMOVE_ORIGINAL": False,
+        # Audio Swap Settings
+        "SWAP_AUDIO_ENABLED": False,
+        "SWAP_AUDIO_USE_LANGUAGE": True,
+        "SWAP_AUDIO_LANGUAGE_ORDER": "eng,hin",
+        "SWAP_AUDIO_INDEX_ORDER": "0,1",
+        # Video Swap Settings
+        "SWAP_VIDEO_ENABLED": False,
+        "SWAP_VIDEO_USE_LANGUAGE": True,
+        "SWAP_VIDEO_LANGUAGE_ORDER": "eng,hin",
+        "SWAP_VIDEO_INDEX_ORDER": "0,1",
+        # Subtitle Swap Settings
+        "SWAP_SUBTITLE_ENABLED": False,
+        "SWAP_SUBTITLE_USE_LANGUAGE": True,
+        "SWAP_SUBTITLE_LANGUAGE_ORDER": "eng,hin",
+        "SWAP_SUBTITLE_INDEX_ORDER": "0,1",
     }
 
     # Get prefixes for the specified tool
@@ -1306,14 +1322,12 @@ async def reset_ddl_configs(database):
     ddl_configs = {
         "DDL_ENABLED": False,
         "DDL_DEFAULT_SERVER": "gofile",
-        "GOFILE_ENABLED": True,
         "GOFILE_API_KEY": "",
         "GOFILE_FOLDER_NAME": "",
         "GOFILE_PUBLIC_LINKS": True,
         "GOFILE_PASSWORD_PROTECTION": False,
         "GOFILE_DEFAULT_PASSWORD": "",
         "GOFILE_LINK_EXPIRY_DAYS": 0,
-        "STREAMTAPE_ENABLED": True,
         "STREAMTAPE_LOGIN": "",
         "STREAMTAPE_API_KEY": "",
         "STREAMTAPE_FOLDER_NAME": "",

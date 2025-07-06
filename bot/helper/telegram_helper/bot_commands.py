@@ -15,7 +15,7 @@ class BotCommands:
     NzbLeechCommand = [f"nzbleech{i}", f"nl{i}"]
     YtdlLeechCommand = [f"ytdlleech{i}", f"yl{i}"]
     CloneCommand = f"clone{i}"
-    MegaCloneCommand = [f"megaclone{i}", f"mc{i}"]
+
     MediaInfoCommand = [f"mediainfo{i}", f"mi{i}"]
     CountCommand = f"count{i}"
     DeleteCommand = f"del{i}"
@@ -48,6 +48,7 @@ class BotCommands:
     FontStylesCommand = [f"fontstyles{i}", f"fonts{i}"]
     CheckDeletionsCommand = [f"check_deletions{i}", f"cd{i}"]
     IMDBCommand = f"imdb{i}"
+    WhisperCommand = f"whisper{i}"
     LoginCommand = f"login{i}"
     MediaSearchCommand = [f"mediasearch{i}", f"mds{i}"]
     MediaToolsCommand = [f"mediatools{i}", f"mt{i}"]
@@ -70,3 +71,13 @@ class BotCommands:
     DecodeCommand = [f"decode{i}", f"dec{i}"]
     # QuickInfo Commands
     QuickInfoCommand = [f"quickinfo{i}", f"qi{i}"]
+    # File-to-Link Commands
+    File2LinkCommand = [f"file2link{i}", f"f2l{i}"]
+    # Tool Commands
+    ToolCommand = [f"tool{i}", f"t{i}"]
+    StreamStatsCommand = [f"streamstats{i}", f"sstats{i}"]
+    # Index Command
+    IndexCommand = f"index{i}"
+    # Enhanced NSFW Detection Commands
+    NSFWStatsCommand = f"nsfwstats{i}"
+    NSFWTestCommand = f"nsfwtest{i}"

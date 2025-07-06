@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Tools - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --accent: #f093fb;
+            --dark: #2c3e50;
+            --darker: #1a252f;
+            --light: #ecf0f1;
+            --text: #ffffff;
+            --text-muted: #bdc3c7;
+            --border: rgba(255, 255, 255, 0.1);
+            --shadow: rgba(0, 0, 0, 0.4);
+            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success: #2ecc71;
+            --error: #e74c3c;
+            --warning: #f39c12;
+            --info: #3498db;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .admin-header {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .admin-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .debug-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .debug-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .debug-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .info-list {
+            list-style: none;
+        }
+
+        .info-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-list li:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .info-value {
+            color: var(--text);
+            font-weight: 500;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-word;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-online {
+            background: var(--success);
+        }
+
+        .status-offline {
+            background: var(--error);
+        }
+
+        .status-warning {
+            background: var(--warning);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--gradient-1);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.25rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, var(--error), #c0392b);
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, var(--warning), #e67e22);
+        }
+
+        .btn-info {
+            background: linear-gradient(45deg, var(--info), #2980b9);
+        }
+
+        .debug-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .alert-info {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            color: var(--info);
+        }
+
+        .alert-warning {
+            background: rgba(243, 156, 18, 0.1);
+            border: 1px solid rgba(243, 156, 18, 0.3);
+            color: var(--warning);
+        }
+
+        @media (max-width: 768px) {
+            .debug-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .debug-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <div>
+            <h1 class="admin-title">🐛 Debug Tools</h1>
+            <div class="breadcrumb">
+                <a href="/admin">Dashboard</a> / <span>Debug Tools</span>
+            </div>
+        </div>
+        <div>
+            <a href="/admin" class="btn">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="alert alert-warning">
+            <strong>⚠️ Warning:</strong> These tools are for advanced users and developers. Use with caution as some actions may affect system performance or stability.
+        </div>
+
+        <div class="debug-grid">
+            <!-- System Information -->
+            <div class="debug-card">
+                <div class="card-header">
+                    <span class="card-icon">💻</span>
+                    <h3 class="card-title">System Information</h3>
+                </div>
+                <ul class="info-list">
+                    <li>
+                        <span class="info-label">Python Version</span>
+                        <span class="info-value">{{system_info.python_version.split()[0]}}</span>
+                    </li>
+                    <li>
+                        <span class="info-label">Platform</span>
+                        <span class="info-value">{{system_info.platform}}</span>
+                    </li>
+                    <li>
+                        <span class="info-label">Architecture</span>
+                        <span class="info-value">{{system_info.architecture[0]}}</span>
+                    </li>
+                    <li>
+                        <span class="info-label">Processor</span>
+                        <span class="info-value">{{system_info.processor or 'Unknown'}}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Bot Configuration -->
+            <div class="debug-card">
+                <div class="card-header">
+                    <span class="card-icon">🤖</span>
+                    <h3 class="card-title">Bot Status</h3>
+                </div>
+                <ul class="info-list">
+                    <li>
+                        <span class="info-label">Database</span>
+                        <span class="info-value">
+                            <span class="status-indicator {{'status-online' if bot_config.database_connected else 'status-offline'}}"></span>
+                            {{'Connected' if bot_config.database_connected else 'Disconnected'}}
+                        </span>
+                    </li>
+                    <li>
+                        <span class="info-label">File-to-Link</span>
+                        <span class="info-value">
+                            <span class="status-indicator {{'status-online' if bot_config.file_to_link_enabled else 'status-offline'}}"></span>
+                            {{'Enabled' if bot_config.file_to_link_enabled else 'Disabled'}}
+                        </span>
+                    </li>
+                    <li>
+                        <span class="info-label">Bot Token</span>
+                        <span class="info-value">
+                            <span class="status-indicator {{'status-online' if bot_config.bot_token_set else 'status-offline'}}"></span>
+                            {{'Configured' if bot_config.bot_token_set else 'Missing'}}
+                        </span>
+                    </li>
+                    <li>
+                        <span class="info-label">Owner ID</span>
+                        <span class="info-value">
+                            <span class="status-indicator {{'status-online' if bot_config.owner_id_set else 'status-offline'}}"></span>
+                            {{'Set' if bot_config.owner_id_set else 'Not Set'}}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Debug Actions -->
+            <div class="debug-card">
+                <div class="card-header">
+                    <span class="card-icon">🔧</span>
+                    <h3 class="card-title">Debug Actions</h3>
+                </div>
+                <div class="debug-actions">
+                    <a href="/admin/logs" class="btn btn-info">📋 View Logs</a>
+                    <a href="/debug/f2l" class="btn btn-info" target="_blank">🔗 F2L Debug</a>
+                    <button onclick="clearCache()" class="btn btn-warning">🗑️ Clear Cache</button>
+                    <button onclick="testDatabase()" class="btn btn-info">🗄️ Test Database</button>
+                    <button onclick="restartServices()" class="btn btn-danger">🔄 Restart Services</button>
+                </div>
+            </div>
+
+            <!-- Quick Tests -->
+            <div class="debug-card">
+                <div class="card-header">
+                    <span class="card-icon">⚡</span>
+                    <h3 class="card-title">Quick Tests</h3>
+                </div>
+                <div class="debug-actions">
+                    <button onclick="runTest('database')" class="btn">Test Database</button>
+                    <button onclick="runTest('telegram')" class="btn">Test Telegram</button>
+                    <button onclick="runTest('storage')" class="btn">Test Storage</button>
+                    <button onclick="runTest('streaming')" class="btn">Test Streaming</button>
+                </div>
+                <div id="test-results" class="code-block" style="display: none; margin-top: 1rem;">
+                    Test results will appear here...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function clearCache() {
+            if (confirm('Clear application cache? This may temporarily slow down the system.')) {
+                try {
+                    const response = await fetch('/admin/debug/clear-cache', { method: 'POST' });
+                    const result = await response.json();
+                    alert(result.success ? 'Cache cleared successfully!' : 'Failed to clear cache: ' + result.error);
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+        }
+
+        async function testDatabase() {
+            try {
+                const response = await fetch('/admin/debug/test-database');
+                const result = await response.json();
+                alert(result.success ? 'Database connection successful!' : 'Database test failed: ' + result.error);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function restartServices() {
+            if (confirm('Restart background services? This may cause temporary interruptions.')) {
+                try {
+                    const response = await fetch('/admin/debug/restart-services', { method: 'POST' });
+                    const result = await response.json();
+                    alert(result.success ? 'Services restarted successfully!' : 'Failed to restart services: ' + result.error);
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+        }
+
+        async function runTest(testType) {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.textContent = `Running ${testType} test...`;
+
+            try {
+                const response = await fetch(`/admin/debug/test/${testType}`);
+                const result = await response.json();
+                resultsDiv.textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

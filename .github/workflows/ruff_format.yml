@@ -2,7 +2,7 @@ name: format code with ruff
 
 on:
   push:
-    branches: [main]
+    branches: [extended]
 
 jobs:
   code-format:

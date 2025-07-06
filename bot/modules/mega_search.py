@@ -5,14 +5,19 @@ Search through MEGA drive and provide download links
 """
 
 import asyncio
-from asyncio import create_task
 
+from bot import LOGGER
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import (
     get_telegraph_list,
     sync_to_async,
 )
+from bot.helper.ext_utils.mega_utils import (
+    MegaApi,
+    MegaRequest,
+)
 from bot.helper.ext_utils.status_utils import get_readable_file_size
+from bot.helper.listeners.mega_listener import AsyncMega, MegaAppListener
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     delete_links,
@@ -20,254 +25,25 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-# Try to import MEGA SDK with system-wide detection
-MEGA_SDK_AVAILABLE = False
-MEGA_IMPORT_ERROR = None
 
-
-def _detect_and_import_mega():
-    """Detect MEGA SDK installation system-wide and import"""
-    import sys
-    from pathlib import Path
-
-    # System-wide search paths for MEGA SDK
-    search_paths = [
-        "/usr/local/lib/python3.13/dist-packages",
-        "/usr/lib/python3/dist-packages",
-        "/usr/lib/python3.13/dist-packages",
-        "/usr/local/lib/python3.12/dist-packages",
-        "/usr/lib/python3.12/dist-packages",
-        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
-        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
-        "/usr/src/app/.venv/lib/python3.13/site-packages",
-        "/opt/megasdk/lib/python3.13/site-packages",
-    ]
-
-    # Try standard import first
-    try:
-        from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
-
-        # Test basic functionality
-        api = MegaApi("test")
-        api.getVersion()
-        return (
-            True,
-            None,
-            (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
-        )
-    except ImportError:
-        pass
-    except Exception as e:
-        return False, f"MEGA SDK validation failed: {e}", None
-
-    # Search system-wide paths
-    for path in search_paths:
-        mega_path = Path(path) / "mega"
-        if mega_path.exists():
-            try:
-                if str(Path(path)) not in sys.path:
-                    sys.path.insert(0, str(Path(path)))
-
-                from mega import (
-                    MegaApi,
-                    MegaError,
-                    MegaListener,
-                    MegaRequest,
-                    MegaTransfer,
-                )
-
-                # Test basic functionality
-                api = MegaApi("test")
-                api.getVersion()
-                return (
-                    True,
-                    None,
-                    (MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer),
-                )
-            except Exception:
-                continue
-
-    return False, "MEGA SDK not found in system-wide search", None
-
-
-# Perform detection
-try:
-    success, error, classes = _detect_and_import_mega()
-    if success:
-        MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer = classes
-        MEGA_SDK_AVAILABLE = True
-        MEGA_IMPORT_ERROR = None
-    else:
-        raise ImportError(error)
-except Exception as e:
-    # Create dummy classes to prevent import errors
-    class MegaApi:
-        pass
-
-    class MegaListener:
-        pass
-
-    class MegaRequest:
-        TYPE_LOGIN = 1
-        TYPE_FETCH_NODES = 2
-        TYPE_SEARCH = 3
-
-    class MegaTransfer:
-        pass
-
-    class MegaError:
-        pass
-
-    MEGA_SDK_AVAILABLE = False
-    MEGA_IMPORT_ERROR = str(e)
-
-from bot import LOGGER
-
-
-class MegaSearchListener(MegaListener):
+class MegaSearchListener(MegaAppListener):
     """MEGA SDK listener for search operations"""
 
-    def __init__(self, continue_event):
-        super().__init__()
-        self.continue_event = continue_event
-        self.error = None
-        self.temp_error = None
+    def __init__(self, continue_event, listener=None):
+        super().__init__(continue_event, listener)
         self.search_results = []
         self.nodes_fetched = False
 
     def onRequestFinish(self, api, request, error):
-        """Called when a request finishes - with exception handling to prevent SWIG errors"""
-        try:
-            if error.getErrorCode() != 0:
-                # Handle MEGA error with proper signature
-                error_code = error.getErrorCode()
-                try:
-                    # Try the static method first (most common in MEGA SDK v4.8.0)
-                    if hasattr(error, "getErrorString") and callable(
-                        error.getErrorString
-                    ):
-                        # Try instance method first
-                        self.error = error.getErrorString()
-                    else:
-                        # Try static method with error code
-                        from mega import MegaError
+        # Handle search-specific request types
+        if str(error).lower() == "no error":
+            request_type = request.getType()
 
-                        self.error = MegaError.getErrorString(error_code)
-                except Exception:
-                    # Fallback to error code only
-                    self.error = f"MEGA Error Code: {error_code}"
+            if request_type == MegaRequest.TYPE_FETCH_NODES:
+                self.nodes_fetched = True
 
-                # Classify error severity based on error code
-                if error_code == -1:
-                    # Error code -1 is typically a temporary network/connection issue
-                    # Log as INFO since these are usually automatically retried and succeed
-                    LOGGER.info(
-                        f"MEGA temporary connection issue (will retry): {self.error}"
-                    )
-                    # Don't treat temporary errors as permanent failures
-                    self.temp_error = self.error
-                elif error_code in [-2, -3, -4, -5]:
-                    # These are also typically temporary errors
-                    LOGGER.warning(
-                        f"MEGA temporary error (will retry): {self.error}"
-                    )
-                    # Don't treat temporary errors as permanent failures
-                    self.temp_error = self.error
-                else:
-                    # Other error codes are more serious
-                    LOGGER.error(f"MEGA request error: {self.error}")
-            else:
-                request_type = request.getType()
-
-                if request_type == MegaRequest.TYPE_LOGIN:
-                    LOGGER.info("MEGA login successful")
-                    # Clear any temporary errors after successful login
-                    if hasattr(self, "temp_error"):
-                        self.error = None
-                elif request_type == MegaRequest.TYPE_FETCH_NODES:
-                    self.nodes_fetched = True
-                    # Clear any temporary errors after successful node fetching
-                    if hasattr(self, "temp_error"):
-                        self.error = None
-                # Note: Search results are handled differently in MEGA SDK
-                # The search method returns a MegaNodeList directly, not through request
-
-            self.continue_event.set()
-        except Exception as e:
-            # Critical: Prevent any exceptions from propagating back to C++
-            # This prevents SWIG DirectorMethodException
-            try:
-                LOGGER.error(f"Exception in MEGA listener callback: {e}")
-                self.error = f"Listener callback error: {e!s}"
-                self.continue_event.set()
-            except Exception:
-                # Last resort: even logging failed, just set the event
-                pass
-
-
-class AsyncMegaExecutor:
-    """Async executor for MEGA operations"""
-
-    def __init__(self):
-        self.continue_event = asyncio.Event()
-
-    async def do(self, function, args=(), timeout=None):
-        """Execute MEGA function asynchronously with improved error handling and retry logic"""
-        function_name = getattr(function, "__name__", str(function))
-
-        # Try multiple attempts with increasing timeouts for login operations only
-        max_attempts = 3 if function_name == "login" else 1
-        base_timeout = timeout
-
-        for attempt in range(max_attempts):
-            if timeout is not None:
-                current_timeout = base_timeout + (
-                    attempt * 30
-                )  # Increase timeout each attempt
-            else:
-                current_timeout = None  # No timeout for main operations
-
-            if attempt > 0:
-                await asyncio.sleep(5)  # Brief delay between attempts
-
-            self.continue_event.clear()
-
-            try:
-                # Execute the MEGA function
-                await sync_to_async(function, *args)
-
-                # Wait for completion with or without timeout
-                if current_timeout is not None:
-                    await asyncio.wait_for(
-                        self.continue_event.wait(), timeout=current_timeout
-                    )
-                else:
-                    await (
-                        self.continue_event.wait()
-                    )  # No timeout - wait indefinitely
-
-                return  # Success, exit retry loop
-
-            except TimeoutError:
-                if (
-                    attempt == max_attempts - 1
-                ):  # Last attempt - this is a real failure
-                    LOGGER.error(
-                        f"MEGA {function_name} operation timed out after {current_timeout} seconds (attempt {attempt + 1}) - FINAL FAILURE"
-                    )
-                    raise Exception(
-                        f"MEGA {function_name} operation failed after {max_attempts} attempts. This may be due to network issues or MEGA server problems."
-                    )
-                # Not the last attempt - this is just a retry, log as INFO
-                LOGGER.info(
-                    f"MEGA {function_name} operation timed out after {current_timeout} seconds (attempt {attempt + 1}) - retrying with longer timeout"
-                )
-                continue  # Try again
-
-            except Exception as e:
-                # Re-raise other exceptions immediately (don't retry)
-                LOGGER.error(f"MEGA {function_name} operation failed: {e!s}")
-                raise Exception(f"MEGA {function_name} operation failed: {e!s}")
+        # Call parent implementation for standard handling
+        super().onRequestFinish(api, request, error)
 
 
 class MegaSearchHandler:
@@ -346,35 +122,50 @@ class MegaSearchHandler:
             )
             return
 
-        # Check if MEGA SDK is available
-        if not MEGA_SDK_AVAILABLE:
-            error_msg = (
-                "❌ MEGA SDK v4.8.0 not available. Please install megasdk v4.8.0."
-            )
-            if MEGA_IMPORT_ERROR:
-                error_msg += f"\nImport error: {MEGA_IMPORT_ERROR}"
-            await send_message(self.message, error_msg)
-            return
-
-        # Get MEGA credentials
+        # Get MEGA credentials following the same logic as other cloud services
         from bot.helper.ext_utils.db_handler import database
 
         user_dict = await database.get_user_doc(self.user_id)
 
+        # Check USER_TOKENS setting to determine credential priority
+        user_tokens_enabled = user_dict.get("USER_TOKENS", False)
+
+        # Get MEGA settings with priority: User > Owner (when USER_TOKENS enabled)
         user_mega_email = user_dict.get("MEGA_EMAIL")
         user_mega_password = user_dict.get("MEGA_PASSWORD")
 
-        if user_mega_email and user_mega_password:
-            MEGA_EMAIL = user_mega_email
-            MEGA_PASSWORD = user_mega_password
+        if user_tokens_enabled:
+            # When USER_TOKENS is enabled, only use user's personal credentials
+            if user_mega_email and user_mega_password:
+                MEGA_EMAIL = user_mega_email
+                MEGA_PASSWORD = user_mega_password
+                LOGGER.info(
+                    "Using user MEGA credentials for search (USER_TOKENS enabled)"
+                )
+            else:
+                await send_message(
+                    self.message,
+                    "❌ USER_TOKENS is enabled but user's MEGA credentials not found. Please set your MEGA email and password in User Settings → ☁️ MEGA.",
+                )
+                return
         else:
+            # When USER_TOKENS is disabled, use owner credentials only
             MEGA_EMAIL = Config.MEGA_EMAIL
             MEGA_PASSWORD = Config.MEGA_PASSWORD
+            LOGGER.info(
+                "Using owner MEGA credentials for search (USER_TOKENS disabled)"
+            )
 
         if not MEGA_EMAIL or not MEGA_PASSWORD:
+            if user_tokens_enabled:
+                await send_message(
+                    self.message,
+                    "❌ USER_TOKENS is enabled but user's MEGA credentials are incomplete. Please set both MEGA email and password in User Settings.",
+                )
+                return
             await send_message(
                 self.message,
-                "❌ MEGA.nz credentials not configured. Please set MEGA_EMAIL and MEGA_PASSWORD in user settings or contact the administrator.",
+                "❌ Owner MEGA credentials not configured. Please contact the administrator or enable USER_TOKENS to use your own credentials.",
             )
             return
 
@@ -385,226 +176,179 @@ class MegaSearchHandler:
             "⏳ Please wait...",
         )
 
-        executor = AsyncMegaExecutor()
-        api = None
-        mega_listener = None
+        async_api = AsyncMega()
+        async_api.api = api = MegaApi(None, None, None, "aimleechbot")
+        mega_listener = MegaSearchListener(async_api.continue_event)
+        async_api.listener = mega_listener  # Connect listener to async_api
+        api.addListener(mega_listener)
 
         try:
-            # Initialize MEGA API with custom timeout settings
-            api = MegaApi(None, None, None, "aimleechbot")
+            # Login to MEGA
+            await async_api.login(MEGA_EMAIL, MEGA_PASSWORD)
 
-            # Try to set MEGA SDK timeouts if available
+            # Fetch nodes with timeout to prevent hanging
             try:
-                # Set connection timeout to 180 seconds if method exists
-                if hasattr(api, "setConnectTimeout"):
-                    api.setConnectTimeout(180)
-                if hasattr(api, "setRequestTimeout"):
-                    api.setRequestTimeout(180)
-                # Try additional timeout methods
-                if hasattr(api, "setTimeout"):
-                    api.setTimeout(180)
-                if hasattr(api, "setMaxConnections"):
-                    api.setMaxConnections(6)  # Reduce concurrent connections
-            except Exception as timeout_error:
-                LOGGER.warning(f"Could not set MEGA SDK timeouts: {timeout_error}")
-
-            mega_listener = MegaSearchListener(executor.continue_event)
-            api.addListener(mega_listener)
-
-            # Login to MEGA with increased timeout
-            try:
-                await executor.do(api.login, (MEGA_EMAIL, MEGA_PASSWORD), timeout=60)
-            except Exception as login_error:
-                LOGGER.error(f"MEGA login failed: {login_error}")
-                if "timed out" in str(login_error).lower():
-                    await edit_message(
-                        search_msg,
-                        "❌ MEGA login timed out. Please check your internet connection and try again.",
-                    )
-                else:
-                    await edit_message(
-                        search_msg, f"❌ MEGA login failed: {login_error!s}"
-                    )
-                return
-
-            if mega_listener.error:
+                await asyncio.wait_for(async_api.fetchNodes(), timeout=30.0)
+            except TimeoutError:
+                LOGGER.error("MEGA search: fetchNodes timed out after 30 seconds")
                 await edit_message(
-                    search_msg, f"❌ MEGA login failed: {mega_listener.error}"
+                    search_msg,
+                    "❌ MEGA node fetching timed out. Your MEGA account may have many files. Please try again.",
                 )
                 return
 
-            # Fetch nodes with increased timeout
+            # Additional verification - wait a bit for listener to process
+            await asyncio.sleep(0.5)
+
             try:
-                await executor.do(api.fetchNodes, timeout=90)
+                root_node_check = api.getRootNode()
+                if root_node_check:
+                    mega_listener.nodes_fetched = True  # Ensure flag is set
+            except Exception as verify_error:
+                LOGGER.warning(f"Initial node verification failed: {verify_error}")
+                # Ignore verification errors - will be handled in fallback
 
-                # Additional verification - wait a bit for listener to process
-                await asyncio.sleep(0.5)
+        except Exception as fetch_error:
+            if "timed out" in str(fetch_error).lower():
+                await edit_message(
+                    search_msg,
+                    "❌ MEGA node fetching timed out. Your MEGA account may have many files. Please try again.",
+                )
+            else:
+                await edit_message(
+                    search_msg, f"❌ Failed to fetch MEGA nodes: {fetch_error!s}"
+                )
+            return
 
-                # Force check if nodes are available
-                try:
-                    root_node_check = api.getRootNode()
-                    if root_node_check:
-                        mega_listener.nodes_fetched = True  # Ensure flag is set
-                        LOGGER.info("MEGA nodes verified immediately after fetch")
-                except Exception as verify_error:
-                    LOGGER.debug(f"Initial node verification failed: {verify_error}")
-                    # Ignore verification errors - will be handled in fallback
-
-            except Exception as fetch_error:
-                if "timed out" in str(fetch_error).lower():
-                    await edit_message(
-                        search_msg,
-                        "❌ MEGA node fetching timed out. Your MEGA account may have many files. Please try again.",
-                    )
-                else:
-                    await edit_message(
-                        search_msg, f"❌ Failed to fetch MEGA nodes: {fetch_error!s}"
-                    )
+        # Check if node fetching actually succeeded despite temporary errors
+        if mega_listener.error and not mega_listener.nodes_fetched:
+            # Only treat as error if nodes weren't fetched AND there's a non-temporary error
+            error_str = str(mega_listener.error).lower()
+            if "error code: -1" not in error_str:
+                # This is a real error, not a temporary connection issue
+                await edit_message(
+                    search_msg,
+                    f"❌ Failed to fetch MEGA nodes: {mega_listener.error}",
+                )
                 return
 
-            # Check if node fetching actually succeeded despite temporary errors
-            if mega_listener.error and not mega_listener.nodes_fetched:
-                # Only treat as error if nodes weren't fetched AND there's a non-temporary error
-                error_str = str(mega_listener.error).lower()
-                if "error code: -1" not in error_str:
-                    # This is a real error, not a temporary connection issue
-                    await edit_message(
-                        search_msg,
-                        f"❌ Failed to fetch MEGA nodes: {mega_listener.error}",
-                    )
-                    return
-
-            if not mega_listener.nodes_fetched:
-                # Try to get root node as a fallback check
-                try:
-                    root_node_test = api.getRootNode()
-                    if root_node_test:
-                        mega_listener.nodes_fetched = True  # Manually set the flag
-                        LOGGER.info(
-                            "MEGA nodes verified via fallback check - proceeding with search"
-                        )
-                    # Check if we have a temporary error that should be ignored
-                    elif (
-                        mega_listener.error
-                        and "error code: -1" in str(mega_listener.error).lower()
-                    ):
-                        # Temporary error but no root node - try one more time
-                        await asyncio.sleep(2)
-                        try:
-                            root_node_test = api.getRootNode()
-                            if root_node_test:
-                                mega_listener.nodes_fetched = True
-                                LOGGER.info(
-                                    "MEGA nodes verified after retry - proceeding with search"
-                                )
-                            else:
-                                await edit_message(
-                                    search_msg,
-                                    "❌ Failed to fetch MEGA nodes after retry",
-                                )
-                                return
-                        except Exception:
+        if not mega_listener.nodes_fetched:
+            # Try to get root node as a fallback check
+            try:
+                root_node_test = api.getRootNode()
+                if root_node_test:
+                    mega_listener.nodes_fetched = True  # Manually set the flag
+                # Check if we have a temporary error that should be ignored
+                elif (
+                    mega_listener.error
+                    and "error code: -1" in str(mega_listener.error).lower()
+                ):
+                    # Temporary error but no root node - try one more time
+                    await asyncio.sleep(2)
+                    try:
+                        root_node_test = api.getRootNode()
+                        if root_node_test:
+                            mega_listener.nodes_fetched = True
+                        else:
                             await edit_message(
                                 search_msg,
                                 "❌ Failed to fetch MEGA nodes after retry",
                             )
                             return
-                    else:
+                    except Exception:
                         await edit_message(
-                            search_msg, "❌ Failed to fetch MEGA nodes"
+                            search_msg,
+                            "❌ Failed to fetch MEGA nodes after retry",
                         )
                         return
-                except Exception as e:
-                    # Check if we have a temporary error that should be ignored
-                    if (
-                        mega_listener.error
-                        and "error code: -1" in str(mega_listener.error).lower()
-                    ):
-                        # Temporary error - try one more time
-                        await asyncio.sleep(2)
-                        try:
-                            root_node_test = api.getRootNode()
-                            if root_node_test:
-                                mega_listener.nodes_fetched = True
-                                LOGGER.info(
-                                    "MEGA nodes verified after exception retry - proceeding with search"
-                                )
-                            else:
-                                await edit_message(
-                                    search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
-                                )
-                                return
-                        except Exception as retry_e:
+                else:
+                    await edit_message(search_msg, "❌ Failed to fetch MEGA nodes")
+                    return
+            except Exception as e:
+                # Check if we have a temporary error that should be ignored
+                if (
+                    mega_listener.error
+                    and "error code: -1" in str(mega_listener.error).lower()
+                ):
+                    # Temporary error - try one more time
+                    await asyncio.sleep(2)
+                    try:
+                        root_node_test = api.getRootNode()
+                        if root_node_test:
+                            mega_listener.nodes_fetched = True
+                        else:
                             await edit_message(
-                                search_msg,
-                                f"❌ Failed to fetch MEGA nodes: {retry_e}",
+                                search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
                             )
                             return
-                    else:
+                    except Exception as retry_e:
                         await edit_message(
-                            search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
+                            search_msg,
+                            f"❌ Failed to fetch MEGA nodes: {retry_e}",
                         )
                         return
+                else:
+                    await edit_message(
+                        search_msg, f"❌ Failed to fetch MEGA nodes: {e}"
+                    )
+                    return
 
-            # Perform search
+        # Perform search
+        try:
             root_node = api.getRootNode()
             if not root_node:
+                LOGGER.error("MEGA search: Could not get root node")
                 await edit_message(
                     search_msg, "❌ Could not access MEGA root folder"
                 )
                 return
 
             # MEGA search returns results directly, not through listener
-            try:
-                # Update search message to show progress
-                await edit_message(
-                    search_msg,
-                    f"🔍 Searching MEGA drive for: <code>{self.query}</code>\n\n"
-                    "🔄 Searching through files and folders...",
-                )
+            # Update search message to show progress
+            await edit_message(
+                search_msg,
+                f"🔍 Searching MEGA drive for: <code>{self.query}</code>\n\n"
+                "🔄 Searching through files and folders...",
+            )
 
-                # Try different search methods as MEGA SDK can be inconsistent
-                # Method 1: Try the standard search with recursive flag
+            # Try different search methods as MEGA SDK can be inconsistent
+            # Method 1: Try the standard search with recursive flag
+            try:
+                node_list = await sync_to_async(
+                    api.search, root_node, self.query, True
+                )
+            except Exception as e:
+                LOGGER.warning(f"MEGA search: Method 1 failed: {e}")
+                node_list = None
+
+            # Method 2: If standard search fails, try without recursive flag
+            if not node_list or (
+                hasattr(node_list, "size") and node_list.size() == 0
+            ):
                 try:
                     node_list = await sync_to_async(
-                        api.search, root_node, self.query, True
+                        api.search, root_node, self.query
                     )
-                except Exception:
+                except Exception as e:
+                    LOGGER.warning(f"MEGA search: Method 2 failed: {e}")
                     node_list = None
 
-                # Method 2: If standard search fails, try without recursive flag
-                if not node_list or (
-                    hasattr(node_list, "size") and node_list.size() == 0
-                ):
-                    try:
-                        node_list = await sync_to_async(
-                            api.search, root_node, self.query
-                        )
-                    except Exception:
-                        node_list = None
+            # Method 3: If both fail, try manual traversal search
+            if not node_list or (
+                hasattr(node_list, "size") and node_list.size() == 0
+            ):
+                node_list = await self._manual_search(api, root_node, self.query)
 
-                # Method 3: If both fail, try manual traversal search
-                if not node_list or (
-                    hasattr(node_list, "size") and node_list.size() == 0
-                ):
-                    node_list = await self._manual_search(api, root_node, self.query)
-
-                if node_list and hasattr(node_list, "size") and node_list.size() > 0:
-                    for i in range(node_list.size()):
-                        node = node_list.get(i)
-                        if node:
-                            self.results.append(node)
-                elif isinstance(node_list, list) and len(node_list) > 0:
-                    # Handle case where manual search returns a list
-                    for node in node_list:
-                        if node:
-                            self.results.append(node)
-
-            except Exception as search_error:
-                await edit_message(
-                    search_msg, f"❌ MEGA search failed: {search_error!s}"
-                )
-                return
+            if node_list and hasattr(node_list, "size") and node_list.size() > 0:
+                for i in range(node_list.size()):
+                    node = node_list.get(i)
+                    if node:
+                        self.results.append(node)
+            elif isinstance(node_list, list) and len(node_list) > 0:
+                # Handle case where manual search returns a list
+                for node in node_list:
+                    if node:
+                        self.results.append(node)
 
             if not self.results:
                 await edit_message(
@@ -768,5 +512,9 @@ async def mega_search_command(_, message):
     # Delete the command message first
     await delete_links(message)
 
-    # Start the search (no need to store task reference since we're not managing it)
-    create_task(search_handler.search())
+    # Start the search with proper task management
+    try:
+        await search_handler.search()
+    except Exception as e:
+        LOGGER.error(f"MEGA search error: {e}")
+        await send_message(message, f"❌ MEGA search failed: {e}")

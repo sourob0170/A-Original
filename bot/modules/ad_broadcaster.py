@@ -27,9 +27,19 @@ DEFAULT_AD_KEYWORDS = [
 ]
 
 
+# Cache for ad keywords to avoid repeated logging
+_ad_keywords_cache = None
+_last_keywords_log_time = 0
+
+
 # Function to get ad keywords (from config or default)
 def get_ad_keywords():
     """Get ad keywords from config or use defaults"""
+    global _ad_keywords_cache, _last_keywords_log_time
+    import time
+
+    current_time = time.time()
+
     if Config.AD_KEYWORDS:
         # Split by comma and strip whitespace, preserving spaces within phrases
         custom_keywords = [
@@ -37,10 +47,24 @@ def get_ad_keywords():
             for keyword in Config.AD_KEYWORDS.split(",")
             if keyword.strip()
         ]
-        LOGGER.info(f"Using custom ad keywords (phrases): {custom_keywords}")
+        # Only log if keywords changed or it's been more than 5 minutes
+        if (
+            _ad_keywords_cache != custom_keywords
+            or current_time - _last_keywords_log_time > 300
+        ):
+            LOGGER.info(f"Using custom ad keywords (phrases): {custom_keywords}")
+            _ad_keywords_cache = custom_keywords
+            _last_keywords_log_time = current_time
         return custom_keywords
 
-    LOGGER.info(f"Using default ad keywords: {DEFAULT_AD_KEYWORDS}")
+    # Only log if keywords changed or it's been more than 5 minutes
+    if (
+        _ad_keywords_cache != DEFAULT_AD_KEYWORDS
+        or current_time - _last_keywords_log_time > 300
+    ):
+        LOGGER.info(f"Using default ad keywords: {DEFAULT_AD_KEYWORDS}")
+        _ad_keywords_cache = DEFAULT_AD_KEYWORDS
+        _last_keywords_log_time = current_time
     return DEFAULT_AD_KEYWORDS
 
 

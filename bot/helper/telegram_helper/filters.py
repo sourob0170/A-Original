@@ -62,8 +62,8 @@ class CustomFilters:
             chat = update.message.chat
             thread_id = (
                 update.message.message_thread_id
-                if hasattr(update.message, "is_topic_message")
-                and update.message.is_topic_message
+                if hasattr(update.message, "topic_message")
+                and update.message.topic_message
                 else None
             )
         else:
@@ -81,15 +81,10 @@ class CustomFilters:
         uid = user.id
         chat_id = chat.id
 
-        # Always authorize owner ID
-        if uid == Config.OWNER_ID:
-            # Ensure owner is in user_data with AUTH=True
-            if uid not in user_data:
-                from bot.helper.ext_utils.bot_utils import update_user_ldata
+        # Always authorize privileged users (Owner + Sudo)
+        from bot.helper.ext_utils.bot_utils import is_privileged_user
 
-                update_user_ldata(uid, "AUTH", True)
-            elif not user_data[uid].get("AUTH", False):
-                user_data[uid]["AUTH"] = True
+        if is_privileged_user(uid):
             return True
 
         # Use the same authorization logic as in authorized_user
@@ -142,8 +137,8 @@ class CustomFilters:
                 chat = update.callback_query.message.chat
                 thread_id = (
                     update.callback_query.message.message_thread_id
-                    if hasattr(update.callback_query.message, "is_topic_message")
-                    and update.callback_query.message.is_topic_message
+                    if hasattr(update.callback_query.message, "topic_message")
+                    and update.callback_query.message.topic_message
                     else None
                 )
             else:
@@ -154,8 +149,8 @@ class CustomFilters:
             chat = update.message.chat
             thread_id = (
                 update.message.message_thread_id
-                if hasattr(update.message, "is_topic_message")
-                and update.message.is_topic_message
+                if hasattr(update.message, "topic_message")
+                and update.message.topic_message
                 else None
             )
         elif hasattr(update, "chat") and update.chat:
@@ -164,7 +159,7 @@ class CustomFilters:
             chat = update.chat
             thread_id = (
                 update.message_thread_id
-                if hasattr(update, "is_topic_message") and update.is_topic_message
+                if hasattr(update, "topic_message") and update.topic_message
                 else None
             )
         else:
@@ -178,15 +173,10 @@ class CustomFilters:
         uid = user.id
         chat_id = chat.id
 
-        # Always authorize owner ID
-        if uid == Config.OWNER_ID:
-            # Ensure owner is in user_data with AUTH=True
-            if uid not in user_data:
-                from bot.helper.ext_utils.bot_utils import update_user_ldata
+        # Always authorize privileged users (Owner + Sudo)
+        from bot.helper.ext_utils.bot_utils import is_privileged_user
 
-                update_user_ldata(uid, "AUTH", True)
-            elif not user_data[uid].get("AUTH", False):
-                user_data[uid]["AUTH"] = True
+        if is_privileged_user(uid):
             return True
 
         return bool(
@@ -234,15 +224,10 @@ class CustomFilters:
 
         uid = user.id
 
-        # Always authorize owner ID as sudo
-        if uid == Config.OWNER_ID:
-            # Ensure owner is in user_data with SUDO=True
-            if uid not in user_data:
-                from bot.helper.ext_utils.bot_utils import update_user_ldata
+        # Always authorize privileged users as sudo (Owner + Sudo)
+        from bot.helper.ext_utils.bot_utils import is_privileged_user
 
-                update_user_ldata(uid, "SUDO", True)
-            elif not user_data[uid].get("SUDO", False):
-                user_data[uid]["SUDO"] = True
+        if is_privileged_user(uid):
             return True
 
         return bool(

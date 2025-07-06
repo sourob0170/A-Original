@@ -26,6 +26,7 @@ from .encoding import (
 )
 from .exec import aioexecute, clear, execute
 from .file_selector import confirm_selection, select
+from .file_to_link import file_to_link_command, stream_stats_command
 from .font_styles import font_styles_cmd
 from .force_start import remove_from_queue
 from .gd_count import count_node
@@ -40,6 +41,7 @@ from .gen_session import (
 )
 from .help import arg_usage, bot_help
 from .imdb import imdb_callback, imdb_search
+from .index_command import index_command
 from .media_search import (
     inline_media_search,
     media_cancel_callback,
@@ -49,7 +51,6 @@ from .media_search import (
 from .media_tools import edit_media_tools_settings, media_tools_settings
 from .media_tools_help import media_tools_help_cmd
 from .mediainfo import mediainfo
-from .megaclone import mega_clone
 from .mirror_leech import (
     jd_leech,
     jd_mirror,
@@ -57,6 +58,10 @@ from .mirror_leech import (
     mirror,
     nzb_leech,
     nzb_mirror,
+)
+from .nsfw_management import (
+    nsfw_stats_command,
+    nsfw_test_command,
 )
 from .nzb_search import hydra_search
 from .paste import paste_text
@@ -79,6 +84,7 @@ from .sox import spectrum_handler
 from .speedtest import speedtest
 from .stats import bot_stats, get_packages_version
 from .status import status_pages, task_status
+from .tool_commands import tool_command
 from .truecaller import truecaller_lookup
 from .users_settings import (
     edit_user_settings,
@@ -86,6 +92,7 @@ from .users_settings import (
     send_user_settings,
 )
 from .virustotal import virustotal_scan
+from .whisper import whisper_callback, whisper_command
 from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
 from .ytdlp import ytdl, ytdl_leech
 from .zotify import zotify_leech, zotify_mirror, zotify_search
@@ -122,6 +129,8 @@ __all__ = [
     "encoding_callback",
     "encoding_help_command",
     "execute",
+    # File-to-Link functions
+    "file_to_link_command",
     "font_styles_cmd",
     "force_delete_all_messages",
     "gdrive_search",
@@ -144,6 +153,8 @@ __all__ = [
     "hydra_search",
     "imdb_callback",
     "imdb_search",
+    # Index command
+    "index_command",
     "initiate_search_tools",
     "inline_media_search",
     "jd_leech",
@@ -158,7 +169,6 @@ __all__ = [
     "media_tools_help_cmd",
     "media_tools_settings",
     "mediainfo",
-    "mega_clone",
     "mirror",
     "nzb_leech",
     "nzb_mirror",
@@ -181,7 +191,9 @@ __all__ = [
     "speedtest",
     "start",
     "status_pages",
+    "stream_stats_command",
     "task_status",
+    "tool_command",
     "torrent_search",
     "torrent_search_update",
     "truecaller_lookup",

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Security Settings - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Security Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="/admin/settings/security">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="require_login" name="require_login" 
+                                               {% if security_settings.require_login %}checked{% endif %}>
+                                        <label class="form-check-label" for="require_login">
+                                            Require Login for Access
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="enable_registration" name="enable_registration" 
+                                               {% if security_settings.enable_registration %}checked{% endif %}>
+                                        <label class="form-check-label" for="enable_registration">
+                                            Enable User Registration
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="session_timeout">Session Timeout (hours)</label>
+                                    <input type="number" class="form-control" id="session_timeout" name="session_timeout" 
+                                           value="{{ security_settings.session_timeout or 24 }}" min="1" max="168">
+                                    <small class="form-text text-muted">How long users stay logged in</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="max_login_attempts">Max Login Attempts</label>
+                                    <input type="number" class="form-control" id="max_login_attempts" name="max_login_attempts" 
+                                           value="{{ security_settings.max_login_attempts or 5 }}" min="3" max="20">
+                                    <small class="form-text text-muted">Maximum failed login attempts before lockout</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="enable_rate_limiting" name="enable_rate_limiting" 
+                                               {% if security_settings.enable_rate_limiting %}checked{% endif %}>
+                                        <label class="form-check-label" for="enable_rate_limiting">
+                                            Enable Rate Limiting
+                                        </label>
+                                        <small class="form-text text-muted">Limit requests per IP address</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="enable_https_only" name="enable_https_only" 
+                                               {% if security_settings.enable_https_only %}checked{% endif %}>
+                                        <label class="form-check-label" for="enable_https_only">
+                                            HTTPS Only
+                                        </label>
+                                        <small class="form-text text-muted">Redirect HTTP to HTTPS</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="allowed_domains">Allowed Domains (one per line)</label>
+                                    <textarea class="form-control" id="allowed_domains" name="allowed_domains" rows="4" 
+                                              placeholder="example.com&#10;subdomain.example.com">{{ security_settings.allowed_domains or '' }}</textarea>
+                                    <small class="form-text text-muted">Leave empty to allow all domains</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="blocked_ips">Blocked IP Addresses (one per line)</label>
+                                    <textarea class="form-control" id="blocked_ips" name="blocked_ips" rows="4" 
+                                              placeholder="192.168.1.100&#10;10.0.0.50">{{ security_settings.blocked_ips or '' }}</textarea>
+                                    <small class="form-text text-muted">IP addresses to block from accessing the site</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <a href="/admin/settings" class="btn btn-secondary">Back to Settings</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

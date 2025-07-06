@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ site_name or "reelnn" }}{% endblock %}</title>
+
+    <!-- Meta Tags -->
+    <meta name="description" content="{% block description %}A self-hosted streaming platform for your personal media collection{% endblock %}">
+    <meta name="keywords" content="streaming, movies, tv shows, self-hosted, media server">
+    <meta name="author" content="{{ site_name or 'reelnn' }}">
+    <meta name="theme-color" content="#000000">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="{% block og_title %}{{ site_name or 'reelnn' }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}A self-hosted streaming platform for your personal media collection{% endblock %}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:image" content="/static/reelnn/images/og-image.jpg">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% block twitter_title %}{{ site_name or 'reelnn' }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}A self-hosted streaming platform{% endblock %}">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/reelnn/images/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/reelnn/images/apple-touch-icon.png">
+
+    <!-- Fonts - Exact Reelnn Implementation -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- ReelNN Player CSS -->
+    <link rel="stylesheet" href="/static/reelnn/css/reelnn-player.css">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'mont': ['Montserrat', 'sans-serif'],
+                        'sans': ['Montserrat', 'sans-serif']
+                    },
+                    colors: {
+                        'background': '#151111',
+                        'foreground': '#ffffff'
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'slide-down': 'slideDown 0.3s ease-out',
+                        'scale-in': 'scaleIn 0.2s ease-out'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideDown: {
+                            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom Reelnn Styles -->
+    <style>
+        /* Custom scrollbar */
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Glass effect */
+        .glass {
+            backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Hover effects */
+        .hover-scale {
+            transition: transform 0.2s ease;
+        }
+        .hover-scale:hover {
+            transform: scale(1.05);
+        }
+
+        /* Loading animation */
+        .loading-dots {
+            display: inline-block;
+        }
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+    </style>
+
+    <!-- CSS - Exact Reelnn Implementation -->
+    <link rel="stylesheet" href="/static/reelnn/css/main.css">
+    <link rel="stylesheet" href="/static/reelnn/css/components.css">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-background text-foreground font-mont antialiased" style="background: #151111; color: #ffffff; font-family: 'Montserrat', sans-serif;">
+    <!-- Navigation - Exact Reelnn Implementation -->
+    <nav class="text-white p-3 sm:p-4 flex items-center justify-between z-30 fixed top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent" role="navigation">
+        <!-- Mobile menu button -->
+        <div class="md:hidden">
+            <button
+                id="mobile-menu-btn"
+                class="p-2 hover:bg-gray-800/30 rounded-full transition-colors"
+                aria-label="Menu"
+                aria-expanded="false"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Left side -->
+        <div class="hidden md:flex items-center space-x-6">
+            <a href="/" class="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-gray-800/30 rounded-full transition-colors" aria-label="Home">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                </svg>
+                <span>Home</span>
+            </a>
+
+            <!-- Browse with Dropdown -->
+            <div class="relative group">
+                <button class="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-red-500/20 hover:text-red-400 rounded-full transition-colors" aria-expanded="false" aria-haspopup="true">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2h4a1 1 0 110 2h-1v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 110-2h4zM9 6v8a1 1 0 102 0V6H9z"></path>
+                    </svg>
+                    <span>Browse</span>
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+
+                <!-- Dropdown menu -->
+                <div class="absolute top-full left-0 mt-2 w-48 bg-gray-900/95 backdrop-blur-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                    <div class="py-2">
+                        <a href="/browse/movie" class="block px-4 py-2 text-sm hover:bg-gray-800/50 transition-colors">Movies</a>
+                        <a href="/browse/show" class="block px-4 py-2 text-sm hover:bg-gray-800/50 transition-colors">TV Shows</a>
+                        <div class="border-t border-gray-800/50 my-1"></div>
+                        <a href="/search?sort_by=recent" class="block px-4 py-2 text-sm hover:bg-gray-800/50 transition-colors">Recently Added</a>
+                        <a href="/search?sort_by=popular" class="block px-4 py-2 text-sm hover:bg-gray-800/50 transition-colors">Popular</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Logo -->
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <a href="/" aria-label="{{ site_name or 'reelnn' }} Home">
+                <div class="flex items-center justify-center">
+                    <span class="text-2xl font-bold bg-gradient-to-r from-red-500 to-red-400 bg-clip-text text-transparent">
+                        {{ site_name or "reelnn" }}
+                    </span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Right side - Exact ReelNN Search -->
+        <div class="flex items-center space-x-3 md:space-x-4">
+            <div class="relative flex items-center">
+                <!-- Desktop search button -->
+                <button
+                    id="searchToggle"
+                    class="hidden md:block p-2 hover:bg-gray-700/30 rounded-full transition-colors"
+                    aria-label="Search"
+                >
+                    <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </button>
+
+                <!-- Mobile search button - properly positioned on the right -->
+                <button
+                    id="mobile-search-btn"
+                    class="md:hidden p-2 hover:bg-gray-800/30 rounded-full transition-colors"
+                    aria-label="Search"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </button>
+
+                <!-- Animated Search Input -->
+                <div id="searchContainer" class="absolute right-0 flex items-center opacity-0 w-0 overflow-hidden transition-all duration-200">
+                    <form action="/search" method="GET" class="flex items-center">
+                        <input
+                            id="searchInput"
+                            type="text"
+                            name="q"
+                            placeholder="Search movies, shows..."
+                            class="w-full bg-gray-900/90 backdrop-blur-md text-white border border-gray-700 rounded-lg py-1.5 sm:py-2 px-3 sm:px-4 focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 text-xs sm:text-sm shadow-lg"
+                            value="{{ search_query or '' }}"
+                            aria-label="Search input"
+                        >
+                    </form>
+                </div>
+
+                <!-- Search Results Dropdown - Exact ReelNN Style -->
+                <div id="searchResults" class="font-mont fixed top-16 sm:right-4 right-0 w-full sm:w-[320px] max-h-[60vh] sm:max-h-[70vh] overflow-y-auto bg-gray-900 rounded-b-lg shadow-lg z-40 hidden">
+                    <div id="searchResultsContent">
+                        <!-- Results will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden fixed top-0 left-0 right-0 bg-gray-900/95 backdrop-blur-sm z-40 mt-16">
+        <div class="px-4 py-6 space-y-4">
+            <a href="/" class="block py-2 text-lg font-medium hover:text-blue-400 transition-colors">Home</a>
+            <a href="/search?type=movie" class="block py-2 text-lg font-medium hover:text-blue-400 transition-colors">Movies</a>
+            <a href="/search?type=show" class="block py-2 text-lg font-medium hover:text-blue-400 transition-colors">TV Shows</a>
+            <a href="/search?sort_by=recent" class="block py-2 text-lg font-medium hover:text-blue-400 transition-colors">Recently Added</a>
+
+            <!-- Mobile search -->
+            <div class="pt-4 border-t border-gray-700/50">
+                <form action="/search" method="GET" class="flex">
+                    <input
+                        type="text"
+                        name="q"
+                        placeholder="Search..."
+                        class="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-l-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        value="{{ search_query or '' }}"
+                    >
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-r-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content - Exact Reelnn Layout -->
+    <main class="reelnn-main-layout">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer - Exact Reelnn Implementation -->
+    <footer class="reelnn-footer">
+        <div class="reelnn-footer-content">
+            <div class="reelnn-footer-disclaimer">
+                <p>This website does not host any files on its own servers; it simply provides links to media files stored in telegram.</p>
+            </div>
+            <div class="reelnn-footer-contact">
+                <p>Contact Us:</p>
+                <a href="https://t.me/AeonDiscussion" target="_blank" rel="noopener noreferrer" class="reelnn-telegram-link">
+                    Telegram
+                </a>
+            </div>
+            <div class="reelnn-footer-copyright">
+                <p>&copy; {{ current_year or 2025 }} {{ site_name or "reelnn" }}</p>
+                <a href="https://github.com/AeonOrg/Aeon-MLTB/tree/extended" target="_blank" rel="noopener noreferrer" class="reelnn-made-with-love">
+                    Made with ❤️
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript - ReelNN Implementation -->
+    <script src="/static/reelnn/js/reelnn-player.js"></script>
+    <script src="/static/reelnn/js/main.js"></script>
+    <script src="/static/reelnn/js/components.js"></script>
+
+    <!-- Initialize Reelnn App -->
+    <script>
+        // Initialize the reelnn app
+        const reelnnApp = new ReelnnApp();
+    </script>
+
+    <!-- Mobile Menu Script -->
+    <script>
+        document.getElementById('mobile-menu-btn').addEventListener('click', function() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+    </script>
+
+    <!-- Exact ReelNN Search Functionality -->
+    <script>
+        class ReelnnSearch {
+            constructor() {
+                this.searchToggle = document.getElementById('searchToggle');
+                this.mobileSearchBtn = document.getElementById('mobile-search-btn');
+                this.searchContainer = document.getElementById('searchContainer');
+                this.searchInput = document.getElementById('searchInput');
+                this.searchResults = document.getElementById('searchResults');
+                this.searchResultsContent = document.getElementById('searchResultsContent');
+                this.isSearchActive = false;
+                this.searchTimeout = null;
+                this.currentBreakpoint = this.getBreakpoint();
+
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.updateSearchWidth();
+                window.addEventListener('resize', () => {
+                    this.currentBreakpoint = this.getBreakpoint();
+                    this.updateSearchWidth();
+                });
+            }
+
+            getBreakpoint() {
+                const width = window.innerWidth;
+                if (width < 640) return 0; // sm
+                if (width < 768) return 1; // md
+                return 2; // lg+
+            }
+
+            updateSearchWidth() {
+                if (!this.searchContainer) return;
+
+                // Exact ReelNN breakpoint widths
+                const widths = ["150px", "200px", "320px"];
+                const targetWidth = widths[this.currentBreakpoint];
+
+                if (this.isSearchActive) {
+                    this.searchContainer.style.width = targetWidth;
+                    this.searchContainer.style.opacity = '1';
+                } else {
+                    this.searchContainer.style.width = '0';
+                    this.searchContainer.style.opacity = '0';
+                }
+            }
+
+            setupEventListeners() {
+                // Desktop search button
+                if (this.searchToggle) {
+                    this.searchToggle.addEventListener('click', () => this.toggleSearch());
+                }
+
+                // Mobile search button - should open mobile menu, not search input
+                if (this.mobileSearchBtn) {
+                    this.mobileSearchBtn.addEventListener('click', () => {
+                        const mobileMenu = document.getElementById('mobile-menu');
+                        if (mobileMenu) {
+                            mobileMenu.classList.toggle('hidden');
+                        }
+                    });
+                }
+
+                this.searchInput.addEventListener('input', (e) => this.handleSearchInput(e.target.value));
+                this.searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.performSearch();
+                    }
+                });
+
+                // Close search when clicking outside
+                document.addEventListener('click', (e) => {
+                    const isSearchButton = (this.searchToggle && this.searchToggle.contains(e.target));
+                    if (!this.searchContainer.contains(e.target) && !isSearchButton) {
+                        this.closeSearch();
+                    }
+                });
+            }
+
+            toggleSearch() {
+                if (this.isSearchActive) {
+                    this.closeSearch();
+                } else {
+                    this.openSearch();
+                }
+            }
+
+            openSearch() {
+                this.isSearchActive = true;
+
+                // Update desktop button styles only
+                if (this.searchToggle) {
+                    this.searchToggle.classList.add('bg-gray-700');
+                    this.searchToggle.classList.remove('hover:bg-gray-700/30');
+                }
+
+                const widths = ["150px", "200px", "320px"];
+                this.searchContainer.style.width = widths[this.currentBreakpoint];
+                this.searchContainer.style.opacity = '1';
+
+                setTimeout(() => {
+                    this.searchInput.focus();
+                }, 100);
+            }
+
+            closeSearch() {
+                this.isSearchActive = false;
+
+                // Reset desktop button styles only
+                if (this.searchToggle) {
+                    this.searchToggle.classList.remove('bg-gray-700');
+                    this.searchToggle.classList.add('hover:bg-gray-700/30');
+                }
+
+                this.searchContainer.style.width = '0';
+                this.searchContainer.style.opacity = '0';
+                this.hideSearchResults();
+            }
+
+            async handleSearchInput(query) {
+                if (query.length < 3) {
+                    this.hideSearchResults();
+                    return;
+                }
+
+                // Clear previous timeout
+                if (this.searchTimeout) {
+                    clearTimeout(this.searchTimeout);
+                }
+
+                // Debounce search
+                this.searchTimeout = setTimeout(async () => {
+                    try {
+                        const results = await this.fetchSearchResults(query);
+                        this.showSearchResults(results, query);
+                    } catch (error) {
+                        console.error('Search error:', error);
+                        this.showSearchError();
+                    }
+                }, 500);
+            }
+
+            async fetchSearchResults(query) {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=8`);
+                if (!response.ok) {
+                    throw new Error('Search request failed');
+                }
+                return await response.json();
+            }
+
+            performSearch() {
+                const query = this.searchInput.value.trim();
+                if (query) {
+                    window.location.href = `/search?q=${encodeURIComponent(query)}`;
+                }
+            }
+
+            showSearchResults(results, query) {
+                if (query.length < 3) {
+                    this.searchResultsContent.innerHTML = `
+                        <p class="text-gray-400 text-center py-4 sm:py-8 text-sm sm:text-base">
+                            Type at least 3 characters to search
+                        </p>
+                    `;
+                } else if (results.length === 0) {
+                    this.searchResultsContent.innerHTML = `
+                        <p class="text-gray-400 text-center py-4 sm:py-8 text-sm sm:text-base">
+                            No results found
+                        </p>
+                    `;
+                } else {
+                    this.searchResultsContent.innerHTML = `
+                        <div class="divide-y divide-gray-700">
+                            ${results.map(item => `
+                                <a href="/${item.media_type || (item.series_data ? 'show' : 'watch')}/${item.hash_id}"
+                                   class="block hover:bg-gray-800 transition-colors">
+                                    <div class="flex p-2 sm:p-3">
+                                        <div class="w-12 h-18 sm:w-16 sm:h-24 flex-shrink-0 relative rounded overflow-hidden">
+                                            ${item.poster_url ?
+                                                `<img src="${item.poster_url}" alt="${item.enhanced_title || item.file_name}" class="w-full h-full object-cover" loading="lazy" sizes="(max-width: 640px) 48px, 64px">` :
+                                                `<div class="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs">
+                                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                                                    </svg>
+                                                </div>`
+                                            }
+                                        </div>
+                                        <div class="ml-2 sm:ml-3 flex-grow">
+                                            <p class="font-medium text-xs sm:text-sm truncate text-white">
+                                                ${item.enhanced_title || item.file_name}
+                                            </p>
+                                            <div class="flex items-center text-xs text-gray-400 mt-0.5 sm:mt-1">
+                                                <span>${item.tmdb_data?.release_date?.substring(0, 4) || item.tmdb_data?.first_air_date?.substring(0, 4) || 'N/A'}</span>
+                                                <span class="mx-1">•</span>
+                                                <span>${item.series_data ? 'TV Show' : 'Movie'}</span>
+                                                ${item.tmdb_data?.vote_average ? `
+                                                    <span class="mx-1">•</span>
+                                                    <span>⭐ ${item.tmdb_data.vote_average.toFixed(1)}</span>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
+                this.searchResults.classList.remove('hidden');
+            }
+
+            showSearchError() {
+                this.searchResultsContent.innerHTML = `
+                    <p class="text-red-500 text-center py-4 sm:py-8 text-sm sm:text-base">
+                        An error occurred while searching. Please try again.
+                    </p>
+                `;
+                this.searchResults.classList.remove('hidden');
+            }
+
+            hideSearchResults() {
+                this.searchResults.classList.add('hidden');
+            }
+        }
+
+        // Initialize search when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new ReelnnSearch();
+        });
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

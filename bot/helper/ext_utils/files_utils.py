@@ -354,26 +354,19 @@ async def split_file(f_path, split_size, listener):
     # Ensure split size is in bytes and is an integer
     split_size_bytes = int(split_size)
 
-    # For extra safety, ensure split size is always below Telegram's limit
-    # For non-premium accounts, Telegram's limit is 2GB
-    telegram_limit = (
-        2000 * 1024 * 1024
-    )  # 2000 MiB (slightly less than 2 GiB for safety)
-
-    # If user is premium, use premium limit (4GB) but still with safety margin
-    if TgClient.IS_PREMIUM_USER:
-        telegram_limit = (
-            4000 * 1024 * 1024
-        )  # 4000 MiB (slightly less than 4 GiB for safety)
+    # Use the MAX_SPLIT_SIZE from TgClient which is already set based on premium status
+    # This ensures consistency across all modules
+    telegram_limit = TgClient.MAX_SPLIT_SIZE
 
     # Add a larger safety margin to ensure we're well under the limit
-    safety_margin = 50 * 1024 * 1024  # 50 MiB safety margin
+    # Use 100 MiB safety margin for extra protection against any overhead
+    safety_margin = 100 * 1024 * 1024  # 100 MiB safety margin
 
     # Final check to ensure split size is safe
     if split_size_bytes > (telegram_limit - safety_margin):
         split_size_bytes = telegram_limit - safety_margin
         LOGGER.info(
-            f"Final adjustment: split size set to {split_size_bytes / (1024 * 1024 * 1024):.2f} GiB"
+            f"Final adjustment: split size set to {split_size_bytes / (1024 * 1024 * 1024):.2f} GiB (with {safety_margin / (1024 * 1024):.0f} MiB safety margin)"
         )
 
     cmd = [
@@ -422,28 +415,25 @@ async def split_file(f_path, split_size, listener):
 
         # Check the size of each split file to ensure none exceed Telegram's limit
         oversized_files = []
+        telegram_limit = TgClient.MAX_SPLIT_SIZE
+        safety_margin = 100 * 1024 * 1024  # 100 MiB safety margin
+        safe_limit = telegram_limit - safety_margin
+
         for split_file in split_files:
             try:
                 split_file_size = await aiopath.getsize(split_file)
                 split_size_gb = split_file_size / (1024 * 1024 * 1024)
 
-                # For non-premium accounts, Telegram's limit is 2GB
-                telegram_limit = (
-                    2000 * 1024 * 1024
-                )  # 2000 MiB (slightly less than 2 GiB for safety)
-
-                # If user is premium, use premium limit (4GB) but still with safety margin
-                if TgClient.IS_PREMIUM_USER:
-                    telegram_limit = (
-                        4000 * 1024 * 1024
-                    )  # 4000 MiB (slightly less than 4 GiB for safety)
-
-                if split_file_size > telegram_limit:
+                if split_file_size > safe_limit:
                     LOGGER.error(
                         f"Split file {split_file} is {split_size_gb:.2f} GiB, which exceeds "
-                        f"Telegram's {telegram_limit / (1024 * 1024 * 1024):.2f} GiB limit!"
+                        f"safe limit of {safe_limit / (1024 * 1024 * 1024):.2f} GiB!"
                     )
                     oversized_files.append(split_file)
+                else:
+                    LOGGER.debug(
+                        f"Split file {split_file}: {split_size_gb:.2f} GiB (within safe limit)"
+                    )
             except Exception as e:
                 LOGGER.error(f"Error checking split file size: {e}")
 
@@ -566,6 +556,20 @@ class SevenZ:
             except Exception:
                 stderr = "Unable to decode the error!"
             LOGGER.error(f"{stderr}. Unable to extract archive!. Path: {f_path}")
+
+            # Clean up any partially extracted files to prevent zero-size file issues
+            try:
+                if await aiopath.exists(t_path):
+                    extracted_files = await listdir(t_path)
+                    if extracted_files:
+                        LOGGER.warning(
+                            f"Cleaning up {len(extracted_files)} partially extracted files from failed extraction"
+                        )
+                        await aiormtree(t_path, ignore_errors=True)
+                        await aiomakedirs(t_path, exist_ok=True)
+            except Exception as cleanup_error:
+                LOGGER.error(f"Error during extraction cleanup: {cleanup_error}")
+
         return code
 
     async def zip(self, dl_path, up_path, pswd):

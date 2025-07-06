@@ -425,7 +425,9 @@ def direct_link_generator(link):
     """direct links generator"""
     domain = urlparse(link).hostname
     if not domain:
-        raise DirectDownloadLinkException("ERROR: Invalid URL")
+        raise DirectDownloadLinkException(
+            "ERROR: Invalid URL - Unable to parse domain from the provided link"
+        )
     if "yadi.sk" in link or "disk.yandex." in link:
         return yandex_disk(link)
     if Config.DEBRID_LINK_API and any(
@@ -442,6 +444,10 @@ def direct_link_generator(link):
         return uploadhaven(link)
     if "fuckingfast.co" in domain:
         return fuckingfast_dl(link)
+    if "mediafile.cc" in domain:
+        return mediafile(link)
+    if "mediafire.com" in domain:
+        return mediafire(link)
     if "osdn.net" in domain:
         return osdn(link)
     if "github.com" in domain:
@@ -585,9 +591,7 @@ def direct_link_generator(link):
         ]
     ):
         return linkBox(link)
-    if is_share_link(link):
-        if "gdtot" in domain:
-            return gdtot(link)
+    elif is_share_link(link):
         if "filepress" in domain:
             return filepress(link)
         return sharer_scraper(link)
@@ -614,7 +618,9 @@ def direct_link_generator(link):
         ]
     ):
         raise DirectDownloadLinkException(f"ERROR: R.I.P {domain}")
-    raise DirectDownloadLinkException(f"No Direct link function found for {link}")
+    raise DirectDownloadLinkException(
+        f"No direct link function found for {domain}. This site is not supported for direct link generation. Try using a different download method or check if the link is correct."
+    )
 
 
 def get_captcha_token(session, params):
@@ -845,6 +851,103 @@ def uploadhaven(url):
         return a.get("href")
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {str(e)}") from e
+
+
+def mediafile(url):
+    """
+    Generate a direct download link for mediafile.cc URLs.
+    @param url: URL from mediafile.cc
+    @return: Direct download link
+    """
+    try:
+        res = get(url, allow_redirects=True)
+        match = search(r"href='([^']+)'", res.text)
+        if not match:
+            raise DirectDownloadLinkException("ERROR: Unable to find link data")
+        download_url = match.group(1)
+        sleep(60)
+        res = get(download_url, headers={"Referer": url}, cookies=res.cookies)
+        postvalue = search(r"showFileInformation(.*);", res.text)
+        if not postvalue:
+            raise DirectDownloadLinkException("ERROR: Unable to find post value")
+        postid = postvalue.group(1).replace("(", "").replace(")", "")
+        response = post(
+            "https://mediafile.cc/account/ajax/file_details",
+            data={"u": postid},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        html = response.json()["html"]
+        return [
+            i for i in findall(r'https://[^\s"\']+', html) if "download_token" in i
+        ][1]
+    except Exception as e:
+        raise DirectDownloadLinkException(f"ERROR: {str(e)}") from e
+
+
+def mediafire(url, session=None):
+    if "/folder/" in url:
+        return mediafireFolder(url)
+    if "::" in url:
+        _password = url.split("::")[-1]
+        url = url.split("::")[-2]
+    else:
+        _password = ""
+    if final_link := findall(
+        r"https?:\/\/download\d+\.mediafire\.com\/\S+\/\S+\/\S+", url
+    ):
+        return final_link[0]
+
+    def _repair_download(url, session):
+        try:
+            html = HTML(session.get(url).text)
+            if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
+                return mediafire(f"https://mediafire.com/{new_link[0]}")
+        except Exception as e:
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            ) from e
+
+    if session is None:
+        session = create_scraper()
+        parsed_url = urlparse(url)
+        url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+    try:
+        html = HTML(session.get(url).text)
+    except Exception as e:
+        session.close()
+        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
+    if error := html.xpath('//p[@class="notranslate"]/text()'):
+        session.close()
+        raise DirectDownloadLinkException(f"ERROR: {error[0]}")
+    if html.xpath("//div[@class='passwordPrompt']"):
+        if not _password:
+            session.close()
+            raise DirectDownloadLinkException(
+                f"ERROR: {PASSWORD_ERROR_MESSAGE}".format(url)
+            )
+        try:
+            html = HTML(session.post(url, data={"downloadp": _password}).text)
+        except Exception as e:
+            session.close()
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            ) from e
+        if html.xpath("//div[@class='passwordPrompt']"):
+            session.close()
+            raise DirectDownloadLinkException("ERROR: Wrong password.")
+    if not (final_link := html.xpath('//a[@aria-label="Download file"]/@href')):
+        if repair_link := html.xpath("//a[@class='retry']/@href"):
+            return _repair_download(repair_link[0], session)
+        raise DirectDownloadLinkException(
+            "ERROR: No links found in this page Try Again"
+        )
+    if final_link[0].startswith("//"):
+        final_url = f"https://{final_link[0][2:]}"
+        if _password:
+            final_url += f"::{_password}"
+        return mediafire(final_url, session)
+    session.close()
+    return final_link[0]
 
 
 def osdn(url):
@@ -1138,18 +1241,11 @@ def uploadee(url):
 
 
 def terabox(url):
-    from bot.core.config_manager import Config
-
     if "/file/" in url:
         return url
-
-    # Use TERABOX_PROXY if configured, otherwise use default API
-    if hasattr(Config, "TERABOX_PROXY") and Config.TERABOX_PROXY:
-        proxy_url = Config.TERABOX_PROXY.rstrip("/")
-        api_url = f"{proxy_url}/api?url={quote(url)}"
-    else:
-        api_url = f"https://wdzone-terabox-api.vercel.app/api?url={quote(url)}"
-
+    # Use configurable TERABOX_PROXY instead of hardcoded URL
+    proxy_base = Config.TERABOX_PROXY.rstrip("/")
+    api_url = f"{proxy_base}/api?url={quote(url)}"
     try:
         with Session() as session:
             req = session.get(api_url, headers={"User-Agent": user_agent}).json()
@@ -1177,81 +1273,35 @@ def terabox(url):
 
 
 def filepress(url):
-    with create_scraper() as session:
-        try:
-            url = session.get(url).url
-            raw = urlparse(url)
-            json_data = {
-                "id": raw.path.split("/")[-1],
-                "method": "publicDownlaod",
-            }
-            api = f"{raw.scheme}://{raw.hostname}/api/file/downlaod/"
-            res2 = session.post(
-                api,
-                headers={"Referer": f"{raw.scheme}://{raw.hostname}"},
-                json=json_data,
-            ).json()
-            json_data2 = {
-                "id": res2["data"],
-                "method": "publicUserDownlaod",
-            }
-            api2 = "https://new2.filepress.store/api/file/downlaod2/"
-            res = session.post(
-                api2,
-                headers={"Referer": f"{raw.scheme}://{raw.hostname}"},
-                json=json_data2,
-            ).json()
-        except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}",
-            ) from e
+    try:
+        url = get(f"https://filebee.xyz/file/{url.split('/')[-1]}").url
+        raw = urlparse(url)
+        json_data = {
+            "id": raw.path.split("/")[-1],
+            "method": "publicDownlaod",
+        }
+        api = f"{raw.scheme}://{raw.hostname}/api/file/downlaod/"
+        res2 = post(
+            api,
+            headers={"Referer": f"{raw.scheme}://{raw.hostname}"},
+            json=json_data,
+        ).json()
+        json_data2 = {
+            "id": res2["data"],
+            "method": "publicDownlaod",
+        }
+        api2 = f"{raw.scheme}://{raw.hostname}/api/file/downlaod2/"
+        res = post(
+            api2,
+            headers={"Referer": f"{raw.scheme}://{raw.hostname}"},
+            json=json_data2,
+        ).json()
+    except Exception as e:
+        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
+
     if "data" not in res:
         raise DirectDownloadLinkException(f"ERROR: {res['statusText']}")
     return f"https://drive.google.com/uc?id={res['data']}&export=download"
-
-
-def gdtot(url):
-    cget = create_scraper().request
-    try:
-        res = cget("GET", f"https://gdtot.pro/file/{url.split('/')[-1]}")
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
-    token_url = HTML(res.text).xpath(
-        "//a[contains(@class,'inline-flex items-center justify-center')]/@href",
-    )
-    if not token_url:
-        try:
-            url = cget("GET", url).url
-            p_url = urlparse(url)
-            res = cget(
-                "GET",
-                f"{p_url.scheme}://{p_url.hostname}/ddl/{url.split('/')[-1]}",
-            )
-        except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}",
-            ) from e
-        if (
-            drive_link := findall(r"myDl\('(.*?)'\)", res.text)
-        ) and "drive.google.com" in drive_link[0]:
-            return drive_link[0]
-        raise DirectDownloadLinkException(
-            "ERROR: Drive Link not found, Try in your broswer",
-        )
-    token_url = token_url[0]
-    try:
-        token_page = cget("GET", token_url)
-    except Exception as e:
-        raise DirectDownloadLinkException(
-            f"ERROR: {e.__class__.__name__} with {token_url}",
-        ) from e
-    path = findall(r'\("(.*?)"\)', token_page.text)
-    if not path:
-        raise DirectDownloadLinkException("ERROR: Cannot bypass this")
-    path = path[0]
-    raw = urlparse(token_url)
-    final_url = f"{raw.scheme}://{raw.hostname}{path}"
-    return sharer_scraper(final_url)
 
 
 def sharer_scraper(url):

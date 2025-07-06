@@ -15,7 +15,7 @@ from time import time
 import aiofiles
 import fitz  # PyMuPDF
 from aioshutil import rmtree
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from bot import DOWNLOAD_DIR, LOGGER, cpu_no
 from bot.core.config_manager import Config
@@ -63,7 +63,7 @@ def limit_memory_for_pil():
 
 
 async def get_streams(file):
-    """Get stream information from a media file using ffprobe.
+    """Get stream information from a media file using ffprobe with enhanced error handling.
 
     Args:
         file: Path to the media file
@@ -76,6 +76,17 @@ async def get_streams(file):
         LOGGER.error(f"File not found: {file}")
         return None
 
+    # Check file size - skip very small files that are likely corrupted
+    try:
+        file_size = os.path.getsize(file)
+        if file_size < 1024:  # Less than 1KB
+            LOGGER.warning(
+                f"File too small ({file_size} bytes), likely corrupted: {file}"
+            )
+            return None
+    except Exception as e:
+        LOGGER.warning(f"Could not get file size for {file}: {e}")
+
     # Get file modification time for cache key
     try:
         mtime = os.path.getmtime(file)
@@ -87,48 +98,185 @@ async def get_streams(file):
     except Exception:
         cache_key = None
 
-    # If not in cache or couldn't get mtime, run ffprobe
+    # Enhanced ffprobe command with better error handling
+    # Use ffprobe for stream analysis (xtra is ffmpeg, not ffprobe)
+    ffprobe_binary = "ffprobe"
+
     cmd = [
-        "ffprobe",  # Keep as ffprobe, not xtra
+        ffprobe_binary,
         "-hide_banner",
         "-loglevel",
-        "error",
+        "warning",  # Changed from "error" to "warning" for better diagnostics
+        "-analyzeduration",
+        "10000000",  # 10 seconds max analysis
+        "-probesize",
+        "50000000",  # 50MB max probe size
         "-print_format",
         "json",
         "-show_streams",
+        "-show_format",  # Also get format info for better validation
         file,
     ]
 
     # Execute the command
-    stdout, stderr, code = await cmd_exec(cmd)
+    try:
+        stdout, stderr, code = await cmd_exec(cmd)
+    except Exception as e:
+        LOGGER.warning(f"ffprobe execution failed for {file}: {e}")
+        return None
 
+    # Enhanced error handling for common media file issues
     if code != 0:
-        LOGGER.error(f"Error getting stream info: {stderr}")
+        error_msg = stderr.lower() if stderr else ""
+
+        # Handle specific common errors gracefully
+        if "moov atom not found" in error_msg:
+            LOGGER.warning(f"⚠️ Incomplete MP4 file (missing moov atom): {file}")
+            return None
+        if "ebml header parsing failed" in error_msg:
+            LOGGER.warning(
+                f"⚠️ Corrupted Matroska/WebM file (EBML header issue): {file}"
+            )
+            return None
+        if "invalid data found when processing input" in error_msg:
+            LOGGER.warning(f"⚠️ Corrupted media file detected: {file}")
+            return None
+        if "no such file or directory" in error_msg:
+            LOGGER.warning(f"⚠️ File disappeared during analysis: {file}")
+            return None
+        LOGGER.warning(f"⚠️ ffprobe failed for {file}: {stderr}")
+        return None
+
+    # Validate stdout is not empty
+    if not stdout or not stdout.strip():
+        LOGGER.warning(f"ffprobe returned empty output for {file}")
         return None
 
     try:
-        streams = json.loads(stdout)["streams"]
+        data = json.loads(stdout)
+        streams = data.get("streams", [])
+
+        # Validate we have actual streams
+        if not streams:
+            LOGGER.warning(f"No streams found in media file: {file}")
+            return None
+
+        # Additional validation - check if streams have required fields
+        valid_streams = []
+        for stream in streams:
+            if "codec_type" in stream and "index" in stream:
+                valid_streams.append(stream)
+            else:
+                LOGGER.warning(f"Invalid stream data in {file}: {stream}")
+
+        if not valid_streams:
+            LOGGER.warning(f"No valid streams found in {file}")
+            return None
 
         # Cache the result if we have a valid cache key
-        if cache_key and streams:
+        if cache_key and valid_streams:
             # If cache is too large, remove oldest entries
             if len(MEDIA_STREAMS_CACHE) >= MAX_CACHE_SIZE:
                 # Remove the first item (oldest)
                 MEDIA_STREAMS_CACHE.pop(next(iter(MEDIA_STREAMS_CACHE)))
 
-            MEDIA_STREAMS_CACHE[cache_key] = streams
+            MEDIA_STREAMS_CACHE[cache_key] = valid_streams
 
-        return streams
-    except KeyError:
-        LOGGER.error(
-            f"No streams found in the ffprobe output: {stdout}",
+        LOGGER.info(
+            f"✅ Successfully analyzed {len(valid_streams)} streams in {file}"
         )
+        return valid_streams
+
+    except KeyError as e:
+        LOGGER.warning(f"Missing expected data in ffprobe output for {file}: {e}")
         return None
-    except json.JSONDecodeError:
-        LOGGER.error(
-            f"Invalid JSON in ffprobe output: {stdout}",
-        )
+    except json.JSONDecodeError as e:
+        LOGGER.warning(f"Invalid JSON in ffprobe output for {file}: {e}")
         return None
+    except Exception as e:
+        LOGGER.error(f"Unexpected error processing ffprobe output for {file}: {e}")
+        return None
+
+
+async def validate_media_file(file_path: str) -> tuple[bool, str]:
+    """Validate media file integrity and detect common corruption issues.
+
+    Args:
+        file_path: Path to the media file
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    try:
+        # Check if file exists
+        if not await aiopath.exists(file_path):
+            return False, "File not found"
+
+        # Check file size
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size < 1024:  # Less than 1KB
+                return False, f"File too small ({file_size} bytes), likely corrupted"
+        except Exception as e:
+            return False, f"Cannot access file: {e}"
+
+        # Quick validation using ffprobe with minimal analysis
+        cmd = [
+            "ffprobe",  # Use ffprobe for stream analysis
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-analyzeduration",
+            "1000000",  # 1 second max
+            "-probesize",
+            "5000000",  # 5MB max
+            "-print_format",
+            "json",
+            "-show_format",
+            file_path,
+        ]
+
+        try:
+            stdout, stderr, code = await cmd_exec(cmd)
+        except Exception as e:
+            return False, f"Validation failed: {e}"
+
+        if code != 0:
+            error_msg = stderr.lower() if stderr else ""
+
+            # Detect specific corruption patterns
+            if "moov atom not found" in error_msg:
+                return False, "Incomplete MP4 file (missing moov atom)"
+            if "ebml header parsing failed" in error_msg:
+                return False, "Corrupted Matroska/WebM file (EBML header issue)"
+            if "invalid data found when processing input" in error_msg:
+                return False, "Corrupted media file detected"
+            if "no such file or directory" in error_msg:
+                return False, "File disappeared during validation"
+            return False, f"Media validation failed: {stderr}"
+
+        # Check if we got valid format info
+        if stdout:
+            try:
+                data = json.loads(stdout)
+                format_info = data.get("format", {})
+                if not format_info:
+                    return False, "No format information found"
+
+                # Check if duration is reasonable (not 0 or negative)
+                duration = float(format_info.get("duration", 0))
+                if duration <= 0:
+                    return False, "Invalid or zero duration"
+
+                return True, "Valid media file"
+
+            except json.JSONDecodeError:
+                return False, "Invalid ffprobe output"
+        else:
+            return False, "Empty ffprobe output"
+
+    except Exception as e:
+        return False, f"Validation error: {e}"
 
 
 async def create_thumb(msg, _id=""):
@@ -195,7 +343,7 @@ async def get_media_info(path):
     try:
         result = await cmd_exec(
             [
-                "ffprobe",  # Keep as ffprobe, not xtra
+                "ffprobe",  # Use ffprobe for stream analysis
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -321,7 +469,7 @@ async def get_document_type(path):
     try:
         result = await cmd_exec(
             [
-                "ffprobe",  # Keep as ffprobe, not xtra
+                "ffprobe",  # Use ffprobe for stream analysis
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -331,7 +479,7 @@ async def get_document_type(path):
                 path,
             ],
         )
-        if result[1] and mime_type.startswith("video"):
+        if result[0] and result[2] == 0 and mime_type.startswith("video"):
             is_video = True
     except Exception as e:
         LOGGER.error(
@@ -561,6 +709,7 @@ async def get_media_type(file_path):
 
 
 async def take_ss(video_file, ss_nb) -> bool:
+    """Take screenshots from video using simple approach like old Aeon"""
     duration = (await get_media_info(video_file))[0]
     if duration != 0:
         dirpath, name = video_file.rsplit("/", 1)
@@ -573,7 +722,7 @@ async def take_ss(video_file, ss_nb) -> bool:
         for i in range(ss_nb):
             output = f"{dirpath}/SS.{name}_{i:02}.png"
             cmd = [
-                "xtra",  # Using xtra instead of ffmpeg
+                "xtra",
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -585,28 +734,20 @@ async def take_ss(video_file, ss_nb) -> bool:
                 "1",
                 "-frames:v",
                 "1",
-                "-threads",
-                f"{max(1, cpu_no // 2)}",
+                "-y",  # Overwrite output
                 output,
             ]
             cap_time += interval
             cmds.append(cmd_exec(cmd))
         try:
-            resutls = await wait_for(gather(*cmds), timeout=60)
-            if resutls[0][2] != 0:
-                LOGGER.error(
-                    f"Error while creating sreenshots from video. Path: {video_file}. stderr: {resutls[0][1]}",
-                )
+            results = await wait_for(gather(*cmds), timeout=30)
+            if results[0][2] != 0:
                 await rmtree(dirpath, ignore_errors=True)
                 return False
         except Exception:
-            LOGGER.error(
-                f"Error while creating sreenshots from video. Path: {video_file}. Error: Timeout some issues with xtra (ffmpeg) with specific arch!",
-            )
             await rmtree(dirpath, ignore_errors=True)
             return False
         return dirpath
-    LOGGER.error("take_ss: Can't get the duration of video")
     return False
 
 
@@ -680,75 +821,44 @@ async def extract_album_art_with_pil(audio_file, output_path):
 
 
 async def get_audio_thumbnail(audio_file):
+    """Extract thumbnail from audio file using simple approach to avoid audio decoding errors"""
     output_dir = f"{DOWNLOAD_DIR}thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
+
+    # Simple approach - try to extract embedded album art without audio processing
     cmd = [
-        "xtra",  # Using xtra instead of ffmpeg
+        "xtra",
         "-hide_banner",
         "-loglevel",
         "error",
         "-i",
         audio_file,
-        "-an",
+        "-an",  # Disable audio processing
         "-vcodec",
         "copy",
-        "-threads",
-        f"{max(1, cpu_no // 2)}",
+        "-y",  # Overwrite output
         output,
     ]
+
     try:
-        _, err, code = await wait_for(cmd_exec(cmd), timeout=60)
+        _, err, code = await wait_for(cmd_exec(cmd), timeout=30)
         if code == 0 and await aiopath.exists(output):
-            # Check if the extracted image is valid and not empty
             if await aiopath.getsize(output) > 0:
                 return output
             await remove(output)
-            LOGGER.warning(f"Extracted empty thumbnail from audio: {audio_file}")
-        else:
-            LOGGER.warning(
-                f"Failed to extract thumbnail with first method: {audio_file} stderr: {err}",
-            )
-
-        # Try alternative method - extract album art using ffmpeg with different options
-        alt_output = ospath.join(output_dir, f"thumb_alt_{int(time())}.jpg")
-        alt_cmd = [
-            "xtra",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            audio_file,
-            "-map",
-            "0:v",
-            "-map",
-            "-0:V",
-            "-c",
-            "copy",
-            "-threads",
-            f"{max(1, cpu_no // 2)}",
-            alt_output,
-        ]
-
-        _, err, code = await wait_for(cmd_exec(alt_cmd), timeout=60)
-        if code == 0 and await aiopath.exists(alt_output):
-            if await aiopath.getsize(alt_output) > 0:
-                return alt_output
-            await remove(alt_output)
-            LOGGER.warning(
-                f"Extracted empty thumbnail from audio (alt method): {audio_file}"
-            )
-        else:
-            LOGGER.warning(
-                f"Failed to extract thumbnail with alternative method: {audio_file} stderr: {err}",
-            )
-            return None
     except Exception:
-        LOGGER.error(
-            f"Error while extracting thumbnail from audio. Name: {audio_file}. Error: Timeout some issues with xtra (ffmpeg) with specific arch!",
-        )
-        return None
-    return output
+        pass
+
+    # If extraction fails, try PIL method for embedded album art
+    try:
+        if await extract_album_art_with_pil(audio_file, output):
+            return output
+    except Exception:
+        pass
+
+    # If all methods fail, return None to trigger default thumbnail creation
+    return None
 
 
 # Output extension mappings for different track types and codecs
@@ -3892,93 +4002,8 @@ async def remove_tracks(
         return []
 
 
-async def create_default_audio_thumbnail(output_dir, user_id=None):
-    # Try user thumbnail first if available
-    if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
-        return f"thumbnails/{user_id}.jpg"
-    # Then try owner thumbnail
-    if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
-        return f"thumbnails/{Config.OWNER_ID}.jpg"
-
-    # Create a default audio thumbnail if no user/owner thumbnail
-    default_thumb = ospath.join(output_dir, "default_audio.jpg")
-
-    # First check if the default thumbnail already exists
-    if await aiopath.exists(default_thumb):
-        return default_thumb
-
-    # Try to create the default thumbnail using FFmpeg
-    try:
-        # Make sure the output directory exists
-        await makedirs(output_dir, exist_ok=True)
-
-        # Create a simple default audio thumbnail
-        cmd = [
-            "xtra",  # Using xtra instead of ffmpeg
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=blue:s=320x320",
-            "-ignore_unknown",
-            "-frames:v",
-            "1",
-            default_thumb,
-        ]
-
-        # Execute the command
-        _, err, code = await cmd_exec(cmd)
-
-        if code != 0 or not await aiopath.exists(default_thumb):
-            # Try with a different approach
-            cmd = [
-                "xtra",  # Using xtra instead of ffmpeg
-                "-f",
-                "lavfi",
-                "-i",
-                "color=c=blue:s=320x320",
-                "-ignore_unknown",
-                "-y",  # Overwrite output file
-                "-frames:v",
-                "1",
-                default_thumb,
-            ]
-
-            # Execute the command
-            _, err, code = await cmd_exec(cmd)
-
-            if code != 0 or not await aiopath.exists(default_thumb):
-                # As a last resort, try to create a simple image file directly
-                try:
-                    # Create a simple blue image (320x320 pixel) and save it
-                    from PIL import Image
-
-                    # Apply memory limits for PIL operations
-                    limit_memory_for_pil()
-
-                    img = Image.new("RGB", (320, 320), color=(0, 0, 255))
-                    img.save(default_thumb)
-                except Exception:
-                    # Create an even simpler fallback image
-                    try:
-                        # Create a tiny blue image and save it
-                        # Apply memory limits for PIL operations
-                        limit_memory_for_pil()
-
-                        img = Image.new("RGB", (32, 32), color=(0, 0, 255))
-                        img.save(default_thumb)
-                    except Exception:
-                        return None
-    except Exception:
-        return None
-
-    # Final check to make sure the thumbnail exists
-    if await aiopath.exists(default_thumb):
-        return default_thumb
-    return None
-
-
 async def get_video_thumbnail(video_file, duration):
-    """Extract a thumbnail from a video file with error handling and fallbacks"""
+    """Extract a thumbnail from a video file using simple approach like old Aeon"""
     output_dir = f"{DOWNLOAD_DIR}thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
@@ -3989,257 +4014,36 @@ async def get_video_thumbnail(video_file, duration):
         duration = 3
     duration = duration // 2
 
-    # First attempt - extract from middle of video
-    try:
-        cmd = [
-            "xtra",  # Using xtra instead of ffmpeg
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-ss",
-            f"{duration}",
-            "-i",
-            video_file,
-            "-vf",
-            "scale=640:-1",
-            "-q:v",
-            "5",
-            "-vframes",
-            "1",
-            "-threads",
-            "1",
-            output,
-        ]
+    # Simple approach - extract thumbnail from middle of video
+    cmd = [
+        "xtra",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{duration}",
+        "-i",
+        video_file,
+        "-vf",
+        "scale=640:-1",
+        "-q:v",
+        "5",
+        "-vframes",
+        "1",
+        "-y",  # Overwrite output
+        output,
+    ]
 
-        _, _, code = await wait_for(cmd_exec(cmd), timeout=60)
+    try:
+        _, _, code = await cmd_exec(cmd)
         if code == 0 and await aiopath.exists(output):
             if await aiopath.getsize(output) > 0:
                 return output
             await remove(output)
     except Exception:
-        # Suppress detailed errors
         pass
 
-    # Second attempt - extract from beginning of video
-    try:
-        alt_output = ospath.join(output_dir, f"thumb_alt_{int(time())}.jpg")
-        alt_cmd = [
-            "xtra",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            video_file,
-            "-vf",
-            "scale=640:-1",
-            "-q:v",
-            "5",
-            "-vframes",
-            "1",
-            "-threads",
-            f"{max(1, cpu_no // 2)}",
-            alt_output,
-        ]
-
-        _, _, code = await wait_for(cmd_exec(alt_cmd), timeout=60)
-        if code == 0 and await aiopath.exists(alt_output):
-            if await aiopath.getsize(alt_output) > 0:
-                return alt_output
-            await remove(alt_output)
-    except Exception:
-        # Suppress detailed errors
-        pass
-
-    # Both methods failed
-    return None
-
-
-async def create_default_text_thumbnail(output_dir, user_id=None):
-    # Try user thumbnail first if available
-    if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
-        return f"thumbnails/{user_id}.jpg"
-    # Then try owner thumbnail
-    if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
-        return f"thumbnails/{Config.OWNER_ID}.jpg"
-
-    # Create a default thumbnail for text files if no user/owner thumbnail
-    default_thumb = ospath.join(output_dir, "default_text.jpg")
-    if not await aiopath.exists(default_thumb):
-        # Create a simple default text file thumbnail
-        cmd = [
-            "xtra",  # Using xtra instead of ffmpeg
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=gray:s=320x320",
-            "-frames:v",
-            "1",
-            default_thumb,
-        ]
-        _, _, code = await cmd_exec(cmd)
-
-        if code != 0 or not await aiopath.exists(default_thumb):
-            # If FFmpeg fails, try with PIL
-            try:
-                # Apply memory limits for PIL operations
-                limit_memory_for_pil()
-
-                # Create a simple gray image
-                img = Image.new("RGB", (320, 320), color=(128, 128, 128))
-                img.save(default_thumb)
-            except Exception:
-                return None
-
-    if await aiopath.exists(default_thumb):
-        return default_thumb
-    return None
-
-
-async def create_default_video_thumbnail(output_dir, user_id=None):
-    try:
-        # Try user thumbnail first if available
-        if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
-            return f"thumbnails/{user_id}.jpg"
-        # Then try owner thumbnail
-        if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
-            return f"thumbnails/{Config.OWNER_ID}.jpg"
-
-        # Create a default thumbnail for video files if no user/owner thumbnail
-        default_thumb = ospath.join(output_dir, "default_video.jpg")
-
-        # Make sure the output directory exists
-        await makedirs(output_dir, exist_ok=True)
-
-        # If a default thumbnail already exists, use it
-        if await aiopath.exists(default_thumb):
-            return default_thumb
-
-        # Create a simple default video thumbnail
-        cmd = [
-            "xtra",  # Using xtra instead of ffmpeg
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=black:s=640x360",
-            "-vf",
-            "drawtext=text='Video':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2",
-            "-frames:v",
-            "1",
-            default_thumb,
-        ]
-
-        try:
-            # Try with a timeout to prevent hanging
-            _, _, code = await wait_for(cmd_exec(cmd), timeout=30)
-
-            if code != 0 or not await aiopath.exists(default_thumb):
-                # Try with a simpler command
-                cmd = [
-                    "xtra",
-                    "-f",
-                    "lavfi",
-                    "-i",
-                    "color=c=black:s=640x360",
-                    "-frames:v",
-                    "1",
-                    default_thumb,
-                ]
-                _, _, code = await wait_for(cmd_exec(cmd), timeout=30)
-        except Exception as e:
-            LOGGER.error(f"Error creating thumbnail with xtra: {e}")
-            code = 1  # Force fallback to PIL
-
-        if code != 0 or not await aiopath.exists(default_thumb):
-            # If FFmpeg fails, try with PIL
-            try:
-                # Apply memory limits for PIL operations
-                limit_memory_for_pil()
-
-                # Create a simple black image
-                img = Image.new("RGB", (640, 360), color=(0, 0, 0))
-
-                # Try to add text if possible
-                try:
-                    draw = ImageDraw.Draw(img)
-                    # Try to load a font, fall back to default if not available
-                    try:
-                        font = ImageFont.truetype("DejaVuSans.ttf", 24)
-                    except Exception:
-                        font = ImageFont.load_default()
-
-                    # Add text to the image
-                    draw.text(
-                        (320, 180),
-                        "Video",
-                        fill=(255, 255, 255),
-                        font=font,
-                        anchor="mm",
-                    )
-                except Exception:
-                    # If text drawing fails, just use the black image
-                    pass
-
-                img.save(default_thumb)
-                LOGGER.info(f"Created default thumbnail with PIL: {default_thumb}")
-            except Exception as e:
-                LOGGER.error(f"Error creating thumbnail with PIL: {e}")
-                # Last resort: create a tiny image
-                try:
-                    img = Image.new("RGB", (32, 32), color=(0, 0, 0))
-                    img.save(default_thumb)
-                    LOGGER.info(f"Created minimal thumbnail: {default_thumb}")
-                except Exception as e:
-                    LOGGER.error(f"Failed to create even minimal thumbnail: {e}")
-                    return None
-
-        if await aiopath.exists(default_thumb):
-            return default_thumb
-        return None
-    except Exception as e:
-        LOGGER.error(f"Unexpected error in create_default_video_thumbnail: {e}")
-        return None
-
-
-async def create_default_image_thumbnail(output_dir, user_id=None):
-    # Try user thumbnail first if available
-    if user_id and await aiopath.exists(f"thumbnails/{user_id}.jpg"):
-        return f"thumbnails/{user_id}.jpg"
-    # Then try owner thumbnail
-    if await aiopath.exists(f"thumbnails/{Config.OWNER_ID}.jpg"):
-        return f"thumbnails/{Config.OWNER_ID}.jpg"
-
-    # Create a default thumbnail for image files if no user/owner thumbnail
-    default_thumb = ospath.join(output_dir, "default_image.jpg")
-    if not await aiopath.exists(default_thumb):
-        # Create a simple default image thumbnail
-        cmd = [
-            "xtra",  # Using xtra instead of ffmpeg
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=purple:s=640x360",
-            "-vf",
-            "drawtext=text='Image':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2",
-            "-frames:v",
-            "1",
-            default_thumb,
-        ]
-        _, _, code = await cmd_exec(cmd)
-
-        if code != 0 or not await aiopath.exists(default_thumb):
-            # If FFmpeg fails, try with PIL
-            try:
-                # Apply memory limits for PIL operations
-                limit_memory_for_pil()
-
-                # Create a simple purple image
-                img = Image.new("RGB", (640, 360), color=(128, 0, 128))
-                img.save(default_thumb)
-            except Exception:
-                return None
-
-    if await aiopath.exists(default_thumb):
-        return default_thumb
+    # If extraction fails, return None to trigger default thumbnail creation
     return None
 
 
@@ -4611,7 +4415,7 @@ async def get_media_type_for_watermark(file):
 
         # Use ffprobe to get file information
         cmd = [
-            "ffprobe",  # Keep as ffprobe, not xtra
+            "ffprobe",  # Use ffprobe for stream analysis
             "-v",
             "error",
             "-show_entries",
@@ -5044,7 +4848,7 @@ class FFMpeg:
             # Use ffprobe to get stream information
             result = await cmd_exec(
                 [
-                    "ffprobe",
+                    "ffprobe",  # Use ffprobe for stream analysis
                     "-hide_banner",
                     "-loglevel",
                     "error",
@@ -5094,7 +4898,7 @@ class FFMpeg:
             # Use ffprobe to get detailed stream information
             result = await cmd_exec(
                 [
-                    "ffprobe",
+                    "ffprobe",  # Use ffprobe for stream analysis
                     "-hide_banner",
                     "-loglevel",
                     "error",

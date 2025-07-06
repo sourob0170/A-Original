@@ -4,12 +4,31 @@ OWNER_ID = 0  # Your Telegram User ID (not username) as an integer
 TELEGRAM_API = 0  # Get this from my.telegram.org
 TELEGRAM_HASH = ""  # Get this from my.telegram.org
 
+# SEMI-REQUIRED, WE SUGGEST TO FILL IT FROM MONGODB
+DATABASE_URL = ""  # MongoDB URI for storing user data and preferences
+
+# Heroku config for get BASE_URL automatically
+HEROKU_APP_NAME = ""
+HEROKU_API_KEY = ""
+HEROKU_EMAIL = ""  # Your Heroku account email
+HEROKU_TEAM_NAME = (
+    ""  # Optional: Your Heroku team name (leave empty if not using teams)
+)
+HEROKU_REGION = (
+    "eu"  # Heroku deployment region: "eu" for Europe or "us" for United States
+)
+
+# AUTO REDEPLOY CONFIG
+AUTO_REDEPLOY = False  # Enable/disable automatic redeployment on schedule
+REDEPLOY_INTERVAL_DAYS = 7  # Auto redeploy interval in days (1, 3, 7, 14, or 30)
+
+# Update
+UPSTREAM_REPO = "https://github.com/AeonOrg/Aeon-MLTB"  # Repository URL for updates
+UPSTREAM_BRANCH = "extended"  # Branch to use for updates
+
 # Branding Settings
 CREDIT = "Powered by @aimmirror"  # Credit text shown in status messages and RSS feeds (default: "Powered by @aimmirror")
 OWNER_THUMB = "https://graph.org/file/80b7fb095063a18f9e232.jpg"  # Default thumbnail URL for owner (accepts Telegram file links)
-
-# SEMI-REQUIRED, WE SUGGEST TO FILL IT FROM MONGODB
-DATABASE_URL = ""  # MongoDB URI for storing user data and preferences
 
 # OPTIONAL CONFIG
 TG_PROXY = {}  # Proxy for Telegram connection, format: {'addr': 'ip:port', 'username': 'username', 'password': 'password'}
@@ -103,21 +122,16 @@ MEGA_PASSWORD = ""  # Mega.nz account password (optional, for premium features)
 
 # MEGA Upload Settings
 MEGA_UPLOAD_ENABLED = True  # Enable MEGA upload functionality
-MEGA_UPLOAD_FOLDER = ""  # Default upload folder path in MEGA account (empty = root)
+# MEGA_UPLOAD_FOLDER removed - using folder selector instead
 MEGA_UPLOAD_PUBLIC = True  # Generate public links by default
-MEGA_UPLOAD_PRIVATE = False  # Generate private links
-MEGA_UPLOAD_UNLISTED = False  # Generate unlisted links
-MEGA_UPLOAD_EXPIRY_DAYS = 0  # Link expiry in days (0 = no expiry)
-MEGA_UPLOAD_PASSWORD = ""  # Password protection for uploads
-MEGA_UPLOAD_ENCRYPTION_KEY = ""  # Custom encryption key for uploads
+# MEGA_UPLOAD_PRIVATE removed - not supported by MEGA SDK v4.8.0
+# MEGA_UPLOAD_UNLISTED removed - not supported by MEGA SDK v4.8.0
+# MEGA_UPLOAD_EXPIRY_DAYS removed - premium feature not implemented
+# MEGA_UPLOAD_PASSWORD removed - premium feature not implemented
+# MEGA_UPLOAD_ENCRYPTION_KEY removed - not supported by MEGA SDK v4.8.0
 MEGA_UPLOAD_THUMBNAIL = True  # Generate thumbnails for videos using FFmpeg
-MEGA_UPLOAD_DELETE_AFTER = False  # Delete local files after upload
+# MEGA_UPLOAD_DELETE_AFTER removed - always delete after upload
 
-# MEGA Clone Settings
-MEGA_CLONE_ENABLED = True  # Enable MEGA clone functionality
-MEGA_CLONE_TO_FOLDER = ""  # Default folder for cloned files (empty = root)
-MEGA_CLONE_PRESERVE_STRUCTURE = True  # Preserve folder structure when cloning
-MEGA_CLONE_OVERWRITE = False  # Overwrite existing files when cloning
 
 # MEGA Search Settings
 MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
@@ -126,8 +140,7 @@ MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
 DDL_ENABLED = True  # Enable/disable DDL upload feature
 DDL_DEFAULT_SERVER = "gofile"  # Default DDL server: gofile, streamtape
 
-# Gofile Settings
-GOFILE_ENABLED = True  # Enable/disable Gofile uploads
+# Gofile Settings (Enabled automatically when API key is provided)
 GOFILE_API_KEY = ""  # Default Gofile API key (can be overridden per user)
 GOFILE_FOLDER_NAME = ""  # Default folder name for uploads (empty = use filename)
 GOFILE_PUBLIC_LINKS = True  # Generate public links by default
@@ -135,11 +148,21 @@ GOFILE_PASSWORD_PROTECTION = False  # Enable password protection
 GOFILE_DEFAULT_PASSWORD = ""  # Default password for protected uploads
 GOFILE_LINK_EXPIRY_DAYS = 0  # Link expiry in days (0 = no expiry)
 
-# Streamtape Settings
-STREAMTAPE_ENABLED = True  # Enable/disable Streamtape uploads
+# Streamtape Settings (Enabled automatically when login and API key are provided)
 STREAMTAPE_LOGIN = ""  # Default Streamtape login
 STREAMTAPE_API_KEY = ""  # Default Streamtape API key
 STREAMTAPE_FOLDER_NAME = ""  # Default folder name for uploads
+
+# File-to-Link Settings
+FILE_TO_LINK_ENABLED = True  # Enable/disable file-to-link functionality
+STREAM_SECURITY_HASH = True  # Enable hash-based security
+PERMANENT_LINKS = True  # Links don't expire
+STREAM_PASSWORD_PROTECTION = False  # Enable password protection for files
+STREAM_DEFAULT_PASSWORD = ""  # Default password for protected files
+STREAM_NO_ADS = True  # Ensure no ads in generated links
+BANNED_STREAM_CHANNELS = ""  # Comma-separated list of banned channel IDs
+STREAM_CACHE_ENABLED = True  # Enable caching for better performance
+STREAM_LOAD_BALANCING = True  # Enable multi-client load balancing
 
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
@@ -166,9 +189,6 @@ USENET_SERVERS = [  # List of Usenet servers for NZB downloads
     },
 ]
 
-# Update
-UPSTREAM_REPO = "https://github.com/AeonOrg/Aeon-MLTB"  # Repository URL for updates
-UPSTREAM_BRANCH = "extended"  # Branch to use for updates
 
 # Leech
 LEECH_SPLIT_SIZE = 0  # Size of split files in bytes, 0 means no split
@@ -204,9 +224,6 @@ QUEUE_ALL = 0  # Maximum number of concurrent tasks (0 = unlimited)
 QUEUE_DOWNLOAD = 0  # Maximum number of concurrent downloads (0 = unlimited)
 QUEUE_UPLOAD = 0  # Maximum number of concurrent uploads (0 = unlimited)
 
-# Heroku config for get BASE_URL automatically
-HEROKU_APP_NAME = ""
-HEROKU_API_KEY = ""
 
 # RSS - Optimized for better resource management
 RSS_DELAY = 900  # Increased delay to 15 minutes for better resource efficiency
@@ -283,7 +300,9 @@ GC_AGGRESSIVE_MODE = (
 )
 
 # Extra Modules Settings
-ENABLE_EXTRA_MODULES = True  # Enable additional modules and features
+AI_ENABLED = True  # Enable/disable AI functionality
+IMDB_ENABLED = True  # Enable/disable IMDB functionality
+TRUECALLER_ENABLED = True  # Enable/disable Truecaller functionality
 
 # Encoding/Decoding Settings
 ENCODING_ENABLED = True  # Enable/disable encoding functionality
@@ -295,6 +314,53 @@ VT_API_TIMEOUT = 500  # VirusTotal API timeout in seconds
 VT_ENABLED = False  # Enable/disable VirusTotal functionality
 VT_MAX_FILE_SIZE = (
     33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
+)
+
+# Enhanced NSFW Detection Settings
+NSFW_DETECTION_ENABLED = True  # Master toggle for NSFW detection
+NSFW_DETECTION_SENSITIVITY = (
+    "moderate"  # Detection sensitivity: strict, moderate, permissive
+)
+NSFW_KEYWORD_DETECTION = (
+    True  # Enable enhanced keyword detection with fuzzy matching
+)
+NSFW_VISUAL_DETECTION = (
+    False  # Enable AI-powered visual content analysis (requires API keys)
+)
+NSFW_AUDIO_DETECTION = False  # Enable audio content analysis (experimental)
+NSFW_FUZZY_MATCHING = True  # Enable fuzzy keyword matching for misspellings
+NSFW_LEETSPEAK_DETECTION = True  # Detect leetspeak variations (p0rn, s3x, etc.)
+NSFW_MULTI_LANGUAGE = True  # Enable multi-language keyword support
+NSFW_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for NSFW detection (0.0-1.0)
+NSFW_CACHE_DURATION = 3600  # Cache detection results for 1 hour (seconds)
+NSFW_MAX_FILE_SIZE = 52428800  # Maximum file size for NSFW analysis (50MB)
+NSFW_VIDEO_ANALYSIS = True  # Enable video frame analysis
+NSFW_VIDEO_FRAME_COUNT = 5  # Number of frames to extract for analysis
+NSFW_FRAME_QUALITY = 2  # Frame extraction quality (1-5, higher = better quality)
+NSFW_AUDIO_ANALYSIS = True  # Enable audio content analysis
+NSFW_SUBTITLE_ANALYSIS = True  # Enable subtitle text analysis
+
+# NSFW Visual Analysis API Settings (choose one or more providers)
+NSFW_GOOGLE_VISION_API_KEY = ""  # Google Cloud Vision API key for content safety
+NSFW_AWS_ACCESS_KEY = ""  # AWS Rekognition access key
+NSFW_AWS_SECRET_KEY = ""  # AWS Rekognition secret key
+NSFW_AWS_REGION = "us-east-1"  # AWS region for Rekognition
+NSFW_AZURE_ENDPOINT = ""  # Azure Content Moderator endpoint URL
+NSFW_AZURE_KEY = ""  # Azure Content Moderator subscription key
+NSFW_OPENAI_API_KEY = ""  # OpenAI API key for GPT-4 Vision analysis
+
+# NSFW Text Analysis API Settings
+NSFW_PERSPECTIVE_API_KEY = ""  # Google Perspective API key for toxicity detection
+NSFW_OPENAI_MODERATION = False  # Use OpenAI moderation API for text analysis
+
+# NSFW Behavior and Logging Settings
+NSFW_LOG_DETECTIONS = True  # Log all NSFW detections for analysis and improvement
+NSFW_STORE_METADATA = True  # Store detection metadata in database for tracking
+NSFW_AUTO_DELETE = (
+    False  # Automatically delete detected NSFW content (use with caution)
+)
+NSFW_NOTIFY_ADMINS = (
+    True  # Send notifications to admins when NSFW content is detected
 )
 TRUECALLER_API_URL = ""  # Truecaller API URL for phone number lookup
 
@@ -989,6 +1055,41 @@ ADD_ATTACHMENT_ENABLED = False  # Enable/disable attachment addition
 # ADD_ATTACHMENT_PATH has been removed
 ADD_ATTACHMENT_INDEX = None  # Attachment index to add: None (all), 0, 1, 2, etc.
 ADD_ATTACHMENT_MIMETYPE = "none"  # MIME type: none, font/ttf, image/png, etc.
+
+# Swap Settings
+SWAP_ENABLED = False  # Master switch to enable/disable swap feature
+SWAP_PRIORITY = 6  # Processing priority in pipeline (lower numbers run earlier)
+SWAP_REMOVE_ORIGINAL = False  # Delete original files after successful swap operation
+
+# Audio Swap Settings
+SWAP_AUDIO_ENABLED = False  # Enable/disable audio track swapping
+SWAP_AUDIO_USE_LANGUAGE = (
+    True  # Use language-based swapping (True) or index-based (False)
+)
+SWAP_AUDIO_LANGUAGE_ORDER = "eng,hin"  # Language priority order: eng,hin,jpn,etc.
+SWAP_AUDIO_INDEX_ORDER = (
+    "0,1"  # Index swap order: 0,1 (swap first two), 1,2,0 (rotate), etc.
+)
+
+# Video Swap Settings
+SWAP_VIDEO_ENABLED = False  # Enable/disable video track swapping
+SWAP_VIDEO_USE_LANGUAGE = (
+    True  # Use language-based swapping (True) or index-based (False)
+)
+SWAP_VIDEO_LANGUAGE_ORDER = "eng,hin"  # Language priority order: eng,hin,jpn,etc.
+SWAP_VIDEO_INDEX_ORDER = (
+    "0,1"  # Index swap order: 0,1 (swap first two), 1,2,0 (rotate), etc.
+)
+
+# Subtitle Swap Settings
+SWAP_SUBTITLE_ENABLED = False  # Enable/disable subtitle track swapping
+SWAP_SUBTITLE_USE_LANGUAGE = (
+    True  # Use language-based swapping (True) or index-based (False)
+)
+SWAP_SUBTITLE_LANGUAGE_ORDER = "eng,hin"  # Language priority order: eng,hin,jpn,etc.
+SWAP_SUBTITLE_INDEX_ORDER = (
+    "0,1"  # Index swap order: 0,1 (swap first two), 1,2,0 (rotate), etc.
+)
 
 # Convert Settings
 CONVERT_ENABLED = False  # Master switch to enable/disable convert feature

@@ -52,6 +52,89 @@ class QuickInfoFormatter:
             f"👥 <b>Members:</b> <code>{members_count}</code>" + access_note
         )
 
+    @staticmethod
+    def format_media_info(message) -> str:
+        """Format media information from a message"""
+        media_info = []
+
+        if message.photo:
+            photo = message.photo
+            media_info.append(f"📷 <b>Photo:</b> {photo.width}x{photo.height}")
+            if photo.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {photo.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        elif message.video:
+            video = message.video
+            media_info.append(f"🎥 <b>Video:</b> {video.width}x{video.height}")
+            if video.duration:
+                media_info.append(f"⏱ <b>Duration:</b> {video.duration}s")
+            if video.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {video.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        elif message.audio:
+            audio = message.audio
+            media_info.append(f"🎵 <b>Audio:</b> {audio.title or 'Unknown'}")
+            if audio.performer:
+                media_info.append(f"👤 <b>Artist:</b> {audio.performer}")
+            if audio.duration:
+                media_info.append(f"⏱ <b>Duration:</b> {audio.duration}s")
+            if audio.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {audio.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        elif message.voice:
+            voice = message.voice
+            media_info.append("🎤 <b>Voice Message</b>")
+            if voice.duration:
+                media_info.append(f"⏱ <b>Duration:</b> {voice.duration}s")
+            if voice.file_size:
+                media_info.append(f"📦 <b>Size:</b> {voice.file_size / 1024:.2f} KB")
+
+        elif message.video_note:
+            video_note = message.video_note
+            media_info.append("📹 <b>Video Note</b>")
+            if video_note.duration:
+                media_info.append(f"⏱ <b>Duration:</b> {video_note.duration}s")
+            if video_note.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {video_note.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        elif message.document:
+            document = message.document
+            media_info.append(
+                f"📄 <b>Document:</b> {document.file_name or 'Unknown'}"
+            )
+            if document.mime_type:
+                media_info.append(f"🏷 <b>Type:</b> {document.mime_type}")
+            if document.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {document.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        elif message.sticker:
+            sticker = message.sticker
+            media_info.append(f"🎭 <b>Sticker:</b> {sticker.emoji or '❓'}")
+            if sticker.set_name:
+                media_info.append(f"📦 <b>Set:</b> {sticker.set_name}")
+
+        elif message.animation:
+            animation = message.animation
+            media_info.append(f"🎬 <b>GIF:</b> {animation.width}x{animation.height}")
+            if animation.duration:
+                media_info.append(f"⏱ <b>Duration:</b> {animation.duration}s")
+            if animation.file_size:
+                media_info.append(
+                    f"📦 <b>Size:</b> {animation.file_size / 1024 / 1024:.2f} MB"
+                )
+
+        return "\n".join(media_info) if media_info else ""
+
 
 def is_quickinfo_enabled() -> bool:
     """Check if QuickInfo feature is enabled"""

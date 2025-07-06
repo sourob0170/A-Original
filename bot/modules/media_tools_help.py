@@ -49,20 +49,23 @@ def get_page_content(page_num):
         21: get_add_intro_page_1(),
         22: get_add_intro_page_2(),
         23: get_add_settings_page(),
+        # Swap pages
+        24: get_swap_intro_page(),
+        25: get_swap_settings_page(),
         # Other pages
-        24: get_priority_guide_page(),
-        25: get_usage_examples_page_1(),
-        26: get_usage_examples_page_2(),
+        26: get_priority_guide_page(),
+        27: get_usage_examples_page_1(),
+        28: get_usage_examples_page_2(),
         # Metadata page
-        27: get_metadata_guide_page(),
+        29: get_metadata_guide_page(),
         # MT Flag page
-        28: get_mt_flag_guide_page(),
+        30: get_mt_flag_guide_page(),
     }
     return pages.get(page_num, "Invalid page")
 
 
 def get_merge_intro_page():
-    msg = "<b>Merge Feature Guide (1/22)</b>\n\n"
+    msg = "<b>Merge Feature Guide (1/24)</b>\n\n"
     msg += "<b>Merge Flags</b>: -merge-video -merge-audio -merge-subtitle -merge-image -merge-pdf -merge-all\n\n"
 
     msg += "<b>Usage</b>:\n"
@@ -1105,7 +1108,7 @@ def get_remove_settings_page():
 
 
 def get_priority_guide_page():
-    msg = "<b>Media Tools Priority Guide (24/28)</b>\n\n"
+    msg = "<b>Media Tools Priority Guide (26/30)</b>\n\n"
     msg += "<b>Understanding Priority Settings:</b>\n"
     msg += "Media tools (merge, watermark, convert, compression, trim, extract) use a priority system to determine the order of processing.\n\n"
 
@@ -1144,7 +1147,7 @@ def get_priority_guide_page():
 
 
 def get_metadata_guide_page():
-    msg = "<b>Metadata Feature Guide (27/28)</b>\n\n"
+    msg = "<b>Metadata Feature Guide (29/30)</b>\n\n"
     msg += "<b>Metadata Feature</b>\n"
     msg += "Add custom metadata to media files (videos, audio, images, documents) to enhance organization and information.\n\n"
 
@@ -1217,7 +1220,7 @@ def get_metadata_guide_page():
 
 
 def get_usage_examples_page_1():
-    msg = "<b>Media Tools Usage Examples (1/2) (25/28)</b>\n\n"
+    msg = "<b>Media Tools Usage Examples (1/2) (27/30)</b>\n\n"
 
     msg += "<b>Merge Examples</b>:\n"
     msg += "• <code>/leech https://example.com/videos.zip -merge-video</code>\n"
@@ -1245,6 +1248,12 @@ def get_usage_examples_page_1():
     msg += "• <code>/mirror https://example.com/audio.wav -ca mp3</code>\n"
     msg += "  Converts WAV audio to MP3 format\n\n"
 
+    msg += "<b>Swap Examples</b>:\n"
+    msg += "• <code>/leech https://example.com/movie.mkv -swap</code>\n"
+    msg += "  Reorders tracks based on language priority\n\n"
+    msg += "• <code>/mirror https://example.com/series.zip -swap-audio</code>\n"
+    msg += "  Swaps only audio tracks in all files\n\n"
+
     msg += "<b>Combined Usage</b>:\n"
     msg += '• <code>/leech https://example.com/videos.zip -merge-video -wm "My Channel"</code>\n'
     msg += "  Merges videos, then adds text watermark\n\n"
@@ -1259,7 +1268,7 @@ def get_usage_examples_page_1():
 
 
 def get_usage_examples_page_2():
-    msg = "<b>Media Tools Usage Examples (2/2) (26/28)</b>\n\n"
+    msg = "<b>Media Tools Usage Examples (2/2) (28/30)</b>\n\n"
 
     msg += "<b>Compression Examples</b>:\n"
     msg += "• <code>/leech https://example.com/video.mp4 -video-fast</code>\n"
@@ -1339,7 +1348,7 @@ def get_usage_examples_page_2():
 
 
 def get_mt_flag_guide_page():
-    msg = "<b>Media Tools Flag Guide (28/28)</b>\n\n"
+    msg = "<b>Media Tools Flag Guide (30/30)</b>\n\n"
     msg += "<b>Media Tools Flag</b>: -mt\n\n"
     msg += "/cmd link -mt (opens media tools settings before starting the task)\n\n"
 
@@ -1459,7 +1468,7 @@ def get_add_intro_page_2():
 
 
 def get_add_settings_page():
-    msg = "<b>Add Settings (23/28)</b>\n\n"
+    msg = "<b>Add Settings (23/30)</b>\n\n"
 
     msg += "<b>Main Settings</b>:\n"
     msg += "• <b>Add Enabled</b>: Enable or disable the add feature globally\n"
@@ -1527,11 +1536,98 @@ def get_add_settings_page():
     return msg
 
 
+def get_swap_intro_page():
+    msg = "<b>Swap Feature Guide (24/30)</b>\n\n"
+    msg += "<b>Swap Flag</b>: -swap\n\n"
+
+    msg += "<b>Usage</b>:\n"
+    msg += "• <code>/cmd link -swap</code> - Reorder tracks based on language or index\n"
+    msg += "• <code>/cmd link -swap-audio</code> - Swap only audio tracks\n"
+    msg += "• <code>/cmd link -swap-video</code> - Swap only video tracks\n"
+    msg += "• <code>/cmd link -swap-subtitle</code> - Swap only subtitle tracks\n\n"
+
+    msg += "<b>Two Swapping Modes</b>:\n"
+    msg += "• <b>Language-based</b>: Reorder tracks by language priority\n"
+    msg += "• <b>Index-based</b>: Swap tracks at specific positions\n\n"
+
+    msg += "<b>Language-based Examples</b>:\n"
+    msg += "• Language order: <code>eng,hin,jpn</code>\n"
+    msg += "• Result: English tracks first, Hindi second, Japanese third\n"
+    msg += "• Remaining tracks maintain their original order\n\n"
+
+    msg += "<b>Index-based Examples</b>:\n"
+    msg += "• Index order: <code>0,1</code> - Swaps first two tracks\n"
+    msg += "• Index order: <code>1,2,0</code> - Rotates first three tracks\n"
+    msg += "• Single index: <code>1</code> - No swapping occurs\n\n"
+
+    msg += "<b>Multi-Link Usage</b>:\n"
+    msg += "• <code>/cmd link -m folder_name -swap</code>\n"
+    msg += "• <code>/cmd -b -m folder_name -swap</code> (reply to links)\n\n"
+
+    msg += "<b>Key Features</b>:\n"
+    msg += "• Works with video, audio, and subtitle tracks\n"
+    msg += "• Preserves track metadata and properties\n"
+    msg += "• Handles missing languages gracefully\n"
+    msg += "• Validates index ranges automatically\n"
+    msg += "• Supports all media containers (MKV, MP4, etc.)\n\n"
+
+    return msg
+
+
+def get_swap_settings_page():
+    msg = "<b>Swap Settings (25/30)</b>\n\n"
+
+    msg += "<b>Main Settings</b>:\n"
+    msg += "• <b>Swap Enabled</b>: Enable or disable the swap feature globally\n"
+    msg += "• <b>Swap Priority</b>: Set the processing order in the pipeline\n"
+    msg += (
+        "• <b>Swap Remove Original (RO)</b>: Delete original file after swapping\n\n"
+    )
+
+    msg += "<b>Track Type Settings</b>:\n"
+    msg += "• <b>Swap Audio Enabled</b>: Enable or disable audio track swapping\n"
+    msg += "• <b>Swap Video Enabled</b>: Enable or disable video track swapping\n"
+    msg += "• <b>Swap Subtitle Enabled</b>: Enable or disable subtitle track swapping\n\n"
+
+    msg += "<b>Mode Settings (per track type)</b>:\n"
+    msg += "• <b>Use Language</b>: True = language-based, False = index-based\n"
+    msg += "• <b>Language Order</b>: Priority order (e.g., 'eng,hin,jpn')\n"
+    msg += "• <b>Index Order</b>: Swap pattern (e.g., '0,1' or '1,2,0')\n\n"
+
+    msg += '<blockquote expandable="expandable"><b>Configuration Examples</b>:\n'
+    msg += "<b>Language-based Audio Swap</b>:\n"
+    msg += "• Audio Enabled: ✅\n"
+    msg += "• Use Language: ✅\n"
+    msg += "• Language Order: eng,hin,jpn\n"
+    msg += "• Result: English audio first, Hindi second, Japanese third\n\n"
+
+    msg += "<b>Index-based Video Swap</b>:\n"
+    msg += "• Video Enabled: ✅\n"
+    msg += "• Use Language: ❌\n"
+    msg += "• Index Order: 1,0\n"
+    msg += "• Result: Second video track becomes first, first becomes second\n\n"
+
+    msg += "<b>Mixed Configuration</b>:\n"
+    msg += "• Audio: Language-based (eng,hin)\n"
+    msg += "• Video: Index-based (0,1)\n"
+    msg += "• Subtitle: Language-based (eng,hin,jpn)\n\n"
+
+    msg += "<b>Best Practices</b>:\n"
+    msg += "• Use language codes (eng, hin, jpn, spa, etc.)\n"
+    msg += "• Index order should be comma-separated numbers\n"
+    msg += "• Single index in order means no swapping\n"
+    msg += "• Invalid indices are automatically handled\n"
+    msg += "• Language mode works best with properly tagged files\n"
+    msg += "• Index mode gives precise control over track order</blockquote>\n\n"
+
+    return msg
+
+
 def get_pagination_buttons(current_page):
     buttons = ButtonMaker()
 
     # Total number of pages
-    total_pages = 28
+    total_pages = 30
 
     # Add navigation buttons
     if current_page > 1:

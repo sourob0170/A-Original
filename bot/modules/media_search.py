@@ -852,6 +852,8 @@ async def media_search(_, message: Message):
             return []
 
     # Create search tasks - always use user client for searching since bots cannot search messages
+    user_client_available = False
+
     if TgClient.user:
         # User client can search messages
         # Searching channels using user client
@@ -859,7 +861,37 @@ async def media_search(_, message: Message):
             process_search_results(TgClient.user, chat_id, "user")
             for chat_id in media_channels
         ]
-    elif TgClient.bot:
+        user_client_available = True
+    elif Config.USER_SESSION_STRING:
+        # Try using USER_SESSION_STRING as fallback
+        try:
+            from pyrogram import Client
+
+            user_client = Client(
+                "user_session_search",
+                Config.TELEGRAM_API,
+                Config.TELEGRAM_HASH,
+                session_string=Config.USER_SESSION_STRING,
+                no_updates=True,
+            )
+            await user_client.start()
+            LOGGER.info("Using USER_SESSION_STRING for media search")
+
+            search_tasks = [
+                process_search_results(user_client, chat_id, "user_session")
+                for chat_id in media_channels
+            ]
+            user_client_available = True
+
+            # Note: user_client cleanup will be handled after search completion
+
+        except Exception as user_error:
+            LOGGER.warning(
+                f"Failed to use USER_SESSION_STRING for media search: {user_error}"
+            )
+            user_client_available = False
+
+    if not user_client_available and TgClient.bot:
         # Only use bot client if user client is not available (will likely fail for searching)
         # Add warning to status message
         await edit_message(

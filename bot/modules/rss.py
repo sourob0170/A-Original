@@ -283,7 +283,10 @@ async def rss_sub(_, message, pre_event):
             # Don't send individual error messages for each feed to avoid flooding
             # Just add to the error count
         except Exception as e:
-            LOGGER.error(f"Unexpected error adding RSS feed {title}: {e}")
+            error_details = str(e) if e else "Unknown error occurred"
+            LOGGER.error(
+                f"Unexpected error adding RSS feed {title}: {error_details}"
+            )
             error_count += 1
             # Don't send individual error messages for each feed to avoid flooding
             # Just add to the error count
@@ -915,10 +918,12 @@ async def rss_monitor():
                             res = await client.get(data["link"])
                         html = res.text
                         break
-                    except Exception:
+                    except Exception as fetch_error:
                         tries += 1
                         if tries > 3:
-                            raise
+                            raise Exception(
+                                f"Failed to fetch RSS feed after {tries} attempts: {fetch_error}"
+                            )
                         continue
                 rss_d = feed_parse(html)
                 all_paused = False
@@ -1137,7 +1142,12 @@ async def rss_monitor():
             except RssShutdownException:
                 break
             except Exception as e:
-                LOGGER.error(f"{e} - Feed Name: {title} - Feed Link: {data['link']}")
+                error_msg = str(e) if e else "Unknown error"
+                feed_name = title if title else "Unknown"
+                feed_link = data.get("link", "Unknown") if data else "Unknown"
+                LOGGER.error(
+                    f"RSS Feed Error: {error_msg} - Feed Name: {feed_name} - Feed Link: {feed_link}"
+                )
                 continue
     if all_paused:
         scheduler.pause()

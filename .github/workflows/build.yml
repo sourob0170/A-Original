@@ -51,7 +51,6 @@ jobs:
       - name: Prepare Docker Build Files
         run: |
           cp dev/Aeon .
-          cp dev/megasdk-4.8.0-py2.py3-none-any.whl .
           chmod +x Aeon
 
       - name: Build and Push

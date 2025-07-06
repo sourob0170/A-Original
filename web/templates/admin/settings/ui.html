@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}UI Settings - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">UI Settings</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="/admin/settings/ui">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="theme">Default Theme</label>
+                                    <select class="form-control" id="theme" name="theme">
+                                        <option value="light" {% if ui_settings.theme == 'light' %}selected{% endif %}>Light</option>
+                                        <option value="dark" {% if ui_settings.theme == 'dark' %}selected{% endif %}>Dark</option>
+                                        <option value="auto" {% if ui_settings.theme == 'auto' %}selected{% endif %}>Auto</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="items_per_page">Items Per Page</label>
+                                    <input type="number" class="form-control" id="items_per_page" name="items_per_page" 
+                                           value="{{ ui_settings.items_per_page or 10 }}" min="5" max="50">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="show_thumbnails" name="show_thumbnails" 
+                                               {% if ui_settings.show_thumbnails %}checked{% endif %}>
+                                        <label class="form-check-label" for="show_thumbnails">
+                                            Show Thumbnails
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="mobile_friendly" name="mobile_friendly" 
+                                               {% if ui_settings.mobile_friendly %}checked{% endif %}>
+                                        <label class="form-check-label" for="mobile_friendly">
+                                            Mobile Friendly Layout
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="show_file_sizes" name="show_file_sizes" 
+                                               {% if ui_settings.show_file_sizes %}checked{% endif %}>
+                                        <label class="form-check-label" for="show_file_sizes">
+                                            Show File Sizes
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="show_view_counts" name="show_view_counts" 
+                                               {% if ui_settings.show_view_counts %}checked{% endif %}>
+                                        <label class="form-check-label" for="show_view_counts">
+                                            Show View Counts
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <a href="/admin/settings" class="btn btn-secondary">Back to Settings</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

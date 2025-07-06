@@ -12,10 +12,33 @@ class ButtonMaker:
         self._page_button = []
 
     def url_button(self, key, link, position=None):
-        # Validate URL before creating button
-        if not link or not isinstance(link, str):
-            LOGGER.error(f"Invalid URL button: '{link}' is empty or not a string")
+        # Validate and convert URL to string
+        if link is None or link == "":
+            LOGGER.error(f"Invalid URL button: '{link}' is empty")
             return self
+
+        # Auto-convert non-string values to strings (for backward compatibility)
+        if not isinstance(link, str):
+            try:
+                link = str(link)
+            except Exception as e:
+                LOGGER.error(f"Failed to convert URL '{link}' to string: {e}")
+                return self
+
+        # Validate and convert button text to string
+        if key is None or key == "":
+            LOGGER.error(f"Invalid URL button text: '{key}' is empty")
+            return self
+
+        # Auto-convert non-string values to strings (for backward compatibility)
+        if not isinstance(key, str):
+            try:
+                key = str(key)
+            except Exception as e:
+                LOGGER.error(
+                    f"Failed to convert URL button text '{key}' to string: {e}"
+                )
+                return self
 
         # Ensure URL has a protocol (http:// or https://)
         if not link.startswith(("http://", "https://", "tg://")):
@@ -43,10 +66,20 @@ class ButtonMaker:
         return self
 
     def data_button(self, key, data, position=None):
-        # Validate callback_data length (Telegram limit is 64 bytes)
-        if not data or not isinstance(data, str):
-            LOGGER.error(f"Invalid callback data: '{data}' is empty or not a string")
+        # Validate and convert callback_data to string
+        if data is None or data == "":
+            LOGGER.error(f"Invalid callback data: '{data}' is empty")
             return self
+
+        # Auto-convert non-string values to strings (for backward compatibility)
+        if not isinstance(data, str):
+            try:
+                data = str(data)
+            except Exception as e:
+                LOGGER.error(
+                    f"Failed to convert callback data '{data}' to string: {e}"
+                )
+                return self
 
         # Ensure callback_data doesn't exceed Telegram's limit (64 bytes)
         if len(data.encode("utf-8")) > 64:
@@ -54,10 +87,18 @@ class ButtonMaker:
             # Truncate data to fit within limits
             data = data[:60] + "..."
 
-        # Validate button text
-        if not key or not isinstance(key, str):
-            LOGGER.error(f"Invalid button text: '{key}' is empty or not a string")
+        # Validate and convert button text to string
+        if key is None or key == "":
+            LOGGER.error(f"Invalid button text: '{key}' is empty")
             return self
+
+        # Auto-convert non-string values to strings (for backward compatibility)
+        if not isinstance(key, str):
+            try:
+                key = str(key)
+            except Exception as e:
+                LOGGER.error(f"Failed to convert button text '{key}' to string: {e}")
+                return self
 
         if not position:
             self._button.append(InlineKeyboardButton(text=key, callback_data=data))

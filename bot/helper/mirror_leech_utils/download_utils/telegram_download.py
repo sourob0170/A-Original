@@ -104,8 +104,7 @@ class TelegramDownloadHelper:
     async def _on_download_error(self, error):
         global LOGGER  # Ensure LOGGER is treated as global
         async with global_lock:
-            if self._id in GLOBAL_GID:
-                GLOBAL_GID.remove(self._id)
+            GLOBAL_GID.discard(self._id)
         try:
             await self._listener.on_download_error(error)
         except Exception as e:
@@ -120,8 +119,7 @@ class TelegramDownloadHelper:
     async def _on_download_complete(self):
         async with global_lock:
             # Safely remove ID from GLOBAL_GID if it exists
-            if self._id in GLOBAL_GID:
-                GLOBAL_GID.remove(self._id)
+            GLOBAL_GID.discard(self._id)
         await self._listener.on_download_complete()
 
     async def _download(self, message, path):

@@ -320,7 +320,7 @@ class YouTubeUpload:
 
         return youtube_service
 
-    def progress(self):
+    async def progress(self):
         """Update upload progress"""
         if self._total_bytes > 0:
             percentage = (self._uploaded_bytes / self._total_bytes) * 100

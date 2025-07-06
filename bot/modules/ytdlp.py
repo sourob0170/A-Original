@@ -1,6 +1,5 @@
 from asyncio import Event, create_task, wait_for
 from functools import partial
-from os import path as ospath
 from time import time
 
 from httpx import AsyncClient
@@ -38,8 +37,13 @@ from bot.helper.telegram_helper.message_utils import (
 
 @new_task
 async def select_format(_, query, obj):
-    data = query.data.split()
-    await query.answer()
+    try:
+        data = query.data.split()
+        await query.answer()
+    except Exception as e:
+        # Handle QueryIdInvalid and other callback query errors gracefully
+        LOGGER.warning(f"Callback query error: {e}")
+        return
 
     if data[1] == "dict":
         b_name = data[2]
@@ -716,6 +720,7 @@ class YtDlp(TaskListener):
             "-s": False,
             "-b": False,
             "-z": False,
+            "-es": False,
             "-sv": False,
             "-ss": False,
             "-f": False,
@@ -737,11 +742,23 @@ class YtDlp(TaskListener):
             "-extract-audio": False,
             "-extract-subtitle": False,
             "-extract-attachment": False,
+            "-extract-priority": False,
+            "-remove": False,
+            "-remove-video": False,
+            "-remove-audio": False,
+            "-remove-subtitle": False,
+            "-remove-attachment": False,
+            "-remove-metadata": False,
             "-add": False,
             "-add-video": False,
             "-add-audio": False,
             "-add-subtitle": False,
+            "-add-subtitle-hardsub": False,
             "-add-attachment": False,
+            "-swap": False,
+            "-swap-audio": False,
+            "-swap-video": False,
+            "-swap-subtitle": False,
             "-trim": False,
             "-compress": False,
             "-comp-video": False,
@@ -750,6 +767,28 @@ class YtDlp(TaskListener):
             "-comp-document": False,
             "-comp-subtitle": False,
             "-comp-archive": False,
+            "-video-fast": False,
+            "-video-medium": False,
+            "-video-slow": False,
+            "-audio-fast": False,
+            "-audio-medium": False,
+            "-audio-slow": False,
+            "-image-fast": False,
+            "-image-medium": False,
+            "-image-slow": False,
+            "-document-fast": False,
+            "-document-medium": False,
+            "-document-slow": False,
+            "-subtitle-fast": False,
+            "-subtitle-medium": False,
+            "-subtitle-slow": False,
+            "-archive-fast": False,
+            "-archive-medium": False,
+            "-archive-slow": False,
+            "-del": False,
+            "-preserve": False,
+            "-replace": False,
+            "-mt": False,
             "-i": 0,
             "-sp": 0,
             "link": "",
@@ -1004,11 +1043,23 @@ class YtDlp(TaskListener):
         self.extract_audio = args["-extract-audio"]
         self.extract_subtitle = args["-extract-subtitle"]
         self.extract_attachment = args["-extract-attachment"]
+        self.extract_priority = args["-extract-priority"]
+        self.remove = args["-remove"]
+        self.remove_video = args["-remove-video"]
+        self.remove_audio = args["-remove-audio"]
+        self.remove_subtitle = args["-remove-subtitle"]
+        self.remove_attachment = args["-remove-attachment"]
+        self.remove_metadata = args["-remove-metadata"]
         self.add = args["-add"]
         self.add_video = args["-add-video"]
         self.add_audio = args["-add-audio"]
         self.add_subtitle = args["-add-subtitle"]
+        self.add_subtitle_hardsub = args["-add-subtitle-hardsub"]
         self.add_attachment = args["-add-attachment"]
+        self.swap = args["-swap"]
+        self.swap_audio = args["-swap-audio"]
+        self.swap_video = args["-swap-video"]
+        self.swap_subtitle = args["-swap-subtitle"]
         self.trim = args["-trim"]
         self.compression = args["-compress"]
         self.comp_video = args["-comp-video"]
@@ -1017,7 +1068,36 @@ class YtDlp(TaskListener):
         self.comp_document = args["-comp-document"]
         self.comp_subtitle = args["-comp-subtitle"]
         self.comp_archive = args["-comp-archive"]
+        self.video_fast = args["-video-fast"]
+        self.video_medium = args["-video-medium"]
+        self.video_slow = args["-video-slow"]
+        self.audio_fast = args["-audio-fast"]
+        self.audio_medium = args["-audio-medium"]
+        self.audio_slow = args["-audio-slow"]
+        self.image_fast = args["-image-fast"]
+        self.image_medium = args["-image-medium"]
+        self.image_slow = args["-image-slow"]
+        self.document_fast = args["-document-fast"]
+        self.document_medium = args["-document-medium"]
+        self.document_slow = args["-document-slow"]
+        self.subtitle_fast = args["-subtitle-fast"]
+        self.subtitle_medium = args["-subtitle-medium"]
+        self.subtitle_slow = args["-subtitle-slow"]
+        self.archive_fast = args["-archive-fast"]
+        self.archive_medium = args["-archive-medium"]
+        self.archive_slow = args["-archive-slow"]
+        self.delete_original = args["-del"]
+        self.preserve_tracks = args["-preserve"]
+        self.replace_tracks = args["-replace"]
+        self.media_tools = args["-mt"]
+        self.extract_subs = args["-es"]
         self.download_range = args["-range"]
+
+        # Register user for media tools if -mt flag is used
+        if self.media_tools:
+            from bot.modules.media_tools import register_pending_task_user
+
+            register_pending_task_user(self.user_id)
 
         is_bulk = args["-b"]
 
@@ -1099,21 +1179,18 @@ class YtDlp(TaskListener):
             await self.remove_from_same_dir()
             return
 
-        # Check for user-specific cookies
-        user_id = self.user_id
-        user_cookies_path = f"cookies/{user_id}.txt"
+        # Show media tools interface if -mt flag is used
+        if self.media_tools:
+            from bot.modules.media_tools import show_media_tools_for_task
 
-        # Security check: Only use user's own cookies or the default cookies
-        if ospath.exists(user_cookies_path):
-            cookies_file = user_cookies_path
-        else:
-            cookies_file = "cookies.txt"
+            result = await show_media_tools_for_task(self.client, self.message, self)
+            if not result:
+                # User cancelled or timeout occurred
+                await self.remove_from_same_dir()
+                return
 
-        options = {
-            "usenetrc": True,
-            "cookiefile": cookies_file,
-            "ffmpeg_location": "/usr/bin/xtra",
-        }
+        # Initialize options with default cookies (logging handled in YoutubeDLHelper)
+        options = {"usenetrc": True, "cookiefile": "cookies.txt"}
         if opt:
             for key, value in opt.items():
                 if key in ["postprocessors", "download_ranges"]:
@@ -1127,243 +1204,16 @@ class YtDlp(TaskListener):
                 options[key] = value
         options["playlist_items"] = "0"
 
-        # Process download range if specified
-        if self.download_range:
-            try:
-                # Parse the range format: start_time-end_time or start_time:end_time
-                # Handle cases like "30-90", "1:30-3:45", "10-", "-120", etc.
-                separator = "-" if "-" in self.download_range else ":"
-                range_parts = self.download_range.split(separator, 1)
-
-                if len(range_parts) == 1:
-                    # Single time value, treat as start time only
-                    start_time_str = range_parts[0].strip()
-                    end_time_str = ""
-                elif len(range_parts) == 2:
-                    start_time_str, end_time_str = [
-                        part.strip() for part in range_parts
-                    ]
-                else:
-                    raise ValueError("Invalid range format")
-
-                # Convert time strings to seconds
-                def time_to_seconds(time_str):
-                    """Convert time string (HH:MM:SS, MM:SS, or SS) to seconds"""
-                    time_str = time_str.strip()
-                    if not time_str:
-                        return None
-
-                    parts = time_str.split(":")
-                    if len(parts) == 1:  # SS
-                        return int(parts[0])
-                    if len(parts) == 2:  # MM:SS
-                        return int(parts[0]) * 60 + int(parts[1])
-                    if len(parts) == 3:  # HH:MM:SS
-                        return (
-                            int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-                        )
-                    raise ValueError("Invalid time format")
-
-                start_seconds = (
-                    time_to_seconds(start_time_str) if start_time_str else None
-                )
-                end_seconds = time_to_seconds(end_time_str) if end_time_str else None
-
-                # Create download_ranges for yt-dlp
-                download_range = {}
-                if start_seconds is not None:
-                    download_range["start_time"] = start_seconds
-                if end_seconds is not None:
-                    download_range["end_time"] = end_seconds
-
-                if download_range:
-                    options["download_ranges"] = lambda info, ytdl: [download_range]
-                    start_display = (
-                        f"{start_seconds}s" if start_seconds is not None else "start"
-                    )
-                    end_display = (
-                        f"{end_seconds}s" if end_seconds is not None else "end"
-                    )
-                    LOGGER.info(
-                        f"Download range set: {start_display} to {end_display}"
-                    )
-                else:
-                    LOGGER.warning("Invalid download range format, ignoring")
-
-            except Exception as e:
-                LOGGER.error(
-                    f"Error parsing download range '{self.download_range}': {e}"
-                )
-
-        # Log which cookies file is being used
-        if cookies_file == user_cookies_path:
-            LOGGER.info(f"Using user-specific cookies for user ID: {user_id}")
-        else:
-            LOGGER.info("Using default cookies.txt file")
-
         try:
-            # Check for HLS streams and configure appropriately
-            if ".m3u8" in self.link or "hls" in self.link.lower():
-                LOGGER.info(
-                    "HLS stream detected in ytdlp module, configuring appropriate options"
-                )
-                # Add HLS-specific options
-                options["external_downloader"] = "xtra"
-                options["hls_prefer_native"] = False
-                options["hls_use_mpegts"] = True
-
-                # For live streams
-                if "live" in self.link.lower():
-                    LOGGER.info(
-                        "Live HLS stream detected, adding live stream options"
-                    )
-                    options["live_from_start"] = True
-                    options["wait_for_video"] = (
-                        5,
-                        60,
-                    )  # Wait between 5-60 seconds for video
-
-                # Don't use YouTube-specific extractor args for HLS streams unless it's actually a YouTube link
-                if (
-                    "extractor_args" in options
-                    and "youtube" in options["extractor_args"]
-                    and not ("youtube.com" in self.link or "youtu.be" in self.link)
-                ):
-                    LOGGER.info(
-                        "Non-YouTube HLS stream detected, removing YouTube extractor args"
-                    )
-                    del options["extractor_args"]["youtube"]
-                    if not options["extractor_args"]:
-                        del options["extractor_args"]
-
-            # Log which client is being used for YouTube
-            elif "youtube.com" in self.link or "youtu.be" in self.link:
-                LOGGER.info("Extracting YouTube video info with TV client")
-                # Add minimal YouTube TV client settings for initial extraction
-                if "extractor_args" not in options:
-                    options["extractor_args"] = {
-                        "youtube": {
-                            "player_client": ["tv"],
-                        }
-                    }
-                elif "youtube" not in options["extractor_args"]:
-                    options["extractor_args"]["youtube"] = {
-                        "player_client": ["tv"],
-                    }
-                else:
-                    # Ensure TV client is used even if extractor_args already exist
-                    options["extractor_args"]["youtube"]["player_client"] = ["tv"]
-
             result = await sync_to_async(extract_info, self.link, options)
-
-            # Debug: Log the extracted title and set it in the listener
-            if result and result.get("title"):
-                LOGGER.info(f"Successfully extracted title: {result['title']}")
-                # Set the title in the listener so YoutubeDLHelper can use it
-                if not self.name:
-                    self.name = result["title"]
-                    LOGGER.info(f"Set listener name to extracted title: {self.name}")
-            else:
-                LOGGER.warning(
-                    f"Title extraction failed. Available keys: {list(result.keys()) if result else 'None'}"
-                )
         except Exception as e:
             msg = str(e).replace("<", " ").replace(">", " ")
+            await delete_links(self.message)
+            error_msg = await send_message(self.message, f"{self.tag} {msg}")
+            create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
+            await self.remove_from_same_dir()
+            return
 
-            # Check if this is an HLS stream
-            is_hls = ".m3u8" in self.link or "hls" in self.link.lower()
-            is_youtube = (
-                "youtube" in self.link.lower() or "youtu.be" in self.link.lower()
-            )
-
-            # Handle HLS stream errors
-            if is_hls and "'NoneType' object has no attribute 'can_download'" in msg:
-                LOGGER.error(f"HLS stream error: {msg}")
-                try:
-                    # Try with different format specification
-                    options["format"] = "best"
-                    LOGGER.info("Retrying HLS stream with format=best")
-                    result = await sync_to_async(extract_info, self.link, options)
-                except Exception:
-                    try:
-                        # Try with different format specification
-                        options["format"] = "bestvideo+bestaudio/best"
-                        LOGGER.info(
-                            "Retrying HLS stream with format=bestvideo+bestaudio/best"
-                        )
-                        result = await sync_to_async(
-                            extract_info, self.link, options
-                        )
-                    except Exception:
-                        # If all retries fail, raise a more helpful error
-                        error_msg = (
-                            f"Error: Failed to download HLS stream. The stream might be protected or requires authentication. "
-                            f"Try downloading with a different method or check if the stream is accessible. "
-                            f"Original error: {msg}"
-                        )
-                        raise ValueError(error_msg) from None
-
-            # Handle YouTube SSAP experiment issues
-            elif is_youtube and (
-                "Unable to extract video data" in msg
-                or "This video is unavailable" in msg
-                or "Sign in to confirm" in msg
-            ):
-                try:
-                    # Try with Android client
-                    if (
-                        "extractor_args" in options
-                        and "youtube" in options["extractor_args"]
-                    ):
-                        options["extractor_args"]["youtube"]["player_client"] = [
-                            "android"
-                        ]
-
-                    result = await sync_to_async(extract_info, self.link, options)
-                except Exception:
-                    try:
-                        # Last resort: try with web client
-                        if (
-                            "extractor_args" in options
-                            and "youtube" in options["extractor_args"]
-                        ):
-                            options["extractor_args"]["youtube"]["player_client"] = [
-                                "web"
-                            ]
-
-                        result = await sync_to_async(
-                            extract_info, self.link, options
-                        )
-                    except Exception:
-                        # All clients failed, report the original error
-                        msg = f"{msg}\n\nTried multiple YouTube clients but all failed. This might be due to the YouTube SSAP experiment or region restrictions."
-                        try:
-                            await self.on_download_error(msg)
-                        except Exception as err:
-                            LOGGER.error(f"Error in error handling: {err}")
-                            await delete_links(self.message)
-                            error_msg = await send_message(
-                                self.message, f"{self.tag} {msg}"
-                            )
-                            create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
-                        finally:
-                            await self.remove_from_same_dir()
-                        return
-            else:
-                # Not a YouTube SSAP issue, handle normally
-                try:
-                    # Use self directly since YtDlp inherits from TaskListener
-                    # Don't add tag here as it will be added in on_download_error
-                    await self.on_download_error(msg)
-                except Exception as err:
-                    LOGGER.error(f"Error in error handling: {err}")
-                    # Fallback error handling
-                    await delete_links(self.message)
-                    error_msg = await send_message(self.message, f"{self.tag} {msg}")
-                    create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
-                finally:
-                    await self.remove_from_same_dir()
-                return
         finally:
             await self.run_multi(input_list, YtDlp)
 

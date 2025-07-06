@@ -48,6 +48,7 @@ CPU_INTENSIVE: Final[frozenset] = frozenset(
         MirrorStatus.STATUS_COMPRESS,
         MirrorStatus.STATUS_ARCHIVE,
         MirrorStatus.STATUS_EXTRACT,
+        MirrorStatus.STATUS_SWAP,
     ]
 )
 
@@ -536,13 +537,11 @@ async def should_cancel_task(task, gid: str) -> tuple[bool, str]:
 
         # Check if task is cancelled (handle different listener types)
         is_cancelled = False
-        if hasattr(task, "listener"):
-            if (
-                hasattr(task.listener, "is_cancelled") and task.listener.is_cancelled
-            ) or (
-                hasattr(task.listener, "isCancelled") and task.listener.isCancelled
-            ):
-                is_cancelled = True
+        if hasattr(task, "listener") and (
+            (hasattr(task.listener, "is_cancelled") and task.listener.is_cancelled)
+            or (hasattr(task.listener, "isCancelled") and task.listener.isCancelled)
+        ):
+            is_cancelled = True
 
         if is_cancelled:
             return False, ""
@@ -720,15 +719,17 @@ async def monitor_tasks():
 
                 # Skip cancelled tasks (check different possible cancellation attributes)
                 is_cancelled = False
-                if hasattr(task, "listener"):
-                    if (
+                if hasattr(task, "listener") and (
+                    (
                         hasattr(task.listener, "is_cancelled")
                         and task.listener.is_cancelled
-                    ) or (
+                    )
+                    or (
                         hasattr(task.listener, "isCancelled")
                         and task.listener.isCancelled
-                    ):
-                        is_cancelled = True
+                    )
+                ):
+                    is_cancelled = True
 
                 if is_cancelled:
                     continue

@@ -47,9 +47,17 @@ class DirectListener:
                 self._a2c_opt["dir"] = self._path
             filename = content["filename"]
             self._a2c_opt["out"] = filename
+
+            # Validate URL before attempting download
+            url = content["url"]
+            if not url or not url.startswith(("http://", "https://", "ftp://")):
+                LOGGER.error(f"Invalid URL for direct download: {url}")
+                await self.listener.on_download_error(f"Invalid download URL: {url}")
+                return
+
             try:
                 gid = await TorrentManager.aria2.addUri(
-                    uris=[content["url"]],
+                    uris=[url],
                     options=self._a2c_opt,
                     position=0,
                 )

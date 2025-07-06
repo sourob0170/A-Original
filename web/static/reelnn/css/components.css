@@ -1,0 +1,2699 @@
+/**
+ * Component styles for reelnn frontend - Exact Reelnn Implementation
+ * Matches Next.js reelnn components exactly with Montserrat font
+ */
+
+/* Exact Reelnn CardGrid Component */
+.reelnn-card-grid {
+    font-family: 'Montserrat', sans-serif;
+    width: 100%;
+    padding: 0 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-card-grid {
+        padding: 0 1rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-card-grid {
+        padding: 0 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-card-grid {
+        padding: 0 2rem;
+    }
+}
+
+.reelnn-card-container {
+    position: relative;
+}
+
+.reelnn-card-scroll {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    gap: 0.75rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.reelnn-card-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+@media (min-width: 640px) {
+    .reelnn-card-scroll {
+        gap: 1rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-card-scroll {
+        gap: 1.25rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-card-scroll {
+        gap: 1.5rem;
+    }
+}
+
+.reelnn-card-item {
+    flex-shrink: 0;
+    width: 140px;
+}
+
+@media (min-width: 640px) {
+    .reelnn-card-item {
+        width: 160px;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-card-item {
+        width: 180px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-card-item {
+        width: 200px;
+    }
+}
+
+.reelnn-card {
+    position: relative;
+    cursor: pointer;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(8px);
+}
+
+.reelnn-card:hover {
+    transform: scale(1.05) translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.reelnn-card:hover .reelnn-card-poster {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.reelnn-card:hover .reelnn-card-title {
+    color: #60a5fa;
+}
+
+.reelnn-card:active {
+    transform: scale(1.02) translateY(-2px);
+}
+
+.reelnn-card-poster {
+    aspect-ratio: 2/3;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    position: relative;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-card-poster::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    z-index: 1;
+}
+
+.reelnn-card:hover .reelnn-card-poster::before {
+    opacity: 1;
+}
+
+.reelnn-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reelnn-card:hover .reelnn-card-image {
+    transform: scale(1.02);
+}
+
+/* Placeholder styling for missing images */
+.reelnn-card-poster .placeholder-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #6b7280;
+    z-index: 2;
+}
+
+.reelnn-card-poster .placeholder-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.7;
+}
+
+.reelnn-card-poster .placeholder-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.reelnn-card-info {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 4rem; /* Ensures consistent card height */
+    padding: 0 0.25rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-card-info {
+        min-height: 4.25rem;
+        padding: 0 0.375rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-card-info {
+        min-height: 4.5rem;
+        padding: 0 0.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-card-info {
+        min-height: 4.75rem;
+        padding: 0 0.625rem;
+    }
+}
+
+.reelnn-card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+    hyphens: auto;
+    margin-bottom: 0.375rem;
+    min-height: 2.275rem; /* Ensures consistent height for 2 lines */
+}
+
+/* Improved title handling for different screen sizes */
+@media (min-width: 640px) {
+    .reelnn-card-title {
+        font-size: 0.9375rem;
+        min-height: 2.4375rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-card-title {
+        font-size: 1rem;
+        min-height: 2.6rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-card-title {
+        font-size: 1.0625rem;
+        min-height: 2.7625rem;
+    }
+}
+
+.reelnn-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: auto; /* Push to bottom of card info */
+}
+
+/* Enhanced meta styling */
+.reelnn-card-meta span {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.reelnn-card-meta span:first-child {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+/* Quality badge styling */
+.reelnn-quality-badge {
+    background-color: rgba(34, 197, 94, 0.2) !important;
+    color: #86efac !important;
+    font-weight: 600;
+}
+
+/* Exact Reelnn HeroSlideshow Component */
+.reelnn-hero {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.reelnn-hero-slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 1000ms ease;
+}
+
+.reelnn-hero-slide.active {
+    opacity: 1;
+}
+
+.reelnn-hero-overlay {
+    position: absolute;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(21, 17, 17, 0.1) 0%, rgba(21, 17, 17, 1) 100%);
+}
+
+.reelnn-hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+}
+
+.reelnn-hero-content {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.reelnn-hero-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-hero-container {
+        padding: 0 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-hero-container {
+        padding: 0 2rem;
+    }
+}
+
+.reelnn-hero-info {
+    max-width: 32rem;
+}
+
+.reelnn-hero-title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 1rem;
+    line-height: 1.1;
+    font-family: 'Montserrat', sans-serif;
+}
+
+@media (min-width: 640px) {
+    .reelnn-hero-title {
+        font-size: 3rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-hero-title {
+        font-size: 3.75rem;
+    }
+}
+
+.reelnn-hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    color: #d1d5db;
+}
+
+.reelnn-hero-overview {
+    font-size: 1.125rem;
+    color: #d1d5db;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.reelnn-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.reelnn-hero-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #ffffff;
+    color: #000000;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 300ms ease;
+}
+
+.reelnn-hero-play:hover {
+    background-color: #e5e7eb;
+}
+
+.reelnn-hero-more {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 300ms ease;
+}
+
+.reelnn-hero-more:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-hero-indicators {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.375rem;
+    z-index: 4;
+}
+
+@media (min-width: 640px) {
+    .reelnn-hero-indicators {
+        bottom: 1rem;
+        gap: 0.5rem;
+    }
+}
+
+.reelnn-hero-indicator {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.5);
+    border: none;
+    cursor: pointer;
+    transition: all 300ms ease;
+}
+
+.reelnn-hero-indicator.active {
+    background-color: #ffffff;
+    width: 1.25rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-hero-indicator {
+        width: 0.625rem;
+        height: 0.625rem;
+    }
+
+    .reelnn-hero-indicator.active {
+        width: 1.5rem;
+    }
+}
+
+/* Exact Reelnn VideoPlayer Component */
+.reelnn-video-player {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000000;
+    overflow: hidden;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-back-button {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 30;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    padding: 0.75rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(8px);
+}
+
+.reelnn-back-button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+}
+
+.reelnn-video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reelnn-video-element {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    background-color: #000000;
+}
+
+.reelnn-controls-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.reelnn-controls-overlay.show-controls {
+    pointer-events: auto;
+}
+
+.reelnn-loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #ffffff;
+    z-index: 40;
+}
+
+.reelnn-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.reelnn-loading-text {
+    font-size: 1.125rem;
+    font-weight: 500;
+}
+
+.reelnn-loading-dots::after {
+    content: '';
+    animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: ''; }
+    40% { content: '.'; }
+    60% { content: '..'; }
+    80%, 100% { content: '...'; }
+}
+
+.reelnn-center-controls {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+}
+
+.reelnn-play-button {
+    width: 4rem;
+    height: 4rem;
+    background-color: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    color: #ffffff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(8px);
+}
+
+.reelnn-play-button:hover {
+    background-color: rgba(0, 0, 0, 0.9);
+    transform: scale(1.1);
+}
+
+.reelnn-play-button svg {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.reelnn-bottom-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+    padding: 1rem;
+    z-index: 20;
+}
+
+.reelnn-progress-container {
+    margin-bottom: 1rem;
+}
+
+.reelnn-progress-bar {
+    position: relative;
+    height: 4px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.reelnn-progress-buffer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.reelnn-progress-played {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #3b82f6;
+    border-radius: 2px;
+    transition: width 0.1s ease;
+}
+
+.reelnn-progress-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background-color: #3b82f6;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.reelnn-progress-bar:hover .reelnn-progress-thumb {
+    opacity: 1;
+}
+
+.reelnn-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.reelnn-controls-left,
+.reelnn-controls-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reelnn-control-button {
+    background: none;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reelnn-control-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.1);
+}
+
+.reelnn-control-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.reelnn-volume-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reelnn-volume-slider {
+    width: 4rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.reelnn-volume-container:hover .reelnn-volume-slider {
+    opacity: 1;
+}
+
+.reelnn-volume-track {
+    position: relative;
+    height: 4px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.reelnn-volume-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #ffffff;
+    border-radius: 2px;
+    transition: width 0.1s ease;
+}
+
+.reelnn-volume-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background-color: #ffffff;
+    border-radius: 50%;
+}
+
+.reelnn-time-display {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin-left: 0.5rem;
+}
+
+.reelnn-time-separator {
+    opacity: 0.7;
+}
+
+.reelnn-settings-menu {
+    position: absolute;
+    bottom: 4rem;
+    right: 1rem;
+    background-color: rgba(0, 0, 0, 0.9);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    min-width: 12rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(8px);
+    z-index: 30;
+}
+
+.reelnn-settings-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.reelnn-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reelnn-settings-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.reelnn-settings-close {
+    background: none;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+    transition: background-color 0.3s ease;
+}
+
+.reelnn-settings-close:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-setting-group {
+    margin-bottom: 1rem;
+}
+
+.reelnn-setting-group:last-child {
+    margin-bottom: 0;
+}
+
+.reelnn-setting-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+}
+
+.reelnn-setting-select {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.25rem;
+    color: #ffffff;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.reelnn-setting-select:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.reelnn-setting-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.reelnn-setting-select option {
+    background-color: #1f2937;
+    color: #ffffff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .reelnn-back-button {
+        top: 0.5rem;
+        left: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .reelnn-bottom-controls {
+        padding: 0.5rem;
+    }
+
+    .reelnn-controls-left,
+    .reelnn-controls-right {
+        gap: 0.25rem;
+    }
+
+    .reelnn-control-button {
+        padding: 0.375rem;
+    }
+
+    .reelnn-control-button svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .reelnn-play-button {
+        width: 3rem;
+        height: 3rem;
+    }
+
+    .reelnn-play-button svg {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
+    .reelnn-volume-slider {
+        width: 3rem;
+    }
+
+    .reelnn-time-display {
+        font-size: 0.75rem;
+    }
+
+    .reelnn-settings-menu {
+        right: 0.5rem;
+        min-width: 10rem;
+    }
+}
+
+/* Hide/Show Icons Based on State */
+.reelnn-video-player.playing .reelnn-play-icon {
+    display: none;
+}
+
+.reelnn-video-player.playing .reelnn-pause-icon {
+    display: block;
+}
+
+.reelnn-video-player.paused .reelnn-play-icon {
+    display: block;
+}
+
+.reelnn-video-player.paused .reelnn-pause-icon {
+    display: none;
+}
+
+.reelnn-video-player.muted .reelnn-volume-high,
+.reelnn-video-player.muted .reelnn-volume-low {
+    display: none;
+}
+
+.reelnn-video-player.muted .reelnn-volume-mute {
+    display: block;
+}
+
+.reelnn-video-player:not(.muted) .reelnn-volume-mute {
+    display: none;
+}
+
+.reelnn-video-player.fullscreen .reelnn-fullscreen-enter {
+    display: none;
+}
+
+.reelnn-video-player.fullscreen .reelnn-fullscreen-exit {
+    display: block;
+}
+
+.reelnn-video-player:not(.fullscreen) .reelnn-fullscreen-exit {
+    display: none;
+}
+
+/* Error Overlay Styling */
+.reelnn-error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    backdrop-filter: blur(8px);
+}
+
+.reelnn-error-content {
+    text-align: center;
+    color: #ffffff;
+    max-width: 24rem;
+    padding: 2rem;
+}
+
+.reelnn-error-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: #ef4444;
+}
+
+.reelnn-error-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-error-message {
+    font-size: 1.125rem;
+    opacity: 0.8;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-error-retry {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-error-retry:hover {
+    background-color: #2563eb;
+    transform: scale(1.05);
+}
+
+/* Additional responsive improvements */
+@media (max-width: 480px) {
+    .reelnn-error-content {
+        padding: 1rem;
+    }
+
+    .reelnn-error-icon {
+        font-size: 3rem;
+    }
+
+    .reelnn-error-title {
+        font-size: 1.25rem;
+    }
+
+    .reelnn-error-message {
+        font-size: 1rem;
+    }
+
+    .reelnn-error-retry {
+        padding: 0.625rem 1.5rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* Exact Reelnn Movie Detail Page */
+.reelnn-movie-page {
+    min-height: 100vh;
+    background-color: var(--background);
+    color: var(--foreground);
+}
+
+.reelnn-movie-hero {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.reelnn-movie-backdrop {
+    position: absolute;
+    inset: 0;
+}
+
+.reelnn-backdrop-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+.reelnn-backdrop-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+}
+
+.reelnn-movie-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(21, 17, 17, 0.8) 0%, rgba(21, 17, 17, 0.5) 50%, transparent 100%),
+                linear-gradient(to top, rgba(21, 17, 17, 1) 0%, transparent 50%);
+}
+
+.reelnn-movie-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.reelnn-movie-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-movie-container {
+        padding: 0 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-movie-container {
+        padding: 0 2rem;
+    }
+}
+
+.reelnn-movie-info {
+    max-width: 32rem;
+}
+
+.reelnn-movie-title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 1rem;
+    line-height: 1.1;
+    font-family: 'Montserrat', sans-serif;
+}
+
+@media (min-width: 640px) {
+    .reelnn-movie-title {
+        font-size: 3rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-movie-title {
+        font-size: 3.75rem;
+    }
+}
+
+.reelnn-movie-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    color: #d1d5db;
+}
+
+.reelnn-meta-item {
+    color: #d1d5db;
+}
+
+.reelnn-quality-badge {
+    background-color: #374151;
+    color: #ffffff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+.reelnn-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.reelnn-star-icon {
+    width: 1rem;
+    height: 1rem;
+    color: #fbbf24;
+}
+
+.reelnn-rating-value {
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.reelnn-movie-overview {
+    font-size: 1.125rem;
+    color: #d1d5db;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.reelnn-movie-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.reelnn-play-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #ffffff;
+    color: #000000;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-play-button:hover {
+    background-color: #e5e7eb;
+    transform: translateY(-1px);
+}
+
+.reelnn-play-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.reelnn-info-button {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-info-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.reelnn-movie-details {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: #d1d5db;
+}
+
+@media (min-width: 768px) {
+    .reelnn-movie-details {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.reelnn-detail-item {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.reelnn-detail-label {
+    font-weight: 600;
+    color: #ffffff;
+    min-width: 4rem;
+}
+
+.reelnn-detail-value {
+    color: #d1d5db;
+}
+
+.reelnn-genre-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.reelnn-genre-tag {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .reelnn-movie-title {
+        font-size: 2rem;
+    }
+
+    .reelnn-movie-meta {
+        font-size: 0.75rem;
+        gap: 0.75rem;
+    }
+
+    .reelnn-movie-overview {
+        font-size: 1rem;
+    }
+
+    .reelnn-movie-actions {
+        gap: 0.75rem;
+    }
+
+    .reelnn-play-button,
+    .reelnn-info-button {
+        padding: 0.625rem 1.5rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* Button Components */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    line-height: 1;
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition);
+    user-select: none;
+    white-space: nowrap;
+}
+
+.btn:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-600);
+    border-color: var(--primary-600);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--surface-color);
+    border-color: var(--gray-600);
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: var(--surface-color);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-xs);
+}
+
+.btn-lg {
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--text-lg);
+}
+
+/* Card Components */
+.card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition: all var(--transition);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+    padding: var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-body {
+    padding: var(--space-6);
+}
+
+.card-footer {
+    padding: var(--space-6);
+    border-top: 1px solid var(--border-color);
+    background-color: var(--gray-800);
+}
+
+/* Media Card Component */
+.media-card {
+    background: var(--surface-color);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition: all var(--transition);
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    display: block;
+}
+
+.media-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-2xl);
+}
+
+.media-poster {
+    position: relative;
+    aspect-ratio: 2/3;
+    overflow: hidden;
+}
+
+.poster-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition);
+}
+
+.media-card:hover .poster-image {
+    transform: scale(1.05);
+}
+
+.placeholder-poster {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--surface-color) 0%, var(--border-color) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: var(--text-secondary);
+}
+
+.media-info {
+    padding: var(--space-4);
+}
+
+.media-title {
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.media-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.media-rating {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: #fbbf24;
+}
+
+/* Form Components */
+.form-group {
+    margin-bottom: var(--space-4);
+}
+
+.form-label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.form-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.form-select {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Badge Components */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.badge-secondary {
+    background-color: var(--gray-600);
+    color: var(--gray-100);
+}
+
+.badge-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.badge-warning {
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.badge-error {
+    background-color: var(--error-color);
+    color: white;
+}
+
+/* Loading Components */
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-dots {
+    display: inline-flex;
+    gap: var(--space-1);
+}
+
+.loading-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.loading-dot:nth-child(1) { animation-delay: -0.32s; }
+.loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* Modal Components */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-modal-backdrop);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+}
+
+.modal {
+    background-color: var(--surface-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-2xl);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+    z-index: var(--z-modal);
+}
+
+.modal-header {
+    padding: var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-title {
+    font-size: var(--text-xl);
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: var(--text-xl);
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: var(--radius);
+    transition: all var(--transition);
+}
+
+.modal-close:hover {
+    background-color: var(--gray-700);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: var(--space-6);
+}
+
+.modal-footer {
+    padding: var(--space-6);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+}
+
+/* Alert Components */
+.alert {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 1px solid;
+    margin-bottom: var(--space-4);
+}
+
+.alert-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.alert-warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: var(--warning-color);
+    color: var(--warning-color);
+}
+
+.alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+.alert-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+/* Navigation Components */
+.nav {
+    display: flex;
+    gap: var(--space-6);
+    list-style: none;
+}
+
+.nav-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color var(--transition);
+    position: relative;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: var(--text-primary);
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--primary-color);
+    border-radius: var(--radius-full);
+}
+
+/* Dropdown Components */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-dropdown);
+    padding: var(--space-2);
+    margin-top: var(--space-1);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all var(--transition);
+}
+
+.dropdown:hover .dropdown-menu,
+.dropdown.active .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: var(--radius);
+    transition: background-color var(--transition);
+}
+
+.dropdown-item:hover {
+    background-color: var(--gray-700);
+}
+
+/* Utility Classes */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Section Headers and Layout Improvements */
+.reelnn-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0 0.25rem;
+}
+
+.reelnn-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff;
+    font-family: 'Montserrat', sans-serif;
+    margin: 0;
+}
+
+@media (min-width: 640px) {
+    .reelnn-section-title {
+        font-size: 1.5rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-section-title {
+        font-size: 1.75rem;
+    }
+}
+
+.reelnn-section-link {
+    color: #60a5fa;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+}
+
+.reelnn-section-link:hover {
+    color: #93c5fd;
+    background-color: rgba(96, 165, 250, 0.1);
+    border-color: rgba(96, 165, 250, 0.2);
+    transform: translateY(-1px);
+}
+
+@media (min-width: 640px) {
+    .reelnn-section-link {
+        font-size: 1rem;
+    }
+}
+
+/* Enhanced scrollbar styling for card grids */
+.reelnn-card-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.reelnn-card-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.reelnn-card-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.reelnn-card-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    transition: background-color 0.3s ease;
+}
+
+.reelnn-card-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Loading states for cards */
+.reelnn-card.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.reelnn-card.loading .reelnn-card-poster {
+    background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Focus states for accessibility */
+.reelnn-card:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+.reelnn-section-link:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+/* Exact Reelnn Main Layout */
+.reelnn-main-layout {
+    min-height: 100vh;
+    padding-top: 4rem; /* Account for fixed navbar */
+    background-color: var(--background);
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Exact Reelnn Main Content Layout */
+.reelnn-main-content {
+    font-family: 'Montserrat', sans-serif;
+    background-color: var(--background);
+    padding: 1.5rem 0;
+}
+
+@media (min-width: 768px) {
+    .reelnn-main-content {
+        padding: 2rem 4rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-main-content {
+        padding: 2rem 8rem;
+    }
+}
+
+.reelnn-section-wrapper {
+    margin-top: 3rem;
+    padding: 0 1rem;
+}
+
+@media (min-width: 768px) {
+    .reelnn-section-wrapper {
+        padding: 0;
+    }
+}
+
+/* Exact Reelnn Section Headers */
+.reelnn-section-header-exact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.reelnn-section-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.reelnn-section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ef4444;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+@media (min-width: 768px) {
+    .reelnn-section-label {
+        font-size: 0.875rem;
+    }
+}
+
+.reelnn-section-title-main {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+    .reelnn-section-title-main {
+        font-size: 2rem;
+    }
+}
+
+/* Exact Reelnn See More Button */
+.reelnn-see-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    align-self: flex-end;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+}
+
+@media (min-width: 768px) {
+    .reelnn-see-more-btn {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+}
+
+.reelnn-see-more-btn:hover {
+    color: rgba(239, 68, 68, 0.8);
+    transform: translateX(2px);
+}
+
+.reelnn-see-more-btn:hover .reelnn-arrow-icon {
+    transform: translateX(4px);
+}
+
+.reelnn-arrow-icon {
+    width: 1rem;
+    height: 1rem;
+    transition: transform 0.3s ease;
+}
+
+@media (min-width: 768px) {
+    .reelnn-arrow-icon {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+}
+
+/* Update card grid to work with new layout */
+.reelnn-main-content .reelnn-card-container {
+    position: relative;
+}
+
+.reelnn-main-content .reelnn-card-scroll {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    gap: 0.75rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.reelnn-main-content .reelnn-card-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+@media (min-width: 640px) {
+    .reelnn-main-content .reelnn-card-scroll {
+        gap: 1rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-main-content .reelnn-card-scroll {
+        gap: 1.25rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-main-content .reelnn-card-scroll {
+        gap: 1.5rem;
+    }
+}
+
+/* Exact Reelnn Footer */
+.reelnn-footer {
+    background-color: var(--background);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem 0;
+    margin-top: 4rem;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.reelnn-footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    text-align: center;
+    color: #9ca3af;
+}
+
+@media (min-width: 768px) {
+    .reelnn-footer-content {
+        padding: 0 2rem;
+    }
+}
+
+.reelnn-footer-disclaimer {
+    margin-bottom: 1.5rem;
+}
+
+.reelnn-footer-disclaimer p {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.reelnn-footer-contact {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.reelnn-telegram-link {
+    color: #60a5fa;
+    text-decoration: underline;
+    transition: color 0.3s ease;
+}
+
+.reelnn-telegram-link:hover {
+    color: #93c5fd;
+}
+
+.reelnn-footer-copyright {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+}
+
+.reelnn-footer-copyright p {
+    margin: 0;
+}
+
+.reelnn-made-with-love {
+    color: #ef4444;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.reelnn-made-with-love:hover {
+    color: #f87171;
+}
+
+/* Exact Reelnn Browse Pages */
+.reelnn-browse-page {
+    font-family: 'Montserrat', sans-serif;
+    background-color: var(--background);
+    min-height: 100vh;
+}
+
+.reelnn-browse-header {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(21, 17, 17, 0.8) 100%);
+    padding: 2rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-browse-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+@media (min-width: 768px) {
+    .reelnn-browse-container {
+        padding: 0 2rem;
+    }
+}
+
+.reelnn-browse-title-section {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.reelnn-browse-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .reelnn-browse-title {
+        font-size: 3rem;
+    }
+}
+
+.reelnn-browse-subtitle {
+    font-size: 1.125rem;
+    color: #9ca3af;
+    margin: 0;
+}
+
+.reelnn-browse-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+}
+
+@media (min-width: 768px) {
+    .reelnn-browse-controls {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+}
+
+.reelnn-search-box {
+    width: 100%;
+    max-width: 400px;
+}
+
+.reelnn-search-form {
+    position: relative;
+    display: flex;
+}
+
+.reelnn-search-input {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 3rem 0.75rem 1rem;
+    color: #ffffff;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.reelnn-search-input:focus {
+    outline: none;
+    border-color: #ef4444;
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.reelnn-search-input::placeholder {
+    color: #9ca3af;
+}
+
+.reelnn-search-btn {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: color 0.3s ease;
+}
+
+.reelnn-search-btn:hover {
+    color: #ffffff;
+}
+
+.reelnn-search-btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.reelnn-filter-controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.reelnn-filter-select {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    color: #ffffff;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.reelnn-filter-select:focus {
+    outline: none;
+    border-color: #ef4444;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.reelnn-filter-select option {
+    background-color: #1f2937;
+    color: #ffffff;
+}
+
+.reelnn-browse-content {
+    padding: 2rem 0;
+}
+
+/* Movies/Shows Grid */
+.reelnn-movies-grid,
+.reelnn-shows-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (min-width: 640px) {
+    .reelnn-movies-grid,
+    .reelnn-shows-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 2rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .reelnn-movies-grid,
+    .reelnn-shows-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .reelnn-movies-grid,
+    .reelnn-shows-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+}
+
+/* Movie/Show Cards */
+.reelnn-movie-card,
+.reelnn-show-card {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.reelnn-movie-card:hover,
+.reelnn-show-card:hover {
+    transform: scale(1.05) translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.reelnn-movie-link,
+.reelnn-show-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.reelnn-movie-poster,
+.reelnn-show-poster {
+    position: relative;
+    aspect-ratio: 2/3;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-movie-image,
+.reelnn-show-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.reelnn-movie-card:hover .reelnn-movie-image,
+.reelnn-show-card:hover .reelnn-show-image {
+    transform: scale(1.02);
+}
+
+.reelnn-movie-placeholder,
+.reelnn-show-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #6b7280;
+}
+
+.reelnn-placeholder-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.7;
+}
+
+.reelnn-placeholder-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+/* Hover Overlay */
+.reelnn-movie-overlay,
+.reelnn-show-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.reelnn-movie-card:hover .reelnn-movie-overlay,
+.reelnn-show-card:hover .reelnn-show-overlay {
+    opacity: 1;
+}
+
+.reelnn-movie-actions,
+.reelnn-show-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.reelnn-play-btn,
+.reelnn-info-btn {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.reelnn-play-btn {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.reelnn-play-btn:hover {
+    background-color: #e5e7eb;
+    transform: scale(1.1);
+}
+
+.reelnn-info-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.reelnn-info-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.reelnn-play-btn svg,
+.reelnn-info-btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+/* Episode Badge for Shows */
+.reelnn-episode-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: rgba(239, 68, 68, 0.9);
+    color: #ffffff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    backdrop-filter: blur(8px);
+}
+
+/* Movie/Show Info */
+.reelnn-movie-info,
+.reelnn-show-info {
+    padding: 1rem 0.5rem 0;
+}
+
+.reelnn-movie-title,
+.reelnn-show-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.3;
+    margin-bottom: 0.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.reelnn-movie-meta,
+.reelnn-show-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.reelnn-year {
+    color: #60a5fa;
+    background-color: rgba(96, 165, 250, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+.reelnn-quality {
+    color: #86efac;
+    background-color: rgba(34, 197, 94, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+}
+
+.reelnn-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #fbbf24;
+}
+
+.reelnn-star {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+.reelnn-status {
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.reelnn-status-ongoing {
+    color: #86efac;
+    background-color: rgba(34, 197, 94, 0.1);
+}
+
+.reelnn-status-completed {
+    color: #60a5fa;
+    background-color: rgba(96, 165, 250, 0.1);
+}
+
+.reelnn-status-cancelled {
+    color: #f87171;
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Pagination */
+.reelnn-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding: 2rem 0;
+}
+
+.reelnn-page-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reelnn-page-btn:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    transform: translateY(-1px);
+}
+
+.reelnn-page-btn svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.reelnn-page-numbers {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reelnn-page-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reelnn-page-number:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.reelnn-page-current {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
+.reelnn-page-current:hover {
+    background-color: #dc2626;
+    border-color: #dc2626;
+}
+
+.reelnn-page-ellipsis {
+    color: #9ca3af;
+    padding: 0 0.5rem;
+}
+
+/* Empty State */
+.reelnn-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #9ca3af;
+}
+
+.reelnn-empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.7;
+}
+
+.reelnn-empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+}
+
+.reelnn-empty-message {
+    font-size: 1rem;
+    line-height: 1.6;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* Responsive adjustments for browse pages */
+@media (max-width: 768px) {
+    .reelnn-browse-controls {
+        align-items: stretch;
+    }
+
+    .reelnn-filter-controls {
+        justify-content: center;
+    }
+
+    .reelnn-filter-select {
+        min-width: 100px;
+        font-size: 0.75rem;
+    }
+
+    .reelnn-pagination {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .reelnn-page-numbers {
+        order: -1;
+    }
+
+    .reelnn-page-btn {
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+    }
+}

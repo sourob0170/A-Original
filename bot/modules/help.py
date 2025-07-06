@@ -2,8 +2,11 @@ from bot.helper.ext_utils.bot_utils import COMMAND_USAGE, new_task
 from bot.helper.ext_utils.help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
+    FILE_TO_LINK_HELP_DICT,
     MIRROR_HELP_DICT,
+    NSFW_HELP_DICT,
     STREAMRIP_HELP_DICT,
+    TOOL_HELP_DICT,
     VT_HELP_DICT,
     YT_HELP_DICT,
     ZOTIFY_HELP_DICT,
@@ -53,6 +56,7 @@ async def arg_usage(_, query):
         buttons.data_button("📊 Status", "help page status")
         buttons.data_button("🔍 Search", "help page search")
         buttons.data_button("📁 Files", "help page file")
+        buttons.data_button("🔗 File-to-Link", "help page f2l")
         buttons.data_button("🔒 Security", "help page security")
         buttons.data_button("⚙️ Settings", "help page settings")
         buttons.data_button("🤖 Special", "help page special")
@@ -115,6 +119,32 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["zotify"][0],
                 COMMAND_USAGE["zotify"][1],
             )
+        elif data[2] == "f2l":
+            # For File-to-Link, we'll show the main help page with buttons
+            buttons = ButtonMaker()
+            buttons.data_button("📋 Main", "help f2l main")
+            buttons.data_button("🔧 Configuration", "help f2l Configuration")
+            buttons.data_button("⚡ Performance", "help f2l Performance")
+            buttons.data_button("🔧 Troubleshooting", "help f2l Troubleshooting")
+            buttons.data_button("❌ Close", "help close")
+            button = buttons.build_menu(2)
+            await edit_message(message, help_string["f2l"], button)
+        elif data[2] == "nsfw":
+            await edit_message(
+                message,
+                COMMAND_USAGE["nsfw"][0],
+                COMMAND_USAGE["nsfw"][1],
+            )
+        elif data[2] == "tool":
+            # For Tool commands, show the main help page with buttons
+            buttons = ButtonMaker()
+            buttons.data_button("🎬 Media Conversion", "help tool Media-Conversion")
+            buttons.data_button("🖼️ Image Processing", "help tool Image-Processing")
+            buttons.data_button("📝 Text Processing", "help tool Text-Processing")
+            buttons.data_button("📦 Other Features", "help tool Other-Features")
+            buttons.data_button("❌ Close", "help close")
+            button = buttons.build_menu(2)
+            await edit_message(message, TOOL_HELP_DICT["main"], button)
     elif data[1] == "mirror":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back m")
@@ -157,6 +187,24 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, ZOTIFY_HELP_DICT[data[2]], button)
+    elif data[1] == "f2l":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back f2l")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, FILE_TO_LINK_HELP_DICT[data[2]], button)
+    elif data[1] == "nsfw":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back nsfw")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, NSFW_HELP_DICT[data[2]], button)
+    elif data[1] == "tool":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back tool")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, TOOL_HELP_DICT[data[2]], button)
 
     try:
         await query.answer()
@@ -186,6 +234,7 @@ async def bot_help(_, message):
     buttons.data_button("📊 Status", "help page status")
     buttons.data_button("🔍 Search", "help page search")
     buttons.data_button("📁 Files", "help page file")
+    buttons.data_button("🔗 File-to-Link", "help page f2l")
     buttons.data_button("🔒 Security", "help page security")
     buttons.data_button("⚙️ Settings", "help page settings")
     buttons.data_button("🤖 Special", "help page special")

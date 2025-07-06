@@ -1,4 +1,3 @@
-from re import IGNORECASE, escape, search
 from time import time
 from uuid import uuid4
 
@@ -12,9 +11,12 @@ from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.aeon_utils.shorteners import short
 from bot.helper.ext_utils.db_handler import database
-from bot.helper.ext_utils.help_messages import nsfw_keywords
+from bot.helper.ext_utils.nsfw_detection import nsfw_detector
 from bot.helper.ext_utils.status_utils import get_readable_time
 from bot.helper.telegram_helper.button_build import ButtonMaker
+
+# Rate limiting for FSUB skip messages to prevent log spam
+_fsub_skip_log_cache = {}
 
 
 async def error_check(message):
@@ -48,9 +50,19 @@ async def error_check(message):
                 # For channel messages or anonymous admins, we can't check membership
                 # So we'll skip the membership check for these messages
                 if message.from_user is None:
-                    LOGGER.info(
-                        f"Skipping FSUB check for channel {channel_id} - message from channel/anonymous in chat {message.chat.id}"
-                    )
+                    # Rate limit this log message to prevent spam
+                    log_key = f"{channel_id}_{message.chat.id}"
+                    current_time = time()
+
+                    # Only log once every 300 seconds (5 minutes) per channel-chat combination
+                    if (
+                        log_key not in _fsub_skip_log_cache
+                        or (current_time - _fsub_skip_log_cache[log_key]) > 300
+                    ):
+                        _fsub_skip_log_cache[log_key] = current_time
+                        LOGGER.info(
+                            f"Skipping FSUB check for channel {channel_id} - message from channel/anonymous in chat {message.chat.id}"
+                        )
                     continue
 
                 try:
@@ -93,15 +105,10 @@ async def error_check(message):
                 button.data_button("Start", f"aeon {user_id} private", "header")
                 msg.append("You haven't initiated the bot in a private message!")
 
-    # Always authorize owner ID
-    if user_id == Config.OWNER_ID:
-        # Ensure owner is in user_data with AUTH=True
-        if user_id not in user_data:
-            from bot.helper.ext_utils.bot_utils import update_user_ldata
+    # Always authorize privileged users (Owner + Sudo)
+    from bot.helper.ext_utils.bot_utils import is_privileged_user
 
-            update_user_ldata(user_id, "AUTH", True)
-        elif not user_data[user_id].get("AUTH", False):
-            user_data[user_id]["AUTH"] = True
+    if is_privileged_user(user_id):
         return None, None
 
     if user_id not in {
@@ -143,47 +150,77 @@ async def get_chat_info(channel_id):
         return None
 
 
-def is_nsfw(text):
-    pattern = (
-        r"(?:^|\W|_)(?:"
-        + "|".join(escape(keyword) for keyword in nsfw_keywords)
-        + r")(?:$|\W|_)"
-    )
-    return bool(search(pattern, text, flags=IGNORECASE))
-
-
-def is_nsfw_data(data):
-    if isinstance(data, list):
-        return any(
-            is_nsfw(item.get("name", ""))
-            if isinstance(item, dict)
-            else is_nsfw(item)
-            for item in data
-        )
-    if isinstance(data, dict):
-        return any(is_nsfw(item["filename"]) for item in data.get("contents", []))
-    return False
+# Legacy NSFW functions removed - now using enhanced detection system
 
 
 async def nsfw_precheck(message):
-    if is_nsfw(message.text):
-        return True
+    """Enhanced NSFW detection using the new detection system"""
+    from bot.core.config_manager import Config
 
-    reply_to = message.reply_to_message
-    if not reply_to:
+    # If enhanced NSFW detection is disabled, skip NSFW check
+    if not Config.NSFW_DETECTION_ENABLED:
         return False
 
-    for attr in ["document", "video"]:
-        if hasattr(reply_to, attr) and getattr(reply_to, attr):
-            file_name = getattr(reply_to, attr).file_name
-            if file_name and is_nsfw(file_name):
+    try:
+        # Check message text
+        if message.text:
+            result = await nsfw_detector.detect_text_nsfw(message.text)
+            if result.is_nsfw:
+                # Update user behavior tracking
+                if Config.NSFW_STORE_METADATA:
+                    from bot.helper.ext_utils.db_handler import database
+
+                    await database.update_user_nsfw_behavior(
+                        message.from_user.id, True, result.confidence
+                    )
                 return True
 
-    return any(
-        is_nsfw(getattr(reply_to, attr))
-        for attr in ["caption", "text"]
-        if hasattr(reply_to, attr) and getattr(reply_to, attr)
-    )
+        # Check reply message
+        reply_to = message.reply_to_message
+        if reply_to:
+            # Check reply text/caption
+            reply_text = reply_to.text or reply_to.caption
+            if reply_text:
+                result = await nsfw_detector.detect_text_nsfw(reply_text)
+                if result.is_nsfw:
+                    if Config.NSFW_STORE_METADATA:
+                        from bot.helper.ext_utils.db_handler import database
+
+                        await database.update_user_nsfw_behavior(
+                            message.from_user.id, True, result.confidence
+                        )
+                    return True
+
+            # Check file names
+            for attr in ["document", "video", "photo", "audio"]:
+                if hasattr(reply_to, attr) and getattr(reply_to, attr):
+                    media_obj = getattr(reply_to, attr)
+                    file_name = getattr(media_obj, "file_name", None)
+                    if file_name:
+                        result = await nsfw_detector.detect_text_nsfw(file_name)
+                        if result.is_nsfw:
+                            if Config.NSFW_STORE_METADATA:
+                                from bot.helper.ext_utils.db_handler import database
+
+                                await database.update_user_nsfw_behavior(
+                                    message.from_user.id, True, result.confidence
+                                )
+                            return True
+
+        # Update user behavior for clean content
+        if Config.NSFW_STORE_METADATA:
+            from bot.helper.ext_utils.db_handler import database
+
+            await database.update_user_nsfw_behavior(
+                message.from_user.id, False, 0.0
+            )
+
+        return False
+
+    except Exception as e:
+        LOGGER.error(f"Error in enhanced NSFW detection: {e}")
+        # Return False on error instead of falling back to legacy
+        return False
 
 
 async def check_is_paid(chat, uid):
@@ -206,15 +243,10 @@ async def is_paid(user_id):
 async def token_check(user_id, button=None):
     token_timeout = Config.TOKEN_TIMEOUT
 
-    # Always authorize owner ID without token
-    if user_id == Config.OWNER_ID:
-        # Ensure owner is in user_data with AUTH=True
-        if user_id not in user_data:
-            from bot.helper.ext_utils.bot_utils import update_user_ldata
+    # Always authorize privileged users without token (Owner + Sudo)
+    from bot.helper.ext_utils.bot_utils import is_privileged_user
 
-            update_user_ldata(user_id, "AUTH", True)
-        elif not user_data[user_id].get("AUTH", False):
-            user_data[user_id]["AUTH"] = True
+    if is_privileged_user(user_id):
         return None, button
 
     if not token_timeout:

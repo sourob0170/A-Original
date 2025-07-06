@@ -1,0 +1,239 @@
+{% extends "reelnn/base.html" %}
+
+{% block title %}Browse Movies - {{ site_name or "reelnn" }}{% endblock %}
+
+{% block content %}
+<!-- Exact Reelnn Browse Movies Page -->
+<div class="reelnn-browse-page">
+    <div class="reelnn-browse-header">
+        <div class="reelnn-browse-container">
+            <div class="reelnn-browse-title-section">
+                <h1 class="reelnn-browse-title">Browse Movies</h1>
+                <p class="reelnn-browse-subtitle">Discover your next favorite movie</p>
+            </div>
+            
+            <!-- Search and Filters -->
+            <div class="reelnn-browse-controls">
+                <div class="reelnn-search-box">
+                    <form action="/search" method="GET" class="reelnn-search-form">
+                        <input type="hidden" name="type" value="movie">
+                        <input 
+                            type="search" 
+                            name="q" 
+                            placeholder="Search movies..." 
+                            class="reelnn-search-input"
+                            value=""
+                        >
+                        <button type="submit" class="reelnn-search-btn">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="reelnn-filter-controls">
+                    <select class="reelnn-filter-select" id="genreFilter">
+                        <option value="">All Genres</option>
+                        <option value="action">Action</option>
+                        <option value="comedy">Comedy</option>
+                        <option value="drama">Drama</option>
+                        <option value="horror">Horror</option>
+                        <option value="thriller">Thriller</option>
+                        <option value="sci-fi">Sci-Fi</option>
+                        <option value="romance">Romance</option>
+                    </select>
+                    
+                    <select class="reelnn-filter-select" id="yearFilter">
+                        <option value="">All Years</option>
+                        <option value="2024">2024</option>
+                        <option value="2023">2023</option>
+                        <option value="2022">2022</option>
+                        <option value="2021">2021</option>
+                        <option value="2020">2020</option>
+                    </select>
+                    
+                    <select class="reelnn-filter-select" id="sortFilter">
+                        <option value="recent">Recently Added</option>
+                        <option value="popular">Most Popular</option>
+                        <option value="rating">Highest Rated</option>
+                        <option value="alphabetical">A-Z</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Movies Grid -->
+    <div class="reelnn-browse-content">
+        <div class="reelnn-browse-container">
+            {% if movies %}
+                <div class="reelnn-movies-grid">
+                    {% for movie in movies %}
+                    <div class="reelnn-movie-card">
+                        <a href="/movie/{{ movie.hash_id }}" class="reelnn-movie-link">
+                            <div class="reelnn-movie-poster">
+                                {% if movie.thumbnail %}
+                                    <img src="{{ movie.thumbnail }}" alt="{{ movie.enhanced_title or movie.file_name }}" class="reelnn-movie-image" loading="lazy">
+                                {% else %}
+                                    <div class="reelnn-movie-placeholder">
+                                        <div class="reelnn-placeholder-icon">🎬</div>
+                                        <div class="reelnn-placeholder-text">No Image</div>
+                                    </div>
+                                {% endif %}
+                                
+                                <!-- Hover Overlay -->
+                                <div class="reelnn-movie-overlay">
+                                    <div class="reelnn-movie-actions">
+                                        <button class="reelnn-play-btn" onclick="event.preventDefault(); window.location.href='/movie/{{ movie.hash_id }}';">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M8 5v14l11-7z"/>
+                                            </svg>
+                                        </button>
+                                        <button class="reelnn-info-btn">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="reelnn-movie-info">
+                                <h3 class="reelnn-movie-title" title="{{ movie.enhanced_title or movie.file_name }}">
+                                    {% set display_title = movie.enhanced_title or movie.file_name %}
+                                    {% if display_title.endswith('.mkv') or display_title.endswith('.mp4') or display_title.endswith('.avi') %}
+                                        {% set clean_title = display_title.rsplit('.', 1)[0] %}
+                                        {% set clean_title = clean_title.replace('_', ' ').replace('.', ' ') %}
+                                        {{ clean_title }}
+                                    {% else %}
+                                        {{ display_title }}
+                                    {% endif %}
+                                </h3>
+                                
+                                <div class="reelnn-movie-meta">
+                                    {% if movie.tmdb_data and movie.tmdb_data.release_date %}
+                                        <span class="reelnn-year">{{ movie.tmdb_data.release_date[:4] }}</span>
+                                    {% endif %}
+                                    {% if movie.quality %}
+                                        <span class="reelnn-quality">{{ movie.quality }}</span>
+                                    {% endif %}
+                                    {% if movie.tmdb_data and movie.tmdb_data.vote_average %}
+                                        <div class="reelnn-rating">
+                                            <svg class="reelnn-star" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                            </svg>
+                                            <span>{{ "%.1f"|format(movie.tmdb_data.vote_average) }}</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Pagination -->
+                {% if pagination %}
+                <div class="reelnn-pagination">
+                    {% if pagination.has_prev %}
+                        <a href="?page={{ pagination.prev_num }}" class="reelnn-page-btn reelnn-page-prev">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                            </svg>
+                            Previous
+                        </a>
+                    {% endif %}
+                    
+                    <div class="reelnn-page-numbers">
+                        {% for page_num in pagination.iter_pages() %}
+                            {% if page_num %}
+                                {% if page_num != pagination.page %}
+                                    <a href="?page={{ page_num }}" class="reelnn-page-number">{{ page_num }}</a>
+                                {% else %}
+                                    <span class="reelnn-page-number reelnn-page-current">{{ page_num }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="reelnn-page-ellipsis">…</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    
+                    {% if pagination.has_next %}
+                        <a href="?page={{ pagination.next_num }}" class="reelnn-page-btn reelnn-page-next">
+                            Next
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                            </svg>
+                        </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="reelnn-empty-state">
+                    <div class="reelnn-empty-icon">🎬</div>
+                    <h3 class="reelnn-empty-title">No Movies Found</h3>
+                    <p class="reelnn-empty-message">Try adjusting your search or filters to find more content.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Browse page functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality
+    const genreFilter = document.getElementById('genreFilter');
+    const yearFilter = document.getElementById('yearFilter');
+    const sortFilter = document.getElementById('sortFilter');
+    
+    [genreFilter, yearFilter, sortFilter].forEach(filter => {
+        if (filter) {
+            filter.addEventListener('change', function() {
+                applyFilters();
+            });
+        }
+    });
+    
+    function applyFilters() {
+        const params = new URLSearchParams(window.location.search);
+        
+        if (genreFilter.value) {
+            params.set('genre', genreFilter.value);
+        } else {
+            params.delete('genre');
+        }
+        
+        if (yearFilter.value) {
+            params.set('year', yearFilter.value);
+        } else {
+            params.delete('year');
+        }
+        
+        if (sortFilter.value) {
+            params.set('sort', sortFilter.value);
+        } else {
+            params.delete('sort');
+        }
+        
+        params.delete('page'); // Reset to first page
+        window.location.search = params.toString();
+    }
+    
+    // Set current filter values from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (genreFilter && urlParams.get('genre')) {
+        genreFilter.value = urlParams.get('genre');
+    }
+    if (yearFilter && urlParams.get('year')) {
+        yearFilter.value = urlParams.get('year');
+    }
+    if (sortFilter && urlParams.get('sort')) {
+        sortFilter.value = urlParams.get('sort');
+    }
+});
+</script>
+{% endblock %}

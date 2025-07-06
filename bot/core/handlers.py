@@ -59,6 +59,7 @@ from bot.modules import (
     hydra_search,
     imdb_callback,
     imdb_search,
+    index_command,
     jd_leech,
     jd_mirror,
     leech,
@@ -92,11 +93,14 @@ from bot.modules import (
     start,
     status_pages,
     task_status,
+    tool_command,
     torrent_search,
     torrent_search_update,
     truecaller_lookup,
     unauthorize,
     virustotal_scan,
+    whisper_callback,
+    whisper_command,
     ytdl,
     ytdl_leech,
 )
@@ -211,7 +215,7 @@ def add_handlers():
         "run_shell": (
             run_shell,
             BotCommands.ShellCommand,
-            CustomFilters.owner,
+            CustomFilters.sudo,
         ),
         "start": (
             start,
@@ -345,6 +349,11 @@ def add_handlers():
             BotCommands.GenSessionCommand,
             filters.private,  # Only allow in private chats
         ),
+        "whisper_command": (
+            whisper_command,
+            BotCommands.WhisperCommand,
+            CustomFilters.authorized,
+        ),
         # user_settings entry removed - now handled by direct handler registration
         "truecaller_lookup": (
             truecaller_lookup,
@@ -372,7 +381,66 @@ def add_handlers():
             BotCommands.QuickInfoCommand,
             CustomFilters.authorized,
         ),
+        # Tool commands
+        "tool": (
+            tool_command,
+            BotCommands.ToolCommand,
+            CustomFilters.authorized,
+        ),
     }
+
+    # Add File-to-Link handlers if enabled
+    if Config.FILE_TO_LINK_ENABLED:
+        from bot.modules.file_to_link import (
+            file_to_link_command,
+            stream_stats_command,
+        )
+
+        file_to_link_handlers = {
+            "file_to_link": (
+                file_to_link_command,
+                BotCommands.File2LinkCommand,
+                CustomFilters.authorized,
+            ),
+            "stream_stats": (
+                stream_stats_command,
+                BotCommands.StreamStatsCommand,
+                CustomFilters.authorized,
+            ),
+        }
+
+        # Add File-to-Link handlers to command_filters
+        command_filters.update(file_to_link_handlers)
+
+    # Add index command handler (always available for admins)
+    command_filters["index"] = (
+        index_command,
+        BotCommands.IndexCommand,
+        CustomFilters.sudo,
+    )
+
+    # Add Enhanced NSFW Detection handlers if enabled
+    if Config.NSFW_DETECTION_ENABLED:
+        from bot.modules.nsfw_management import (
+            nsfw_stats_command,
+            nsfw_test_command,
+        )
+
+        nsfw_handlers = {
+            "nsfw_stats": (
+                nsfw_stats_command,
+                BotCommands.NSFWStatsCommand,
+                CustomFilters.authorized,
+            ),
+            "nsfw_test": (
+                nsfw_test_command,
+                BotCommands.NSFWTestCommand,
+                CustomFilters.authorized,
+            ),
+        }
+
+        # Add NSFW handlers to command_filters
+        command_filters.update(nsfw_handlers)
 
     # Add streamrip handlers if streamrip is enabled
     if Config.STREAMRIP_ENABLED:
@@ -432,30 +500,20 @@ def add_handlers():
         # Add zotify handlers to command_filters
         command_filters.update(zotify_handlers)
 
-    # Add MEGA handlers if MEGA is enabled
-    if Config.MEGA_ENABLED:
-        from bot.modules.megaclone import mega_clone
+    # Add MEGA search handler if MEGA search is enabled
+    if Config.MEGA_ENABLED and Config.MEGA_SEARCH_ENABLED:
+        from bot.modules.mega_search import mega_search_command
 
-        mega_handlers = {
-            "mega_clone": (
-                mega_clone,
-                BotCommands.MegaCloneCommand,
+        mega_search_handlers = {
+            "mega_search": (
+                mega_search_command,
+                BotCommands.MegaSearchCommand,
                 CustomFilters.authorized,
             ),
         }
 
-        # Add MEGA search handler if MEGA search is enabled
-        if Config.MEGA_SEARCH_ENABLED:
-            from bot.modules.mega_search import mega_search_command
-
-            mega_handlers["mega_search"] = (
-                mega_search_command,
-                BotCommands.MegaSearchCommand,
-                CustomFilters.authorized,
-            )
-
-        # Add MEGA handlers to command_filters
-        command_filters.update(mega_handlers)
+        # Add MEGA search handlers to command_filters
+        command_filters.update(mega_search_handlers)
 
     # Add encoding/decoding handlers if enabled
     if Config.ENCODING_ENABLED:
@@ -510,7 +568,6 @@ def add_handlers():
         "^imdb": imdb_callback,
         "^medget": media_get_callback,
         "^medcancel": media_cancel_callback,
-        "^gensession$": gen_session,
         "delete_pending": delete_pending_messages,
         "force_delete_all": force_delete_all_messages,
     }
@@ -522,7 +579,9 @@ def add_handlers():
         "^fontstyles": font_styles_callback,
         "^mthelp": media_tools_help_callback,
         "^gensession_cancel$": handle_cancel_button,
+        "^gensession$": gen_session,  # Allow session generation for all users
         "^quickinfo_": quickinfo_callback,  # QuickInfo callbacks
+        "^whisper_": whisper_callback,  # Whisper message callbacks
     }
 
     # Add encoding/decoding callback handlers if enabled
@@ -580,7 +639,7 @@ def add_handlers():
         EditedMessageHandler(
             run_shell,
             filters=command(BotCommands.ShellCommand, case_sensitive=True)
-            & CustomFilters.owner,
+            & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -703,6 +762,13 @@ def add_handlers():
         "mgs",
         "quickinfo",
         "qi",
+        "file2link",
+        "f2l",
+        "streamstats",
+        "sstats",
+        "index",
+        "tool",
+        "t",
     ]
 
     # Add encoding/decoding commands if enabled

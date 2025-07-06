@@ -7,9 +7,15 @@ Similar to rclone folder selection but for MEGA drive
 import asyncio
 from time import time
 
+from bot import LOGGER
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import sync_to_async
 from bot.helper.ext_utils.db_handler import database
+from bot.helper.ext_utils.mega_utils import (
+    MegaApi,
+    MegaRequest,
+)
+from bot.helper.listeners.mega_listener import AsyncMega, MegaAppListener
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     delete_message,
@@ -17,207 +23,27 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-# Try to import MEGA SDK with system-wide detection
-MEGA_SDK_AVAILABLE = False
-MEGA_IMPORT_ERROR = None
-
-
-def _detect_and_import_mega():
-    """Detect MEGA SDK installation system-wide and import"""
-    import sys
-    from pathlib import Path
-
-    # System-wide search paths for MEGA SDK
-    search_paths = [
-        "/usr/local/lib/python3.13/dist-packages",
-        "/usr/lib/python3/dist-packages",
-        "/usr/lib/python3.13/dist-packages",
-        "/usr/local/lib/python3.12/dist-packages",
-        "/usr/lib/python3.12/dist-packages",
-        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages",
-        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/dist-packages",
-        "/usr/src/app/.venv/lib/python3.13/site-packages",
-        "/opt/megasdk/lib/python3.13/site-packages",
-    ]
-
-    # Try standard import first
-    try:
-        from mega import MegaApi, MegaError, MegaListener, MegaRequest
-
-        # Test basic functionality
-        api = MegaApi("test")
-        api.getVersion()
-        return True, None, (MegaApi, MegaError, MegaListener, MegaRequest)
-    except ImportError:
-        pass
-    except Exception as e:
-        return False, f"MEGA SDK validation failed: {e}", None
-
-    # Search system-wide paths
-    for path in search_paths:
-        mega_path = Path(path) / "mega"
-        if mega_path.exists():
-            try:
-                if str(Path(path)) not in sys.path:
-                    sys.path.insert(0, str(Path(path)))
-
-                from mega import MegaApi, MegaError, MegaListener, MegaRequest
-
-                # Test basic functionality
-                api = MegaApi("test")
-                api.getVersion()
-                return True, None, (MegaApi, MegaError, MegaListener, MegaRequest)
-            except Exception:
-                continue
-
-    return False, "MEGA SDK not found in system-wide search", None
-
-
-# Perform detection
-try:
-    success, error, classes = _detect_and_import_mega()
-    if success:
-        MegaApi, MegaError, MegaListener, MegaRequest = classes
-        MEGA_SDK_AVAILABLE = True
-        MEGA_IMPORT_ERROR = None
-    else:
-        raise ImportError(error)
-except Exception as e:
-    # Create dummy classes to prevent import errors
-    class MegaApi:
-        pass
-
-    class MegaListener:
-        pass
-
-    class MegaRequest:
-        TYPE_LOGIN = 1
-        TYPE_FETCH_NODES = 2
-
-    class MegaError:
-        pass
-
-    MEGA_SDK_AVAILABLE = False
-    MEGA_IMPORT_ERROR = str(e)
-
-from bot import LOGGER
-
 LIST_LIMIT = 10
 
 
-class MegaFolderListener(MegaListener):
+class MegaFolderListener(MegaAppListener):
     """MEGA SDK listener for folder operations"""
 
     def __init__(self, continue_event):
-        super().__init__()
-        self.continue_event = continue_event
-        self.error = None
+        super().__init__(continue_event)
         self.nodes_fetched = False
 
     def onRequestFinish(self, api, request, error):
-        """Called when a request finishes - with exception handling to prevent SWIG errors"""
-        try:
-            if error.getErrorCode() != 0:
-                # Handle MEGA SDK v4.8.0 getErrorString() method signature changes
-                try:
-                    # Try the instance method first (no parameters)
-                    self.error = error.getErrorString()
-                except Exception:
-                    try:
-                        # Try with error code parameter
-                        error_code = error.getErrorCode()
-                        self.error = error.getErrorString(error_code)
-                    except Exception:
-                        try:
-                            # Try static method with error code
-                            error_code = error.getErrorCode()
-                            self.error = MegaError.getErrorString(error_code)
-                        except Exception:
-                            # Fallback to error code if all methods fail
-                            self.error = f"MEGA Error Code: {error.getErrorCode()}"
+        # Handle folder-specific request types
+        if str(error).lower() == "no error":
+            request_type = request.getType()
 
-                LOGGER.error(f"MEGA request error: {self.error}")
-            elif request.getType() == MegaRequest.TYPE_LOGIN:
-                LOGGER.info("MEGA login successful")
-            elif request.getType() == MegaRequest.TYPE_FETCH_NODES:
+            if request_type == MegaRequest.TYPE_FETCH_NODES:
                 self.nodes_fetched = True
+                LOGGER.info("MEGA nodes fetched successfully for folder selection")
 
-            self.continue_event.set()
-        except Exception as e:
-            # Critical: Prevent any exceptions from propagating back to C++
-            # This prevents SWIG DirectorMethodException
-            try:
-                LOGGER.error(f"Exception in MEGA folder listener callback: {e}")
-                self.error = f"Listener callback error: {e!s}"
-                self.continue_event.set()
-            except Exception:
-                # Last resort: even logging failed, just set the event
-                pass
-
-
-class AsyncMegaExecutor:
-    """Async executor for MEGA operations"""
-
-    def __init__(self):
-        self.continue_event = asyncio.Event()
-
-    async def do(self, function, args=(), timeout=None):
-        """Execute MEGA function asynchronously with improved error handling and retry logic"""
-        function_name = getattr(function, "__name__", str(function))
-
-        # Try multiple attempts with increasing timeouts for login operations only
-        max_attempts = 3 if function_name == "login" else 1
-        base_timeout = timeout
-
-        for attempt in range(max_attempts):
-            if timeout is not None:
-                current_timeout = base_timeout + (
-                    attempt * 30
-                )  # Increase timeout each attempt
-            else:
-                current_timeout = None  # No timeout for main operations
-
-            if attempt > 0:
-                await asyncio.sleep(5)  # Brief delay between attempts
-
-            self.continue_event.clear()
-
-            try:
-                # Execute the MEGA function
-                await sync_to_async(function, *args)
-
-                # Wait for completion with or without timeout
-                if current_timeout is not None:
-                    await asyncio.wait_for(
-                        self.continue_event.wait(), timeout=current_timeout
-                    )
-                else:
-                    await (
-                        self.continue_event.wait()
-                    )  # No timeout - wait indefinitely
-
-                return  # Success, exit retry loop
-
-            except TimeoutError:
-                if (
-                    attempt == max_attempts - 1
-                ):  # Last attempt - this is a real failure
-                    LOGGER.error(
-                        f"MEGA {function_name} operation timed out after {current_timeout} seconds (attempt {attempt + 1}) - FINAL FAILURE"
-                    )
-                    raise Exception(
-                        f"MEGA {function_name} operation failed after {max_attempts} attempts. This may be due to network issues or MEGA server problems."
-                    )
-                # Not the last attempt - this is just a retry, log as INFO
-                LOGGER.info(
-                    f"MEGA {function_name} operation timed out after {current_timeout} seconds (attempt {attempt + 1}) - retrying with longer timeout"
-                )
-                continue  # Try again
-
-            except Exception as e:
-                # Re-raise other exceptions immediately (don't retry)
-                LOGGER.error(f"MEGA {function_name} operation failed: {e!s}")
-                raise Exception(f"MEGA {function_name} operation failed: {e!s}")
+        # Call parent implementation for standard handling
+        super().onRequestFinish(api, request, error)
 
 
 class MegaFolderSelector:
@@ -226,9 +52,8 @@ class MegaFolderSelector:
     def __init__(self, listener):
         self.listener = listener
         self.user_id = listener.user_id
-        self.api = None
+        self.async_api = AsyncMega()
         self.mega_listener = None
-        self.executor = AsyncMegaExecutor()
         self.current_node_handle = None
         self.folder_list = []
         self.iter_start = 0
@@ -246,32 +71,45 @@ class MegaFolderSelector:
         if not Config.MEGA_ENABLED:
             return "❌ MEGA.nz operations are disabled by the administrator."
 
-        # Check if MEGA SDK is available
-        if not MEGA_SDK_AVAILABLE:
-            error_msg = (
-                "❌ MEGA SDK v4.8.0 not available. Please install megasdk v4.8.0."
-            )
-            if MEGA_IMPORT_ERROR:
-                error_msg += f"\nImport error: {MEGA_IMPORT_ERROR}"
-            return error_msg
-
-        # Get MEGA credentials
+        # Get MEGA credentials following the same logic as other cloud services
         user_dict = await database.get_user_doc(self.user_id)
 
+        # Check USER_TOKENS setting to determine credential priority
+        user_tokens_enabled = user_dict.get("USER_TOKENS", False)
+
+        # Get MEGA settings with priority: User > Owner (when USER_TOKENS enabled)
         user_mega_email = user_dict.get("MEGA_EMAIL")
         user_mega_password = user_dict.get("MEGA_PASSWORD")
 
-        if user_mega_email and user_mega_password:
-            MEGA_EMAIL = user_mega_email
-            MEGA_PASSWORD = user_mega_password
-            LOGGER.info("Using user MEGA credentials for folder selection")
+        if user_tokens_enabled:
+            # When USER_TOKENS is enabled, only use user's personal credentials
+            if user_mega_email and user_mega_password:
+                MEGA_EMAIL = user_mega_email
+                MEGA_PASSWORD = user_mega_password
+                LOGGER.info(
+                    "Using user MEGA credentials for folder selection (USER_TOKENS enabled)"
+                )
+            else:
+                return "❌ USER_TOKENS is enabled but user's MEGA credentials not found. Please set your MEGA email and password in User Settings → ☁️ MEGA."
         else:
+            # When USER_TOKENS is disabled, use owner credentials only
             MEGA_EMAIL = Config.MEGA_EMAIL
             MEGA_PASSWORD = Config.MEGA_PASSWORD
-            LOGGER.info("Using owner MEGA credentials for folder selection")
+            LOGGER.info(
+                "Using owner MEGA credentials for folder selection (USER_TOKENS disabled)"
+            )
 
         if not MEGA_EMAIL or not MEGA_PASSWORD:
-            return "❌ MEGA.nz credentials not configured. Please set MEGA_EMAIL and MEGA_PASSWORD in user settings or contact the administrator."
+            if user_tokens_enabled:
+                return "❌ USER_TOKENS is enabled but user's MEGA credentials are incomplete. Please set both MEGA email and password in User Settings."
+            return "❌ Owner MEGA credentials not configured. Please contact the administrator or enable USER_TOKENS to use your own credentials."
+
+        # Validate email format
+        if "@" not in MEGA_EMAIL or "." not in MEGA_EMAIL:
+            LOGGER.error(f"Invalid MEGA email format: {MEGA_EMAIL}")
+            return (
+                "❌ Invalid MEGA email format. Please check your MEGA credentials."
+            )
 
         # Show initial progress message
         progress_msg = await send_message(
@@ -287,25 +125,11 @@ class MegaFolderSelector:
             global active_mega_selectors
             active_mega_selectors[self.user_id] = self
 
-            # Initialize MEGA API with custom timeout settings
-            self.api = MegaApi(None, None, None, "aimleechbot")
+            self.async_api = AsyncMega()
+            self.async_api.api = self.api = MegaApi(None, None, None, "aim")
 
-            # Try to set MEGA SDK timeouts if available
-            try:
-                # Set connection timeout to 180 seconds if method exists
-                if hasattr(self.api, "setConnectTimeout"):
-                    self.api.setConnectTimeout(180)
-                if hasattr(self.api, "setRequestTimeout"):
-                    self.api.setRequestTimeout(180)
-                # Try additional timeout methods
-                if hasattr(self.api, "setTimeout"):
-                    self.api.setTimeout(180)
-                if hasattr(self.api, "setMaxConnections"):
-                    self.api.setMaxConnections(6)  # Reduce concurrent connections
-            except Exception as timeout_error:
-                LOGGER.warning(f"Could not set MEGA SDK timeouts: {timeout_error}")
-
-            self.mega_listener = MegaFolderListener(self.executor.continue_event)
+            self.mega_listener = MegaFolderListener(self.async_api.continue_event)
+            self.async_api.listener = self.mega_listener
             self.api.addListener(self.mega_listener)
 
             # Update progress - Login
@@ -316,20 +140,26 @@ class MegaFolderSelector:
                 "📡 This may take up to 2 minutes for large accounts.",
             )
 
-            # Login to MEGA with increased timeout
+            # Login to MEGA (no fallback - follow USER_TOKENS logic)
             try:
-                await self.executor.do(
-                    self.api.login, (MEGA_EMAIL, MEGA_PASSWORD), timeout=60
-                )
+                await self.async_api.login(MEGA_EMAIL, MEGA_PASSWORD)
             except Exception as login_error:
                 LOGGER.error(f"MEGA login failed: {login_error}")
                 await delete_message(progress_msg)
                 if "timed out" in str(login_error).lower():
                     return "❌ MEGA login timed out. Please check your internet connection and try again."
+                if "invalid credentials" in str(login_error).lower():
+                    if user_tokens_enabled:
+                        return "❌ MEGA login failed: Invalid user credentials. Please check your MEGA email and password in User Settings → ☁️ MEGA."
+                    return "❌ MEGA login failed: Invalid owner credentials. Please contact the administrator."
                 return f"❌ MEGA login failed: {login_error!s}"
 
             if self.mega_listener.error:
                 await delete_message(progress_msg)
+                if "invalid credentials" in str(self.mega_listener.error).lower():
+                    if user_tokens_enabled:
+                        return "❌ MEGA login failed: Invalid user credentials. Please check your MEGA email and password in User Settings → ☁️ MEGA."
+                    return "❌ MEGA login failed: Invalid owner credentials. Please contact the administrator."
                 return f"❌ MEGA login failed: {self.mega_listener.error}"
 
             # Update progress - Fetch nodes
@@ -341,23 +171,83 @@ class MegaFolderSelector:
                 "📡 This may take longer for accounts with many files.",
             )
 
-            # Fetch nodes with increased timeout
-            try:
-                await self.executor.do(self.api.fetchNodes, timeout=90)
-            except Exception as fetch_error:
-                LOGGER.error(f"MEGA node fetching failed: {fetch_error}")
-                await delete_message(progress_msg)
-                if "timed out" in str(fetch_error).lower():
-                    return "❌ MEGA node fetching timed out. Your MEGA account may have many files. Please try again."
-                return f"❌ Failed to fetch MEGA nodes: {fetch_error!s}"
+            # Check if nodes are already fetched from login
+            if self.mega_listener.nodes_fetched:
+                pass
+            else:
+                # Fetch nodes with timeout
+                try:
+                    # Add timeout to prevent hanging
+                    await asyncio.wait_for(
+                        self.async_api.fetchNodes(),
+                        timeout=60,  # 60 seconds timeout
+                    )
+                except TimeoutError:
+                    LOGGER.error("MEGA node fetching timed out after 60 seconds")
+                    await delete_message(progress_msg)
+                    return "❌ MEGA node fetching timed out after 60 seconds. Your MEGA account may have many files. Please try again."
+                except Exception as fetch_error:
+                    LOGGER.error(f"MEGA node fetching failed: {fetch_error}")
+                    await delete_message(progress_msg)
+                    if "timed out" in str(fetch_error).lower():
+                        return "❌ MEGA node fetching timed out. Your MEGA account may have many files. Please try again."
+                    return f"❌ Failed to fetch MEGA nodes: {fetch_error!s}"
 
             if self.mega_listener.error:
-                await delete_message(progress_msg)
-                return f"❌ Failed to fetch MEGA nodes: {self.mega_listener.error}"
+                error_str = str(self.mega_listener.error).lower()
+                LOGGER.warning(
+                    f"MEGA listener has error: {self.mega_listener.error}"
+                )
+
+                # Check if it's a temporary error that we can ignore
+                if "error code: -1" in error_str or "request failed" in error_str:
+                    # Wait a moment and check if nodes were actually fetched despite the error
+                    await asyncio.sleep(2)
+
+                    try:
+                        root_node = self.api.getRootNode()
+                        if root_node:
+                            self.mega_listener.nodes_fetched = True
+                            self.mega_listener.error = (
+                                None  # Clear the temporary error
+                            )
+                        else:
+                            LOGGER.error(
+                                "MEGA root node is None - nodes not fetched"
+                            )
+                            await delete_message(progress_msg)
+                            return f"❌ Failed to fetch MEGA nodes: {self.mega_listener.error}"
+                    except Exception as root_check_error:
+                        LOGGER.error(
+                            f"Error checking MEGA root node: {root_check_error}"
+                        )
+                        await delete_message(progress_msg)
+                        return f"❌ Failed to fetch MEGA nodes: {self.mega_listener.error}"
+                else:
+                    # This is a real error, not temporary
+                    await delete_message(progress_msg)
+                    return (
+                        f"❌ Failed to fetch MEGA nodes: {self.mega_listener.error}"
+                    )
 
             if not self.mega_listener.nodes_fetched:
-                await delete_message(progress_msg)
-                return "❌ Failed to fetch MEGA nodes"
+                LOGGER.warning(
+                    "MEGA nodes_fetched is False, attempting verification..."
+                )
+
+                # Try to verify if nodes were actually fetched
+                try:
+                    root_node = self.api.getRootNode()
+                    if root_node:
+                        self.mega_listener.nodes_fetched = True
+                    else:
+                        LOGGER.error("MEGA root node is None - nodes not fetched")
+                        await delete_message(progress_msg)
+                        return "❌ Failed to fetch MEGA nodes"
+                except Exception as verify_error:
+                    LOGGER.error(f"Error verifying MEGA nodes: {verify_error}")
+                    await delete_message(progress_msg)
+                    return "❌ Failed to fetch MEGA nodes"
 
             # Start from root
             root_node = self.api.getRootNode()
@@ -385,7 +275,7 @@ class MegaFolderSelector:
             try:
                 if "progress_msg" in locals():
                     await delete_message(progress_msg)
-            except:
+            except Exception:
                 pass
             return f"❌ Folder selection failed: {e!s}"
         finally:

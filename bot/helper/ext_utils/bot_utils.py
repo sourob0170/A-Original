@@ -25,7 +25,9 @@ except ImportError:
 from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
+    FILE_TO_LINK_HELP_DICT,
     MIRROR_HELP_DICT,
+    NSFW_HELP_DICT,
     STREAMRIP_HELP_DICT,
     VT_HELP_DICT,
     YT_HELP_DICT,
@@ -40,15 +42,81 @@ class SetInterval:
     def __init__(self, interval, action, *args, **kwargs):
         self.interval = interval
         self.action = action
-        self.task = bot_loop.create_task(self._set_interval(*args, **kwargs))
+        self.args = args
+        self.kwargs = kwargs
+        self._cancelled = False
 
-    async def _set_interval(self, *args, **kwargs):
-        while True:
-            await sleep(self.interval)
-            await self.action(*args, **kwargs)
+        # Validate that action is callable
+        if not callable(action):
+            raise ValueError(f"Action must be callable, got {type(action)}")
+
+        # Check if action is an async function
+        import inspect
+
+        if not inspect.iscoroutinefunction(action):
+            raise ValueError(
+                f"Action must be an async function, got {type(action).__name__}. Did you forget to add 'async' keyword?"
+            )
+
+        self.task = bot_loop.create_task(self._set_interval())
+
+    async def _set_interval(self):
+        try:
+            while not self._cancelled:
+                await sleep(self.interval)
+                if self._cancelled:
+                    break
+
+                # Ensure action is still valid before calling
+                if self.action is None:
+                    LOGGER.error("SetInterval action became None, stopping interval")
+                    break
+
+                # Additional validation to prevent NoneType errors
+                if not callable(self.action):
+                    LOGGER.error(
+                        f"SetInterval action is not callable: {type(self.action)}, stopping interval"
+                    )
+                    break
+
+                try:
+                    # Validate action is still a coroutine function
+                    import inspect
+
+                    if not inspect.iscoroutinefunction(self.action):
+                        LOGGER.error(
+                            f"SetInterval action is no longer a coroutine function: {type(self.action)}, stopping interval"
+                        )
+                        break
+
+                    # Call the action with stored args and kwargs
+                    result = self.action(*self.args, **self.kwargs)
+
+                    # Ensure we have a coroutine to await
+                    if result is None:
+                        LOGGER.error(
+                            "SetInterval action returned None instead of coroutine, stopping interval"
+                        )
+                        break
+
+                    await result
+                except Exception as e:
+                    LOGGER.error(f"Error in SetInterval action: {e}", exc_info=True)
+                    # Continue the loop unless it's a critical error
+                    if "NoneType" in str(e) or "can't be used in 'await'" in str(e):
+                        LOGGER.error(
+                            "Critical error: action became None or invalid, stopping interval"
+                        )
+                        break
+        except Exception as e:
+            LOGGER.error(f"Critical error in SetInterval: {e}", exc_info=True)
+        finally:
+            self._cancelled = True
 
     def cancel(self):
-        self.task.cancel()
+        self._cancelled = True
+        if hasattr(self, "task") and self.task:
+            self.task.cancel()
 
 
 def _build_command_usage(help_dict, command_key):
@@ -66,8 +134,10 @@ def create_help_buttons():
     _build_command_usage(CLONE_HELP_DICT, "clone")
     _build_command_usage(AI_HELP_DICT, "ai")
     _build_command_usage(VT_HELP_DICT, "virustotal")
+    _build_command_usage(NSFW_HELP_DICT, "nsfw")
     _build_command_usage(STREAMRIP_HELP_DICT, "streamrip")
     _build_command_usage(ZOTIFY_HELP_DICT, "zotify")
+    _build_command_usage(FILE_TO_LINK_HELP_DICT, "f2l")
 
 
 def bt_selection_buttons(id_):
@@ -247,6 +317,10 @@ def arg_parser(items, arg_base):
                 "-add-subtitle",
                 "-add-subtitle-hardsub",
                 "-add-attachment",
+                "-swap",
+                "-swap-audio",
+                "-swap-video",
+                "-swap-subtitle",
                 "-del",
                 "-preserve",
                 "-replace",
@@ -447,15 +521,97 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
 
 
 def update_user_ldata(id_, key, value):
-    from bot.core.config_manager import Config
-
     user_data.setdefault(id_, {})
     user_data[id_][key] = value
 
-    # Special handling for owner ID
-    if id_ == Config.OWNER_ID and key == "AUTH":
-        # Always ensure owner is authorized
-        user_data[id_]["AUTH"] = True
+
+async def ensure_authorized_users():
+    """
+    Unified function to ensure OWNER_ID and SUDO_USERS are properly authorized.
+    This consolidates all authorization logic into one place.
+    """
+    from bot import sudo_users
+    from bot.core.config_manager import Config
+    from bot.helper.ext_utils.db_handler import database
+
+    authorized_count = 0
+
+    # Authorize OWNER_ID
+    if Config.OWNER_ID:
+        owner_id = Config.OWNER_ID
+        if owner_id not in user_data:
+            user_data[owner_id] = {"AUTH": True}
+            authorized_count += 1
+        elif not user_data[owner_id].get("AUTH", False):
+            user_data[owner_id]["AUTH"] = True
+            authorized_count += 1
+
+        # Update in database if available
+        if hasattr(database, "db") and database.db is not None:
+            await database.update_user_data(owner_id)
+
+    # Authorize SUDO_USERS
+    if Config.SUDO_USERS:
+        aid = Config.SUDO_USERS.split()
+        for id_ in aid:
+            user_id = int(id_.strip())
+            # Add to sudo_users list if not already there
+            if user_id not in sudo_users:
+                sudo_users.append(user_id)
+
+            # Authorize the user
+            if user_id not in user_data:
+                user_data[user_id] = {"AUTH": True, "SUDO": True}
+                authorized_count += 1
+            else:
+                if not user_data[user_id].get("AUTH", False):
+                    user_data[user_id]["AUTH"] = True
+                    authorized_count += 1
+                user_data[user_id]["SUDO"] = True
+
+            # Update in database if available
+            if hasattr(database, "db") and database.db is not None:
+                await database.update_user_data(user_id)
+
+    if authorized_count > 0:
+        from bot import LOGGER
+
+        LOGGER.info(
+            f"Ensured authorization for {authorized_count} privileged users (Owner + Sudo)"
+        )
+
+    return authorized_count
+
+
+def is_privileged_user(user_id):
+    """
+    Check if user is OWNER_ID or SUDO_USER and auto-authorize if needed.
+    Returns True if user is privileged, False otherwise.
+    """
+    from bot import sudo_users
+    from bot.core.config_manager import Config
+
+    # Check if user is owner
+    if user_id == Config.OWNER_ID:
+        # Ensure owner is authorized
+        if user_id not in user_data:
+            user_data[user_id] = {"AUTH": True}
+        elif not user_data[user_id].get("AUTH", False):
+            user_data[user_id]["AUTH"] = True
+        return True
+
+    # Check if user is sudo user
+    if user_id in sudo_users:
+        # Ensure sudo user is authorized
+        if user_id not in user_data:
+            user_data[user_id] = {"AUTH": True, "SUDO": True}
+        else:
+            if not user_data[user_id].get("AUTH", False):
+                user_data[user_id]["AUTH"] = True
+            user_data[user_id]["SUDO"] = True
+        return True
+
+    return False
 
 
 async def getdailytasks(
@@ -716,7 +872,9 @@ async def cmd_exec(cmd, shell=False, task_type="FFmpeg"):
     Returns:
         tuple: (stdout, stderr, return_code)
     """
+    import asyncio
     import shlex
+    import sys
 
     # Handle shell commands with special characters
     if shell and isinstance(cmd, str):
@@ -724,10 +882,56 @@ async def cmd_exec(cmd, shell=False, task_type="FFmpeg"):
         cmd_parts = shlex.split(cmd)
         cmd = " ".join(shlex.quote(part) for part in cmd_parts)
 
-    if shell:
-        proc = await create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
-    else:
-        proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    try:
+        if shell:
+            proc = await create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
+        else:
+            proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    except NotImplementedError:
+        # Fallback for environments where child watcher is not implemented
+        # This can happen in certain asyncio environments
+        if sys.platform != "win32":
+            # Set a compatible event loop policy for Unix systems
+            try:
+                asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+                if shell:
+                    proc = await create_subprocess_shell(
+                        cmd, stdout=PIPE, stderr=PIPE
+                    )
+                else:
+                    proc = await create_subprocess_exec(
+                        *cmd, stdout=PIPE, stderr=PIPE
+                    )
+            except Exception:
+                # Final fallback: use synchronous subprocess
+                import subprocess
+
+                if shell:
+                    result = subprocess.run(
+                        cmd, check=False, shell=True, capture_output=True, text=True
+                    )
+                else:
+                    result = subprocess.run(
+                        cmd, check=False, capture_output=True, text=True
+                    )
+                return (
+                    result.stdout.strip(),
+                    result.stderr.strip(),
+                    result.returncode,
+                )
+        else:
+            # For Windows, use synchronous subprocess as fallback
+            import subprocess
+
+            if shell:
+                result = subprocess.run(
+                    cmd, check=False, shell=True, capture_output=True, text=True
+                )
+            else:
+                result = subprocess.run(
+                    cmd, check=False, capture_output=True, text=True
+                )
+            return result.stdout.strip(), result.stderr.strip(), result.returncode
 
     stdout, stderr = await proc.communicate()
     try:
@@ -849,10 +1053,6 @@ def is_media_tool_enabled(tool_name):
     from bot import LOGGER
     from bot.core.config_manager import Config
 
-    # If ENABLE_EXTRA_MODULES is False, all extra modules are disabled
-    if not Config.ENABLE_EXTRA_MODULES:
-        return False
-
     # If media tools are completely disabled (boolean False), return False
     if Config.MEDIA_TOOLS_ENABLED is False:
         return False
@@ -867,6 +1067,7 @@ def is_media_tool_enabled(tool_name):
         "extract",
         "remove",
         "add",
+        "swap",
         "metadata",
         "xtra",
         "sample",
@@ -1043,6 +1244,10 @@ def is_flag_enabled(flag_name):
         "aati": "add",  # Short for add-attachment-index
         "preserve": "add",
         "replace": "add",
+        "swap": "swap",
+        "swap-audio": "swap",
+        "swap-video": "swap",
+        "swap-subtitle": "swap",
         "trim": "trim",
         "compress": "compression",
         "comp-video": "compression",
@@ -1188,7 +1393,7 @@ def check_storage_threshold(size, threshold, arch=False):
 
             space_needed = int(size * compression_multiplier)
             LOGGER.info(
-                f"Archive detected, estimating {compression_multiplier}x space needed for extraction"
+                f"Archive detected: {get_readable_file_size(size)} → estimating {compression_multiplier}x space needed for extraction ({get_readable_file_size(space_needed)} total)"
             )
 
         # Check if there's enough space

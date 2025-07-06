@@ -35,7 +35,6 @@ COMMANDS = {
     "ZotifyLeechCommand": "- Leech music from Spotify",
     "ZotifySearchCommand": "- Search music on Spotify",
     "CloneCommand": "- Copy file/folder to Drive",
-    "MegaCloneCommand": "- Clone MEGA files/folders to MEGA account",
     "MegaSearchCommand": "- Search MEGA drive for files/folders",
     "MediaInfoCommand": "- Get mediainfo",
     "SoxCommand": "- Get audio spectrum",
@@ -51,18 +50,34 @@ COMMANDS = {
     "CancelAllCommand": "- Cancel all tasks added by you to the bot",
     "HelpCommand": "- Get detailed help",
     "FontStylesCommand": "- View available font styles for leech",
-    "IMDBCommand": "- Search for movies or TV series info",
     "MediaSearchCommand": "- Search for media files (/mds) or reply to a message",
     "SpeedTest": "- Get speedtest result",
     "GenSessionCommand": "- Generate Pyrogram session string",
-    "TruecallerCommand": "- Lookup phone numbers using Truecaller",
     "VirusTotalCommand": "- Scan files or URLs for viruses using VirusTotal",
     # QuickInfo Commands
     "QuickInfoCommand": "- Get chat/user information with interactive buttons",
+    # File-to-Link Commands
+    "File2LinkCommand": "- Convert files to permanent download/stream links",
+    "StreamStatsCommand": "- View streaming server statistics",
+    "ToolCommand": "- Media conversion and processing tools (gif, sticker, emoji, voice, etc.)",
+    "IndexCommand": "- [ADMIN] Reindex media files from dump chats",
     "BotSetCommand": "- [ADMIN] Open Bot settings",
     "LogCommand": "- [ADMIN] View log",
     "RestartCommand": "- [ADMIN] Restart the bot",
+    "WhisperCommand": "- Send private whisper messages in group chats",
 }
+
+# Add AI command if enabled
+if Config.AI_ENABLED:
+    COMMANDS["AskCommand"] = "- Ask AI questions and get intelligent responses"
+
+# Add IMDB command if enabled
+if Config.IMDB_ENABLED:
+    COMMANDS["IMDBCommand"] = "- Search for movies or TV series info"
+
+# Add Truecaller command if enabled
+if Config.TRUECALLER_ENABLED:
+    COMMANDS["TruecallerCommand"] = "- Lookup phone numbers using Truecaller"
 
 # Add encoding/decoding commands if enabled
 if Config.ENCODING_ENABLED:
@@ -187,6 +202,29 @@ async def main():
     LOGGER.info("Loading user data for limits tracking...")
     await _load_user_data()
 
+    # Streaming functionality is now fully integrated with wserver
+    # No separate stream server needed
+    LOGGER.info("Streaming functionality integrated with wserver")
+
+    # Initialize File-to-Link functionality if enabled
+    if Config.FILE_TO_LINK_ENABLED:
+        from .modules.file_to_link import initialize_file_to_link
+
+        LOGGER.info("Initializing File-to-Link functionality...")
+        create_task(initialize_file_to_link())  # noqa: RUF006
+
+    # Initialize whisper cleanup task
+    LOGGER.info("Initializing whisper cleanup task...")
+    from .modules.whisper import start_whisper_cleanup
+
+    create_task(start_whisper_cleanup())  # noqa: RUF006
+
+    # Run automatic indexing to sync dump chats with database on startup
+    LOGGER.info("Starting automatic indexing to sync dump chats with database...")
+    from .modules.index_command import auto_index_on_startup
+
+    create_task(auto_index_on_startup())  # noqa: RUF006
+
     # Initial garbage collection and memory usage logging (less aggressive during startup)
     LOGGER.info("Performing initial garbage collection...")
     smart_garbage_collection(
@@ -234,6 +272,9 @@ async def cleanup():
     except Exception as e:
         LOGGER.error(f"Error during streamrip cleanup: {e}")
 
+    # Streaming functionality is integrated with wserver - no separate cleanup needed
+    LOGGER.info("Streaming functionality cleanup handled by wserver")
+
     # Stop database heartbeat task
     await database.stop_heartbeat()
 
@@ -273,6 +314,11 @@ def handle_loop_exception(loop, context):
             LOGGER.debug(
                 f"Transport closing error (harmless during shutdown): {exception}"
             )
+        # Filter out QueryIdInvalid errors from YT-DLP callback queries (these are expected when callbacks expire)
+        elif "QUERY_ID_INVALID" in str(exception) or "QueryIdInvalid" in str(
+            type(exception).__name__
+        ):
+            LOGGER.debug(f"Callback query expired (expected behavior): {exception}")
         else:
             LOGGER.error(f"Unhandled loop exception: {exception}")
             LOGGER.error(f"Exception context: {context}")

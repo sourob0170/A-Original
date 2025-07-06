@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 from asyncio import (
     create_subprocess_exec,
     create_subprocess_shell,
@@ -90,7 +91,9 @@ DEFAULT_VALUES = {
     "AUTO_RESTART_ENABLED": False,
     "AUTO_RESTART_INTERVAL": 24,
     "EQUAL_SPLITS": False,
-    "ENABLE_EXTRA_MODULES": True,
+    "AI_ENABLED": True,
+    "IMDB_ENABLED": True,
+    "TRUECALLER_ENABLED": True,
     "MEDIA_TOOLS_ENABLED": True,
     "BULK_ENABLED": True,
     "MULTI_LINK_ENABLED": True,
@@ -536,6 +539,25 @@ DEFAULT_VALUES = {
     "ADD_ATTACHMENT_ENABLED": False,
     "ADD_ATTACHMENT_INDEX": None,
     "ADD_ATTACHMENT_MIMETYPE": "none",
+    # Swap Settings
+    "SWAP_ENABLED": False,
+    "SWAP_PRIORITY": 6,
+    "SWAP_REMOVE_ORIGINAL": False,
+    # Audio Swap Settings
+    "SWAP_AUDIO_ENABLED": False,
+    "SWAP_AUDIO_USE_LANGUAGE": True,
+    "SWAP_AUDIO_LANGUAGE_ORDER": "eng,hin",
+    "SWAP_AUDIO_INDEX_ORDER": "0,1",
+    # Video Swap Settings
+    "SWAP_VIDEO_ENABLED": False,
+    "SWAP_VIDEO_USE_LANGUAGE": True,
+    "SWAP_VIDEO_LANGUAGE_ORDER": "eng,hin",
+    "SWAP_VIDEO_INDEX_ORDER": "0,1",
+    # Subtitle Swap Settings
+    "SWAP_SUBTITLE_ENABLED": False,
+    "SWAP_SUBTITLE_USE_LANGUAGE": True,
+    "SWAP_SUBTITLE_LANGUAGE_ORDER": "eng,hin",
+    "SWAP_SUBTITLE_INDEX_ORDER": "0,1",
     # Convert Settings
     "CONVERT_ENABLED": False,
     "CONVERT_PRIORITY": 3,
@@ -649,8 +671,8 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         # Always show Media Tools button, regardless of whether tools are enabled
         buttons.data_button("🎬 Media Tools", "botset mediatools")
 
-        # Only show AI Settings button if Extra Modules are enabled
-        if Config.ENABLE_EXTRA_MODULES:
+        # Only show AI Settings button if AI is enabled
+        if Config.AI_ENABLED:
             buttons.data_button("🤖 AI Settings", "botset ai")
 
         # Only show Streamrip Settings button if Streamrip is enabled
@@ -1501,7 +1523,6 @@ Send one of the following position options:
                     "YOUTUBE_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_UPLOAD_ENABLED",  # Keep only the enabled toggle in operations menu
-                    "MEGA_CLONE_ENABLED",  # Keep only the enabled toggle in operations menu
                     "MEGA_SEARCH_ENABLED",  # Keep only the enabled toggle in mega menu
                     "DDL_DEFAULT_SERVER",  # Keep only in DDL section
                 ]
@@ -1524,7 +1545,9 @@ Send one of the following position options:
 
         # Add module control settings to the config menu
         module_keys = [
-            "ENABLE_EXTRA_MODULES",
+            "AI_ENABLED",
+            "IMDB_ENABLED",
+            "TRUECALLER_ENABLED",
             "BULK_ENABLED",
             "MULTI_LINK_ENABLED",
             "SAME_DIR_ENABLED",
@@ -1540,7 +1563,9 @@ Send one of the following position options:
 
         # Add descriptions for module settings
         module_descriptions = {
-            "ENABLE_EXTRA_MODULES": "Enable Extra Modules (AI, Truecaller, IMDB)",
+            "AI_ENABLED": "Enable AI functionality",
+            "IMDB_ENABLED": "Enable IMDB functionality",
+            "TRUECALLER_ENABLED": "Enable Truecaller functionality",
             "BULK_ENABLED": "Enable Bulk Operations (-b flag)",
             "MULTI_LINK_ENABLED": "Enable Multi-Link Operations",
             "SAME_DIR_ENABLED": "Enable Same Directory Operations (-m flag)",
@@ -1589,25 +1614,9 @@ Send one of the following position options:
             elif k in module_keys:
                 # Use the module descriptions for better display
                 description = module_descriptions.get(k, k)
-                value = Config.get(k)
+                Config.get(k)
 
-                # For ENABLE_EXTRA_MODULES, show status
-                if k == "ENABLE_EXTRA_MODULES":
-                    if isinstance(value, str) and "," in value:
-                        # Show the number of disabled modules
-                        disabled_modules = [
-                            t.strip() for t in value.split(",") if t.strip()
-                        ]
-                        status = (
-                            f"✅ ({len(disabled_modules)} disabled)"
-                            if disabled_modules
-                            else "✅"
-                        )
-                    else:
-                        status = "✅" if value else "❌"
-                    buttons.data_button(f"🧩 {description}: {status}", callback)
-                else:
-                    buttons.data_button(f"🧩 {k}", callback)
+                buttons.data_button(f"🧩 {k}", callback)
             else:
                 buttons.data_button(k, callback)
         if state == "view":
@@ -1880,6 +1889,7 @@ Send one of the following position options:
                 "trim",
                 "extract",
                 "add",
+                "swap",
                 "metadata",
                 "xtra",
                 "sample",
@@ -1887,7 +1897,7 @@ Send one of the following position options:
             ]
 
         # Count enabled tools for display
-        total_tools = 10  # Total number of possible tools
+        total_tools = 11  # Total number of possible tools
         enabled_count = len(enabled_tools)
 
         # Add navigation buttons at the bottom
@@ -1921,6 +1931,8 @@ Send one of the following position options:
         # Media Enhancement Tools
         if is_media_tool_enabled("add"):
             buttons.data_button("➕ Add", "botset mediatools_add")
+        if is_media_tool_enabled("swap"):
+            buttons.data_button("⌬ Swap", "botset mediatools_swap")
         if is_media_tool_enabled("metadata"):
             buttons.data_button("📝 Metadata", "botset mediatools_metadata")
 
@@ -1934,6 +1946,7 @@ Send one of the following position options:
             "extract",
             "remove",
             "add",
+            "swap",
             "metadata",
             "xtra",
             "sample",
@@ -3667,7 +3680,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         # MEGA Settings section
         buttons.data_button("⚙️ General Settings", "botset mega_general")
         buttons.data_button("📤 Upload Settings", "botset mega_upload")
-        buttons.data_button("🔄 Clone Settings", "botset mega_clone")
+
         buttons.data_button("🔐 Security Settings", "botset mega_security")
 
         # Add MEGA Search toggle
@@ -4068,15 +4081,15 @@ These credentials are required for MEGA upload and clone operations."""
         # MEGA Upload Settings
         upload_settings = [
             "MEGA_UPLOAD_ENABLED",
-            "MEGA_UPLOAD_FOLDER",
+            # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
             "MEGA_UPLOAD_PUBLIC",
-            "MEGA_UPLOAD_PRIVATE",
-            "MEGA_UPLOAD_UNLISTED",
-            "MEGA_UPLOAD_EXPIRY_DAYS",
-            "MEGA_UPLOAD_PASSWORD",
-            "MEGA_UPLOAD_ENCRYPTION_KEY",
+            # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+            # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+            # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+            # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+            # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
             "MEGA_UPLOAD_THUMBNAIL",
-            "MEGA_UPLOAD_DELETE_AFTER",
+            # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
         ]
 
         for setting in upload_settings:
@@ -4088,10 +4101,10 @@ These credentials are required for MEGA upload and clone operations."""
             if setting in [
                 "MEGA_UPLOAD_ENABLED",
                 "MEGA_UPLOAD_PUBLIC",
-                "MEGA_UPLOAD_PRIVATE",
-                "MEGA_UPLOAD_UNLISTED",
+                # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+                # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
                 "MEGA_UPLOAD_THUMBNAIL",
-                "MEGA_UPLOAD_DELETE_AFTER",
+                # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
             ]:
                 setting_value = getattr(Config, setting, False)
                 status = "✅ ON" if setting_value else "❌ OFF"
@@ -4116,167 +4129,54 @@ These credentials are required for MEGA upload and clone operations."""
 
         # Get current upload settings
         enabled = "✅ Enabled" if Config.MEGA_UPLOAD_ENABLED else "❌ Disabled"
-        folder = Config.MEGA_UPLOAD_FOLDER or "Root folder (Default)"
+        # folder removed - using folder selector instead
         public = "✅ Enabled" if Config.MEGA_UPLOAD_PUBLIC else "❌ Disabled"
-        private = "✅ Enabled" if Config.MEGA_UPLOAD_PRIVATE else "❌ Disabled"
-        unlisted = "✅ Enabled" if Config.MEGA_UPLOAD_UNLISTED else "❌ Disabled"
-        expiry = (
-            f"{Config.MEGA_UPLOAD_EXPIRY_DAYS} days"
-            if Config.MEGA_UPLOAD_EXPIRY_DAYS > 0
-            else "No expiry (Default)"
-        )
-        password = "Set" if Config.MEGA_UPLOAD_PASSWORD else "Not set (Default)"
-        encryption = (
-            "Set" if Config.MEGA_UPLOAD_ENCRYPTION_KEY else "Not set (Default)"
-        )
+        # private, unlisted, expiry, password, encryption removed - not supported by MEGA SDK v4.8.0
         thumbnail = "✅ Enabled" if Config.MEGA_UPLOAD_THUMBNAIL else "❌ Disabled"
-        delete_after = (
-            "✅ Enabled" if Config.MEGA_UPLOAD_DELETE_AFTER else "❌ Disabled"
-        )
+        # delete_after removed - always delete after upload
 
         msg = f"""<b>☁️ MEGA Upload Settings</b> | State: {state}
 
 <b>Status:</b> {enabled}
-<b>Upload Folder:</b> <code>{folder}</code>
+<b>Upload Folder:</b> <code>📁 Using Folder Selector</code>
 <b>Generate Public Links:</b> {public}
-<b>Generate Private Links:</b> {private}
-<b>Generate Unlisted Links:</b> {unlisted}
-<b>Link Expiry:</b> <code>{expiry}</code>
-<b>Password Protection:</b> <code>{password}</code>
-<b>Custom Encryption:</b> <code>{encryption}</code>
 <b>Generate Thumbnails:</b> {thumbnail}
-<b>Delete After Upload:</b> {delete_after}
+<b>Delete After Upload:</b> <code>🗑️ Always Delete</code>
 
 <b>Description:</b>
 • <b>Enabled:</b> Master toggle for MEGA upload functionality
-• <b>Upload Folder:</b> Default folder path in MEGA account for uploads
-• <b>Public/Private/Unlisted:</b> Link generation preferences
-• <b>Link Expiry:</b> Automatic link expiration (0 = no expiry)
-• <b>Password Protection:</b> Add password protection to uploads
-• <b>Custom Encryption:</b> Use custom encryption keys
+• <b>Upload Folder:</b> Interactive folder selection for each upload
+• <b>Public Links:</b> Generate public MEGA links with decryption keys
 • <b>Generate Thumbnails:</b> Create video thumbnails using FFmpeg
+• <b>Delete After Upload:</b> Always delete local files after successful upload
+
+<b>ℹ️ Note:</b> Private/Unlisted links, Password protection, Link expiry, and Custom encryption are not supported by MEGA SDK v4.8.0
 • <b>Delete After Upload:</b> Remove local files after successful upload"""
 
-    elif key == "mega_clone":
-        # MEGA Clone Settings
-        clone_settings = [
-            "MEGA_CLONE_ENABLED",
-            "MEGA_CLONE_TO_FOLDER",
-            "MEGA_CLONE_PRESERVE_STRUCTURE",
-            "MEGA_CLONE_OVERWRITE",
-        ]
-
-        for setting in clone_settings:
-            display_name = (
-                setting.replace("MEGA_CLONE_", "").replace("_", " ").title()
-            )
-
-            # For boolean settings, add toggle buttons with status
-            if setting in [
-                "MEGA_CLONE_ENABLED",
-                "MEGA_CLONE_PRESERVE_STRUCTURE",
-                "MEGA_CLONE_OVERWRITE",
-            ]:
-                setting_value = getattr(Config, setting, False)
-                status = "✅ ON" if setting_value else "❌ OFF"
-                display_name = f"{display_name}: {status}"
-                buttons.data_button(
-                    display_name, f"botset toggle {setting} {not setting_value}"
-                )
-            else:
-                # For non-boolean settings, use editvar
-                buttons.data_button(display_name, f"botset editvar {setting}")
-
-        if state == "view":
-            buttons.data_button("✏️ Edit", "botset edit mega_clone", "footer")
-        else:
-            buttons.data_button("👁️ View", "botset view mega_clone", "footer")
-
-        buttons.data_button(
-            "🔄 Reset to Default", "botset default_mega_clone", "footer"
-        )
-        buttons.data_button("⬅️ Back", "botset mega", "footer")
-        buttons.data_button("❌ Close", "botset close", "footer")
-
-        # Get current clone settings
-        enabled = "✅ Enabled" if Config.MEGA_CLONE_ENABLED else "❌ Disabled"
-        folder = Config.MEGA_CLONE_TO_FOLDER or "Root folder (Default)"
-        preserve = (
-            "✅ Enabled" if Config.MEGA_CLONE_PRESERVE_STRUCTURE else "❌ Disabled"
-        )
-        overwrite = "✅ Enabled" if Config.MEGA_CLONE_OVERWRITE else "❌ Disabled"
-
-        msg = f"""<b>☁️ MEGA Clone Settings</b> | State: {state}
-
-<b>Status:</b> {enabled}
-<b>Clone To Folder:</b> <code>{folder}</code>
-<b>Preserve Structure:</b> {preserve}
-<b>Overwrite Existing:</b> {overwrite}
-
-<b>Description:</b>
-• <b>Enabled:</b> Master toggle for MEGA clone functionality
-• <b>Clone To Folder:</b> Default destination folder for cloned files
-• <b>Preserve Structure:</b> Maintain original folder structure when cloning
-• <b>Overwrite Existing:</b> Replace existing files when cloning
-
-<b>Note:</b>
-Clone operations copy files directly between MEGA accounts without downloading locally."""
-
     elif key == "mega_security":
-        # MEGA Security Settings (advanced encryption and security options)
-        security_settings = [
-            "MEGA_UPLOAD_PASSWORD",
-            "MEGA_UPLOAD_ENCRYPTION_KEY",
-            "MEGA_UPLOAD_EXPIRY_DAYS",
-        ]
-
-        for setting in security_settings:
-            display_name = (
-                setting.replace("MEGA_UPLOAD_", "").replace("_", " ").title()
-            )
-            buttons.data_button(display_name, f"botset editvar {setting}")
-
-        if state == "view":
-            buttons.data_button("✏️ Edit", "botset edit mega_security", "footer")
-        else:
-            buttons.data_button("👁️ View", "botset view mega_security", "footer")
-
-        buttons.data_button(
-            "🔄 Reset to Default", "botset default_mega_security", "footer"
-        )
+        # MEGA Security Settings - NOT SUPPORTED by MEGA SDK v4.8.0
         buttons.data_button("⬅️ Back", "botset mega", "footer")
         buttons.data_button("❌ Close", "botset close", "footer")
-
-        # Get current security settings
-        password = "Set" if Config.MEGA_UPLOAD_PASSWORD else "Not set (Default)"
-        encryption = (
-            "Set" if Config.MEGA_UPLOAD_ENCRYPTION_KEY else "Not set (Default)"
-        )
-        expiry = (
-            f"{Config.MEGA_UPLOAD_EXPIRY_DAYS} days"
-            if Config.MEGA_UPLOAD_EXPIRY_DAYS > 0
-            else "No expiry (Default)"
-        )
 
         msg = f"""<b>☁️ MEGA Security Settings</b> | State: {state}
 
-<b>Password Protection:</b> <code>{password}</code>
-<b>Custom Encryption Key:</b> <code>{encryption}</code>
-<b>Link Expiry:</b> <code>{expiry}</code>
+<b>❌ Advanced Security Features Not Supported</b>
 
-<b>Description:</b>
-• <b>Password Protection:</b> Add password protection to uploaded files
-• <b>Custom Encryption Key:</b> Use custom encryption keys for enhanced security
-• <b>Link Expiry:</b> Automatically expire download links after specified days
+The following MEGA security features are <b>not supported</b> by MEGA SDK v4.8.0:
 
-<b>Security Features:</b>
-• Password-protected shares require the password to access
-• Custom encryption keys provide additional security layer
-• Expiring links automatically become invalid after the set time
-• All uploads use MEGA's end-to-end encryption by default
+• <b>❌ Password Protection:</b> Cannot add password protection to uploads
+• <b>❌ Custom Encryption Key:</b> MEGA handles encryption automatically
+• <b>❌ Link Expiry:</b> Cannot set automatic link expiration
+• <b>❌ Private Links:</b> Only public links are supported
+• <b>❌ Unlisted Links:</b> Only public links are supported
 
-<b>Note:</b>
-These are advanced security features. Leave empty for standard MEGA encryption."""
+<b>✅ What IS Supported:</b>
+• <b>Public Links:</b> Generate public MEGA links with decryption keys
+• <b>Default Encryption:</b> MEGA's built-in end-to-end encryption
+• <b>Folder Selection:</b> Interactive folder selection for uploads
+• <b>Thumbnails:</b> Video thumbnail generation
+
+<b>ℹ️ Note:</b> These limitations are due to MEGA SDK v4.8.0 capabilities. All uploads still use MEGA's secure end-to-end encryption by default."""
 
     elif key == "ddl":
         # DDL main menu with subsections for each server
@@ -6058,6 +5958,101 @@ Configure global remove settings that will be used when user settings are not av
 
 Configure global add settings that will be used when user settings are not available."""
 
+    elif key == "mediatools_swap":
+        # Add buttons for swap settings
+        # General swap settings
+        general_settings = [
+            ("SWAP_ENABLED", "Enabled"),
+            ("SWAP_PRIORITY", "Priority"),
+            ("SWAP_REMOVE_ORIGINAL", "Remove Original"),
+        ]
+
+        # Audio swap settings
+        audio_settings = [
+            ("SWAP_AUDIO_ENABLED", "Audio: Enabled"),
+            ("SWAP_AUDIO_USE_LANGUAGE", "Audio: Use Language"),
+            ("SWAP_AUDIO_LANGUAGE_ORDER", "Audio: Language Order"),
+            ("SWAP_AUDIO_INDEX_ORDER", "Audio: Index Order"),
+        ]
+
+        # Video swap settings
+        video_settings = [
+            ("SWAP_VIDEO_ENABLED", "Video: Enabled"),
+            ("SWAP_VIDEO_USE_LANGUAGE", "Video: Use Language"),
+            ("SWAP_VIDEO_LANGUAGE_ORDER", "Video: Language Order"),
+            ("SWAP_VIDEO_INDEX_ORDER", "Video: Index Order"),
+        ]
+
+        # Subtitle swap settings
+        subtitle_settings = [
+            ("SWAP_SUBTITLE_ENABLED", "Subtitle: Enabled"),
+            ("SWAP_SUBTITLE_USE_LANGUAGE", "Subtitle: Use Language"),
+            ("SWAP_SUBTITLE_LANGUAGE_ORDER", "Subtitle: Language Order"),
+            ("SWAP_SUBTITLE_INDEX_ORDER", "Subtitle: Index Order"),
+        ]
+
+        # Add buttons for general settings
+        for setting, display_name in general_settings:
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add audio settings
+        for setting, display_name in audio_settings:
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add video settings
+        for setting, display_name in video_settings:
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add subtitle settings
+        for setting, display_name in subtitle_settings:
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        # Add view/edit state toggle like other media tools
+        if state == "view":
+            buttons.data_button("Edit", "botset edit mediatools_swap")
+        else:
+            buttons.data_button("View", "botset view mediatools_swap")
+
+        # Add reset to default button
+        buttons.data_button("Default", "botset default_swap")
+
+        # Add navigation buttons
+        buttons.data_button("⬅️ Back", "botset mediatools", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        msg = """<b>⌬ Swap Settings</b>
+
+<b>General Settings:</b>
+• <b>Enabled:</b> Master switch for swap functionality
+• <b>Priority:</b> Processing order in pipeline (lower = earlier)
+• <b>Remove Original:</b> Delete original files after swapping
+
+<b>Audio Swap Settings:</b>
+• <b>Enabled:</b> Enable/disable audio track swapping
+• <b>Use Language:</b> Language-based (True) or index-based (False) swapping
+• <b>Language Order:</b> Priority order for languages (e.g., "eng,hin,jpn")
+• <b>Index Order:</b> Index swap pattern (e.g., "0,1" to swap first two)
+
+<b>Video Swap Settings:</b>
+• <b>Enabled:</b> Enable/disable video track swapping
+• <b>Use Language:</b> Language-based (True) or index-based (False) swapping
+• <b>Language Order:</b> Priority order for languages (e.g., "eng,hin,jpn")
+• <b>Index Order:</b> Index swap pattern (e.g., "0,1" to swap first two)
+
+<b>Subtitle Swap Settings:</b>
+• <b>Enabled:</b> Enable/disable subtitle track swapping
+• <b>Use Language:</b> Language-based (True) or index-based (False) swapping
+• <b>Language Order:</b> Priority order for languages (e.g., "eng,hin,jpn")
+• <b>Index Order:</b> Index swap pattern (e.g., "0,1" to swap first two)
+
+<b>Usage:</b>
+• Add <code>-swap</code> to any download command to apply swapping
+• Language mode reorders tracks by language priority
+• Index mode swaps tracks at specific positions
+• Settings with value 'None' will not be used in command generation
+
+Configure global swap settings that will be used when user settings are not available."""
+
     elif key == "mediatools_trim":
         # Add buttons for trim settings
         # General trim settings
@@ -7739,6 +7734,15 @@ async def update_buttons(message, key=None, edit_type=None, page=0):
         # Update the database with all ADD_ settings
         await database.update_config(add_settings)
 
+    # Special handling for mediatools_swap to ensure all SWAP_ settings are initialized
+    if key == "mediatools_swap":
+        # Initialize all SWAP_ settings with their default values in the database
+        swap_settings = {
+            k: value for k, value in DEFAULT_VALUES.items() if k.startswith("SWAP_")
+        }
+        # Update the database with all SWAP_ settings
+        await database.update_config(swap_settings)
+
     # Get the buttons and message for the current state and key
     msg, button = await get_buttons(key, edit_type, page, user_id)
 
@@ -8449,9 +8453,9 @@ async def edit_variable(_, message, pre_message, key):
             drives_ids.insert(0, value)
     elif key == "INDEX_URL":
         if drives_names and drives_names[0] == "Main":
-            index_urls[0] = value
+            index_urls[0] = value.strip("/")
         else:
-            index_urls.insert(0, value)
+            index_urls.insert(0, value.strip("/"))
     elif key == "AUTHORIZED_CHATS":
         aid = value.split()
         auth_chats.clear()
@@ -9387,7 +9391,7 @@ async def update_private_file(_, message, pre_message):
                     drives_ids.append(temp[1])
                     drives_names.append(temp[0].replace("_", " "))
                     if len(temp) > 2:
-                        index_urls.append(temp[2])
+                        index_urls.append(temp[2].strip("/"))
                     else:
                         index_urls.append("")
         elif file_name in [".netrc", "netrc"]:
@@ -9520,7 +9524,6 @@ async def event_handler(client, query, pfunc, rfunc, document=False, photo=False
     # Create a wrapper function that passes the pre_message as the third parameter
     async def pfunc_wrapper(client, message):
         # Check if the function expects 3 parameters (client, message, pre_message)
-        import inspect
         from functools import partial
 
         # Handle partial functions specially
@@ -9927,7 +9930,6 @@ async def edit_bot_settings(client, query):
     elif data[1] in [
         "mega_general",
         "mega_upload",
-        "mega_clone",
         "mega_security",
     ]:
         await query.answer()
@@ -10332,6 +10334,11 @@ async def edit_bot_settings(client, query):
                 "desc": "Extract components from media",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
+            {
+                "name": "swap",
+                "icon": "⌬",
+                "desc": "Reorder tracks by language or index",
+            },
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
@@ -10710,6 +10717,24 @@ async def edit_bot_settings(client, query):
         # Set the state back to what it was
         globals()["state"] = current_state
         await update_buttons(message, "mediatools_add")
+
+    elif data[1] == "mediatools_swap":
+        from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
+
+        await query.answer()
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Check if swap is enabled
+        if not is_media_tool_enabled("swap"):
+            await query.answer(
+                "Swap tool is disabled by the bot owner.", show_alert=True
+            )
+            return
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mediatools_swap")
 
     elif data[1] == "mediatools_compression":
         from bot.helper.ext_utils.bot_utils import is_media_tool_enabled
@@ -11677,6 +11702,60 @@ async def edit_bot_settings(client, query):
         # Force a refresh of the UI to ensure the toggle buttons show the correct state
         await update_buttons(message, "mediatools_add")
 
+    elif data[1] == "default_swap":
+        await query.answer("Resetting all swap settings to default...")
+        # Reset all swap settings to default using DEFAULT_VALUES
+
+        # General swap settings
+        Config.SWAP_ENABLED = DEFAULT_VALUES["SWAP_ENABLED"]
+        Config.SWAP_PRIORITY = DEFAULT_VALUES["SWAP_PRIORITY"]
+        Config.SWAP_REMOVE_ORIGINAL = DEFAULT_VALUES["SWAP_REMOVE_ORIGINAL"]
+
+        # Audio swap settings
+        Config.SWAP_AUDIO_ENABLED = DEFAULT_VALUES["SWAP_AUDIO_ENABLED"]
+        Config.SWAP_AUDIO_USE_LANGUAGE = DEFAULT_VALUES["SWAP_AUDIO_USE_LANGUAGE"]
+        Config.SWAP_AUDIO_LANGUAGE_ORDER = DEFAULT_VALUES[
+            "SWAP_AUDIO_LANGUAGE_ORDER"
+        ]
+        Config.SWAP_AUDIO_INDEX_ORDER = DEFAULT_VALUES["SWAP_AUDIO_INDEX_ORDER"]
+
+        # Video swap settings
+        Config.SWAP_VIDEO_ENABLED = DEFAULT_VALUES["SWAP_VIDEO_ENABLED"]
+        Config.SWAP_VIDEO_USE_LANGUAGE = DEFAULT_VALUES["SWAP_VIDEO_USE_LANGUAGE"]
+        Config.SWAP_VIDEO_LANGUAGE_ORDER = DEFAULT_VALUES[
+            "SWAP_VIDEO_LANGUAGE_ORDER"
+        ]
+        Config.SWAP_VIDEO_INDEX_ORDER = DEFAULT_VALUES["SWAP_VIDEO_INDEX_ORDER"]
+
+        # Subtitle swap settings
+        Config.SWAP_SUBTITLE_ENABLED = DEFAULT_VALUES["SWAP_SUBTITLE_ENABLED"]
+        Config.SWAP_SUBTITLE_USE_LANGUAGE = DEFAULT_VALUES[
+            "SWAP_SUBTITLE_USE_LANGUAGE"
+        ]
+        Config.SWAP_SUBTITLE_LANGUAGE_ORDER = DEFAULT_VALUES[
+            "SWAP_SUBTITLE_LANGUAGE_ORDER"
+        ]
+        Config.SWAP_SUBTITLE_INDEX_ORDER = DEFAULT_VALUES[
+            "SWAP_SUBTITLE_INDEX_ORDER"
+        ]
+
+        # Create a dictionary of all SWAP_ settings from DEFAULT_VALUES
+        swap_settings = {
+            key: value
+            for key, value in DEFAULT_VALUES.items()
+            if key.startswith("SWAP_")
+        }
+
+        # Update the database with all SWAP_ settings
+        await database.update_config(swap_settings)
+
+        # Get the current state before making changes
+        current_state = globals()["state"]
+
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "mediatools_swap")
+
     elif data[1] == "default_metadata":
         await query.answer("Resetting all metadata settings to default...")
         # Reset all metadata settings to default
@@ -12567,51 +12646,29 @@ async def edit_bot_settings(client, query):
         await query.answer("Resetting MEGA upload settings to default...")
         # Reset MEGA upload settings to default
         Config.MEGA_UPLOAD_ENABLED = True
-        Config.MEGA_UPLOAD_FOLDER = ""
+        # Config.MEGA_UPLOAD_FOLDER removed - using folder selector instead
         Config.MEGA_UPLOAD_PUBLIC = True
-        Config.MEGA_UPLOAD_PRIVATE = False
-        Config.MEGA_UPLOAD_UNLISTED = False
-        Config.MEGA_UPLOAD_EXPIRY_DAYS = 0
-        Config.MEGA_UPLOAD_PASSWORD = ""
-        Config.MEGA_UPLOAD_ENCRYPTION_KEY = ""
+        # Config.MEGA_UPLOAD_PRIVATE removed - not supported by MEGA SDK v4.8.0
+        # Config.MEGA_UPLOAD_UNLISTED removed - not supported by MEGA SDK v4.8.0
+        # Config.MEGA_UPLOAD_EXPIRY_DAYS removed - premium feature not implemented
+        # Config.MEGA_UPLOAD_PASSWORD removed - premium feature not implemented
+        # Config.MEGA_UPLOAD_ENCRYPTION_KEY removed - not supported by MEGA SDK v4.8.0
         Config.MEGA_UPLOAD_THUMBNAIL = True
-        Config.MEGA_UPLOAD_DELETE_AFTER = False
+        # Config.MEGA_UPLOAD_DELETE_AFTER removed - always delete after upload
 
         # Update the database
         await database.update_config(
             {
                 "MEGA_UPLOAD_ENABLED": True,
-                "MEGA_UPLOAD_FOLDER": "",
+                # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
                 "MEGA_UPLOAD_PUBLIC": True,
-                "MEGA_UPLOAD_PRIVATE": False,
-                "MEGA_UPLOAD_UNLISTED": False,
-                "MEGA_UPLOAD_EXPIRY_DAYS": 0,
-                "MEGA_UPLOAD_PASSWORD": "",
-                "MEGA_UPLOAD_ENCRYPTION_KEY": "",
+                # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+                # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+                # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+                # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+                # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
                 "MEGA_UPLOAD_THUMBNAIL": True,
-                "MEGA_UPLOAD_DELETE_AFTER": False,
-            }
-        )
-        # Update the UI - go back to MEGA main menu
-        current_state = globals()["state"]
-        globals()["state"] = current_state
-        await update_buttons(message, "mega")
-
-    elif data[1] == "default_mega_clone":
-        await query.answer("Resetting MEGA clone settings to default...")
-        # Reset MEGA clone settings to default
-        Config.MEGA_CLONE_ENABLED = True
-        Config.MEGA_CLONE_TO_FOLDER = ""
-        Config.MEGA_CLONE_PRESERVE_STRUCTURE = True
-        Config.MEGA_CLONE_OVERWRITE = False
-
-        # Update the database
-        await database.update_config(
-            {
-                "MEGA_CLONE_ENABLED": True,
-                "MEGA_CLONE_TO_FOLDER": "",
-                "MEGA_CLONE_PRESERVE_STRUCTURE": True,
-                "MEGA_CLONE_OVERWRITE": False,
+                # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
             }
         )
         # Update the UI - go back to MEGA main menu
@@ -12620,21 +12677,11 @@ async def edit_bot_settings(client, query):
         await update_buttons(message, "mega")
 
     elif data[1] == "default_mega_security":
-        await query.answer("Resetting MEGA security settings to default...")
-        # Reset MEGA security settings to default
-        Config.MEGA_UPLOAD_PASSWORD = ""
-        Config.MEGA_UPLOAD_ENCRYPTION_KEY = ""
-        Config.MEGA_UPLOAD_EXPIRY_DAYS = 0
-
-        # Update the database
-        await database.update_config(
-            {
-                "MEGA_UPLOAD_PASSWORD": "",
-                "MEGA_UPLOAD_ENCRYPTION_KEY": "",
-                "MEGA_UPLOAD_EXPIRY_DAYS": 0,
-            }
+        await query.answer(
+            "MEGA security features are not supported by MEGA SDK v4.8.0"
         )
-        # Update the UI - go back to MEGA main menu
+        # MEGA security settings removed - not supported by MEGA SDK v4.8.0
+        # Redirect back to MEGA main menu
         current_state = globals()["state"]
         globals()["state"] = current_state
         await update_buttons(message, "mega")
@@ -12937,6 +12984,7 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
+        "mediatools_swap",
         "ai",
         "mega",
         "youtube",
@@ -12945,7 +12993,6 @@ async def edit_bot_settings(client, query):
         "youtube_auth",
         "mega_general",
         "mega_upload",
-        "mega_clone",
         "mega_security",
         "ddl",
         "ddl_general",
@@ -12987,7 +13034,6 @@ async def edit_bot_settings(client, query):
             "mega",
             "mega_general",
             "mega_upload",
-            "mega_clone",
             "mega_security",
         ]:
             await update_buttons(message, data[2])
@@ -13003,6 +13049,7 @@ async def edit_bot_settings(client, query):
         "mediatools_trim",
         "mediatools_extract",
         "mediatools_add",
+        "mediatools_swap",
         "ai",
         "youtube",
         "youtube_general",
@@ -13011,7 +13058,6 @@ async def edit_bot_settings(client, query):
         "mega",
         "mega_general",
         "mega_upload",
-        "mega_clone",
         "mega_security",
         "ddl",
         "ddl_general",
@@ -13050,7 +13096,6 @@ async def edit_bot_settings(client, query):
             "mega",
             "mega_general",
             "mega_upload",
-            "mega_clone",
             "mega_security",
         ]:
             await update_buttons(message, data[2])
@@ -13367,29 +13412,19 @@ async def edit_bot_settings(client, query):
                     back_menu = "mega_general"
                 elif data[2] in [
                     "MEGA_UPLOAD_ENABLED",
-                    "MEGA_UPLOAD_FOLDER",
+                    # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
                     "MEGA_UPLOAD_PUBLIC",
-                    "MEGA_UPLOAD_PRIVATE",
-                    "MEGA_UPLOAD_UNLISTED",
-                    "MEGA_UPLOAD_EXPIRY_DAYS",
-                    "MEGA_UPLOAD_PASSWORD",
-                    "MEGA_UPLOAD_ENCRYPTION_KEY",
+                    # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+                    # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+                    # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+                    # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+                    # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
                     "MEGA_UPLOAD_THUMBNAIL",
-                    "MEGA_UPLOAD_DELETE_AFTER",
+                    # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
                 ]:
                     back_menu = "mega_upload"
-                elif data[2] in [
-                    "MEGA_CLONE_ENABLED",
-                    "MEGA_CLONE_TO_FOLDER",
-                    "MEGA_CLONE_PRESERVE_STRUCTURE",
-                    "MEGA_CLONE_OVERWRITE",
-                ]:
-                    back_menu = "mega_clone"
-                elif data[2] in [
-                    "MEGA_UPLOAD_PASSWORD",
-                    "MEGA_UPLOAD_ENCRYPTION_KEY",
-                ]:
-                    back_menu = "mega_security"
+
+                # mega_security settings removed - not supported by MEGA SDK v4.8.0
                 elif data[2] == "MEGA_SEARCH_ENABLED":
                     back_menu = "mega"
                 else:
@@ -14226,6 +14261,8 @@ async def edit_bot_settings(client, query):
             previous_menu = "mediatools_remove"
         elif data[2].startswith("ADD_"):
             previous_menu = "mediatools_add"
+        elif data[2].startswith("SWAP_"):
+            previous_menu = "mediatools_swap"
         elif data[2].startswith("TASK_MONITOR_"):
             previous_menu = "taskmonitor"
         elif data[2] == "DEFAULT_AI_PROVIDER" or data[2].startswith(
@@ -15215,6 +15252,11 @@ No database-only files found."""
                 "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
+            {
+                "name": "swap",
+                "icon": "⌬",
+                "desc": "Reorder tracks by language or index",
+            },
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
@@ -15589,6 +15631,11 @@ No database-only files found."""
                 "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
+            {
+                "name": "swap",
+                "icon": "⌬",
+                "desc": "Reorder tracks by language or index",
+            },
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
@@ -15828,6 +15875,11 @@ No database-only files found."""
                 "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
+            {
+                "name": "swap",
+                "icon": "⌬",
+                "desc": "Reorder tracks by language or index",
+            },
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
@@ -15951,6 +16003,11 @@ No database-only files found."""
                 "desc": "Remove tracks or metadata from media files",
             },
             {"name": "add", "icon": "➕", "desc": "Add elements to media files"},
+            {
+                "name": "swap",
+                "icon": "⌬",
+                "desc": "Reorder tracks by language or index",
+            },
             {"name": "metadata", "icon": "📝", "desc": "Modify file metadata"},
             {"name": "xtra", "icon": "🎬", "desc": "Use custom FFmpeg commands"},
             {"name": "sample", "icon": "🎞️", "desc": "Create sample clips"},
@@ -16573,48 +16630,18 @@ No database-only files found."""
                 # MEGA operations enabled without logging
                 pass
 
-        # Special handling for MEGA upload privacy settings - mutual exclusion
+        # Special handling for MEGA upload public setting
         elif key == "MEGA_UPLOAD_PUBLIC" and value:
-            # If public is being turned on, turn off private and unlisted
+            # Set public links to true (only supported option)
             Config.set("MEGA_UPLOAD_PUBLIC", True)
-            Config.set("MEGA_UPLOAD_PRIVATE", False)
-            Config.set("MEGA_UPLOAD_UNLISTED", False)
-            # Update all three settings in the database
+            # Update the database
             await database.update_config(
                 {
                     "MEGA_UPLOAD_PUBLIC": True,
-                    "MEGA_UPLOAD_PRIVATE": False,
-                    "MEGA_UPLOAD_UNLISTED": False,
                 }
             )
 
-        elif key == "MEGA_UPLOAD_PRIVATE" and value:
-            # If private is being turned on, turn off public and unlisted
-            Config.set("MEGA_UPLOAD_PRIVATE", True)
-            Config.set("MEGA_UPLOAD_PUBLIC", False)
-            Config.set("MEGA_UPLOAD_UNLISTED", False)
-            # Update all three settings in the database
-            await database.update_config(
-                {
-                    "MEGA_UPLOAD_PRIVATE": True,
-                    "MEGA_UPLOAD_PUBLIC": False,
-                    "MEGA_UPLOAD_UNLISTED": False,
-                }
-            )
-
-        elif key == "MEGA_UPLOAD_UNLISTED" and value:
-            # If unlisted is being turned on, turn off public and private
-            Config.set("MEGA_UPLOAD_UNLISTED", True)
-            Config.set("MEGA_UPLOAD_PUBLIC", False)
-            Config.set("MEGA_UPLOAD_PRIVATE", False)
-            # Update all three settings in the database
-            await database.update_config(
-                {
-                    "MEGA_UPLOAD_UNLISTED": True,
-                    "MEGA_UPLOAD_PUBLIC": False,
-                    "MEGA_UPLOAD_PRIVATE": False,
-                }
-            )
+        # MEGA_UPLOAD_PRIVATE and MEGA_UPLOAD_UNLISTED removed - not supported by MEGA SDK v4.8.0
 
         # Special handling for TORRENT_SEARCH_ENABLED
         elif key in {"TORRENT_SEARCH_ENABLED", "NZB_SEARCH_ENABLED"} or key in {
@@ -16634,19 +16661,8 @@ No database-only files found."""
             Config.set(key, value)
             # Database update will be done later in the function
 
-        # Special handling for ENABLE_EXTRA_MODULES
-        if key == "ENABLE_EXTRA_MODULES":
-            # If it's a string with comma-separated values, toggle to True
-            # If it's True, toggle to False
-            # If it's False, toggle to True
-            if (
-                isinstance(Config.ENABLE_EXTRA_MODULES, str)
-                and "," in Config.ENABLE_EXTRA_MODULES
-            ):
-                value = True
-
         # Special handling for MEDIA_TOOLS_ENABLED
-        elif key == "MEDIA_TOOLS_ENABLED":
+        if key == "MEDIA_TOOLS_ENABLED":
             # If toggling to True, set to a comma-separated list of all media tools
             if value:
                 # List of all available media tools
@@ -16844,26 +16860,19 @@ No database-only files found."""
                 return_menu = "mega_general"
             elif key in [
                 "MEGA_UPLOAD_ENABLED",
-                "MEGA_UPLOAD_FOLDER",
+                # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
                 "MEGA_UPLOAD_PUBLIC",
-                "MEGA_UPLOAD_PRIVATE",
-                "MEGA_UPLOAD_UNLISTED",
-                "MEGA_UPLOAD_EXPIRY_DAYS",
-                "MEGA_UPLOAD_PASSWORD",
-                "MEGA_UPLOAD_ENCRYPTION_KEY",
+                # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+                # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+                # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+                # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+                # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
                 "MEGA_UPLOAD_THUMBNAIL",
-                "MEGA_UPLOAD_DELETE_AFTER",
+                # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
             ]:
                 return_menu = "mega_upload"
-            elif key in [
-                "MEGA_CLONE_ENABLED",
-                "MEGA_CLONE_TO_FOLDER",
-                "MEGA_CLONE_PRESERVE_STRUCTURE",
-                "MEGA_CLONE_OVERWRITE",
-            ]:
-                return_menu = "mega_clone"
-            elif key in ["MEGA_UPLOAD_PASSWORD", "MEGA_UPLOAD_ENCRYPTION_KEY"]:
-                return_menu = "mega_security"
+
+            # mega_security settings removed - not supported by MEGA SDK v4.8.0
             elif key == "MEGA_SEARCH_ENABLED":
                 return_menu = "mega"
             else:
@@ -16905,7 +16914,12 @@ No database-only files found."""
                 return_menu = "ddl_streamtape"
             else:
                 return_menu = "ddl"
-        elif key in {"ENABLE_EXTRA_MODULES", "MEDIA_TOOLS_ENABLED"}:
+        elif key in {
+            "AI_ENABLED",
+            "IMDB_ENABLED",
+            "TRUECALLER_ENABLED",
+            "MEDIA_TOOLS_ENABLED",
+        }:
             return_menu = "var"
         elif key == "DEFAULT_AI_PROVIDER" or key.startswith(
             ("MISTRAL_", "DEEPSEEK_")

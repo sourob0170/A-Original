@@ -851,7 +851,9 @@
 ### Core Features
 | Variable               | Type   | Description |
 |------------------------|--------|-------------|
-| `ENABLE_EXTRA_MODULES` | `bool` | Enable extra modules functionality. Default: `True`. |
+| `AI_ENABLED`           | `bool` | Enable AI functionality. Default: `True`. |
+| `IMDB_ENABLED`         | `bool` | Enable IMDB functionality. Default: `True`. |
+| `TRUECALLER_ENABLED`   | `bool` | Enable Truecaller functionality. Default: `True`. |
 | `MULTI_LINK_ENABLED`   | `bool` | Enable multi-link download support. Default: `True`. |
 | `SAME_DIR_ENABLED`     | `bool` | Enable same directory functionality. Default: `True`. |
 | `MIRROR_ENABLED`       | `bool` | Enable mirror functionality. Default: `True`. |

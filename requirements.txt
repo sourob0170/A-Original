@@ -8,10 +8,18 @@ aioqbt
 beautifulsoup4
 cinemagoer
 cloudscraper
+cryptography>=41.0.0
+codext>=1.15.6
 dnspython
-electrogram
+ElectroCrypto
+kurigram
 fastapi
 feedparser
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]
+python-multipart
+PyJWT
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
@@ -35,6 +43,7 @@ requests
 speedtest-cli
 telegraph
 tenacity
+toml
 uvicorn
 uvloop
 vt-py>=0.17.5
@@ -42,5 +51,3 @@ xattr
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev
 git+https://github.com/DraftKinner/zotify.git@dev
-cryptography>=41.0.0
-codext>=1.15.6

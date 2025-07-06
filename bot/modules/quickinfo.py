@@ -1,3 +1,4 @@
+from pyrogram.enums import ChatType
 from pyrogram.types import CallbackQuery, Message
 
 from bot import LOGGER
@@ -9,8 +10,8 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 from bot.helper.telegram_helper.quickinfo_buttons import (
+    get_appropriate_quickinfo_buttons,
     get_quickinfo_inline_buttons,
-    get_quickinfo_menu_buttons,
 )
 from bot.helper.telegram_helper.quickinfo_utils import (
     formatter,
@@ -78,6 +79,8 @@ async def quickinfo_command(client, message: Message):
         )
         return
 
+    chat = message.chat
+
     # Check if command has arguments to show current chat info
     if len(message.command) > 1 and message.command[1].lower() in [
         "chat",
@@ -86,7 +89,6 @@ async def quickinfo_command(client, message: Message):
     ]:
         # Show current chat information
         try:
-            chat = message.chat
             chat_info = formatter.format_chat_info(chat, "detailed")
 
             reply_markup = get_quickinfo_inline_buttons()
@@ -101,23 +103,65 @@ async def quickinfo_command(client, message: Message):
             await send_message(message, "❌ <b>Failed to get chat information.</b>")
         return
 
-    # Show QuickInfo menu
-    welcome_text = (
-        "🆔 <b>Welcome to QuickInfo!</b> 👋\n\n"
-        "✅ <b>Fetch Any Chat ID Instantly!</b>\n\n"
-        "🔧 <b>How to Use:</b>\n"
-        "1️⃣ Click the buttons below to share a chat or user\n"
-        "2️⃣ Receive the unique ID instantly\n"
-        "3️⃣ Use <code>/quickinfo chat</code> to get current chat info\n\n"
-        "💎 <b>Features:</b>\n"
-        "• Supports users, bots, private/public groups & channels\n"
-        "• Fast and reliable\n"
-        "• Get current chat information\n\n"
-        f"🛠 <i>{Config.CREDIT}</i>"
-    )
+    # Determine behavior based on chat type
+    if chat.type == ChatType.PRIVATE:
+        # Private chat: Show only the interactive menu
+        welcome_text = (
+            "🆔 <b>Welcome to QuickInfo!</b> 👋\n\n"
+            "✅ <b>Fetch Any Chat ID Instantly!</b>\n\n"
+            "🔧 <b>How to Use:</b>\n"
+            "1️⃣ Click the buttons below to share a chat or user\n"
+            "2️⃣ Receive the unique ID instantly\n"
+            "3️⃣ Use <code>/quickinfo chat</code> to get current chat info\n\n"
+            "💎 <b>Features:</b>\n"
+            "• Supports users, bots, private/public groups & channels\n"
+            "• Fast and reliable\n"
+            "• Get current chat information\n\n"
+            f"🛠 <i>{Config.CREDIT}</i>"
+        )
 
-    reply_markup = get_quickinfo_menu_buttons()
-    await send_message(message, welcome_text, reply_markup)
+        reply_markup = get_appropriate_quickinfo_buttons(chat.type)
+        await send_message(message, welcome_text, reply_markup)
+
+    elif chat.type in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        # Group/Supergroup/Channel: Show current chat info AND interactive menu
+        try:
+            chat_info = formatter.format_chat_info(chat, "detailed")
+
+            # Add forum topic information if applicable
+            topic_info = ""
+            if message.is_topic_message and message.message_thread_id:
+                topic_info = f"\n🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
+                if hasattr(message, "topic") and message.topic:
+                    topic_info += (
+                        f"\n📝 <b>Topic Name:</b> <code>{message.topic.name}</code>"
+                    )
+
+            welcome_text = (
+                f"📋 <b>Current {chat.type.value.title()} Information</b>\n\n"
+                f"{chat_info}{topic_info}\n\n"
+                "🔧 <b>QuickInfo Menu:</b>\n"
+                "Use the buttons below to get information about other chats and users!\n\n"
+                f"🛠 <i>{Config.CREDIT}</i>"
+            )
+
+            reply_markup = get_appropriate_quickinfo_buttons(chat.type)
+            await send_message(message, welcome_text, reply_markup)
+
+        except Exception as e:
+            LOGGER.error(f"Error getting current chat info: {e}")
+            await send_message(message, "❌ <b>Failed to get chat information.</b>")
+
+    else:
+        # Fallback for unknown chat types
+        welcome_text = (
+            "🆔 <b>Welcome to QuickInfo!</b> 👋\n\n"
+            "✅ <b>Fetch Any Chat ID Instantly!</b>\n\n"
+            f"🛠 <i>{Config.CREDIT}</i>"
+        )
+
+        reply_markup = get_appropriate_quickinfo_buttons(chat.type)
+        await send_message(message, welcome_text, reply_markup)
 
 
 async def handle_forwarded_message(client, message: Message):
@@ -128,57 +172,125 @@ async def handle_forwarded_message(client, message: Message):
     format_style = "detailed"
 
     try:
-        if hasattr(message, "forward_origin") and message.forward_origin:
-            origin = message.forward_origin
+        info_parts = []
 
-            if hasattr(origin, "sender_user") and origin.sender_user:
-                user = origin.sender_user
-                user_info = formatter.format_user_info(user, format_style)
+        # Check for forwarded from user
+        if message.forward_from:
+            user = message.forward_from
+            user_info = formatter.format_user_info(user, format_style)
+            info_parts.append(f"👤 <b>Original Sender:</b>\n{user_info}")
 
-                reply_markup = get_quickinfo_inline_buttons()
-                await send_message(
-                    message,
-                    f"📤 <b>Forwarded Message Info</b>\n\n{user_info}",
-                    reply_markup,
+        # Check for forwarded from chat (channel/group/supergroup)
+        # This can exist alongside forward_from for group messages
+        if message.forward_from_chat:
+            chat = message.forward_from_chat
+            chat_info = formatter.format_chat_info(chat, format_style)
+
+            # Add additional forward info if available
+            forward_details = []
+            if message.forward_from_message_id:
+                forward_details.append(
+                    f"🆔 <b>Original Message ID:</b> <code>{message.forward_from_message_id}</code>"
+                )
+            if message.forward_signature:
+                forward_details.append(
+                    f"✍️ <b>Author Signature:</b> <code>{message.forward_signature}</code>"
+                )
+            if message.forward_date:
+                forward_details.append(
+                    f"📅 <b>Original Date:</b> <code>{message.forward_date}</code>"
                 )
 
-            elif hasattr(origin, "chat") and origin.chat:
-                chat = origin.chat
-                chat_info = formatter.format_chat_info(chat, format_style)
-
-                reply_markup = get_quickinfo_inline_buttons()
-                await send_message(
-                    message,
-                    f"📤 <b>Forwarded Message Info</b>\n\n{chat_info}",
-                    reply_markup,
+            # Check if it's from a forum topic
+            if message.is_topic_message and message.message_thread_id:
+                forward_details.append(
+                    f"🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
                 )
 
-            elif hasattr(origin, "sender_user_name") and origin.sender_user_name:
-                await send_message(
-                    message,
-                    f"📤 <b>Forwarded Message Info</b>\n\n"
-                    f"🔒 <b>Looks Like I Don't Have Control Over The User</b>\n"
-                    f"📝 Forwarded from: <code>{origin.sender_user_name}</code>",
-                )
-            else:
-                await send_message(
-                    message,
-                    "📤 <b>Forwarded Message Info</b>\n\n"
-                    "🔒 <b>Looks Like I Don't Have Control Over The User</b>",
+            info_parts.append(f"💬 <b>Original Chat:</b>\n{chat_info}")
+            if forward_details:
+                info_parts.append(
+                    "📋 <b>Forward Details:</b>\n" + "\n".join(forward_details)
                 )
 
+        # Check for forwarded from hidden user (when no forward_from but has sender name)
+        elif message.forward_sender_name:
+            info_parts.append(
+                f"🔒 <b>Original Sender (Hidden):</b>\n"
+                f"📝 <b>Name:</b> <code>{message.forward_sender_name}</code>\n"
+                f"ℹ️ <i>This user has hidden their account from forwarding</i>"
+            )
+            if message.forward_date:
+                info_parts.append(
+                    f"📅 <b>Original Date:</b> <code>{message.forward_date}</code>"
+                )
+
+        # Check for sender_chat (anonymous group administrators)
+        if message.sender_chat:
+            sender_chat = message.sender_chat
+            sender_chat_info = formatter.format_chat_info(sender_chat, format_style)
+            info_parts.append(f"🎭 <b>Sent on behalf of:</b>\n{sender_chat_info}")
+
+        # Add general forward date if not already added and available
+        if message.forward_date and not any(
+            "Original Date" in part for part in info_parts
+        ):
+            info_parts.append(
+                f"📅 <b>Forward Date:</b> <code>{message.forward_date}</code>"
+            )
+
+        # Extract media information if present
+        media_info = formatter.format_media_info(message)
+        if media_info:
+            info_parts.append(f"📎 <b>Media Information:</b>\n{media_info}")
+
+        # Extract text/caption information
+        if message.text:
+            text_preview = (
+                message.text[:100] + "..."
+                if len(message.text) > 100
+                else message.text
+            )
+            info_parts.append(f"💬 <b>Text:</b> <code>{text_preview}</code>")
+        elif message.caption:
+            caption_preview = (
+                message.caption[:100] + "..."
+                if len(message.caption) > 100
+                else message.caption
+            )
+            info_parts.append(f"📝 <b>Caption:</b> <code>{caption_preview}</code>")
+
+        # Add current chat information if different from forward source
+        if message.chat and (
+            not message.forward_from_chat
+            or message.chat.id != message.forward_from_chat.id
+        ):
+            current_chat_info = formatter.format_chat_info(
+                message.chat, format_style
+            )
+            info_parts.append(f"📍 <b>Current Chat:</b>\n{current_chat_info}")
+
+        if info_parts:
+            final_message = "📤 <b>Forwarded Message Info</b>\n\n" + "\n\n".join(
+                info_parts
+            )
+            reply_markup = get_quickinfo_inline_buttons()
+            await send_message(message, final_message, reply_markup)
         else:
+            # No forward information found
             await send_message(
                 message,
                 "📤 <b>Forwarded Message Info</b>\n\n"
-                "🔒 <b>Looks Like I Don't Have Control Over The User</b>",
+                "🔒 <b>Looks Like I Don't Have Control Over The User</b>\n"
+                "ℹ️ <i>No forward information available for this message</i>",
             )
+
     except Exception as e:
         LOGGER.error(f"Error handling forwarded message: {e}")
         await send_message(
             message,
             "📤 <b>Forwarded Message Info</b>\n\n"
-            "🔒 <b>Looks Like I Don't Have Control Over The User</b>",
+            "❌ <b>Failed to process forwarded message information.</b>",
         )
 
 
@@ -190,230 +302,40 @@ async def handle_shared_entities(client, message: Message):
     format_style = "detailed"
 
     try:
-        # Check for shared users (electrogram structure)
+        # Check for shared users (Users/Bots/Premium buttons)
         if hasattr(message, "users_shared") and message.users_shared:
             users_shared = message.users_shared
-            # Handle both direct list and object with users attribute
-            users_list = (
-                users_shared
-                if isinstance(users_shared, list)
-                else getattr(users_shared, "users", [])
-            )
+            users_list = users_shared.users
 
-            if users_list:  # Only iterate if list is not empty
-                for user_data in users_list:
-                    if user_data is None:  # Skip None entries
-                        continue
+            for user_data in users_list:
+                if user_data is None:  # Skip None entries
+                    continue
 
-                    # Extract user information from shared data
-                    user_id_val = getattr(
-                        user_data, "user_id", getattr(user_data, "id", None)
-                    )
-                    if user_id_val is None:  # Skip if no valid ID
-                        continue
+                # user_data is already a User object from pyrogram
+                user_info = formatter.format_user_info(user_data, format_style)
 
-                    # Try to get full user information
-                    full_user = await get_full_user_info(user_id_val)
-                    if full_user:
-                        # Use full user information
-                        user_info = formatter.format_user_info(
-                            full_user, format_style
-                        )
-                    else:
-                        # Fallback to shared data
-                        first_name = getattr(user_data, "first_name", "Unknown")
-                        last_name = getattr(user_data, "last_name", "")
-                        username = getattr(user_data, "username", None)
-
-                        # Create a user object from shared data
-                        user_obj = type(
-                            "User",
-                            (),
-                            {
-                                "id": user_id_val,
-                                "first_name": first_name,
-                                "last_name": last_name,
-                                "username": username,
-                                "is_bot": False,  # Will be determined by username pattern
-                                "is_premium": False,  # Not available in shared data
-                            },
-                        )()
-
-                        # Determine if it's a bot based on username
-                        if username and username.lower().endswith("bot"):
-                            user_obj.is_bot = True
-
-                        user_info = formatter.format_user_info(
-                            user_obj, format_style
-                        )
-                    reply_markup = get_quickinfo_inline_buttons()
-                    await send_message(
-                        message,
-                        f"👥 <b>Shared Entity Info</b>\n\n{user_info}",
-                        reply_markup,
-                    )
-
-        # Check for shared chats (electrogram structure)
-        elif hasattr(message, "chats_shared") and message.chats_shared:
-            chats_shared = message.chats_shared
-            # Handle both direct list and object with chats attribute
-            chats_list = (
-                chats_shared
-                if isinstance(chats_shared, list)
-                else getattr(chats_shared, "chats", [])
-            )
-
-            if chats_list:  # Only iterate if list is not empty
-                for chat_data in chats_list:
-                    if chat_data is None:  # Skip None entries
-                        continue
-
-                    # Extract chat information from shared data
-                    chat_id_val = getattr(
-                        chat_data, "chat_id", getattr(chat_data, "id", None)
-                    )
-                    if chat_id_val is None:  # Skip if no valid ID
-                        continue
-
-                    # Try to get full chat information
-                    full_chat = await get_full_chat_info(chat_id_val)
-                    if full_chat:
-                        # Use full chat information
-                        chat_info = formatter.format_chat_info(
-                            full_chat, format_style
-                        )
-                    else:
-                        # Fallback to shared data with limited access note
-                        chat_title = getattr(
-                            chat_data,
-                            "title",
-                            getattr(chat_data, "name", "Unknown Chat"),
-                        )
-                        chat_type = getattr(
-                            chat_data,
-                            "type",
-                            getattr(chat_data, "chat_type", "Unknown"),
-                        )
-
-                        # Create a chat object from shared data
-                        chat_obj = type(
-                            "Chat",
-                            (),
-                            {
-                                "id": chat_id_val,
-                                "title": chat_title,
-                                "username": None,  # Not available in shared data
-                                "type": chat_type,
-                                "members_count": "Unknown",
-                            },
-                        )()
-
-                        chat_info = formatter.format_chat_info(
-                            chat_obj, format_style, limited_access=True
-                        )
-                    reply_markup = get_quickinfo_inline_buttons()
-                    await send_message(
-                        message,
-                        f"👥 <b>Shared Entity Info</b>\n\n{chat_info}",
-                        reply_markup,
-                    )
-
-        # Check for user_shared (single user) - alternative electrogram structure
-        elif hasattr(message, "user_shared") and message.user_shared:
-            user_data = message.user_shared
-            if user_data is not None:
-                user_id_val = getattr(
-                    user_data, "user_id", getattr(user_data, "id", None)
+                reply_markup = get_quickinfo_inline_buttons()
+                await send_message(
+                    message,
+                    f"👥 <b>Shared Entity Info</b>\n\n{user_info}",
+                    reply_markup,
                 )
-                if user_id_val is not None:
-                    # Try to get full user information
-                    full_user = await get_full_user_info(user_id_val)
-                    if full_user:
-                        # Use full user information
-                        user_info = formatter.format_user_info(
-                            full_user, format_style
-                        )
-                    else:
-                        # Fallback to shared data
-                        first_name = getattr(user_data, "first_name", "Unknown")
-                        last_name = getattr(user_data, "last_name", "")
-                        username = getattr(user_data, "username", None)
 
-                        user_obj = type(
-                            "User",
-                            (),
-                            {
-                                "id": user_id_val,
-                                "first_name": first_name,
-                                "last_name": last_name,
-                                "username": username,
-                                "is_bot": False,
-                                "is_premium": False,
-                            },
-                        )()
-
-                        if username and username.lower().endswith("bot"):
-                            user_obj.is_bot = True
-
-                        user_info = formatter.format_user_info(
-                            user_obj, format_style
-                        )
-                    reply_markup = get_quickinfo_inline_buttons()
-                    await send_message(
-                        message,
-                        f"👥 <b>Shared Entity Info</b>\n\n{user_info}",
-                        reply_markup,
-                    )
-
-        # Check for chat_shared (single chat) - alternative electrogram structure
+        # Check for shared chats (Channel/Group buttons)
         elif hasattr(message, "chat_shared") and message.chat_shared:
-            chat_data = message.chat_shared
+            chat_shared = message.chat_shared
+            chat_data = chat_shared.chat
+
             if chat_data is not None:
-                chat_id_val = getattr(
-                    chat_data, "chat_id", getattr(chat_data, "id", None)
+                # chat_data is already a Chat object from pyrogram
+                chat_info = formatter.format_chat_info(chat_data, format_style)
+
+                reply_markup = get_quickinfo_inline_buttons()
+                await send_message(
+                    message,
+                    f"👥 <b>Shared Entity Info</b>\n\n{chat_info}",
+                    reply_markup,
                 )
-                if chat_id_val is not None:
-                    # Try to get full chat information
-                    full_chat = await get_full_chat_info(chat_id_val)
-                    if full_chat:
-                        # Use full chat information
-                        chat_info = formatter.format_chat_info(
-                            full_chat, format_style
-                        )
-                    else:
-                        # Fallback to shared data with limited access note
-                        chat_title = getattr(
-                            chat_data,
-                            "title",
-                            getattr(chat_data, "name", "Unknown Chat"),
-                        )
-                        chat_type = getattr(
-                            chat_data,
-                            "type",
-                            getattr(chat_data, "chat_type", "Unknown"),
-                        )
-
-                        chat_obj = type(
-                            "Chat",
-                            (),
-                            {
-                                "id": chat_id_val,
-                                "title": chat_title,
-                                "username": None,
-                                "type": chat_type,
-                                "members_count": "Unknown",
-                            },
-                        )()
-
-                        chat_info = formatter.format_chat_info(
-                            chat_obj, format_style, limited_access=True
-                        )
-                    reply_markup = get_quickinfo_inline_buttons()
-                    await send_message(
-                        message,
-                        f"👥 <b>Shared Entity Info</b>\n\n{chat_info}",
-                        reply_markup,
-                    )
 
         else:
             # No shared entities found, show instruction message

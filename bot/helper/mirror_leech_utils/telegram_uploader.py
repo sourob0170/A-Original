@@ -1,10 +1,11 @@
 import contextlib
 import gc
+import os
 import re
 from asyncio import sleep
 from logging import getLogger
+from os import listdir, walk
 from os import path as ospath
-from os import walk
 from re import match as re_match
 from re import sub as re_sub
 from time import time
@@ -161,6 +162,18 @@ class TelegramUploader:
         chunk_size = current - self._last_uploaded
         self._last_uploaded = current
         self._processed_bytes += chunk_size
+
+        # Track upload progress to detect stalled uploads
+        current_time = time()
+        if not hasattr(self, "_last_progress_time"):
+            self._last_progress_time = current_time
+        elif (
+            current_time - self._last_progress_time > 300
+        ):  # 5 minutes without progress
+            LOGGER.warning(
+                f"Upload progress stalled for 5 minutes. Current: {current}, File: {getattr(self, '_up_path', 'Unknown')}"
+            )
+            self._last_progress_time = current_time
 
     async def _user_settings(self):
         self._media_group = self._listener.user_dict.get("MEDIA_GROUP") or (
@@ -426,12 +439,21 @@ class TelegramUploader:
             if self._lprefix:
                 # Clean prefix for filename (remove HTML tags for file system compatibility)
                 clean_prefix = re_sub("<.*?>", "", self._lprefix)
-                final_filename = f"{clean_prefix}{final_filename}"
-                LOGGER.info(f"Applied leech prefix to filename: {final_filename}")
 
-                # Add HTML prefix to caption ONLY if no leech caption template is used (no automatic space)
+                # Check if prefix is already applied to prevent double prefix
+                if not final_filename.startswith(clean_prefix):
+                    final_filename = f"{clean_prefix} {final_filename}"
+                    LOGGER.info(
+                        f"Applied leech prefix to filename: {final_filename}"
+                    )
+                else:
+                    LOGGER.info(
+                        f"Prefix already applied to filename: {final_filename}"
+                    )
+
+                # Add HTML prefix to caption ONLY if no leech caption template is used (with automatic space)
                 if cap_mono and not has_leech_caption:
-                    cap_mono = f"{self._html_prefix}{cap_mono}"
+                    cap_mono = f"{self._html_prefix} {cap_mono}"
 
             if self._lsuffix:
                 # Split the filename and extension
@@ -442,12 +464,12 @@ class TelegramUploader:
                 )
                 # Clean suffix for filename (remove HTML tags for file system compatibility)
                 clean_suffix = re_sub("<.*?>", "", self._lsuffix)
-                final_filename = f"{name}{clean_suffix}{ext}"
+                final_filename = f"{name} {clean_suffix}{ext}"
                 LOGGER.info(f"Applied leech suffix to filename: {final_filename}")
 
-                # Add HTML suffix to caption ONLY if no leech caption template is used (no automatic space)
+                # Add HTML suffix to caption ONLY if no leech caption template is used (with automatic space)
                 if cap_mono and not has_leech_caption:
-                    cap_mono = f"{cap_mono}{self._html_suffix}"
+                    cap_mono = f"{cap_mono} {self._html_suffix}"
 
             # Rename the file with the final filename (if not already renamed for caption)
             if final_filename != file_ and final_filename != ospath.basename(
@@ -457,6 +479,20 @@ class TelegramUploader:
                 LOGGER.info(f"Final renaming: {self._up_path} -> {new_path}")
                 await rename(self._up_path, new_path)
                 self._up_path = new_path
+
+                # Immediately add renamed filename to processed list to prevent double processing
+                if hasattr(self, "_processed_files"):
+                    self._processed_files.add(final_filename)
+                    LOGGER.info(
+                        f"Immediately added renamed file to processed list: {final_filename}"
+                    )
+
+                # Also add to the main loop's processed_files set if it exists
+                if hasattr(self, "_main_processed_files"):
+                    self._main_processed_files.add(final_filename)
+                    LOGGER.info(
+                        f"Also added renamed file to main processed list: {final_filename}"
+                    )
 
             # Handle extremely long filenames (>240 chars) - Telegram has a limit around 255 chars
             # Only truncate if absolutely necessary
@@ -725,14 +761,21 @@ class TelegramUploader:
             if self._lprefix:
                 # Clean prefix for filename (remove HTML tags for file system compatibility)
                 clean_prefix = re_sub("<.*?>", "", self._lprefix)
-                working_filename = f"{clean_prefix}{working_filename}"
-                LOGGER.info(
-                    f"Applied leech prefix to media group: {working_filename}"
-                )
 
-                # Add HTML prefix to caption ONLY if no leech caption template is used (no automatic space)
+                # Check if prefix is already applied to prevent double prefix
+                if not working_filename.startswith(clean_prefix):
+                    working_filename = f"{clean_prefix} {working_filename}"
+                    LOGGER.info(
+                        f"Applied leech prefix to media group: {working_filename}"
+                    )
+                else:
+                    LOGGER.info(
+                        f"Prefix already applied to media group: {working_filename}"
+                    )
+
+                # Add HTML prefix to caption ONLY if no leech caption template is used (with automatic space)
                 if group_caption and not has_leech_caption:
-                    group_caption = f"{self._html_prefix}{group_caption}"
+                    group_caption = f"{self._html_prefix} {group_caption}"
 
             if self._lsuffix:
                 # Split the filename and extension
@@ -743,14 +786,14 @@ class TelegramUploader:
                 )
                 # Clean suffix for filename (remove HTML tags for file system compatibility)
                 clean_suffix = re_sub("<.*?>", "", self._lsuffix)
-                working_filename = f"{name}{clean_suffix}{ext}"
+                working_filename = f"{name} {clean_suffix}{ext}"
                 LOGGER.info(
                     f"Applied leech suffix to media group: {working_filename}"
                 )
 
-                # Add HTML suffix to caption ONLY if no leech caption template is used (no automatic space)
+                # Add HTML suffix to caption ONLY if no leech caption template is used (with automatic space)
                 if group_caption and not has_leech_caption:
-                    group_caption = f"{group_caption}{self._html_suffix}"
+                    group_caption = f"{group_caption} {self._html_suffix}"
 
             # Update actual_filename with the processed result
             actual_filename = working_filename
@@ -1068,9 +1111,47 @@ class TelegramUploader:
                 await self._send_screenshots(dirpath, files)
                 await rmtree(dirpath, ignore_errors=True)
                 continue
-            for file_ in natsorted(files):
+
+            # Process files with dynamic file list refresh to handle renames during upload
+            processed_files = set()  # Track processed files to avoid duplicates
+
+            while True:
+                # Refresh file list to account for renamed files during upload process
+                current_files = await sync_to_async(listdir, dirpath)
+                current_files = natsorted(
+                    [
+                        f
+                        for f in current_files
+                        if await aiopath.isfile(ospath.join(dirpath, f))
+                    ]
+                )
+
+                # Find next unprocessed file
+                next_file = None
+                for file_ in current_files:
+                    if file_ not in processed_files:
+                        next_file = file_
+                        break
+
+                if next_file is None:
+                    # No more files to process
+                    LOGGER.info(f"All files processed in directory: {dirpath}")
+                    break
+
+                LOGGER.info(
+                    f"Processing file: {next_file} (Current files: {len(current_files)})"
+                )
+                original_filename = next_file
+                processed_files.add(original_filename)
+
+                # Store processed_files as instance variable for access in upload functions
+                self._processed_files = processed_files
+                self._main_processed_files = (
+                    processed_files  # Reference to main loop's set
+                )
+
                 self._error = ""
-                self._up_path = ospath.join(dirpath, file_)
+                self._up_path = ospath.join(dirpath, next_file)
                 if not await aiopath.exists(self._up_path):
                     LOGGER.error(f"{self._up_path} not exists! Continue uploading!")
                     continue
@@ -1078,9 +1159,20 @@ class TelegramUploader:
                     f_size = await aiopath.getsize(self._up_path)
                     self._total_files += 1
                     if f_size == 0:
-                        LOGGER.error(
-                            f"{self._up_path} size is zero, telegram don't upload zero size files",
-                        )
+                        # Check if this is from a failed extraction
+                        parent_dir = ospath.dirname(self._up_path)
+                        if any(
+                            keyword in parent_dir.lower()
+                            for keyword in ["extract", "archive", "rar", "zip", "7z"]
+                        ):
+                            LOGGER.error(
+                                f"Zero-size file detected from failed extraction: {self._up_path}. "
+                                f"This indicates archive extraction failed. Skipping file."
+                            )
+                        else:
+                            LOGGER.error(
+                                f"{self._up_path} size is zero, telegram don't upload zero size files",
+                            )
                         self._corrupted += 1
                         continue
 
@@ -1091,16 +1183,28 @@ class TelegramUploader:
                     telegram_limit = TgClient.MAX_SPLIT_SIZE
                     limit_in_gb = telegram_limit / (1024 * 1024 * 1024)
 
+                    # Check if this is a split file (has .001, .002, etc. extension)
+                    is_split_file = bool(re.search(r"\.\d{3}$", file_))
+
                     if f_size > telegram_limit:
                         premium_status = (
                             "premium" if TgClient.IS_PREMIUM_USER else "non-premium"
                         )
-                        LOGGER.error(
-                            f"Can't upload files bigger than {limit_in_gb:.1f} GiB ({premium_status} account). Path: {self._up_path}",
-                        )
-                        self._error = f"File size exceeds Telegram's {limit_in_gb:.1f} GiB {premium_status} limit"
-                        self._corrupted += 1
-                        continue
+
+                        if is_split_file:
+                            # For split files, this indicates a splitting error - log as warning and continue
+                            LOGGER.warning(
+                                f"Split file {file_} is {f_size / (1024 * 1024 * 1024):.2f} GiB, exceeding {limit_in_gb:.1f} GiB limit. "
+                                f"This indicates a splitting error. Attempting upload anyway..."
+                            )
+                        else:
+                            # For regular files, this is an error - skip the file
+                            LOGGER.error(
+                                f"Can't upload files bigger than {limit_in_gb:.1f} GiB ({premium_status} account). Path: {self._up_path}",
+                            )
+                            self._error = f"File size exceeds Telegram's {limit_in_gb:.1f} GiB {premium_status} limit"
+                            self._corrupted += 1
+                            continue
                     if self._listener.is_cancelled:
                         return
                     # Prepare the file (apply prefix, suffix, font style, etc.)
@@ -1256,7 +1360,6 @@ class TelegramUploader:
                 # Use the current file path (self._up_path) which may have been modified by _prepare_file
                 # Verify the file exists before generating MediaInfo
                 if await aiopath.exists(self._up_path):
-                    LOGGER.info(f"Generating MediaInfo for file: {self._up_path}")
                     self._listener.mediainfo_link = await gen_mediainfo(
                         None, media_path=self._up_path, silent=True
                     )
@@ -1279,7 +1382,7 @@ class TelegramUploader:
 
             except Exception as e:
                 self._listener.mediainfo_link = None
-                LOGGER.error(f"Error generating MediaInfo: {e}")
+                LOGGER.warning(f"Could not generate MediaInfo: {e}")
 
         if (
             self._thumb is not None
@@ -1982,10 +2085,31 @@ class TelegramUploader:
 
     async def cancel_task(self):
         self._listener.is_cancelled = True
-        LOGGER.info(f"Cancelling Upload: {self._listener.name}")
+
+        # Check if this is a premature cancellation (after splitting but before significant upload progress)
+        if (
+            hasattr(self, "_processed_bytes") and self._processed_bytes < 1024 * 1024
+        ):  # Less than 1MB uploaded
+            LOGGER.warning(
+                f"Upload cancelled early (only {self._processed_bytes} bytes uploaded): {self._listener.name}"
+            )
+        else:
+            LOGGER.info(f"Cancelling Upload: {self._listener.name}")
 
         # Safely handle cancellation to prevent race conditions
         try:
+            # Stop any ongoing transmissions
+            if self._user_session:
+                try:
+                    TgClient.user.stop_transmission()
+                except Exception as e:
+                    LOGGER.error(f"Error stopping user transmission: {e}")
+            else:
+                try:
+                    self._listener.client.stop_transmission()
+                except Exception as e:
+                    LOGGER.error(f"Error stopping bot transmission: {e}")
+
             # Clear media dictionaries to prevent further processing
             if hasattr(self, "_media_dict"):
                 self._media_dict.clear()

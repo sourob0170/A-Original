@@ -111,8 +111,8 @@ async def ask_ai(_, message):
         LOGGER.error("Message without text received in ask_ai")
         return
 
-    # Check if Extra Modules are enabled
-    if not Config.ENABLE_EXTRA_MODULES:
+    # Check if AI module is enabled
+    if not Config.AI_ENABLED:
         error_msg = await send_message(
             message,
             "❌ <b>AI module is currently disabled.</b>\n\nPlease contact the bot owner to enable it.",

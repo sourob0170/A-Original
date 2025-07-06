@@ -335,3 +335,6 @@ except (FileNotFoundError, PermissionError):
 
 
 scheduler = AsyncIOScheduler(event_loop=bot_loop)
+
+# Initialize streaming server
+StartTime = time_func()

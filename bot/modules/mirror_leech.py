@@ -242,6 +242,11 @@ class Mirror(TaskListener):
             "-rai": "",
             "-rsi": "",
             "-rati": "",
+            # Swap flags
+            "-swap": False,
+            "-swap-audio": False,
+            "-swap-video": False,
+            "-swap-subtitle": False,
         }
 
         # Parse arguments from the command
@@ -320,22 +325,11 @@ class Mirror(TaskListener):
                     return None
 
                 # Determine which account will be used and check if folder selection is needed
-                will_use_user_account = has_user_credentials
-                will_use_owner_account = (
-                    not has_user_credentials and has_owner_credentials
-                )
 
-                show_folder_selection = False
-                if will_use_user_account and not self.user_dict.get(
-                    "MEGA_UPLOAD_FOLDER"
-                ):
-                    # User account will be used but user hasn't set upload folder
-                    show_folder_selection = True
-                elif will_use_owner_account and not Config.MEGA_UPLOAD_FOLDER:
-                    # Owner account will be used but owner hasn't set upload folder
-                    show_folder_selection = True
+                # Always show MEGA folder selection since we removed upload folder config
+                show_folder_selection = True
 
-                # Show MEGA folder selection if needed for the account that will be used
+                # Show MEGA folder selection for all MEGA uploads
                 if show_folder_selection:
                     from bot.helper.mega_utils.folder_selector import (
                         MegaFolderSelector,
@@ -475,6 +469,25 @@ class Mirror(TaskListener):
         self.watermark_image = args["-iwm"]
         self.trim = args["-trim"]
         self.ffmpeg_cmds = args["-ff"]
+
+        # Swap flags - merge command line flags with configuration
+        # Command line flags enable swap functionality, but detailed config comes from database/settings
+        if args["-swap"]:
+            self.swap_enabled = True
+        if args["-swap-audio"]:
+            self.swap_audio_enabled = True
+        if args["-swap-video"]:
+            self.swap_video_enabled = True
+        if args["-swap-subtitle"]:
+            self.swap_subtitle_enabled = True
+
+        # Enable swap if any specific swap flag is set
+        if (
+            self.swap_audio_enabled
+            or self.swap_video_enabled
+            or self.swap_subtitle_enabled
+        ):
+            self.swap_enabled = True
 
         # Compression flags
         self.compression_enabled = args["-compress"]
@@ -1029,9 +1042,40 @@ class Mirror(TaskListener):
                 except DirectDownloadLinkException as e:
                     e = str(e)
                     if "This link requires a password!" not in e:
-                        LOGGER.info(e)
+                        # Improve error messaging for unsupported sites
+                        if "No Direct link function found" in e:
+                            LOGGER.info(
+                                f"No direct link function found for {self.link}. Trying alternative download methods."
+                            )
+                        elif "ERROR: Invalid URL" in e:
+                            LOGGER.warning(f"Invalid URL format: {self.link}")
+                        else:
+                            LOGGER.info(e)
+
                     if e.startswith("ERROR:"):
-                        x = await send_message(self.message, e)
+                        # Handle specific error types with better user messages
+                        if "Resource not found" in e or "File not found" in e:
+                            error_msg = (
+                                "❌ File not found\n\n"
+                                "The file you're trying to download is no longer available or has been removed. "
+                                "Please check if the link is still valid."
+                            )
+                        elif "Download limit reached" in e or "limit" in e.lower():
+                            error_msg = (
+                                "❌ Download limit reached\n\n"
+                                "The file hosting service has reached its download limit. "
+                                "Please try again later or use a different link."
+                            )
+                        elif "password" in e.lower():
+                            error_msg = (
+                                "❌ Password required\n\n"
+                                "This file requires a password. Please provide the password in the format:\n"
+                                "<code>your_link::password</code>"
+                            )
+                        else:
+                            error_msg = e
+
+                        x = await send_message(self.message, error_msg)
                         await self.remove_from_same_dir()
                         await delete_links(self.message)
                         return await auto_delete_message(x, time=300)
@@ -1077,16 +1121,8 @@ class Mirror(TaskListener):
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             create_task(add_gd_download(self, path))
         elif is_mega_link(self.link):
-            # Check if this is a MEGA-to-MEGA clone operation
-            if not self.is_leech and self.up_dest == "mg":
-                # Import here to avoid circular imports
-                from bot.helper.mirror_leech_utils.download_utils.mega_clone import (
-                    add_mega_clone,
-                )
-
-                create_task(add_mega_clone(self, self.link))
-            else:
-                create_task(add_mega_download(self, path))
+            # MEGA downloads - megaclone functionality removed, use /mirror mega-link instead
+            create_task(add_mega_download(self, path))
         elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
             # Handle streamrip downloads with quality selection
             await self._handle_streamrip_download()

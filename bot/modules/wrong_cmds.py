@@ -164,6 +164,21 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # QuickInfo commands
         "quickinfo",
         "qi",
+        # File-to-Link commands
+        "file2link",
+        "f2l",
+        "streamstats",
+        "sstats",
+        # Index command
+        "index",
+        # NSFW Detection commands
+        "nsfwstats",
+        "nsfwtest",
+        # Whisper command
+        "whisper",
+        # Tool commands
+        "tool",
+        "t",
     ]
 
     # Find the base command (without any suffix)

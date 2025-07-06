@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">System Maintenance</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">Database Cleanup</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if cleanup_stats %}
+                                    <p><strong>Duplicate Files:</strong> {{ cleanup_stats.duplicate_count or 0 }}</p>
+                                    <p><strong>Old Files:</strong> {{ cleanup_stats.old_files_count or 0 }}</p>
+                                    <p><strong>Orphaned Records:</strong> {{ cleanup_stats.orphaned_count or 0 }}</p>
+                                    {% else %}
+                                    <p>No cleanup statistics available</p>
+                                    {% endif %}
+                                    
+                                    <button type="button" class="btn btn-warning" onclick="runCleanup()">
+                                        Run Database Cleanup
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">Cache Management</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>Clear application cache and temporary files</p>
+                                    
+                                    <button type="button" class="btn btn-info" onclick="clearCache()">
+                                        Clear Cache
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">Log Management</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>Download or clear system logs</p>
+                                    
+                                    <a href="/admin/logs/download" class="btn btn-success">Download Logs</a>
+                                    <button type="button" class="btn btn-danger" onclick="clearLogs()">
+                                        Clear Logs
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">System Status</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>Check system health and restart services</p>
+                                    
+                                    <button type="button" class="btn btn-primary" onclick="checkStatus()">
+                                        Check Status
+                                    </button>
+                                    <button type="button" class="btn btn-warning" onclick="restartServices()">
+                                        Restart Services
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function runCleanup() {
+    if (confirm('Are you sure you want to run database cleanup? This will remove duplicate and old files.')) {
+        fetch('/admin/maintenance/cleanup', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Database cleanup completed successfully');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+    }
+}
+
+function clearCache() {
+    fetch('/admin/debug/clear-cache', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Cache cleared successfully');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+}
+
+function clearLogs() {
+    if (confirm('Are you sure you want to clear all logs?')) {
+        fetch('/admin/logs/clear', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Logs cleared successfully');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+    }
+}
+
+function checkStatus() {
+    fetch('/admin/debug/test/database')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('System status: OK\nDatabase: Connected');
+            } else {
+                alert('System status: Error\n' + data.error);
+            }
+        });
+}
+
+function restartServices() {
+    if (confirm('Are you sure you want to restart services?')) {
+        fetch('/admin/debug/restart-services', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Services restart initiated');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+    }
+}
+</script>
+{% endblock %}

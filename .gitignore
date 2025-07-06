@@ -16,7 +16,6 @@ list_drives.txt
 shorteners.txt
 cookies.txt
 cookies/*
-venv/
 downloads/*
 *.session
 venv/

@@ -235,6 +235,9 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         if is_media_tool_enabled("add"):
             buttons.data_button("Add", f"mediatools {user_id} add")
 
+        if is_media_tool_enabled("swap"):
+            buttons.data_button("Swap", f"mediatools {user_id} swap")
+
         buttons.data_button("Help", f"mediatools {user_id} help")
         buttons.data_button("Remove All", f"mediatools {user_id} remove_all")
         buttons.data_button("Reset All", f"mediatools {user_id} reset_all")
@@ -1790,6 +1793,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
         buttons.data_button("Extract Help", f"mediatools {user_id} help_extract")
         buttons.data_button("Remove Help", f"mediatools {user_id} help_remove")
         buttons.data_button("Add Help", f"mediatools {user_id} help_add")
+        buttons.data_button("Swap Help", f"mediatools {user_id} help_swap")
         buttons.data_button("Priority Guide", f"mediatools {user_id} help_priority")
         buttons.data_button("Usage Examples", f"mediatools {user_id} help_examples")
         buttons.data_button("Back", f"mediatools {user_id} back", "footer")
@@ -1809,6 +1813,7 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┠ <b>Extract Help</b> - Information about extracting media tracks
 ┠ <b>Remove Help</b> - Information about removing media tracks
 ┠ <b>Add Help</b> - Information about adding media tracks
+┠ <b>Swap Help</b> - Information about swapping/reordering media tracks
 ┠ <b>Priority Guide</b> - How tool priority affects processing
 ┖ <b>Usage Examples</b> - Examples of how to use media tools"""
 
@@ -2298,6 +2303,53 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃   This removes first two video tracks and third audio track
 ┃
 ┖ <b>Note:</b> Remove uses FFmpeg for processing and works best with MKV containers."""
+
+    elif stype == "help_swap":
+        # Swap Help
+        buttons.data_button("Back to Help", f"mediatools {user_id} help", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        text = f"""⌬ <b>Swap Help :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Overview:</b>
+┃ The Swap feature allows you to reorder audio, video, and subtitle tracks based on language priority or index positions.
+┃
+┠ <b>Supported Media Types:</b>
+┃ • <b>Videos</b> - MP4, MKV, AVI, WebM, etc.
+┃ • <b>Audio</b> - MP3, AAC, FLAC, WAV, etc.
+┃ • <b>Subtitles</b> - SRT, ASS, VTT, etc.
+┃
+┠ <b>Settings:</b>
+┃ • <b>Enabled/Disabled</b> - Toggle Swap feature
+┃ • <b>Priority</b> - Processing order when multiple tools are enabled (default: 6)
+┃ • <b>RO (Remove Original)</b> - Delete original file after swapping tracks
+┃
+┠ <b>Track Type Settings:</b>
+┃ • <b>Audio Swap</b> - Enable/disable audio track swapping
+┃ • <b>Video Swap</b> - Enable/disable video track swapping
+┃ • <b>Subtitle Swap</b> - Enable/disable subtitle track swapping
+┃
+┠ <b>Swap Modes:</b>
+┃ • <b>Language Mode</b> - Reorder tracks based on language priority
+┃   Example: "eng,hin" puts English tracks first, Hindi second
+┃ • <b>Index Mode</b> - Swap tracks at specific positions
+┃   Example: "1,2" swaps track at index 1 with track at index 2
+┃
+┠ <b>Usage:</b>
+┃ • <b>Swap All Enabled:</b> Add <code>-swap</code> to any download command
+┃   Example: <code>/leech https://example.com/video.mkv -swap</code>
+┃
+┃ • <b>Language-based Swapping:</b>
+┃   Configure language order in settings (e.g., "eng,hin,jpn")
+┃   Tracks will be reordered to match this priority
+┃
+┃ • <b>Index-based Swapping:</b>
+┃   Configure index order in settings (e.g., "1,0" to swap first two tracks)
+┃   Tracks at specified indices will be swapped
+┃
+┖ <b>Note:</b> Swap uses FFmpeg for processing and preserves all track data without re-encoding."""
 
     elif stype == "help_priority":
         # Priority Guide
@@ -3006,6 +3058,227 @@ async def get_media_tools_settings(from_user, stype="main", page_no=0):
 ┃
 ┖ <b>Multi-Input Mode:</b> Use <code>-m</code> flag to specify multiple input files
    Example: <code>/leech https://example.com/video.mp4 -add -m folder_name</code>"""
+
+    elif stype == "swap":
+        # Swap settings menu
+        swap_enabled = user_dict.get("SWAP_ENABLED", False)
+        buttons.data_button(
+            "✅ Enabled" if swap_enabled else "❌ Disabled",
+            f"mediatools {user_id} tog SWAP_ENABLED {'f' if swap_enabled else 't'}",
+        )
+
+        # Sub-menus for different track types
+        buttons.data_button("Audio Swap", f"mediatools {user_id} swap_audio")
+        buttons.data_button("Video Swap", f"mediatools {user_id} swap_video")
+        buttons.data_button("Subtitle Swap", f"mediatools {user_id} swap_subtitle")
+
+        buttons.data_button(
+            "Set Priority", f"mediatools {user_id} menu SWAP_PRIORITY"
+        )
+
+        # Add RO toggle button (Remove Original)
+        # Use global setting as fallback when user hasn't set it explicitly
+        remove_original = user_dict.get(
+            "SWAP_REMOVE_ORIGINAL",
+            Config.SWAP_REMOVE_ORIGINAL
+            if hasattr(Config, "SWAP_REMOVE_ORIGINAL")
+            else False,
+        )
+        buttons.data_button(
+            f"RO: {'✅ ON' if remove_original else '❌ OFF'}",
+            f"mediatools {user_id} tog SWAP_REMOVE_ORIGINAL {'f' if remove_original else 't'}",
+        )
+
+        buttons.data_button("Reset", f"mediatools {user_id} reset_swap")
+        buttons.data_button("Remove", f"mediatools {user_id} remove_swap")
+        buttons.data_button("Back", f"mediatools {user_id} back", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get swap priority
+        user_has_priority = (
+            "SWAP_PRIORITY" in user_dict and user_dict["SWAP_PRIORITY"]
+        )
+        if user_has_priority:
+            priority = f"{user_dict['SWAP_PRIORITY']} (User)"
+        elif hasattr(Config, "SWAP_PRIORITY") and Config.SWAP_PRIORITY:
+            priority = f"{Config.SWAP_PRIORITY} (Global)"
+        else:
+            priority = "6 (Default)"
+
+        # Get RO toggle status (Remove Original)
+        remove_original = user_dict.get(
+            "SWAP_REMOVE_ORIGINAL",
+            Config.SWAP_REMOVE_ORIGINAL
+            if hasattr(Config, "SWAP_REMOVE_ORIGINAL")
+            else False,
+        )
+        owner_remove_original_enabled = (
+            hasattr(Config, "SWAP_REMOVE_ORIGINAL") and Config.SWAP_REMOVE_ORIGINAL
+        )
+
+        if "SWAP_REMOVE_ORIGINAL" in user_dict:
+            if remove_original:
+                remove_original_status = "✅ Enabled (User)"
+            else:
+                remove_original_status = "❌ Disabled (User)"
+        elif owner_remove_original_enabled:
+            remove_original_status = "✅ Enabled (Global)"
+        else:
+            remove_original_status = "❌ Disabled (Default)"
+
+        text = f"""⌬ <b>Swap Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Status</b> → {"✅ Enabled" if swap_enabled else "❌ Disabled"}
+┠ <b>Priority</b> → {priority}
+┠ <b>RO</b> → {remove_original_status}
+┃
+┠ <b>Audio Swap</b> → Configure audio track swapping
+┠ <b>Video Swap</b> → Configure video track swapping
+┠ <b>Subtitle Swap</b> → Configure subtitle track swapping
+┃
+┖ <b>Usage:</b> Swap reorders tracks based on language or index priority
+   Example: <code>/leech https://example.com/video.mkv -swap</code>"""
+
+    elif stype == "swap_audio":
+        # Audio Swap settings menu
+        audio_swap_enabled = user_dict.get("SWAP_AUDIO_ENABLED", False)
+        buttons.data_button(
+            "✅ Enabled" if audio_swap_enabled else "❌ Disabled",
+            f"mediatools {user_id} tog SWAP_AUDIO_ENABLED {'f' if audio_swap_enabled else 't'}",
+        )
+
+        # Language/Index toggle
+        use_language = user_dict.get("SWAP_AUDIO_USE_LANGUAGE", True)
+        buttons.data_button(
+            f"Mode: {'🌐 Language' if use_language else '🔢 Index'}",
+            f"mediatools {user_id} tog SWAP_AUDIO_USE_LANGUAGE {'f' if use_language else 't'}",
+        )
+
+        # Configuration buttons
+        buttons.data_button(
+            "Language Order", f"mediatools {user_id} menu SWAP_AUDIO_LANGUAGE_ORDER"
+        )
+        buttons.data_button(
+            "Index Order", f"mediatools {user_id} menu SWAP_AUDIO_INDEX_ORDER"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} swap", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get current settings
+        language_order = user_dict.get("SWAP_AUDIO_LANGUAGE_ORDER", "eng,hin")
+        index_order = user_dict.get("SWAP_AUDIO_INDEX_ORDER", "0,1")
+
+        text = f"""🎵 <b>Audio Swap Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Status</b> → {"✅ Enabled" if audio_swap_enabled else "❌ Disabled"}
+┠ <b>Mode</b> → {"🌐 Language-based" if use_language else "🔢 Index-based"}
+┃
+┠ <b>Language Order</b> → <code>{language_order}</code>
+┠ <b>Index Order</b> → <code>{index_order}</code>
+┃
+┖ <b>Usage:</b>
+  • Language mode: Reorders audio tracks by language priority
+    Example: <code>eng,hin</code> puts English first, Hindi second
+  • Index mode: Swaps audio tracks at specific positions
+    Example: <code>1,2</code> swaps track at index 1 with track at index 2"""
+
+    elif stype == "swap_video":
+        # Video Swap settings menu
+        video_swap_enabled = user_dict.get("SWAP_VIDEO_ENABLED", False)
+        buttons.data_button(
+            "✅ Enabled" if video_swap_enabled else "❌ Disabled",
+            f"mediatools {user_id} tog SWAP_VIDEO_ENABLED {'f' if video_swap_enabled else 't'}",
+        )
+
+        # Language/Index toggle
+        use_language = user_dict.get("SWAP_VIDEO_USE_LANGUAGE", True)
+        buttons.data_button(
+            f"Mode: {'🌐 Language' if use_language else '🔢 Index'}",
+            f"mediatools {user_id} tog SWAP_VIDEO_USE_LANGUAGE {'f' if use_language else 't'}",
+        )
+
+        # Configuration buttons
+        buttons.data_button(
+            "Language Order", f"mediatools {user_id} menu SWAP_VIDEO_LANGUAGE_ORDER"
+        )
+        buttons.data_button(
+            "Index Order", f"mediatools {user_id} menu SWAP_VIDEO_INDEX_ORDER"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} swap", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get current settings
+        language_order = user_dict.get("SWAP_VIDEO_LANGUAGE_ORDER", "eng,hin")
+        index_order = user_dict.get("SWAP_VIDEO_INDEX_ORDER", "0,1")
+
+        text = f"""🎬 <b>Video Swap Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Status</b> → {"✅ Enabled" if video_swap_enabled else "❌ Disabled"}
+┠ <b>Mode</b> → {"🌐 Language-based" if use_language else "🔢 Index-based"}
+┃
+┠ <b>Language Order</b> → <code>{language_order}</code>
+┠ <b>Index Order</b> → <code>{index_order}</code>
+┃
+┖ <b>Usage:</b>
+  • Language mode: Reorders video tracks by language priority
+    Example: <code>eng,hin</code> puts English first, Hindi second
+  • Index mode: Swaps video tracks at specific positions
+    Example: <code>1,2</code> swaps track at index 1 with track at index 2"""
+
+    elif stype == "swap_subtitle":
+        # Subtitle Swap settings menu
+        subtitle_swap_enabled = user_dict.get("SWAP_SUBTITLE_ENABLED", False)
+        buttons.data_button(
+            "✅ Enabled" if subtitle_swap_enabled else "❌ Disabled",
+            f"mediatools {user_id} tog SWAP_SUBTITLE_ENABLED {'f' if subtitle_swap_enabled else 't'}",
+        )
+
+        # Language/Index toggle
+        use_language = user_dict.get("SWAP_SUBTITLE_USE_LANGUAGE", True)
+        buttons.data_button(
+            f"Mode: {'🌐 Language' if use_language else '🔢 Index'}",
+            f"mediatools {user_id} tog SWAP_SUBTITLE_USE_LANGUAGE {'f' if use_language else 't'}",
+        )
+
+        # Configuration buttons
+        buttons.data_button(
+            "Language Order",
+            f"mediatools {user_id} menu SWAP_SUBTITLE_LANGUAGE_ORDER",
+        )
+        buttons.data_button(
+            "Index Order", f"mediatools {user_id} menu SWAP_SUBTITLE_INDEX_ORDER"
+        )
+
+        buttons.data_button("Back", f"mediatools {user_id} swap", "footer")
+        buttons.data_button("Close", f"mediatools {user_id} close", "footer")
+        btns = buttons.build_menu(2)
+
+        # Get current settings
+        language_order = user_dict.get("SWAP_SUBTITLE_LANGUAGE_ORDER", "eng,hin")
+        index_order = user_dict.get("SWAP_SUBTITLE_INDEX_ORDER", "0,1")
+
+        text = f"""💬 <b>Subtitle Swap Settings :</b>
+┟ <b>Name</b> → {user_name}
+┃
+┠ <b>Status</b> → {"✅ Enabled" if subtitle_swap_enabled else "❌ Disabled"}
+┠ <b>Mode</b> → {"🌐 Language-based" if use_language else "🔢 Index-based"}
+┃
+┠ <b>Language Order</b> → <code>{language_order}</code>
+┠ <b>Index Order</b> → <code>{index_order}</code>
+┃
+┖ <b>Usage:</b>
+  • Language mode: Reorders subtitle tracks by language priority
+    Example: <code>eng,hin</code> puts English first, Hindi second
+  • Index mode: Swaps subtitle tracks at specific positions
+    Example: <code>1,2</code> swaps track at index 1 with track at index 2"""
 
     elif stype == "trim_config":
         # Trim configuration menu# Add start time and end time settings at the top
@@ -9061,6 +9334,10 @@ async def edit_media_tools_settings(client, query):
         "add_audio_config",
         "add_subtitle_config",
         "add_attachment_config",
+        "swap",
+        "swap_audio",
+        "swap_video",
+        "swap_subtitle",
         "remove_video_config",
         "remove_audio_config",
         "remove_subtitle_config",
@@ -9079,6 +9356,7 @@ async def edit_media_tools_settings(client, query):
         "help_extract",
         "help_remove",
         "help_add",
+        "help_swap",
         "help_priority",
         "help_examples",
     ]:
@@ -10585,6 +10863,35 @@ async def edit_media_tools_settings(client, query):
             else:
                 update_user_ldata(user_id, key, "none")
 
+        # Handle swap settings
+        swap_keys = [
+            "SWAP_AUDIO_LANGUAGE_ORDER",
+            "SWAP_AUDIO_INDEX_ORDER",
+            "SWAP_VIDEO_LANGUAGE_ORDER",
+            "SWAP_VIDEO_INDEX_ORDER",
+            "SWAP_SUBTITLE_LANGUAGE_ORDER",
+            "SWAP_SUBTITLE_INDEX_ORDER",
+        ]
+        for key in swap_keys:
+            update_user_ldata(user_id, key, "none")
+
+        # Set boolean swap settings to False
+        swap_bool_keys = [
+            "SWAP_ENABLED",
+            "SWAP_AUDIO_ENABLED",
+            "SWAP_AUDIO_USE_LANGUAGE",
+            "SWAP_VIDEO_ENABLED",
+            "SWAP_VIDEO_USE_LANGUAGE",
+            "SWAP_SUBTITLE_ENABLED",
+            "SWAP_SUBTITLE_USE_LANGUAGE",
+            "SWAP_REMOVE_ORIGINAL",
+        ]
+        for key in swap_bool_keys:
+            update_user_ldata(user_id, key, False)
+
+        # Set swap priority to default
+        update_user_ldata(user_id, "SWAP_PRIORITY", 6)
+
         # Remove the image watermark from the database
         await database.update_user_doc(user_id, "IMAGE_WATERMARK", None, None)
 
@@ -10593,6 +10900,32 @@ async def edit_media_tools_settings(client, query):
 
         await database.update_user_data(user_id)
         await update_media_tools_settings(query)
+    elif data[2] == "reset_swap":
+        await query.answer("Resetting all swap settings to default...")
+        # Remove all swap settings from user_dict
+        swap_keys = [
+            "SWAP_ENABLED",
+            "SWAP_PRIORITY",
+            "SWAP_REMOVE_ORIGINAL",
+            "SWAP_AUDIO_ENABLED",
+            "SWAP_AUDIO_USE_LANGUAGE",
+            "SWAP_AUDIO_LANGUAGE_ORDER",
+            "SWAP_AUDIO_INDEX_ORDER",
+            "SWAP_VIDEO_ENABLED",
+            "SWAP_VIDEO_USE_LANGUAGE",
+            "SWAP_VIDEO_LANGUAGE_ORDER",
+            "SWAP_VIDEO_INDEX_ORDER",
+            "SWAP_SUBTITLE_ENABLED",
+            "SWAP_SUBTITLE_USE_LANGUAGE",
+            "SWAP_SUBTITLE_LANGUAGE_ORDER",
+            "SWAP_SUBTITLE_INDEX_ORDER",
+        ]
+        for key in swap_keys:
+            if key in user_dict:
+                del user_dict[key]
+        # Update the user data in the database to persist the changes
+        await database.update_user_data(user_id)
+        await update_media_tools_settings(query, "swap")
     elif data[2] == "reset_all":
         await query.answer("Resetting all media tools settings to default...")
         # Remove all media tools settings from user_dict
@@ -10746,6 +11079,21 @@ async def edit_media_tools_settings(client, query):
             "ADD_ATTACHMENT_INDEX",
             "ADD_ATTACHMENT_MIMETYPE",
             "ADD_DELETE_ORIGINAL",
+            "SWAP_ENABLED",
+            "SWAP_PRIORITY",
+            "SWAP_REMOVE_ORIGINAL",
+            "SWAP_AUDIO_ENABLED",
+            "SWAP_AUDIO_USE_LANGUAGE",
+            "SWAP_AUDIO_LANGUAGE_ORDER",
+            "SWAP_AUDIO_INDEX_ORDER",
+            "SWAP_VIDEO_ENABLED",
+            "SWAP_VIDEO_USE_LANGUAGE",
+            "SWAP_VIDEO_LANGUAGE_ORDER",
+            "SWAP_VIDEO_INDEX_ORDER",
+            "SWAP_SUBTITLE_ENABLED",
+            "SWAP_SUBTITLE_USE_LANGUAGE",
+            "SWAP_SUBTITLE_LANGUAGE_ORDER",
+            "SWAP_SUBTITLE_INDEX_ORDER",
             "MEDIA_TOOLS_PRIORITY",
         ]
         for key in media_tools_keys:
@@ -10763,6 +11111,39 @@ async def edit_media_tools_settings(client, query):
 
         # Return to the main menu
         await update_media_tools_settings(query)
+    elif data[2] == "remove_swap":
+        await query.answer("Setting all swap settings to None...")
+        # Set all swap settings to None/False
+        swap_keys = [
+            "SWAP_AUDIO_LANGUAGE_ORDER",
+            "SWAP_AUDIO_INDEX_ORDER",
+            "SWAP_VIDEO_LANGUAGE_ORDER",
+            "SWAP_VIDEO_INDEX_ORDER",
+            "SWAP_SUBTITLE_LANGUAGE_ORDER",
+            "SWAP_SUBTITLE_INDEX_ORDER",
+        ]
+        for key in swap_keys:
+            update_user_ldata(user_id, key, "none")
+
+        # Set boolean settings to False
+        bool_keys = [
+            "SWAP_ENABLED",
+            "SWAP_AUDIO_ENABLED",
+            "SWAP_AUDIO_USE_LANGUAGE",
+            "SWAP_VIDEO_ENABLED",
+            "SWAP_VIDEO_USE_LANGUAGE",
+            "SWAP_SUBTITLE_ENABLED",
+            "SWAP_SUBTITLE_USE_LANGUAGE",
+            "SWAP_REMOVE_ORIGINAL",
+        ]
+        for key in bool_keys:
+            update_user_ldata(user_id, key, False)
+
+        # Set priority to default
+        update_user_ldata(user_id, "SWAP_PRIORITY", 6)
+
+        await database.update_user_data(user_id)
+        await update_media_tools_settings(query, "swap")
     elif data[2] == "toggle_concat_filter":
         # Toggle between concat demuxer and filter complex
         toggle_mode = data[3]  # 'both', 'concat', or 'filter'

@@ -151,23 +151,15 @@ class Config:
 
     # MEGA Upload Settings
     MEGA_UPLOAD_ENABLED: bool = True
-    MEGA_UPLOAD_FOLDER: str = ""  # Default upload folder path in MEGA account
+    # MEGA_UPLOAD_FOLDER removed - using folder selector instead
     MEGA_UPLOAD_PUBLIC: bool = True  # Generate public links by default
-    MEGA_UPLOAD_PRIVATE: bool = False  # Generate private links
-    MEGA_UPLOAD_UNLISTED: bool = False  # Generate unlisted links
-    MEGA_UPLOAD_EXPIRY_DAYS: int = 0  # Link expiry in days (0 = no expiry)
-    MEGA_UPLOAD_PASSWORD: str = ""  # Password protection for uploads
-    MEGA_UPLOAD_ENCRYPTION_KEY: str = ""  # Custom encryption key for uploads
+    # MEGA_UPLOAD_PRIVATE removed - not supported by MEGA SDK v4.8.0
+    # MEGA_UPLOAD_UNLISTED removed - not supported by MEGA SDK v4.8.0
+    # MEGA_UPLOAD_EXPIRY_DAYS removed - premium feature not implemented
+    # MEGA_UPLOAD_PASSWORD removed - premium feature not implemented
+    # MEGA_UPLOAD_ENCRYPTION_KEY removed - not supported by MEGA SDK v4.8.0
     MEGA_UPLOAD_THUMBNAIL: bool = True  # Generate thumbnails for videos using FFmpeg
-    MEGA_UPLOAD_DELETE_AFTER: bool = False  # Delete local files after upload
-
-    # MEGA Clone Settings
-    MEGA_CLONE_ENABLED: bool = True
-    MEGA_CLONE_TO_FOLDER: str = ""  # Default folder for cloned files
-    MEGA_CLONE_PRESERVE_STRUCTURE: bool = (
-        True  # Preserve folder structure when cloning
-    )
-    MEGA_CLONE_OVERWRITE: bool = False  # Overwrite existing files when cloning
+    # MEGA_UPLOAD_DELETE_AFTER removed - always delete after upload
 
     # MEGA Search Settings
     MEGA_SEARCH_ENABLED: bool = True  # Enable/disable MEGA search functionality
@@ -488,6 +480,43 @@ class Config:
     # Media Tools Settings
     MEDIA_TOOLS_ENABLED: bool = True
     MEDIAINFO_ENABLED: bool = False
+
+    # File-to-Link Settings
+    FILE_TO_LINK_ENABLED: bool = False
+    STREAM_SECURITY_HASH: bool = True
+    PERMANENT_LINKS: bool = True
+    STREAM_CHATS: ClassVar[
+        list[str]
+    ] = []  # ReelNN-style media storage chats (separate from leech dump)
+    STREAM_BASE_URL: str = (
+        ""  # Custom streaming base URL (can be different from BASE_URL)
+    )
+    STREAM_PASSWORD_PROTECTION: bool = False
+    STREAM_DEFAULT_PASSWORD: str = ""
+    STREAM_NO_ADS: bool = True
+    BANNED_STREAM_CHANNELS: str = ""
+    STREAM_CACHE_ENABLED: bool = True
+    STREAM_LOAD_BALANCING: bool = True
+
+    # ReelNN-Specific Streaming Settings
+    REELNN_MODE: bool = True  # Enable ReelNN-style streaming and UI
+    STREAM_AUTO_QUALITY: bool = True  # Enable automatic quality selection
+    STREAM_QUALITY_OPTIONS: str = (
+        "4K,1080p,720p,480p,360p"  # Available quality options
+    )
+    STREAM_BUFFER_SIZE: int = 8192  # Stream buffer size in bytes
+    STREAM_TIMEOUT: int = 300  # Stream timeout in seconds
+    STREAM_MAX_CONCURRENT: int = 10  # Maximum concurrent streams per user
+    STREAM_ENABLE_SUBTITLES: bool = True  # Enable subtitle support
+    STREAM_ENABLE_DOWNLOAD: bool = True  # Enable download functionality
+    STREAM_ENABLE_DIRECT_LINKS: bool = True  # Enable direct streaming links
+    STREAM_PLAYER_AUTOPLAY: bool = False  # Enable autoplay in video player
+    STREAM_PLAYER_CONTROLS: bool = True  # Show player controls
+    STREAM_PLAYER_FULLSCREEN: bool = True  # Enable fullscreen mode
+    STREAM_PLAYER_PIP: bool = True  # Enable picture-in-picture mode
+    STREAM_PLAYER_VOLUME: int = 80  # Default player volume (0-100)
+    STREAM_PLAYER_SPEED_CONTROL: bool = True  # Enable playback speed control
+    STREAM_PLAYER_QUALITY_SELECTOR: bool = True  # Enable quality selector
 
     # DDL (Direct Download Link) Upload Settings
     DDL_ENABLED: bool = True  # Enable/disable DDL upload feature
@@ -845,6 +874,29 @@ class Config:
     ADD_ATTACHMENT_INDEX: int | None = None
     ADD_ATTACHMENT_MIMETYPE: str = "none"
 
+    # Swap Settings
+    SWAP_ENABLED: bool = False
+    SWAP_PRIORITY: int = 6
+    SWAP_REMOVE_ORIGINAL: bool = False
+
+    # Audio Swap Settings
+    SWAP_AUDIO_ENABLED: bool = False
+    SWAP_AUDIO_USE_LANGUAGE: bool = True
+    SWAP_AUDIO_LANGUAGE_ORDER: str = "eng,hin"
+    SWAP_AUDIO_INDEX_ORDER: str = "0,1"
+
+    # Video Swap Settings
+    SWAP_VIDEO_ENABLED: bool = False
+    SWAP_VIDEO_USE_LANGUAGE: bool = True
+    SWAP_VIDEO_LANGUAGE_ORDER: str = "eng,hin"
+    SWAP_VIDEO_INDEX_ORDER: str = "0,1"
+
+    # Subtitle Swap Settings
+    SWAP_SUBTITLE_ENABLED: bool = False
+    SWAP_SUBTITLE_USE_LANGUAGE: bool = True
+    SWAP_SUBTITLE_LANGUAGE_ORDER: str = "eng,hin"
+    SWAP_SUBTITLE_INDEX_ORDER: str = "0,1"
+
     # Convert Settings
     CONVERT_ENABLED: bool = False
     CONVERT_PRIORITY: int = 3
@@ -1040,9 +1092,6 @@ class Config:
     # Truecaller API Settings
     TRUECALLER_API_URL: str = ""
 
-    # Extra Modules Settings
-    ENABLE_EXTRA_MODULES: bool = True
-
     # Multi-link Settings
     MULTI_LINK_ENABLED: bool = True
 
@@ -1075,6 +1124,14 @@ class Config:
     # Media Search Settings
     MEDIA_SEARCH_ENABLED: bool = True
 
+    # TMDB API Settings
+    TMDB_API_KEY: str = ""
+    TMDB_ENABLED: bool = True
+    TMDB_LANGUAGE: str = "en-US"
+    TMDB_REGION: str = "US"
+    TMDB_ADULT_CONTENT: bool = False
+    TMDB_CACHE_DURATION: int = 86400  # 24 hours in seconds
+
     # Rclone Settings
     RCLONE_ENABLED: bool = True
 
@@ -1094,11 +1151,16 @@ class Config:
     # Command Suffix Settings
     CORRECT_CMD_SUFFIX: str = ""  # Comma-separated list of allowed command suffixes
     WRONG_CMD_WARNINGS_ENABLED: bool = (
-        True  # Enable/disable warnings for wrong command suffixes
+        False  # Enable/disable warnings for wrong command suffixes
     )
 
     # QuickInfo Settings
-    QUICKINFO_ENABLED: bool = True  # Enable/disable QuickInfo feature
+    QUICKINFO_ENABLED: bool = False  # Enable/disable QuickInfo feature
+
+    # Extra Modules Settings
+    AI_ENABLED: bool = True  # Enable/disable AI functionality
+    IMDB_ENABLED: bool = True  # Enable/disable IMDB functionality
+    TRUECALLER_ENABLED: bool = True  # Enable/disable Truecaller functionality
 
     # Encoding/Decoding Settings
     ENCODING_ENABLED: bool = True  # Enable/disable encoding functionality
@@ -1109,6 +1171,52 @@ class Config:
     VT_API_TIMEOUT: int = 500
     VT_ENABLED: bool = False
     VT_MAX_FILE_SIZE: int = 32 * 1024 * 1024  # 32MB default limit
+
+    # Enhanced NSFW Detection Settings
+    NSFW_DETECTION_ENABLED: bool = True  # Master toggle for NSFW detection
+    NSFW_DETECTION_SENSITIVITY: str = "moderate"  # strict, moderate, permissive
+    NSFW_KEYWORD_DETECTION: bool = True  # Enable enhanced keyword detection
+    NSFW_VISUAL_DETECTION: bool = False  # Enable AI-powered visual analysis
+    NSFW_AUDIO_DETECTION: bool = False  # Enable audio content analysis
+    NSFW_FUZZY_MATCHING: bool = False  # Enable fuzzy keyword matching (disabled by default to reduce false positives)
+    NSFW_LEETSPEAK_DETECTION: bool = True  # Enable leetspeak detection
+    NSFW_MULTI_LANGUAGE: bool = (
+        False  # Enable multi-language keyword support (disabled by default)
+    )
+    NSFW_CONFIDENCE_THRESHOLD: float = (
+        0.7  # Minimum confidence for NSFW detection (0.0-1.0)
+    )
+    NSFW_CACHE_DURATION: int = 3600  # Cache detection results for 1 hour
+    NSFW_CONTEXT_CHECKING: bool = (
+        True  # Enable context-aware detection to reduce false positives
+    )
+    NSFW_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB max file size for analysis
+    NSFW_VIDEO_ANALYSIS: bool = True  # Enable video frame analysis
+    NSFW_VIDEO_FRAME_COUNT: int = 5  # Number of frames to extract for analysis
+    NSFW_FRAME_QUALITY: int = (
+        2  # Frame extraction quality (1-5, higher = better quality)
+    )
+    NSFW_AUDIO_ANALYSIS: bool = True  # Enable audio content analysis
+    NSFW_SUBTITLE_ANALYSIS: bool = True  # Enable subtitle text analysis
+
+    # NSFW Visual Analysis API Settings
+    NSFW_GOOGLE_VISION_API_KEY: str = ""  # Google Cloud Vision API key
+    NSFW_AWS_ACCESS_KEY: str = ""  # AWS Rekognition access key
+    NSFW_AWS_SECRET_KEY: str = ""  # AWS Rekognition secret key
+    NSFW_AWS_REGION: str = "us-east-1"  # AWS region
+    NSFW_AZURE_ENDPOINT: str = ""  # Azure Content Moderator endpoint
+    NSFW_AZURE_KEY: str = ""  # Azure Content Moderator key
+    NSFW_OPENAI_API_KEY: str = ""  # OpenAI API key for vision analysis
+
+    # NSFW Text Analysis API Settings
+    NSFW_PERSPECTIVE_API_KEY: str = ""  # Google Perspective API key
+    NSFW_OPENAI_MODERATION: bool = False  # Use OpenAI moderation API
+
+    # NSFW Behavior and Logging
+    NSFW_LOG_DETECTIONS: bool = True  # Log NSFW detections for analysis
+    NSFW_STORE_METADATA: bool = True  # Store detection metadata in database
+    NSFW_AUTO_DELETE: bool = False  # Auto-delete detected NSFW content
+    NSFW_NOTIFY_ADMINS: bool = True  # Notify admins of NSFW detections
 
     # Terabox Proxy Settings
     TERABOX_PROXY: str = "https://wdzone-terabox-api.vercel.app/"
@@ -1128,7 +1236,7 @@ class Config:
         if value is None:
             return None
 
-        if key == "LEECH_DUMP_CHAT":
+        if key in ("LEECH_DUMP_CHAT", "STREAM_CHATS"):
             if isinstance(value, list):
                 return [str(v).strip() for v in value if str(v).strip()]
 
@@ -1174,6 +1282,7 @@ class Config:
                     "extract",
                     "remove",
                     "add",
+                    "swap",
                     "metadata",
                     "xtra",
                     "sample",
@@ -1240,14 +1349,17 @@ class Config:
                     f"{key} should be {expected_type.__name__}, got {type(value).__name__}"
                 )
 
+            if not value:
+                return expected_type()
+
             try:
                 evaluated = ast.literal_eval(value)
                 if isinstance(evaluated, expected_type):
                     return evaluated
                 raise TypeError
             except (ValueError, SyntaxError, TypeError) as e:
-                # For LEECH_DUMP_CHAT specifically, return an empty list on error
-                if key == "LEECH_DUMP_CHAT":
+                # For LEECH_DUMP_CHAT and STREAM_CHATS specifically, return an empty list on error
+                if key in ("LEECH_DUMP_CHAT", "STREAM_CHATS"):
                     return []
                 raise TypeError(
                     f"{key} should be {expected_type.__name__}, got invalid string: {value}"

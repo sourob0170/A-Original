@@ -45,7 +45,7 @@ Follow these steps to deploy Aeon to VPS:
 - Clone the repository to your VPS.
 
 ```
-git clone https://github.com/AeonOrg/Aeon-MLTB.git && cd Aeon-MLTB
+git clone https://github.com/AeonOrg/Aeon-MLTB.git && cd Aeon-MLTB && git checkout extended
 ```
 
 ### 3. Install Requirements

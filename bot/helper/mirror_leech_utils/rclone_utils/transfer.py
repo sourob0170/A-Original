@@ -78,7 +78,7 @@ class RcloneTransferHelper:
                     self._speed,
                     self._eta,
                 ) = data[0]
-            await sleep(0.05)
+            await sleep(0.5)
 
     def _switch_service_account(self):
         if self._sa_index == self._sa_number - 1:
@@ -287,8 +287,6 @@ class RcloneTransferHelper:
             "--config",
             config_path,
             epath,
-            "-v",
-            "--log-systemd",
         ]
         res, err, code = await cmd_exec(cmd)
 
@@ -503,20 +501,12 @@ class RcloneTransferHelper:
                 fremote = f"sa{self._sa_index:03}"
                 LOGGER.info(f"Upload with service account {fremote}")
 
-        method = "move"
         cmd = self._get_updated_command(
-            fconfig_path,
-            path,
-            f"{fremote}:{rc_path}",
-            method,
+            fconfig_path, path, f"{fremote}:{rc_path}", "move"
         )
         if remote_type == "drive" and not self._listener.rc_flags:
             cmd.extend(
                 (
-                    "--drive-chunk-size",
-                    "128M",
-                    "--drive-upload-cutoff",
-                    "128M",
                     "--tpslimit",
                     "1",
                     "--tpslimit-burst",
@@ -546,17 +536,21 @@ class RcloneTransferHelper:
                 "--config",
                 oconfig_path,
                 destination,
-                "-v",
-                "--log-systemd",
             ]
             res, err, code = await cmd_exec(cmd)
 
             if code == 0:
                 link = res
             elif code != -9:
-                LOGGER.error(
-                    f"while getting link. Path: {destination} | Stderr: {err}",
-                )
+                # Only log if destination is not empty
+                if destination and destination.strip():
+                    LOGGER.error(
+                        f"while getting link. Path: {destination} | Stderr: {err}",
+                    )
+                else:
+                    LOGGER.error(
+                        f"while getting link. Empty destination path | Stderr: {err}"
+                    )
 
                 # Handle Mega-related errors
                 if (
@@ -601,7 +595,11 @@ class RcloneTransferHelper:
                 link = ""
         if self._listener.is_cancelled:
             return
-        LOGGER.info(f"Upload Done. Path: {destination}")
+        # Only log destination if it's not empty
+        if destination and destination.strip():
+            LOGGER.info(f"Upload Done. Path: {destination}")
+        else:
+            LOGGER.info("Upload Done. (Empty destination path)")
         await self._listener.on_upload_complete(
             link,
             files,
@@ -680,8 +678,6 @@ class RcloneTransferHelper:
                 "--config",
                 config_path,
                 destination,
-                "-v",
-                "--log-systemd",
             ]
             res, err, code = await cmd_exec(cmd)
 
@@ -691,9 +687,15 @@ class RcloneTransferHelper:
             if code == 0:
                 return res, destination
             if code != -9:
-                LOGGER.error(
-                    f"while getting link. Path: {destination} | Stderr: {err}",
-                )
+                # Only log if destination is not empty
+                if destination and destination.strip():
+                    LOGGER.error(
+                        f"while getting link. Path: {destination} | Stderr: {err}",
+                    )
+                else:
+                    LOGGER.error(
+                        f"while getting link. Empty destination path | Stderr: {err}"
+                    )
 
                 # Handle Mega-related errors
                 if (
@@ -837,8 +839,6 @@ class RcloneTransferHelper:
             "--low-level-retries",
             "1",
             "-M",
-            "-v",
-            "--log-systemd",
         ]
         if self._rclone_select:
             cmd.extend(("--files-from", self._listener.link))

@@ -82,32 +82,82 @@ async def cancel_all(status, user_id):
 
 
 def create_cancel_buttons(is_sudo, user_id=""):
+    """
+    Create comprehensive cancel buttons for ALL available task types from status_utils.py
+
+    Core Operations:
+    - Download/Downloading: Download tasks and active downloads
+    - Upload/Uploading: Upload tasks and active uploads
+    - Clone/Cloning: Clone tasks and active cloning
+    - Seeding: Torrent seeding operations
+    - CheckUp: File verification and check operations
+
+    Queue Operations:
+    - QueuedDl/QueuedUp: Queued downloads and uploads
+    - Paused: Paused tasks
+
+    Archive & Extract Operations:
+    - Extracting: Archive extraction
+    - Archiving: Archive creation
+    - Splitting: File splitting
+
+    Media Processing Tools:
+    - FFmpeg: General FFmpeg operations
+    - ConvertMedia: Media format conversion
+    - SampleVideo: Video sample generation
+    - Swap: Audio/Video/Subtitle stream swapping
+    - Compress: Media compression
+    - Trim: Video/Audio trimming
+    - Remove: Stream/track removal
+    - Merging: Media file merging
+
+    Metadata & Enhancement Tools:
+    - Metadata: Metadata editing
+    - Watermark: Watermark addition
+    - EmbedThumb: Thumbnail embedding
+    - Add: Adding streams/tracks
+
+    Args:
+        is_sudo (bool): Whether the user has sudo privileges
+        user_id (str): User ID for task filtering
+
+    Returns:
+        InlineKeyboardMarkup: Organized button menu with ALL 26 task types
+    """
     buttons = button_build.ButtonMaker()
+
+    # Core Operations
     buttons.data_button(
-        "Downloading",
+        "Download",
         f"canall ms {MirrorStatus.STATUS_DOWNLOAD} {user_id}",
     )
     buttons.data_button(
-        "Uploading",
+        "Downloading",
+        f"canall ms {MirrorStatus.STATUS_DOWNLOADING} {user_id}",
+    )
+    buttons.data_button(
+        "Upload",
         f"canall ms {MirrorStatus.STATUS_UPLOAD} {user_id}",
+    )
+    buttons.data_button(
+        "Uploading",
+        f"canall ms {MirrorStatus.STATUS_UPLOADING} {user_id}",
     )
     buttons.data_button("Seeding", f"canall ms {MirrorStatus.STATUS_SEED} {user_id}")
     buttons.data_button(
-        "Spltting",
-        f"canall ms {MirrorStatus.STATUS_SPLIT} {user_id}",
-    )
-    buttons.data_button(
-        "Cloning",
+        "Clone",
         f"canall ms {MirrorStatus.STATUS_CLONE} {user_id}",
     )
     buttons.data_button(
-        "Extracting",
-        f"canall ms {MirrorStatus.STATUS_EXTRACT} {user_id}",
+        "Cloning",
+        f"canall ms {MirrorStatus.STATUS_CLONING} {user_id}",
     )
     buttons.data_button(
-        "Archiving",
-        f"canall ms {MirrorStatus.STATUS_ARCHIVE} {user_id}",
+        "CheckUp",
+        f"canall ms {MirrorStatus.STATUS_CHECK} {user_id}",
     )
+
+    # Queue Operations
     buttons.data_button(
         "QueuedDl",
         f"canall ms {MirrorStatus.STATUS_QUEUEDL} {user_id}",
@@ -117,21 +167,77 @@ def create_cancel_buttons(is_sudo, user_id=""):
         f"canall ms {MirrorStatus.STATUS_QUEUEUP} {user_id}",
     )
     buttons.data_button(
-        "SampleVideo",
-        f"canall ms {MirrorStatus.STATUS_SAMVID} {user_id}",
+        "Paused",
+        f"canall ms {MirrorStatus.STATUS_PAUSED} {user_id}",
+    )
+
+    # Archive & Extract Operations
+    buttons.data_button(
+        "Extracting",
+        f"canall ms {MirrorStatus.STATUS_EXTRACT} {user_id}",
+    )
+    buttons.data_button(
+        "Archiving",
+        f"canall ms {MirrorStatus.STATUS_ARCHIVE} {user_id}",
+    )
+    buttons.data_button(
+        "Splitting",
+        f"canall ms {MirrorStatus.STATUS_SPLIT} {user_id}",
+    )
+
+    # Media Processing Tools
+    buttons.data_button(
+        "FFmpeg",
+        f"canall ms {MirrorStatus.STATUS_FFMPEG} {user_id}",
     )
     buttons.data_button(
         "ConvertMedia",
         f"canall ms {MirrorStatus.STATUS_CONVERT} {user_id}",
     )
     buttons.data_button(
-        "FFmpeg",
-        f"canall ms {MirrorStatus.STATUS_FFMPEG} {user_id}",
+        "SampleVideo",
+        f"canall ms {MirrorStatus.STATUS_SAMVID} {user_id}",
     )
     buttons.data_button(
-        "Paused",
-        f"canall ms {MirrorStatus.STATUS_PAUSED} {user_id}",
+        "Swap",
+        f"canall ms {MirrorStatus.STATUS_SWAP} {user_id}",
     )
+    buttons.data_button(
+        "Compress",
+        f"canall ms {MirrorStatus.STATUS_COMPRESS} {user_id}",
+    )
+    buttons.data_button(
+        "Trim",
+        f"canall ms {MirrorStatus.STATUS_TRIM} {user_id}",
+    )
+    buttons.data_button(
+        "Remove",
+        f"canall ms {MirrorStatus.STATUS_REMOVE} {user_id}",
+    )
+    buttons.data_button(
+        "Merging",
+        f"canall ms {MirrorStatus.STATUS_MERGE} {user_id}",
+    )
+
+    # Metadata & Enhancement Tools
+    buttons.data_button(
+        "Metadata",
+        f"canall ms {MirrorStatus.STATUS_METADATA} {user_id}",
+    )
+    buttons.data_button(
+        "Watermark",
+        f"canall ms {MirrorStatus.STATUS_WATERMARK} {user_id}",
+    )
+    buttons.data_button(
+        "EmbedThumb",
+        f"canall ms {MirrorStatus.STATUS_ETHUMB} {user_id}",
+    )
+    buttons.data_button(
+        "Add",
+        f"canall ms {MirrorStatus.STATUS_ADD} {user_id}",
+    )
+
+    # Control Options
     buttons.data_button("All", f"canall ms All {user_id}")
     if is_sudo:
         if user_id:
@@ -139,7 +245,7 @@ def create_cancel_buttons(is_sudo, user_id=""):
         else:
             buttons.data_button("My Tasks", f"canall user ms {user_id}")
     buttons.data_button("Close", f"canall close ms {user_id}")
-    return buttons.build_menu(2)
+    return buttons.build_menu(3)  # Changed to 3 columns for better organization
 
 
 @new_task

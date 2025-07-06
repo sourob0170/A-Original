@@ -95,12 +95,22 @@ SEARCH_PLUGINS = [
 
 
 async def initiate_search_tools():
-    qb_plugins = await TorrentManager.qbittorrent.search.plugins()
-    if qb_plugins:
-        names = [plugin.name for plugin in qb_plugins]
-        await TorrentManager.qbittorrent.search.uninstall_plugin(names)
-        PLUGINS.clear()
-    await TorrentManager.qbittorrent.search.install_plugin(SEARCH_PLUGINS)
+    # Check if qBittorrent is available before trying to use it
+    if not TorrentManager.qbittorrent:
+        LOGGER.warning(
+            "qBittorrent is not available - skipping search tools initialization"
+        )
+        return
+
+    try:
+        qb_plugins = await TorrentManager.qbittorrent.search.plugins()
+        if qb_plugins:
+            names = [plugin.name for plugin in qb_plugins]
+            await TorrentManager.qbittorrent.search.uninstall_plugin(names)
+            PLUGINS.clear()
+        await TorrentManager.qbittorrent.search.install_plugin(SEARCH_PLUGINS)
+    except Exception as e:
+        LOGGER.error(f"Error initializing search tools: {e}")
 
 
 async def search(key, site, message, user_tag=""):
@@ -204,9 +214,13 @@ async def get_result(search_results, key, message):
 
 async def plugin_buttons(user_id):
     buttons = ButtonMaker()
-    if not PLUGINS:
-        pl = await TorrentManager.qbittorrent.search.plugins()
-        PLUGINS.extend(i.name for i in pl)
+    if not PLUGINS and TorrentManager.qbittorrent:
+        try:
+            pl = await TorrentManager.qbittorrent.search.plugins()
+            PLUGINS.extend(i.name for i in pl)
+        except Exception as e:
+            LOGGER.error(f"Error getting qBittorrent plugins: {e}")
+
     for siteName in PLUGINS:
         buttons.data_button(
             siteName.capitalize(),
@@ -235,6 +249,17 @@ async def torrent_search(_, message):
         error_msg = await send_message(
             message,
             "❌ Torrent search is disabled by the administrator.",
+        )
+        create_task(  # noqa: RUF006
+            auto_delete_message(error_msg, message, time=300),
+        )  # Auto-delete after 5 minutes
+        return
+
+    # Check if qBittorrent is available for search
+    if not TorrentManager.qbittorrent:
+        error_msg = await send_message(
+            message,
+            "❌ qBittorrent is not available. Torrent search requires qBittorrent to be running.",
         )
         create_task(  # noqa: RUF006
             auto_delete_message(error_msg, message, time=300),

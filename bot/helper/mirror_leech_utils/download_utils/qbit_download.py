@@ -32,6 +32,11 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
         return
 
     try:
+        # Check if qBittorrent client is available
+        if TorrentManager.qbittorrent is None:
+            await listener.on_download_error("qBittorrent client is not available")
+            return
+
         form = AddFormBuilder.with_client(TorrentManager.qbittorrent)
         if await aiopath.exists(listener.link):
             async with aiopen(listener.link, "rb") as f:

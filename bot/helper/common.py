@@ -299,6 +299,29 @@ class TaskConfig:
         self.remove_delete_original = False
         self.remove_maintain_quality = True
 
+        # Swap settings
+        self.swap_enabled = False
+        self.swap_priority = 0
+        self.swap_remove_original = False
+
+        # Audio swap settings
+        self.swap_audio_enabled = False
+        self.swap_audio_use_language = True
+        self.swap_audio_language_order = "eng,hin"
+        self.swap_audio_index_order = "0,1"
+
+        # Video swap settings
+        self.swap_video_enabled = False
+        self.swap_video_use_language = True
+        self.swap_video_language_order = "eng,hin"
+        self.swap_video_index_order = "0,1"
+
+        # Subtitle swap settings
+        self.swap_subtitle_enabled = False
+        self.swap_subtitle_use_language = True
+        self.swap_subtitle_language_order = "eng,hin"
+        self.swap_subtitle_index_order = "0,1"
+
         self.thumbnail_layout = ""
         self.folder_name = ""
         self.split_size = 0
@@ -1244,6 +1267,9 @@ class TaskConfig:
         # Initialize add settings
         await self.initialize_add_settings()
 
+        # Initialize swap settings
+        await self.initialize_swap_settings()
+
     async def initialize_remove_settings(self):
         """Initialize remove settings with priority logic."""
         # Get user and owner settings
@@ -2107,6 +2133,228 @@ class TaskConfig:
             self.add_attachment_mimetype = db_add_settings["ADD_ATTACHMENT_MIMETYPE"]
         else:
             self.add_attachment_mimetype = "none"
+
+    async def initialize_swap_settings(self):
+        """Initialize swap settings with priority logic."""
+        # Get user settings
+        user_swap_enabled = self.user_dict.get("SWAP_ENABLED", False)
+
+        # Get owner settings from database
+        owner_swap_enabled = False
+        try:
+            from bot.helper.ext_utils.db_handler import database
+
+            if database.db is not None:
+                db_config = await database.db.settings.config.find_one(
+                    {"_id": TgClient.ID},
+                    {"SWAP_ENABLED": 1, "_id": 0},
+                )
+                if db_config and "SWAP_ENABLED" in db_config:
+                    owner_swap_enabled = db_config["SWAP_ENABLED"]
+        except Exception as e:
+            LOGGER.error(f"Error getting SWAP_ENABLED from database: {e}")
+
+        # Set swap_enabled based on user and owner settings
+        if user_swap_enabled or owner_swap_enabled:
+            self.swap_enabled = True
+        else:
+            self.swap_enabled = False
+
+        # Get all SWAP_ settings from database
+        db_swap_settings = {}
+        try:
+            from bot.helper.ext_utils.db_handler import database
+
+            if database.db is not None:
+                # Create a projection that includes all SWAP_ settings
+                swap_projection = {
+                    "SWAP_PRIORITY": 1,
+                    "SWAP_REMOVE_ORIGINAL": 1,
+                    "SWAP_AUDIO_ENABLED": 1,
+                    "SWAP_AUDIO_USE_LANGUAGE": 1,
+                    "SWAP_AUDIO_LANGUAGE_ORDER": 1,
+                    "SWAP_AUDIO_INDEX_ORDER": 1,
+                    "SWAP_VIDEO_ENABLED": 1,
+                    "SWAP_VIDEO_USE_LANGUAGE": 1,
+                    "SWAP_VIDEO_LANGUAGE_ORDER": 1,
+                    "SWAP_VIDEO_INDEX_ORDER": 1,
+                    "SWAP_SUBTITLE_ENABLED": 1,
+                    "SWAP_SUBTITLE_USE_LANGUAGE": 1,
+                    "SWAP_SUBTITLE_LANGUAGE_ORDER": 1,
+                    "SWAP_SUBTITLE_INDEX_ORDER": 1,
+                    "_id": 0,
+                }
+
+                db_config = await database.db.settings.config.find_one(
+                    {"_id": TgClient.ID}, swap_projection
+                )
+                if db_config:
+                    db_swap_settings = db_config
+        except Exception as e:
+            LOGGER.error(f"Error getting SWAP settings from database: {e}")
+
+        # Set swap priority (user > database > default)
+        if self.user_dict.get("SWAP_PRIORITY"):
+            self.swap_priority = self.user_dict["SWAP_PRIORITY"]
+        elif db_swap_settings.get("SWAP_PRIORITY"):
+            self.swap_priority = db_swap_settings["SWAP_PRIORITY"]
+        else:
+            self.swap_priority = 6  # Default priority
+
+        # Set swap remove original (user > database > default)
+        if "SWAP_REMOVE_ORIGINAL" in self.user_dict:
+            self.swap_remove_original = self.user_dict["SWAP_REMOVE_ORIGINAL"]
+        elif "SWAP_REMOVE_ORIGINAL" in db_swap_settings:
+            self.swap_remove_original = db_swap_settings["SWAP_REMOVE_ORIGINAL"]
+        else:
+            self.swap_remove_original = False
+
+        # Audio swap settings
+        if "SWAP_AUDIO_ENABLED" in self.user_dict:
+            self.swap_audio_enabled = self.user_dict["SWAP_AUDIO_ENABLED"]
+        elif "SWAP_AUDIO_ENABLED" in db_swap_settings:
+            self.swap_audio_enabled = db_swap_settings["SWAP_AUDIO_ENABLED"]
+        else:
+            self.swap_audio_enabled = False
+
+        if "SWAP_AUDIO_USE_LANGUAGE" in self.user_dict:
+            self.swap_audio_use_language = self.user_dict["SWAP_AUDIO_USE_LANGUAGE"]
+        elif "SWAP_AUDIO_USE_LANGUAGE" in db_swap_settings:
+            self.swap_audio_use_language = db_swap_settings[
+                "SWAP_AUDIO_USE_LANGUAGE"
+            ]
+        else:
+            self.swap_audio_use_language = True
+
+        if (
+            "SWAP_AUDIO_LANGUAGE_ORDER" in self.user_dict
+            and self.user_dict["SWAP_AUDIO_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_audio_language_order = self.user_dict[
+                "SWAP_AUDIO_LANGUAGE_ORDER"
+            ]
+        elif (
+            "SWAP_AUDIO_LANGUAGE_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_AUDIO_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_audio_language_order = db_swap_settings[
+                "SWAP_AUDIO_LANGUAGE_ORDER"
+            ]
+        else:
+            self.swap_audio_language_order = "eng,hin"
+
+        if (
+            "SWAP_AUDIO_INDEX_ORDER" in self.user_dict
+            and self.user_dict["SWAP_AUDIO_INDEX_ORDER"] != "none"
+        ):
+            self.swap_audio_index_order = self.user_dict["SWAP_AUDIO_INDEX_ORDER"]
+        elif (
+            "SWAP_AUDIO_INDEX_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_AUDIO_INDEX_ORDER"] != "none"
+        ):
+            self.swap_audio_index_order = db_swap_settings["SWAP_AUDIO_INDEX_ORDER"]
+        else:
+            self.swap_audio_index_order = "0,1"
+
+        # Video swap settings
+        if "SWAP_VIDEO_ENABLED" in self.user_dict:
+            self.swap_video_enabled = self.user_dict["SWAP_VIDEO_ENABLED"]
+        elif "SWAP_VIDEO_ENABLED" in db_swap_settings:
+            self.swap_video_enabled = db_swap_settings["SWAP_VIDEO_ENABLED"]
+        else:
+            self.swap_video_enabled = False
+
+        if "SWAP_VIDEO_USE_LANGUAGE" in self.user_dict:
+            self.swap_video_use_language = self.user_dict["SWAP_VIDEO_USE_LANGUAGE"]
+        elif "SWAP_VIDEO_USE_LANGUAGE" in db_swap_settings:
+            self.swap_video_use_language = db_swap_settings[
+                "SWAP_VIDEO_USE_LANGUAGE"
+            ]
+        else:
+            self.swap_video_use_language = True
+
+        if (
+            "SWAP_VIDEO_LANGUAGE_ORDER" in self.user_dict
+            and self.user_dict["SWAP_VIDEO_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_video_language_order = self.user_dict[
+                "SWAP_VIDEO_LANGUAGE_ORDER"
+            ]
+        elif (
+            "SWAP_VIDEO_LANGUAGE_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_VIDEO_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_video_language_order = db_swap_settings[
+                "SWAP_VIDEO_LANGUAGE_ORDER"
+            ]
+        else:
+            self.swap_video_language_order = "eng,hin"
+
+        if (
+            "SWAP_VIDEO_INDEX_ORDER" in self.user_dict
+            and self.user_dict["SWAP_VIDEO_INDEX_ORDER"] != "none"
+        ):
+            self.swap_video_index_order = self.user_dict["SWAP_VIDEO_INDEX_ORDER"]
+        elif (
+            "SWAP_VIDEO_INDEX_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_VIDEO_INDEX_ORDER"] != "none"
+        ):
+            self.swap_video_index_order = db_swap_settings["SWAP_VIDEO_INDEX_ORDER"]
+        else:
+            self.swap_video_index_order = "0,1"
+
+        # Subtitle swap settings
+        if "SWAP_SUBTITLE_ENABLED" in self.user_dict:
+            self.swap_subtitle_enabled = self.user_dict["SWAP_SUBTITLE_ENABLED"]
+        elif "SWAP_SUBTITLE_ENABLED" in db_swap_settings:
+            self.swap_subtitle_enabled = db_swap_settings["SWAP_SUBTITLE_ENABLED"]
+        else:
+            self.swap_subtitle_enabled = False
+
+        if "SWAP_SUBTITLE_USE_LANGUAGE" in self.user_dict:
+            self.swap_subtitle_use_language = self.user_dict[
+                "SWAP_SUBTITLE_USE_LANGUAGE"
+            ]
+        elif "SWAP_SUBTITLE_USE_LANGUAGE" in db_swap_settings:
+            self.swap_subtitle_use_language = db_swap_settings[
+                "SWAP_SUBTITLE_USE_LANGUAGE"
+            ]
+        else:
+            self.swap_subtitle_use_language = True
+
+        if (
+            "SWAP_SUBTITLE_LANGUAGE_ORDER" in self.user_dict
+            and self.user_dict["SWAP_SUBTITLE_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_subtitle_language_order = self.user_dict[
+                "SWAP_SUBTITLE_LANGUAGE_ORDER"
+            ]
+        elif (
+            "SWAP_SUBTITLE_LANGUAGE_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_SUBTITLE_LANGUAGE_ORDER"] != "none"
+        ):
+            self.swap_subtitle_language_order = db_swap_settings[
+                "SWAP_SUBTITLE_LANGUAGE_ORDER"
+            ]
+        else:
+            self.swap_subtitle_language_order = "eng,hin"
+
+        if (
+            "SWAP_SUBTITLE_INDEX_ORDER" in self.user_dict
+            and self.user_dict["SWAP_SUBTITLE_INDEX_ORDER"] != "none"
+        ):
+            self.swap_subtitle_index_order = self.user_dict[
+                "SWAP_SUBTITLE_INDEX_ORDER"
+            ]
+        elif (
+            "SWAP_SUBTITLE_INDEX_ORDER" in db_swap_settings
+            and db_swap_settings["SWAP_SUBTITLE_INDEX_ORDER"] != "none"
+        ):
+            self.swap_subtitle_index_order = db_swap_settings[
+                "SWAP_SUBTITLE_INDEX_ORDER"
+            ]
+        else:
+            self.swap_subtitle_index_order = "0,1"
 
     async def initialize_extract_settings(self):
         """Initialize extract settings with priority logic."""
@@ -9364,9 +9612,19 @@ class TaskConfig:
         from bot.helper.ext_utils.bot_utils import get_user_split_size
 
         self.files_to_proceed = {}
+
+        # Get the actual split size that should be used for this user
+        # We need to check each file individually to determine if it needs splitting
         if self.is_file:
             f_size = await get_path_size(dl_path)
-            if f_size > self.split_size:
+            # Use get_user_split_size to determine if this file needs splitting
+            args = self.args if hasattr(self, "args") else None
+            split_size, skip_splitting = get_user_split_size(
+                self.user_id, args, f_size, equal_splits=False
+            )
+            if (
+                not skip_splitting
+            ):  # If skip_splitting is False, the file needs to be split
                 self.files_to_proceed[dl_path] = [f_size, ospath.basename(dl_path)]
         else:
             for dirpath, _, files in await sync_to_async(
@@ -9377,7 +9635,14 @@ class TaskConfig:
                 for file_ in files:
                     f_path = ospath.join(dirpath, file_)
                     f_size = await get_path_size(f_path)
-                    if f_size > self.split_size:
+                    # Use get_user_split_size to determine if this file needs splitting
+                    args = self.args if hasattr(self, "args") else None
+                    split_size, skip_splitting = get_user_split_size(
+                        self.user_id, args, f_size, equal_splits=False
+                    )
+                    if (
+                        not skip_splitting
+                    ):  # If skip_splitting is False, the file needs to be split
                         self.files_to_proceed[f_path] = [f_size, file_]
         if self.files_to_proceed:
             ffmpeg = FFMpeg(self)
@@ -10548,11 +10813,33 @@ class TaskConfig:
                         escaped_path = file_path.replace("'", "'\\''")
                         f.write(f"file '{escaped_path}'\n")
 
-                # Determine output path
+                # Determine output path with proper format handling
                 base_dir = os.path.dirname(analysis["video_files"][0])
-                output_file = os.path.join(
-                    base_dir, f"merged.{self.merge_output_format_video}"
-                )
+
+                # Handle "none" output format by using the first file's extension
+                output_format = self.merge_output_format_video
+                if output_format == "none" and analysis["video_files"]:
+                    # Extract extension from the first file
+                    first_file_ext = (
+                        os.path.splitext(analysis["video_files"][0])[1]
+                        .lower()
+                        .lstrip(".")
+                    )
+                    if first_file_ext and first_file_ext in [
+                        "mp4",
+                        "mkv",
+                        "avi",
+                        "mov",
+                        "webm",
+                        "flv",
+                    ]:
+                        output_format = first_file_ext
+                    else:
+                        output_format = "mkv"  # Default for video
+                elif not output_format or output_format == "none":
+                    output_format = "mkv"  # Default for video
+
+                output_file = os.path.join(base_dir, f"merged.{output_format}")
 
                 # Use a simpler concat command with minimal options
                 # Always preserve all tracks in the fallback approach
@@ -11668,15 +11955,16 @@ class TaskConfig:
         return dl_path
 
     async def proceed_add(self, dl_path, gid):
-        """Add media tracks to files using FFmpeg."""
-        # Skip if add is not enabled
-        if not self.add_enabled:
-            LOGGER.info("Add not applied: add is not enabled")
+        """Process add functionality for media files with comprehensive feature support."""
+        from bot.helper.aeon_utils.command_gen import get_add_cmd
+
+        LOGGER.info(f"Starting add processing for: {dl_path}")
+
+        if self.is_cancelled:
             return dl_path
 
         # Check if we're using multi-input mode with the -m flag
         using_multi_input = False
-        multi_input_files = []
 
         # Check if folder_name is set (from -m flag)
         if hasattr(self, "folder_name") and self.folder_name:
@@ -11742,222 +12030,62 @@ class TaskConfig:
             LOGGER.error(f"File not found for adding media: {dl_path}")
             return dl_path
 
-        # Import the add_media function
-        from bot.modules.media_tools import add_media
-
         # Initialize variables
+        from bot.helper.ext_utils.media_utils import FFMpeg
+
         ffmpeg = FFMpeg(self)
         checked = False
 
-        if self.is_file:
-            # Process a single file
-            if using_multi_input:
-                # In multi-input mode, we need to find all files in the specified folder
-                # or in the same directory if no folder is specified
+        try:
+            # Prepare multi-files list if available
+            multi_files = None
+            if hasattr(self, "multi_files") and self.multi_files:
+                multi_files = self.multi_files
 
-                # Determine the directory to search
-                if hasattr(self, "folder_name") and self.folder_name:
-                    # Check if folder_name is an absolute path
-                    if ospath.isabs(self.folder_name) or await aiopath.exists(
-                        self.folder_name
-                    ):
-                        search_dir = self.folder_name
-                    # Check if the folder exists relative to the download directory
-                    elif await aiopath.exists(
-                        ospath.join(ospath.dirname(dl_path), self.folder_name)
-                    ):
-                        search_dir = ospath.join(
-                            ospath.dirname(dl_path), self.folder_name
-                        )
-                    # Try to find the folder in the download directory
-                    else:
-                        # Get the download directory (parent of the file's directory)
-                        download_dir = ospath.dirname(ospath.dirname(dl_path))
-                        potential_path = ospath.join(download_dir, self.folder_name)
-                        if await aiopath.exists(potential_path):
-                            search_dir = potential_path
-                        # Special handling for "/sub" folder
-                        elif self.folder_name == "/sub":
-                            # Create a "sub" directory in the same directory as the target file
-                            search_dir = ospath.join(ospath.dirname(dl_path), "sub")
-                            # Create the directory if it doesn't exist
-                            if not await aiopath.exists(search_dir):
-                                await makedirs(search_dir, exist_ok=True)
-                                LOGGER.info(
-                                    f"Created subtitle directory: {search_dir}"
-                                )
-                        else:
-                            # Fallback to the original behavior
-                            search_dir = ospath.join(
-                                ospath.dirname(dl_path), self.folder_name
-                            )
-                            # Create the directory if it doesn't exist
-                            if not await aiopath.exists(search_dir):
-                                await makedirs(search_dir, exist_ok=True)
-                                LOGGER.info(f"Created directory: {search_dir}")
-                else:
-                    # Use the directory containing the file
-                    search_dir = ospath.dirname(dl_path)
+            if self.is_file:
+                # Process a single file - use the enhanced get_add_cmd approach
+                # Generate add command with all parameters
+                cmd, temp_file = await get_add_cmd(
+                    file_path=dl_path,
+                    add_video=self.add_video_enabled,
+                    add_audio=self.add_audio_enabled,
+                    add_subtitle=self.add_subtitle_enabled,
+                    add_attachment=self.add_attachment_enabled,
+                    video_index=self.add_video_index,
+                    audio_index=self.add_audio_index,
+                    subtitle_index=self.add_subtitle_index,
+                    attachment_index=self.add_attachment_index,
+                    video_codec=self.add_video_codec,
+                    audio_codec=self.add_audio_codec,
+                    subtitle_codec=self.add_subtitle_codec,
+                    video_quality=self.add_video_quality,
+                    video_preset=self.add_video_preset,
+                    video_bitrate=self.add_video_bitrate,
+                    video_resolution=self.add_video_resolution,
+                    video_fps=self.add_video_fps,
+                    audio_bitrate=self.add_audio_bitrate,
+                    audio_channels=self.add_audio_channels,
+                    audio_sampling=self.add_audio_sampling,
+                    audio_volume=self.add_audio_volume,
+                    subtitle_language=self.add_subtitle_language,
+                    subtitle_encoding=self.add_subtitle_encoding,
+                    subtitle_font=self.add_subtitle_font,
+                    subtitle_font_size=self.add_subtitle_font_size,
+                    subtitle_hardsub_enabled=self.add_subtitle_hardsub_enabled,
+                    attachment_mimetype=self.add_attachment_mimetype,
+                    delete_original=delete_original,
+                    preserve_tracks=preserve_tracks,
+                    replace_tracks=replace_tracks,
+                    multi_files=multi_files,
+                )
 
-                LOGGER.info(f"Searching for files in: {search_dir}")
-
-                # Get all files in the directory
-                all_files = []
-                if await aiopath.exists(search_dir):
-                    for dirpath, _, files in await sync_to_async(
-                        walk, search_dir, topdown=False
-                    ):
-                        for file_ in files:
-                            file_path = ospath.join(dirpath, file_)
-                            all_files.append(file_path)
-
-                    # Sort files to ensure consistent order
-                    all_files.sort()
-
-                    # Make sure the target file is first, then use the rest as sources
-                    if dl_path in all_files:
-                        all_files.remove(dl_path)
-                    all_files.insert(0, dl_path)
-
-                    LOGGER.info(
-                        f"Found {len(all_files) - 1} additional files for multi-input mode"
-                    )
-                    if len(all_files) > 1:
-                        multi_input_files = all_files[
-                            1:
-                        ]  # All files except the target
-                    else:
-                        LOGGER.warning(
-                            "No additional files found for multi-input mode"
-                        )
-                else:
-                    LOGGER.error(f"Directory not found: {search_dir}")
+                if not cmd:
+                    LOGGER.warning("Failed to generate add command")
                     return dl_path
 
-            # Set up FFmpeg status
-            if not checked:
-                checked = True
-                async with task_dict_lock:
-                    task_dict[self.mid] = FFmpegStatus(
-                        self,
-                        ffmpeg,
-                        gid,
-                        "Add",
-                    )
-                self.progress = False
-                await cpu_eater_lock.acquire()
-                self.progress = True
+                LOGGER.info(f"Generated add command: {' '.join(cmd[:10])}...")
 
-            self.subsize = self.size
-
-            # Check if the file is a document that can't be processed by FFmpeg
-            file_ext = ospath.splitext(dl_path)[1].lower()
-            if file_ext in [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]:
-                LOGGER.warning(
-                    f"Skipping document file that can't be processed by FFmpeg: {dl_path}"
-                )
-                return dl_path
-
-            # Use the add_media function with delete_original parameter
-            if using_multi_input and multi_input_files:
-                # Filter out document files that can't be processed by FFmpeg
-                filtered_files = []
-                for file_path in multi_input_files:
-                    file_ext = ospath.splitext(file_path)[1].lower()
-                    if file_ext not in [
-                        ".pdf",
-                        ".doc",
-                        ".docx",
-                        ".txt",
-                        ".rtf",
-                        ".odt",
-                    ]:
-                        filtered_files.append(file_path)
-                    else:
-                        LOGGER.warning(
-                            f"Skipping document file that can't be processed by FFmpeg: {file_path}"
-                        )
-
-                if not filtered_files:
-                    LOGGER.warning(
-                        "No valid files found for multi-input mode after filtering"
-                    )
-                    return dl_path
-
-                success, output_path, error = await add_media(
-                    dl_path, self.user_id, self.mid, multi_files=filtered_files
-                )
-            else:
-                success, output_path, error = await add_media(
-                    dl_path, self.user_id, self.mid
-                )
-
-            if success:
-                dl_path = output_path
-            else:
-                LOGGER.error(f"Failed to add media: {error}")
-        # Process all files in the directory
-        elif using_multi_input:
-            # In multi-input mode with a directory, we need to group files
-            # Determine the directory to search
-            search_dir = dl_path
-            if hasattr(self, "folder_name") and self.folder_name:
-                # Check if folder_name is an absolute path
-                if ospath.isabs(self.folder_name) or await aiopath.exists(
-                    self.folder_name
-                ):
-                    search_dir = self.folder_name
-                # Check if the folder exists relative to the download directory
-                elif await aiopath.exists(ospath.join(dl_path, self.folder_name)):
-                    search_dir = ospath.join(dl_path, self.folder_name)
-                # Try to find the folder in the parent directory
-                else:
-                    # Get the parent directory
-                    parent_dir = ospath.dirname(dl_path)
-                    potential_path = ospath.join(parent_dir, self.folder_name)
-                    if await aiopath.exists(potential_path):
-                        search_dir = potential_path
-                    # Special handling for "/sub" folder
-                    elif self.folder_name == "/sub":
-                        # Create a "sub" directory in the download directory
-                        search_dir = ospath.join(dl_path, "sub")
-                        # Create the directory if it doesn't exist
-                        if not await aiopath.exists(search_dir):
-                            await makedirs(search_dir, exist_ok=True)
-                            LOGGER.info(f"Created subtitle directory: {search_dir}")
-                    else:
-                        # Fallback to the original behavior
-                        search_dir = ospath.join(dl_path, self.folder_name)
-                        # Create the directory if it doesn't exist
-                        if not await aiopath.exists(search_dir):
-                            await makedirs(search_dir, exist_ok=True)
-                            LOGGER.info(f"Created directory: {search_dir}")
-
-                LOGGER.info(f"Searching for files in: {search_dir}")
-
-                # Check if the directory exists
-                if not await aiopath.exists(search_dir):
-                    LOGGER.error(f"Directory not found: {search_dir}")
-                    search_dir = dl_path  # Fallback to download directory
-
-            # Get all files in the directory
-            all_files = []
-            for dirpath, _, files in await sync_to_async(
-                walk,
-                search_dir,
-                topdown=False,
-            ):
-                for file_ in files:
-                    file_path = ospath.join(dirpath, file_)
-                    all_files.append(file_path)
-
-            # Sort files to ensure consistent order
-            all_files.sort()
-
-            # Process files in groups based on the folder_name pattern
-            # For now, we'll just use the first file as the target and the rest as sources
-            if all_files:
-                # Set up FFmpeg status if not already done
+                # Set up FFmpeg status
                 if not checked:
                     checked = True
                     async with task_dict_lock:
@@ -11971,106 +12099,279 @@ class TaskConfig:
                     await cpu_eater_lock.acquire()
                     self.progress = True
 
-                target_file = all_files[0]
-                source_files = all_files[1:]
+                # Process the command using FFMpeg
+                result = await ffmpeg.ffmpeg_cmds(cmd, dl_path)
 
-                self.subsize = await aiopath.getsize(target_file)
-                self.subname = ospath.basename(target_file)
+                if result and isinstance(result, list) and result:
+                    # Return the first processed file
+                    processed_file = result[0]
+                    LOGGER.info(f"Add processing completed: {processed_file}")
+                    dl_path = processed_file
+                else:
+                    LOGGER.error("Add processing failed")
 
-                # Check if the target file is a document that can't be processed by FFmpeg
-                file_ext = ospath.splitext(target_file)[1].lower()
-                if file_ext in [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]:
-                    LOGGER.warning(
-                        f"Skipping document file that can't be processed by FFmpeg: {target_file}"
-                    )
-                    # Skip processing this file
-                    if checked:
-                        cpu_eater_lock.release()
-                    return dl_path
+            else:
+                # Directory processing - use enhanced approach for each file
+                for dirpath, _, files in await sync_to_async(
+                    walk, dl_path, topdown=False
+                ):
+                    for file_ in files:
+                        file_path = ospath.join(dirpath, file_)
+                        if self.is_cancelled:
+                            if checked:
+                                cpu_eater_lock.release()
+                            return ""
 
-                # Filter out document files that can't be processed by FFmpeg
-                filtered_files = []
-                for file_path in source_files:
-                    file_ext = ospath.splitext(file_path)[1].lower()
-                    if file_ext not in [
-                        ".pdf",
-                        ".doc",
-                        ".docx",
-                        ".txt",
-                        ".rtf",
-                        ".odt",
-                    ]:
-                        filtered_files.append(file_path)
-                    else:
-                        LOGGER.warning(
-                            f"Skipping document file that can't be processed by FFmpeg: {file_path}"
+                        # Set up FFmpeg status if not already done
+                        if not checked:
+                            checked = True
+                            async with task_dict_lock:
+                                task_dict[self.mid] = FFmpegStatus(
+                                    self,
+                                    ffmpeg,
+                                    gid,
+                                    "Add",
+                                )
+                            self.progress = False
+                            await cpu_eater_lock.acquire()
+                            self.progress = True
+
+                        self.subsize = await aiopath.getsize(file_path)
+                        self.subname = file_
+
+                        # Check if the file is a document that can't be processed by FFmpeg
+                        file_ext = ospath.splitext(file_path)[1].lower()
+                        if file_ext in [
+                            ".pdf",
+                            ".doc",
+                            ".docx",
+                            ".txt",
+                            ".rtf",
+                            ".odt",
+                        ]:
+                            LOGGER.warning(
+                                f"Skipping document file that can't be processed by FFmpeg: {file_path}"
+                            )
+                            continue
+
+                        # Generate add command for this file
+                        cmd, temp_file = await get_add_cmd(
+                            file_path=file_path,
+                            add_video=self.add_video_enabled,
+                            add_audio=self.add_audio_enabled,
+                            add_subtitle=self.add_subtitle_enabled,
+                            add_attachment=self.add_attachment_enabled,
+                            video_index=self.add_video_index,
+                            audio_index=self.add_audio_index,
+                            subtitle_index=self.add_subtitle_index,
+                            attachment_index=self.add_attachment_index,
+                            video_codec=self.add_video_codec,
+                            audio_codec=self.add_audio_codec,
+                            subtitle_codec=self.add_subtitle_codec,
+                            video_quality=self.add_video_quality,
+                            video_preset=self.add_video_preset,
+                            video_bitrate=self.add_video_bitrate,
+                            video_resolution=self.add_video_resolution,
+                            video_fps=self.add_video_fps,
+                            audio_bitrate=self.add_audio_bitrate,
+                            audio_channels=self.add_audio_channels,
+                            audio_sampling=self.add_audio_sampling,
+                            audio_volume=self.add_audio_volume,
+                            subtitle_language=self.add_subtitle_language,
+                            subtitle_encoding=self.add_subtitle_encoding,
+                            subtitle_font=self.add_subtitle_font,
+                            subtitle_font_size=self.add_subtitle_font_size,
+                            subtitle_hardsub_enabled=self.add_subtitle_hardsub_enabled,
+                            attachment_mimetype=self.add_attachment_mimetype,
+                            delete_original=delete_original,
+                            preserve_tracks=preserve_tracks,
+                            replace_tracks=replace_tracks,
+                            multi_files=multi_files,
                         )
 
-                if not filtered_files:
-                    LOGGER.warning(
-                        "No valid files found for multi-input mode after filtering"
-                    )
-                    # Skip processing this file
-                    if checked:
-                        cpu_eater_lock.release()
-                    return dl_path
+                        if cmd:
+                            LOGGER.info(f"Processing file with add: {file_path}")
+                            result = await ffmpeg.ffmpeg_cmds(cmd, file_path)
+                            if result and isinstance(result, list) and result:
+                                LOGGER.info(
+                                    f"Add processing completed for: {file_path}"
+                                )
+                            else:
+                                LOGGER.error(
+                                    f"Add processing failed for: {file_path}"
+                                )
+                        else:
+                            LOGGER.warning(
+                                f"Failed to generate add command for: {file_path}"
+                            )
 
-                # Use the add_media function with multi_files parameter
-                success, output_path, error = await add_media(
-                    target_file, self.user_id, self.mid, multi_files=filtered_files
+        except Exception as e:
+            LOGGER.error(f"Error during add processing: {e}")
+        finally:
+            if checked:
+                cpu_eater_lock.release()
+
+        return dl_path
+
+    async def proceed_swap(self, dl_path, gid):
+        """Process swap functionality for media files to reorder tracks."""
+        from bot.helper.aeon_utils.command_gen import get_swap_cmd
+
+        LOGGER.info(f"Starting swap processing for: {dl_path}")
+
+        if self.is_cancelled:
+            return dl_path
+
+        # Skip if swap is not enabled
+        if not self.swap_enabled:
+            LOGGER.info("Swap not applied: swap is not enabled")
+            return dl_path
+
+        # Check if any swap options are enabled
+        if not (
+            self.swap_audio_enabled
+            or self.swap_video_enabled
+            or self.swap_subtitle_enabled
+        ):
+            LOGGER.info("Swap not applied: no swap options are enabled")
+            return dl_path
+
+        # Acquire CPU lock for processing
+        await cpu_eater_lock.acquire()
+        try:
+            ffmpeg = FFMpeg(self)
+            checked = False
+
+            if self.is_file:
+                # Process single file
+                LOGGER.info(f"Processing single file for swap: {dl_path}")
+
+                # Generate swap command
+                cmd, temp_file = await get_swap_cmd(
+                    file_path=dl_path,
+                    swap_audio=self.swap_audio_enabled,
+                    swap_video=self.swap_video_enabled,
+                    swap_subtitle=self.swap_subtitle_enabled,
+                    audio_use_language=self.swap_audio_use_language,
+                    video_use_language=self.swap_video_use_language,
+                    subtitle_use_language=self.swap_subtitle_use_language,
+                    audio_language_order=self.swap_audio_language_order,
+                    video_language_order=self.swap_video_language_order,
+                    subtitle_language_order=self.swap_subtitle_language_order,
+                    audio_index_order=self.swap_audio_index_order,
+                    video_index_order=self.swap_video_index_order,
+                    subtitle_index_order=self.swap_subtitle_index_order,
+                    delete_original=self.swap_remove_original,
                 )
 
-                if not success:
-                    LOGGER.error(f"Failed to add media: {error}")
-        else:
-            # Legacy mode - process each file individually
-            for dirpath, _, files in await sync_to_async(
-                walk,
-                dl_path,
-                topdown=False,
-            ):
-                for file_ in files:
-                    file_path = ospath.join(dirpath, file_)
-                    if self.is_cancelled:
-                        if checked:
-                            cpu_eater_lock.release()
-                        return ""
-
-                    # Set up FFmpeg status if not already done
+                if cmd and temp_file:
                     if not checked:
                         checked = True
                         async with task_dict_lock:
                             task_dict[self.mid] = FFmpegStatus(
-                                self,
-                                ffmpeg,
-                                gid,
-                                "Add",
+                                self, ffmpeg, gid, "swap"
                             )
-                        self.progress = False
-                        await cpu_eater_lock.acquire()
-                        self.progress = True
 
-                    self.subsize = await aiopath.getsize(file_path)
-                    self.subname = file_
+                    LOGGER.info(f"Executing swap command: {' '.join(cmd)}")
+                    result = await ffmpeg.ffmpeg_cmds(cmd, dl_path)
 
-                    # Check if the file is a document that can't be processed by FFmpeg
-                    file_ext = ospath.splitext(file_path)[1].lower()
-                    if file_ext in [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]:
-                        LOGGER.warning(
-                            f"Skipping document file that can't be processed by FFmpeg: {file_path}"
-                        )
-                        continue
+                    if result and isinstance(result, list) and result:
+                        # Use the first output file
+                        new_path = result[0]
+                        if await aiopath.exists(new_path):
+                            LOGGER.info(f"Swap completed successfully: {new_path}")
+                            return new_path
+                        LOGGER.error(f"Swap output file not found: {new_path}")
+                    else:
+                        LOGGER.error("Swap command failed")
+                else:
+                    LOGGER.info("No swap command generated - skipping")
 
-                    # Use the add_media function with delete_original parameter
-                    success, output_path, error = await add_media(
-                        file_path, self.user_id, self.mid
+            else:
+                # Process directory
+                LOGGER.info(f"Processing directory for swap: {dl_path}")
+
+                # Get all media files in the directory
+                media_files = []
+                for root, _dirs, files in await sync_to_async(walk, dl_path):
+                    for file in files:
+                        file_path = ospath.join(root, file)
+                        # Check if it's a media file (basic check by extension)
+                        if file.lower().endswith(
+                            (
+                                ".mp4",
+                                ".mkv",
+                                ".avi",
+                                ".mov",
+                                ".webm",
+                                ".flv",
+                                ".m4v",
+                                ".3gp",
+                                ".wmv",
+                            )
+                        ):
+                            media_files.append(file_path)
+
+                if not media_files:
+                    LOGGER.info("No media files found in directory for swap")
+                    return dl_path
+
+                LOGGER.info(
+                    f"Found {len(media_files)} media files for swap processing"
+                )
+
+                # Process each media file
+                for file_path in media_files:
+                    if self.is_cancelled:
+                        break
+
+                    LOGGER.info(f"Processing file for swap: {file_path}")
+
+                    # Generate swap command for this file
+                    cmd, temp_file = await get_swap_cmd(
+                        file_path=file_path,
+                        swap_audio=self.swap_audio_enabled,
+                        swap_video=self.swap_video_enabled,
+                        swap_subtitle=self.swap_subtitle_enabled,
+                        audio_use_language=self.swap_audio_use_language,
+                        video_use_language=self.swap_video_use_language,
+                        subtitle_use_language=self.swap_subtitle_use_language,
+                        audio_language_order=self.swap_audio_language_order,
+                        video_language_order=self.swap_video_language_order,
+                        subtitle_language_order=self.swap_subtitle_language_order,
+                        audio_index_order=self.swap_audio_index_order,
+                        video_index_order=self.swap_video_index_order,
+                        subtitle_index_order=self.swap_subtitle_index_order,
+                        delete_original=self.swap_remove_original,
                     )
 
-                    if not success:
-                        LOGGER.error(f"Failed to add media: {error}")
+                    if cmd and temp_file:
+                        if not checked:
+                            checked = True
+                            async with task_dict_lock:
+                                task_dict[self.mid] = FFmpegStatus(
+                                    self, ffmpeg, gid, "swap"
+                                )
 
-        if checked:
+                        LOGGER.info(
+                            f"Executing swap command for {file_path}: {' '.join(cmd)}"
+                        )
+                        result = await ffmpeg.ffmpeg_cmds(cmd, file_path)
+
+                        if result and isinstance(result, list) and result:
+                            LOGGER.info(f"Swap completed for file: {file_path}")
+                        else:
+                            LOGGER.error(f"Swap failed for file: {file_path}")
+                    else:
+                        LOGGER.info(
+                            f"No swap command generated for file: {file_path}"
+                        )
+
+        except Exception as e:
+            LOGGER.error(f"Error during swap processing: {e}")
+        finally:
             cpu_eater_lock.release()
+
         return dl_path
 
     async def proceed_trim(self, dl_path, gid):

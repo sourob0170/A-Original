@@ -1,0 +1,370 @@
+/* ReelNN Custom Video Player Styles */
+
+.reelnn-player-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.reelnn-player-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.reelnn-player-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.reelnn-player-overlay * {
+    pointer-events: auto;
+}
+
+/* Loading Indicator */
+.reelnn-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+}
+
+.reelnn-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    animation: reelnn-spin 1s linear infinite;
+}
+
+@keyframes reelnn-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Center Controls */
+.reelnn-center-controls {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 15;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.reelnn-player-container.paused .reelnn-center-controls,
+.reelnn-center-controls:hover {
+    opacity: 1;
+}
+
+.reelnn-play-btn {
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    padding: 20px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.reelnn-play-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.1);
+}
+
+/* Bottom Controls */
+.reelnn-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    padding: 20px;
+    transition: opacity 0.3s ease;
+    z-index: 15;
+}
+
+.reelnn-controls-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.reelnn-controls-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Progress Bar */
+.reelnn-progress-container {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    margin: 0 10px;
+}
+
+.reelnn-progress-bar {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.reelnn-progress-buffer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s ease;
+}
+
+.reelnn-progress-played {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #ff6b6b;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s ease;
+}
+
+.reelnn-progress-handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: #ff6b6b;
+    border-radius: 50%;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    left: 0%;
+}
+
+.reelnn-progress-container:hover .reelnn-progress-handle {
+    opacity: 1;
+}
+
+/* Control Buttons */
+.reelnn-controls-left,
+.reelnn-controls-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.reelnn-control-btn {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reelnn-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.reelnn-control-btn.active {
+    color: #ff6b6b;
+}
+
+/* Volume Control */
+.reelnn-volume-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.reelnn-volume-slider {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px;
+    border-radius: 4px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    margin-bottom: 10px;
+}
+
+.reelnn-volume-container:hover .reelnn-volume-slider {
+    opacity: 1;
+    visibility: visible;
+}
+
+.reelnn-volume-slider input[type="range"] {
+    writing-mode: bt-lr; /* IE */
+    -webkit-appearance: slider-vertical; /* WebKit */
+    width: 30px;
+    height: 80px;
+    background: transparent;
+    outline: none;
+}
+
+/* Time Display */
+.reelnn-time-display {
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Settings Menu */
+.reelnn-settings-menu {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.95);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-settings-content {
+    color: white;
+}
+
+.reelnn-settings-section {
+    margin-bottom: 20px;
+}
+
+.reelnn-settings-section:last-child {
+    margin-bottom: 0;
+}
+
+.reelnn-settings-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+}
+
+.reelnn-quality-options,
+.reelnn-speed-options,
+.reelnn-audio-options,
+.reelnn-subtitle-options {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.reelnn-option-btn {
+    background: none;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.reelnn-option-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.reelnn-option-btn.active {
+    background: #ff6b6b;
+    color: white;
+}
+
+.reelnn-no-options {
+    color: #999;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Fullscreen Styles */
+.reelnn-player-container.reelnn-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .reelnn-controls {
+        padding: 15px;
+    }
+    
+    .reelnn-controls-row {
+        margin-bottom: 8px;
+    }
+    
+    .reelnn-control-btn {
+        padding: 10px;
+    }
+    
+    .reelnn-time-display {
+        font-size: 12px;
+    }
+    
+    .reelnn-settings-menu {
+        right: 10px;
+        bottom: 70px;
+        min-width: 180px;
+        padding: 15px;
+    }
+    
+    .reelnn-play-btn {
+        padding: 15px;
+    }
+}
+
+/* Dark theme adjustments */
+.reelnn-player-container {
+    --primary-color: #ff6b6b;
+    --bg-color: rgba(0, 0, 0, 0.9);
+    --text-color: white;
+    --border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Accessibility */
+.reelnn-control-btn:focus {
+    outline: 2px solid #ff6b6b;
+    outline-offset: 2px;
+}
+
+.reelnn-option-btn:focus {
+    outline: 1px solid #ff6b6b;
+    outline-offset: 1px;
+}

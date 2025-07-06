@@ -143,23 +143,41 @@ class TorrentManager:
     async def remove_all(cls):
         try:
             await cls.pause_all()
-            await gather(
-                cls.qbittorrent.torrents.delete("all", True),
-                cls.aria2.purgeDownloadResult(),
-            )
-            downloads = []
-            results = await gather(
-                cls.aria2.tellActive(),
-                cls.aria2.tellWaiting(0, 1000),
-            )
-            for res in results:
-                downloads.extend(res)
+
+            # Create tasks list for parallel execution
             tasks = []
-            tasks.extend(
-                cls.aria2.forceRemove(download.get("gid")) for download in downloads
-            )
-            with contextlib.suppress(Exception):
+
+            # Add qBittorrent deletion task if client is available
+            if cls.qbittorrent is not None:
+                tasks.append(cls.qbittorrent.torrents.delete("all", True))
+
+            # Add aria2 purge task if client is available
+            if cls.aria2 is not None:
+                tasks.append(cls.aria2.purgeDownloadResult())
+
+            # Execute available tasks
+            if tasks:
                 await gather(*tasks)
+
+            # Handle aria2 active/waiting downloads if client is available
+            if cls.aria2 is not None:
+                downloads = []
+                results = await gather(
+                    cls.aria2.tellActive(),
+                    cls.aria2.tellWaiting(0, 1000),
+                )
+                for res in results:
+                    downloads.extend(res)
+
+                # Force remove all downloads
+                removal_tasks = []
+                removal_tasks.extend(
+                    cls.aria2.forceRemove(download.get("gid"))
+                    for download in downloads
+                )
+                if removal_tasks:
+                    with contextlib.suppress(Exception):
+                        await gather(*removal_tasks)
 
             # Force garbage collection after removing all torrents
             # This helps free memory used by large torrent metadata
@@ -189,9 +207,22 @@ class TorrentManager:
     @classmethod
     async def pause_all(cls):
         try:
-            await gather(
-                cls.aria2.forcePauseAll(), cls.qbittorrent.torrents.stop("all")
-            )
+            tasks = []
+
+            # Handle aria2 pause if client is available
+            if cls.aria2 is not None:
+                tasks.append(cls.aria2.forcePauseAll())
+
+            # Handle qBittorrent pause if client is available
+            if cls.qbittorrent is not None:
+                tasks.append(cls.qbittorrent.torrents.stop("all"))
+
+            # Execute available tasks
+            if tasks:
+                await gather(*tasks)
+            else:
+                LOGGER.warning("No torrent clients available for pause operation")
+
         except Exception as e:
             # Handle transport closing errors gracefully
             if "closing transport" not in str(e).lower():

@@ -24,7 +24,6 @@ from bot import (
     rss_dict,
     sabnzbd_client,
     shorteners_list,
-    sudo_users,
     user_data,
 )
 
@@ -38,23 +37,42 @@ from .torrent_manager import TorrentManager
 
 
 async def update_qb_options():
-    if not qbit_options:
-        opt = await TorrentManager.qbittorrent.app.preferences()
-        qbit_options.update(opt)
-        del qbit_options["listen_port"]
-        for k in list(qbit_options.keys()):
-            if k.startswith("rss"):
-                del qbit_options[k]
-        # Set username to 'admin' and password to LOGIN_PASS (or 'admin' if not set)
-        username = "admin"
-        password = Config.LOGIN_PASS or "admin"
-        qbit_options["web_ui_username"] = username
-        qbit_options["web_ui_password"] = password
-        await TorrentManager.qbittorrent.app.set_preferences(
-            {"web_ui_username": username, "web_ui_password": password},
-        )
-    else:
-        await TorrentManager.qbittorrent.app.set_preferences(qbit_options)
+    # Check if qBittorrent is available before trying to update options
+    if TorrentManager.qbittorrent is None:
+        from bot import LOGGER
+
+        LOGGER.warning("qBittorrent is not available - skipping options update")
+        return
+
+    try:
+        # Check if qBittorrent client is available
+        if TorrentManager.qbittorrent is None:
+            from bot import LOGGER
+
+            LOGGER.warning("qBittorrent is not available - skipping options update")
+            return
+
+        if not qbit_options:
+            opt = await TorrentManager.qbittorrent.app.preferences()
+            qbit_options.update(opt)
+            del qbit_options["listen_port"]
+            for k in list(qbit_options.keys()):
+                if k.startswith("rss"):
+                    del qbit_options[k]
+            # Set username to 'admin' and password to LOGIN_PASS (or 'admin' if not set)
+            username = "admin"
+            password = Config.LOGIN_PASS or "admin"
+            qbit_options["web_ui_username"] = username
+            qbit_options["web_ui_password"] = password
+            await TorrentManager.qbittorrent.app.set_preferences(
+                {"web_ui_username": username, "web_ui_password": password},
+            )
+        else:
+            await TorrentManager.qbittorrent.app.set_preferences(qbit_options)
+    except Exception as e:
+        from bot import LOGGER
+
+        LOGGER.error(f"Failed to update qBittorrent options: {e}")
 
 
 async def update_aria2_options():
@@ -95,9 +113,6 @@ async def load_zotify_credentials_from_db():
                 )
                 if user_data:
                     user_with_creds = user_data
-                    LOGGER.info(
-                        f"Found Zotify credentials for user {user_data['_id']}"
-                    )
 
             # If we found credentials, recreate the file
             if user_with_creds and "ZOTIFY_CREDENTIALS" in user_with_creds:
@@ -107,8 +122,6 @@ async def load_zotify_credentials_from_db():
                     LOGGER.error(
                         "❌ Failed to restore Zotify credentials from database"
                     )
-            else:
-                LOGGER.info("No Zotify credentials found in database")
 
     except Exception as e:
         LOGGER.error(f"Error loading Zotify credentials from database: {e}")
@@ -121,6 +134,35 @@ async def load_settings():
         if await aiopath.exists(p):
             await rmtree(p, ignore_errors=True)
     await database.connect()
+
+    # Write shared configuration for web server process
+    try:
+        import json
+        import os
+        import tempfile
+
+        # Create a shared config file for web server process
+        shared_config = {
+            "DATABASE_URL": Config.DATABASE_URL,
+            "BOT_TOKEN": Config.BOT_TOKEN,
+            "TG_CLIENT_ID": getattr(TgClient, "ID", None),
+            "HELPER_TOKENS": getattr(Config, "HELPER_TOKENS", ""),
+            "TELEGRAM_API": getattr(Config, "TELEGRAM_API", None),
+            "TELEGRAM_HASH": getattr(Config, "TELEGRAM_HASH", None),
+        }
+
+        # Write to a temporary file that web server can read
+        config_file_path = os.path.join(
+            tempfile.gettempdir(), "aimleechbot_shared_config.json"
+        )
+        with open(config_file_path, "w") as f:
+            json.dump(shared_config, f)
+
+    except Exception as e:
+        LOGGER.warning(f"Failed to write shared configuration: {e}")
+
+    # Clean up invalid configuration keys BEFORE loading any config
+    await database._cleanup_invalid_config_keys()
 
     # Start the database heartbeat task to keep the connection alive
     await database.start_heartbeat()
@@ -137,172 +179,161 @@ async def load_settings():
         )
 
         if old_deploy_config is None:
-            # First time setup - add timestamp to deploy config
-            current_deploy_config["_deploy_timestamp"] = time()
+            # First time setup - create both deploy and runtime configs from config.py
+            from bot.core.config_manager import Config as ConfigClass
+
+            valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+            # Filter out invalid keys from current config
+            filtered_config = {
+                k: v
+                for k, v in current_deploy_config.items()
+                if k in valid_config_keys
+            }
+
+            # Create deploy config (source of truth for config.py)
             await database.db.settings.deployConfig.replace_one(
                 {"_id": BOT_ID},
-                current_deploy_config,
+                filtered_config,
                 upsert=True,
             )
-        elif old_deploy_config != current_deploy_config:
-            runtime_config = (
-                await database.db.settings.config.find_one(
-                    {"_id": BOT_ID},
-                    {"_id": 0},
-                )
-                or {}
+
+            # Create runtime config (initially same as deploy config)
+            await database.db.settings.config.replace_one(
+                {"_id": BOT_ID},
+                filtered_config,
+                upsert=True,
             )
 
-            # Get timestamps to determine which config is newer
-            deploy_timestamp = old_deploy_config.get("_deploy_timestamp", 0)
-            runtime_timestamp = runtime_config.get("_runtime_timestamp", 0)
-            current_time = time()
+            LOGGER.info(
+                "First time setup - created both deploy and runtime configs from config.py"
+            )
+        else:
+            # Not first time - check if config.py has changed
+            from bot.core.config_manager import Config as ConfigClass
 
-            # Check if code config actually changed from what's in database
+            valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+            # Compare current config.py vs stored deploy config (source of truth)
             old_deploy_content = {
-                k: v for k, v in old_deploy_config.items() if not k.startswith("_")
+                k: v for k, v in old_deploy_config.items() if k in valid_config_keys
             }
             current_deploy_content = {
                 k: v
                 for k, v in current_deploy_config.items()
-                if not k.startswith("_")
+                if k in valid_config_keys
             }
 
-            # CRITICAL FIX: Check if configs were previously synced
-            # If timestamps are equal, it means configs were synced - preserve user changes!
-            configs_were_synced = (
-                deploy_timestamp == runtime_timestamp and deploy_timestamp != 0
-            )
+            # Simple comparison - has config.py actually changed?
+            config_py_changed = old_deploy_content != current_deploy_content
 
-            # Only consider it a real "code change" if:
-            # 1. The code config differs from what's in the database, AND
-            # 2. The configs were NOT previously synced (meaning this is a genuine code update)
-            code_actually_changed = (
-                old_deploy_content != current_deploy_content
-                and not configs_were_synced
-            )
+            if config_py_changed:
+                # config.py has changed - update BOTH deploy and runtime configs
+                LOGGER.info(
+                    "Config.py changes detected - updating both deploy and runtime configs"
+                )
 
-            # Simple bidirectional synchronization logic
-            if configs_were_synced:
-                # Equal timestamps - configs were previously synced
-                # This means user made runtime changes that were synced to deploy config
-                # We should NOT overwrite these changes unless code actually changed
-                if old_deploy_content != current_deploy_content:
-                    # Code defaults differ from database, but configs were synced
-                    # This means user made changes - preserve them!
-                    current_deploy_config = (
-                        old_deploy_config.copy()
-                    )  # Use database version
-                    LOGGER.info(
-                        f"Configs were synced (timestamp: {deploy_timestamp}) - preserving user changes"
-                    )
-                else:
-                    # Code and database match, configs were synced - no changes needed
-                    current_deploy_config["_deploy_timestamp"] = deploy_timestamp
-                    LOGGER.info(
-                        f"Deploy and runtime configs have equal timestamps ({deploy_timestamp}) - no sync needed"
-                    )
+                # Filter new config.py values
+                filtered_deploy_config = {
+                    k: v
+                    for k, v in current_deploy_config.items()
+                    if k in valid_config_keys
+                }
 
-            elif code_actually_changed:
-                # Code actually changed (and configs were not synced) - update both configs
-                current_deploy_config["_deploy_timestamp"] = current_time
-
-                # Step 1: Save deploy config with new timestamp
+                # Step 1: Update deploy config with new config.py values
                 await database.db.settings.deployConfig.replace_one(
                     {"_id": BOT_ID},
-                    current_deploy_config,
+                    filtered_deploy_config,
                     upsert=True,
                 )
 
-                # Step 2: Overwrite runtime config with deploy changes and same timestamp
-                runtime_config.update(
-                    {
-                        k: v
-                        for k, v in current_deploy_config.items()
-                        if not k.startswith("_")
-                    }
-                )
-                runtime_config["_runtime_timestamp"] = current_time
-
+                # Step 2: Update runtime config with new config.py values (override user changes)
                 await database.db.settings.config.replace_one(
                     {"_id": BOT_ID},
-                    runtime_config,
+                    filtered_deploy_config,
                     upsert=True,
                 )
 
                 LOGGER.info(
-                    f"Code changed - overwritten runtime config with same timestamp: {current_time}"
+                    "Both deploy and runtime configs updated with new config.py values"
                 )
-
-            elif runtime_timestamp > deploy_timestamp:
-                # Runtime config is newer - overwrite deploy config with runtime changes
-                LOGGER.info(
-                    f"Runtime config is newer than deploy config - overwriting deploy config. "
-                    f"Runtime timestamp: {runtime_timestamp}, Deploy timestamp: {deploy_timestamp}"
-                )
-
-                # Overwrite deploy config with runtime changes and same timestamp
-                current_deploy_config.update(
-                    {
-                        k: v
-                        for k, v in runtime_config.items()
-                        if not k.startswith("_")
-                    }
-                )
-                current_deploy_config["_deploy_timestamp"] = runtime_timestamp
-
-                await database.db.settings.deployConfig.replace_one(
-                    {"_id": BOT_ID},
-                    current_deploy_config,
-                    upsert=True,
-                )
-
-                LOGGER.info(
-                    f"Overwritten deploy config from runtime config with same timestamp: {runtime_timestamp}"
-                )
-
-            elif not code_actually_changed:
-                # No code changes and configs were not synced - just update deploy config timestamp to match database
-                current_deploy_config["_deploy_timestamp"] = deploy_timestamp
-                LOGGER.info(
-                    "No code changes detected - preserving existing config state"
-                )
-
             else:
-                # Both timestamps are 0 or missing - initialize both with current time
-                current_deploy_config["_deploy_timestamp"] = current_time
-                runtime_config["_runtime_timestamp"] = current_time
+                # No changes in config.py - keep both configs unchanged
                 LOGGER.info(
-                    "Missing timestamps - initializing both configs with current time"
+                    "No changes detected in config.py - preserving existing configs"
                 )
 
-                # Update both configs with synchronized timestamps
-                await database.db.settings.deployConfig.replace_one(
-                    {"_id": BOT_ID},
-                    current_deploy_config,
-                    upsert=True,
-                )
-                await database.db.settings.config.replace_one(
-                    {"_id": BOT_ID},
-                    runtime_config,
-                    upsert=True,
-                )
-
+        # Re-fetch runtime config after cleanup to ensure deprecated keys are gone
         runtime_config = await database.db.settings.config.find_one(
             {"_id": BOT_ID},
             {"_id": 0},
         )
+
+        # FORCED CLEANUP: Remove any invalid keys that still exist in runtime config
+        if runtime_config:
+            from bot.core.config_manager import Config as ConfigClass
+
+            valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+            # Find invalid keys
+            invalid_keys_found = [
+                k
+                for k in runtime_config
+                if not k.startswith("_") and k not in valid_config_keys
+            ]
+
+            if invalid_keys_found:
+                LOGGER.warning(
+                    f"🧹 FORCED CLEANUP: Removing persistent invalid keys: {invalid_keys_found}"
+                )
+
+                # Remove invalid keys from database immediately
+                await database.db.settings.config.update_one(
+                    {"_id": BOT_ID},
+                    {"$unset": dict.fromkeys(invalid_keys_found, "")},
+                )
+
+                # Re-fetch the cleaned config
+                runtime_config = await database.db.settings.config.find_one(
+                    {"_id": BOT_ID},
+                    {"_id": 0},
+                )
+
         if runtime_config:
             # Filter out timestamp metadata before loading into Config class
             config_values_only = {
                 k: v for k, v in runtime_config.items() if not k.startswith("_")
             }
-            Config.load_dict(config_values_only)
+
+            # After forced cleanup, the config should be clean - load it directly
+            from bot.core.config_manager import Config as ConfigClass
+
+            valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+            # Filter out any keys that are not valid configuration keys (should be none after forced cleanup)
+            filtered_config = {
+                k: v for k, v in config_values_only.items() if k in valid_config_keys
+            }
+
+            # Check if there are still any invalid keys (this should not happen after forced cleanup)
+            invalid_keys = set(config_values_only.keys()) - valid_config_keys
+            if invalid_keys:
+                LOGGER.error(
+                    f"❌ CRITICAL: Invalid keys still found after forced cleanup: {', '.join(invalid_keys)}"
+                )
+                LOGGER.error(
+                    "This indicates a serious issue with the cleanup process!"
+                )
+
+            Config.load_dict(filtered_config)
 
             # Warm the configuration cache for better performance
             from bot.core.config_manager import warm_config_cache
 
             warm_config_cache()
+
+            # Final cleanup: Remove any invalid keys that might have been re-added during sync
+            await database._cleanup_invalid_config_keys()
 
         if pf_dict := await database.db.settings.files.find_one(
             {"_id": BOT_ID},
@@ -388,17 +419,13 @@ async def load_settings():
                     # Silently load user cookies without logging
                 user_data[uid] = row
 
-            # Ensure owner is authorized after loading all user data
-            if Config.OWNER_ID:
-                owner_id = Config.OWNER_ID
-                if owner_id not in user_data:
-                    user_data[owner_id] = {"AUTH": True}
-                else:
-                    user_data[owner_id]["AUTH"] = True
-                # Update owner data in database
-                await database.update_user_data(owner_id)
-
             LOGGER.info("Users data has been imported from Database")
+
+        # CRITICAL FIX: Always ensure OWNER_ID and SUDO_USERS are authorized,
+        # even for new deployments with empty database
+        from bot.helper.ext_utils.bot_utils import ensure_authorized_users
+
+        await ensure_authorized_users()
 
         # Load Zotify credentials from database if available
         await load_zotify_credentials_from_db()
@@ -493,18 +520,10 @@ async def update_variables():
     ):
         Config.MEDIA_SEARCH_CHATS = Config.MUSIC_SEARCH_CHATS
 
-    # Automatically authorize owner ID
-    if Config.OWNER_ID:
-        owner_id = Config.OWNER_ID
-        # Add owner to user_data with AUTH=True if not already present
-        if owner_id not in user_data:
-            user_data[owner_id] = {"AUTH": True}
-        else:
-            user_data[owner_id]["AUTH"] = True
-        # Update owner data in database if available
-        if hasattr(database, "db") and database.db is not None:
-            await database.update_user_data(owner_id)
-        LOGGER.info(f"Owner ID {owner_id} automatically authorized")
+    # Automatically authorize privileged users (Owner + Sudo)
+    from bot.helper.ext_utils.bot_utils import ensure_authorized_users
+
+    await ensure_authorized_users()
 
     if Config.AUTHORIZED_CHATS:
         aid = Config.AUTHORIZED_CHATS.split()
@@ -516,11 +535,6 @@ async def update_variables():
                 auth_chats[chat_id] = thread_ids
             else:
                 auth_chats[chat_id] = []
-
-    if Config.SUDO_USERS:
-        aid = Config.SUDO_USERS.split()
-        for id_ in aid:
-            sudo_users.append(int(id_.strip()))
 
     if Config.EXCLUDED_EXTENSIONS:
         fx = Config.EXCLUDED_EXTENSIONS.split()
@@ -541,7 +555,7 @@ async def update_variables():
                 drives_ids.append(temp[1])
                 drives_names.append(temp[0].replace("_", " "))
                 if len(temp) > 2:
-                    index_urls.append(temp[2])
+                    index_urls.append(temp[2].strip("/"))
                 else:
                     index_urls.append("")
 
@@ -563,7 +577,15 @@ async def update_variables():
                         response.raise_for_status()
                         app_data = await response.json()
                         if web_url := app_data.get("web_url"):
+                            # Ensure BASE_URL ends with '/' for proper URL generation
                             Config.set("BASE_URL", web_url.rstrip("/"))
+
+                            # ReelNN: Also set STREAM_BASE_URL if not already configured
+                            if not getattr(Config, "STREAM_BASE_URL", ""):
+                                Config.set("STREAM_BASE_URL", web_url.rstrip("/"))
+                                LOGGER.info(
+                                    f"Auto-detected Heroku STREAM_BASE_URL: {web_url.rstrip('/')}"
+                                )
                             return
                 except Exception as e:
                     LOGGER.error(f"BASE_URL error: {e}")
@@ -771,13 +793,19 @@ async def process_pending_deletions():
                         f"Error removing scheduled deletion for invalid chat: {e}"
                     )
             else:
-                # Other errors count as failures
+                # Other errors count as failures - log for debugging
+                LOGGER.warning(
+                    f"Auto-deletion failed for message {msg_id} in chat {chat_id}: {error_str}"
+                )
                 fail_count += 1
 
-    # Log summary
-    LOGGER.info(
-        f"Auto-deletion results: {success_count} deleted, {fail_count} failed, {removed_from_db_count} removed from database",
-    )
+    # Log summary with more context
+    if success_count > 0 or fail_count > 0 or removed_from_db_count > 0:
+        LOGGER.info(
+            f"Auto-deletion results: {success_count} deleted, {fail_count} failed, {removed_from_db_count} removed from database"
+        )
+    else:
+        LOGGER.info("No auto-deletions processed in this cycle")
 
 
 async def scheduled_deletion_checker():

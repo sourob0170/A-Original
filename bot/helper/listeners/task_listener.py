@@ -653,7 +653,51 @@ class TaskListener(TaskConfig):
                     await self.on_upload_error(str(e))
                     return
 
-            dl_path = f"{self.dir}/{self.name}"
+            # Check if this is a MEGA folder download
+            # For MEGA folder downloads, files are directly in self.dir, not in a subdirectory
+            potential_folder_path = f"{self.dir}/{self.name}"
+
+            # First, check if self.dir contains multiple files (indicating a folder download)
+            try:
+                dir_contents = await listdir(self.dir)
+                LOGGER.info(f"📁 Directory contents check: {dir_contents}")
+
+                if len(dir_contents) > 1:
+                    # Multiple files = MEGA folder download, use the directory itself
+                    dl_path = self.dir
+                    LOGGER.info(
+                        f"📁 MEGA folder download detected, using directory: {dl_path}"
+                    )
+                    LOGGER.info(f"📁 Directory contains {len(dir_contents)} items")
+                elif len(dir_contents) == 1:
+                    # Single item - check if it matches our expected name
+                    single_item = dir_contents[0]
+                    if single_item == self.name:
+                        # Single item with expected name - use standard path
+                        dl_path = potential_folder_path
+                        LOGGER.info(
+                            f"📄 Single item with expected name, using: {dl_path}"
+                        )
+                    else:
+                        # Single item with different name - probably a renamed file
+                        dl_path = f"{self.dir}/{single_item}"
+                        LOGGER.info(
+                            f"📄 Single item with different name, using: {dl_path}"
+                        )
+                else:
+                    # Empty directory - fallback to standard path
+                    dl_path = potential_folder_path
+                    LOGGER.info(f"📁 Empty directory, using fallback: {dl_path}")
+            except Exception as e:
+                LOGGER.error(f"Error checking directory contents: {e}")
+                # Fallback to checking if standard path exists
+                if await aiopath.exists(potential_folder_path):
+                    dl_path = potential_folder_path
+                    LOGGER.info(f"📁 Fallback to standard path: {dl_path}")
+                else:
+                    dl_path = self.dir
+                    LOGGER.info(f"📁 Fallback to directory: {dl_path}")
+
             self.size = await get_path_size(dl_path)
             self.is_file = await aiopath.isfile(dl_path)
 
@@ -733,6 +777,10 @@ class TaskListener(TaskConfig):
         # Check if add is enabled
         if self.add_enabled:
             media_tools.append((self.add_priority, "add", self.proceed_add))
+
+        # Check if swap is enabled
+        if self.swap_enabled:
+            media_tools.append((self.swap_priority, "swap", self.proceed_swap))
 
         # Sort media tools by priority (lower number = higher priority)
         media_tools.sort(key=lambda x: x[0])
@@ -1079,7 +1127,8 @@ class TaskListener(TaskConfig):
                 )
                 return
 
-            LOGGER.info(f"Gdrive Upload Name: {self.name}")
+            upload_name = self.name or "Unknown"
+            LOGGER.info(f"Gdrive Upload Name: {upload_name}")
             # If up_dest is "gd", use the configured GDRIVE_ID
             if self.up_dest == "gd":
                 gdrive_id = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
@@ -1089,7 +1138,7 @@ class TaskListener(TaskConfig):
                     LOGGER.warning(
                         "DEFAULT_UPLOAD is 'gd' but no GDRIVE_ID configured, falling back to Rclone"
                     )
-                    LOGGER.info(f"Rclone Upload Name: {self.name}")
+                    LOGGER.info(f"Rclone Upload Name: {upload_name}")
                     RCTransfer = RcloneTransferHelper(self)
                     async with task_dict_lock:
                         task_dict[self.mid] = RcloneStatus(
@@ -1111,7 +1160,8 @@ class TaskListener(TaskConfig):
             )
             del drive
         else:
-            LOGGER.info(f"Rclone Upload Name: {self.name}")
+            upload_name = self.name or "Unknown"
+            LOGGER.info(f"Rclone Upload Name: {upload_name}")
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
@@ -1142,7 +1192,7 @@ class TaskListener(TaskConfig):
             await database.rm_complete_task(self.message.link)
 
         # Use the most up-to-date name (which may have been modified by leech filename template)
-        current_name = self.name
+        current_name = self.name or "Unknown Task"
 
         # Check if MediaInfo is enabled
         mediainfo_enabled = self.user_dict.get("MEDIAINFO_ENABLED", None)
@@ -1169,9 +1219,24 @@ class TaskListener(TaskConfig):
         if len(display_name) > 100:
             display_name = display_name[:97] + "..."
 
+        # Check if this is a multi-file upload in progress
+        if (hasattr(self, "is_multi_file_upload") and self.is_multi_file_upload) or (
+            hasattr(self, "is_uploading") and self.is_uploading
+        ):
+            LOGGER.info(
+                f"🚫 Skipping task completion - multi-file upload in progress: {current_name}"
+            )
+            return
+
         msg = f"<b>Name: </b><code>{escape(display_name)}</code>\n\n<blockquote><b>Size: </b>{get_readable_file_size(self.size)}"
         done_msg = f"<b><blockquote>Hey, {self.tag}</blockquote>\nYour task is complete\nPlease check your inbox.</b>"
-        LOGGER.info(f"Task Done: {current_name}")
+        # Ensure we never log empty task names
+        log_name = (
+            current_name.strip()
+            if current_name and current_name.strip()
+            else "Unknown Task"
+        )
+        LOGGER.info(f"Task Done: {log_name}")
         if self.is_leech:
             msg += f"\n<b>Total Files: </b>{folders}"
             if mime_type != 0:
@@ -1482,11 +1547,11 @@ class TaskListener(TaskConfig):
                         elif Config.INDEX_URL:
                             INDEX_URL = Config.INDEX_URL
                         if INDEX_URL:
-                            share_url = f"{INDEX_URL}findpath?id={dir_id}"
+                            share_url = f"{INDEX_URL}/findpath?id={dir_id}"
                             buttons.url_button("⚡ Index Link", share_url)
                             if mime_type.startswith(("image", "video", "audio")):
                                 share_urls = (
-                                    f"{INDEX_URL}findpath?id={dir_id}&view=true"
+                                    f"{INDEX_URL}/findpath?id={dir_id}&view=true"
                                 )
                                 buttons.url_button("🌐 View Link", share_urls)
                     button = buttons.build_menu(2)
@@ -1793,88 +1858,3 @@ class TaskListener(TaskConfig):
             await clean_download(self.up_dir)
         if self.thumb and await aiopath.exists(self.thumb):
             await remove(self.thumb)
-
-    async def proceed_add(self, up_path, gid):
-        """Process add functionality for media files."""
-        from bot.helper.aeon_utils.command_gen import get_add_cmd
-
-        LOGGER.info(f"Starting add processing for: {up_path}")
-
-        if self.is_cancelled:
-            return up_path
-
-        # Check if any add functionality is enabled
-        if not (
-            self.add_video_enabled
-            or self.add_audio_enabled
-            or self.add_subtitle_enabled
-            or self.add_attachment_enabled
-        ):
-            LOGGER.info("No add functionality enabled, skipping add processing")
-            return up_path
-
-        try:
-            # Prepare multi-files list if available
-            multi_files = None
-            if hasattr(self, "multi_files") and self.multi_files:
-                multi_files = self.multi_files
-
-            # Generate add command
-            cmd, temp_file = await get_add_cmd(
-                file_path=up_path,
-                add_video=self.add_video_enabled,
-                add_audio=self.add_audio_enabled,
-                add_subtitle=self.add_subtitle_enabled,
-                add_attachment=self.add_attachment_enabled,
-                video_index=self.add_video_index,
-                audio_index=self.add_audio_index,
-                subtitle_index=self.add_subtitle_index,
-                attachment_index=self.add_attachment_index,
-                video_codec=self.add_video_codec,
-                audio_codec=self.add_audio_codec,
-                subtitle_codec=self.add_subtitle_codec,
-                video_quality=self.add_video_quality,
-                video_preset=self.add_video_preset,
-                video_bitrate=self.add_video_bitrate,
-                video_resolution=self.add_video_resolution,
-                video_fps=self.add_video_fps,
-                audio_bitrate=self.add_audio_bitrate,
-                audio_channels=self.add_audio_channels,
-                audio_sampling=self.add_audio_sampling,
-                audio_volume=self.add_audio_volume,
-                subtitle_language=self.add_subtitle_language,
-                subtitle_encoding=self.add_subtitle_encoding,
-                subtitle_font=self.add_subtitle_font,
-                subtitle_font_size=self.add_subtitle_font_size,
-                subtitle_hardsub_enabled=self.add_subtitle_hardsub_enabled,
-                attachment_mimetype=self.add_attachment_mimetype,
-                delete_original=self.add_delete_original,
-                preserve_tracks=self.add_preserve_tracks,
-                replace_tracks=self.add_replace_tracks,
-                multi_files=multi_files,
-            )
-
-            if not cmd:
-                LOGGER.warning("Failed to generate add command")
-                return up_path
-
-            LOGGER.info(f"Generated add command: {' '.join(cmd[:10])}...")
-
-            # Process the command using FFMpeg
-            from bot.helper.ext_utils.media_utils import FFMpeg
-
-            processor = FFMpeg(self)
-            result = await processor.ffmpeg_cmds(cmd, up_path)
-
-            if result and isinstance(result, list) and result:
-                # Return the first processed file
-                processed_file = result[0]
-                LOGGER.info(f"Add processing completed: {processed_file}")
-                return processed_file
-
-            LOGGER.error("Add processing failed")
-            return up_path
-
-        except Exception as e:
-            LOGGER.error(f"Error during add processing: {e}")
-            return up_path

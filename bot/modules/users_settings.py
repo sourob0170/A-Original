@@ -284,18 +284,15 @@ youtube_options = [
 mega_options = [
     "MEGA_EMAIL",
     "MEGA_PASSWORD",
-    "MEGA_UPLOAD_FOLDER",
+    # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
     "MEGA_UPLOAD_PUBLIC",
-    "MEGA_UPLOAD_PRIVATE",
-    "MEGA_UPLOAD_UNLISTED",
-    "MEGA_UPLOAD_EXPIRY_DAYS",
-    "MEGA_UPLOAD_PASSWORD",
-    "MEGA_UPLOAD_ENCRYPTION_KEY",
+    # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+    # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
+    # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+    # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+    # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
     "MEGA_UPLOAD_THUMBNAIL",
-    "MEGA_UPLOAD_DELETE_AFTER",
-    "MEGA_CLONE_TO_FOLDER",
-    "MEGA_CLONE_PRESERVE_STRUCTURE",
-    "MEGA_CLONE_OVERWRITE",
+    # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
 ]
 yt_dlp_options = ["YT_DLP_OPTIONS", "USER_COOKIES", "FFMPEG_CMDS"]
 ddl_options = [
@@ -884,127 +881,46 @@ Please contact the administrator to enable MEGA functionality.
         buttons.data_button("🔑 Password", f"userset {user_id} menu MEGA_PASSWORD")
 
         # Upload Settings
-        buttons.data_button(
-            "📤 Upload Folder", f"userset {user_id} menu MEGA_UPLOAD_FOLDER"
-        )
-        buttons.data_button(
-            "⏰ Link Expiry Days", f"userset {user_id} menu MEGA_UPLOAD_EXPIRY_DAYS"
-        )
-        buttons.data_button(
-            "🔐 Upload Password", f"userset {user_id} menu MEGA_UPLOAD_PASSWORD"
-        )
-        buttons.data_button(
-            "🔑 Encryption Key", f"userset {user_id} menu MEGA_UPLOAD_ENCRYPTION_KEY"
-        )
+        # Upload Folder button removed - using folder selector instead
+        # Link Expiry, Upload Password, Encryption Key buttons removed - not supported by MEGA SDK v4.8.0
 
         # Toggle buttons for boolean settings
         public_links, public_links_source = get_mega_setting(
             "MEGA_UPLOAD_PUBLIC", False, True
         )
-        private_links, private_links_source = get_mega_setting(
-            "MEGA_UPLOAD_PRIVATE", False, True
-        )
-        unlisted_links, unlisted_links_source = get_mega_setting(
-            "MEGA_UPLOAD_UNLISTED", False, True
-        )
+        # private_links, unlisted_links removed - not supported by MEGA SDK v4.8.0
         thumbnails, thumbnails_source = get_mega_setting(
             "MEGA_UPLOAD_THUMBNAIL", False, True
         )
-        delete_after, delete_after_source = get_mega_setting(
-            "MEGA_UPLOAD_DELETE_AFTER", False, True
-        )
+        # delete_after removed - always delete after upload
 
         buttons.data_button(
             f"🔗 Public Links: {'✅ ON' if public_links else '❌ OFF'}",
             f"userset {user_id} tog MEGA_UPLOAD_PUBLIC {'f' if public_links else 't'}",
         )
-        buttons.data_button(
-            f"🔒 Private Links: {'✅ ON' if private_links else '❌ OFF'}",
-            f"userset {user_id} tog MEGA_UPLOAD_PRIVATE {'f' if private_links else 't'}",
-        )
-        buttons.data_button(
-            f"🔓 Unlisted Links: {'✅ ON' if unlisted_links else '❌ OFF'}",
-            f"userset {user_id} tog MEGA_UPLOAD_UNLISTED {'f' if unlisted_links else 't'}",
-        )
+        # Private Links and Unlisted Links buttons removed - not supported by MEGA SDK v4.8.0
         buttons.data_button(
             f"🖼️ Thumbnails: {'✅ ON' if thumbnails else '❌ OFF'}",
             f"userset {user_id} tog MEGA_UPLOAD_THUMBNAIL {'f' if thumbnails else 't'}",
         )
-        buttons.data_button(
-            f"🗑️ Delete After: {'✅ ON' if delete_after else '❌ OFF'}",
-            f"userset {user_id} tog MEGA_UPLOAD_DELETE_AFTER {'f' if delete_after else 't'}",
-        )
-
-        # Clone Settings
-        buttons.data_button(
-            "📁 Clone To Folder", f"userset {user_id} menu MEGA_CLONE_TO_FOLDER"
-        )
-
-        preserve_structure, preserve_structure_source = get_mega_setting(
-            "MEGA_CLONE_PRESERVE_STRUCTURE", True, True
-        )
-        overwrite_files, overwrite_files_source = get_mega_setting(
-            "MEGA_CLONE_OVERWRITE", False, True
-        )
-
-        buttons.data_button(
-            f"🏗️ Preserve Structure: {'✅ ON' if preserve_structure else '❌ OFF'}",
-            f"userset {user_id} tog MEGA_CLONE_PRESERVE_STRUCTURE {'f' if preserve_structure else 't'}",
-        )
-        buttons.data_button(
-            f"♻️ Overwrite Files: {'✅ ON' if overwrite_files else '❌ OFF'}",
-            f"userset {user_id} tog MEGA_CLONE_OVERWRITE {'f' if overwrite_files else 't'}",
-        )
+        # Delete After button removed - always delete after upload
 
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
 
         # Upload settings
-        upload_folder, upload_folder_source = get_mega_setting(
-            "MEGA_UPLOAD_FOLDER", "Root folder"
-        )
+        # upload_folder removed - using folder selector instead
         public_links, public_links_source = get_mega_setting(
             "MEGA_UPLOAD_PUBLIC", False, True
         )
-        private_links, private_links_source = get_mega_setting(
-            "MEGA_UPLOAD_PRIVATE", False, True
-        )
-        unlisted_links, unlisted_links_source = get_mega_setting(
-            "MEGA_UPLOAD_UNLISTED", False, True
-        )
-        expiry_days, expiry_days_source = get_mega_setting(
-            "MEGA_UPLOAD_EXPIRY_DAYS", 0
-        )
-        upload_password, upload_password_source = get_mega_setting(
-            "MEGA_UPLOAD_PASSWORD", ""
-        )
-        encryption_key, encryption_key_source = get_mega_setting(
-            "MEGA_UPLOAD_ENCRYPTION_KEY", ""
-        )
+        # private_links, unlisted_links, expiry_days, upload_password, encryption_key removed - not supported by MEGA SDK v4.8.0
         thumbnails, thumbnails_source = get_mega_setting(
             "MEGA_UPLOAD_THUMBNAIL", False, True
         )
-        delete_after, delete_after_source = get_mega_setting(
-            "MEGA_UPLOAD_DELETE_AFTER", False, True
-        )
-
-        # Clone settings
-        clone_folder, clone_folder_source = get_mega_setting(
-            "MEGA_CLONE_TO_FOLDER", "Root folder"
-        )
-        preserve_structure, preserve_structure_source = get_mega_setting(
-            "MEGA_CLONE_PRESERVE_STRUCTURE", True, True
-        )
-        overwrite_files, overwrite_files_source = get_mega_setting(
-            "MEGA_CLONE_OVERWRITE", False, True
-        )
+        # delete_after removed - always delete after upload
 
         # Format display values
-        upload_folder_display = upload_folder or "Root folder"
-        expiry_display = f"{expiry_days} days" if expiry_days > 0 else "No expiry"
-        password_display = "Set" if upload_password else "Not set"
-        encryption_display = "Set" if encryption_key else "Not set"
-        clone_folder_display = clone_folder or "Root folder"
+        # upload_folder_display, expiry_display, password_display, encryption_display removed - not supported by MEGA SDK v4.8.0
 
         # Hide email for privacy - only show if it's set or not
         email_display = (
@@ -1020,16 +936,12 @@ Email: <code>{email_display}</code> ({email_source})
 Password: <code>{password_value}</code> ({password_source})
 
 <b>📤 Upload:</b>
-Folder: <code>{upload_folder_display}</code> ({upload_folder_source})
-Public: <b>{"✅" if public_links else "❌"}</b> | Private: <b>{"✅" if private_links else "❌"}</b> | Unlisted: <b>{"✅" if unlisted_links else "❌"}</b>
-Expiry: <code>{expiry_display}</code> ({expiry_days_source})
-Password: <code>{password_display}</code> ({upload_password_source})
-Encryption: <code>{encryption_display}</code> ({encryption_key_source})
-Thumbnails: <b>{"✅" if thumbnails else "❌"}</b> | Delete After: <b>{"✅" if delete_after else "❌"}</b>
+Folder: <b>📁 Using Folder Selector</b>
+Public Links: <b>{"✅ Enabled" if public_links else "❌ Disabled"}</b>
+Thumbnails: <b>{"✅ Enabled" if thumbnails else "❌ Disabled"}</b> | Delete After: <b>🗑️ Always Delete</b>
 
-<b>🔄 Clone:</b>
-Folder: <code>{clone_folder_display}</code> ({clone_folder_source})
-Preserve Structure: <b>{"✅" if preserve_structure else "❌"}</b> | Overwrite: <b>{"✅" if overwrite_files else "❌"}</b>
+<b>ℹ️ Note:</b> Private/Unlisted links, Password protection, Link expiry, and Custom encryption are not supported by MEGA SDK v4.8.0
+
 
 <i>Your settings override owner settings. Set your own MEGA credentials to use your account.</i>
 """
@@ -1543,8 +1455,8 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
             # Only show DDL Settings button if DDL is enabled
             if Config.DDL_ENABLED:
                 buttons.data_button("🔗 DDL", f"userset {user_id} ddl")
-        # Only show AI Settings button if Extra Modules are enabled
-        if Config.ENABLE_EXTRA_MODULES:
+        # Only show AI Settings button if AI is enabled
+        if Config.AI_ENABLED:
             buttons.data_button("AI Settings", f"userset {user_id} ai")
 
         upload_paths = user_dict.get("UPLOAD_PATHS", {})
@@ -2418,15 +2330,41 @@ async def edit_user_settings(client, query):
     user_id = from_user.id
     name = from_user.mention
     message = query.message
+
+    # Safely handle query.data splitting with error checking
+    if not query.data:
+        LOGGER.error(f"Empty query.data received from user {user_id}")
+        await query.answer("Invalid request!", show_alert=True)
+        return
+
     data = query.data.split()
+    if len(data) < 2:
+        LOGGER.error(f"Insufficient data in query from user {user_id}: {query.data}")
+        await query.answer("Invalid request format!", show_alert=True)
+        return
+
     handler_dict[user_id] = False
     thumb_path = f"thumbnails/{user_id}.jpg"
     rclone_conf = f"rclone/{user_id}.conf"
     token_pickle = f"tokens/{user_id}.pickle"
     user_dict = user_data.get(user_id, {})
-    if user_id != int(data[1]):
-        await query.answer("Not Yours!", show_alert=True)
+
+    try:
+        if user_id != int(data[1]):
+            await query.answer("Not Yours!", show_alert=True)
+            return
+    except (ValueError, IndexError) as e:
+        LOGGER.error(f"Error parsing user_id from query data {data}: {e}")
+        await query.answer("Invalid user data!", show_alert=True)
         return
+    # Ensure we have enough data elements for the operations
+    if len(data) < 3:
+        LOGGER.error(
+            f"Insufficient data elements in query from user {user_id}: {query.data}"
+        )
+        await query.answer("Invalid request format!", show_alert=True)
+        return
+
     if data[2] == "setevent":
         await query.answer()
     elif data[2] in [
@@ -2549,8 +2487,15 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
         await edit_message(message, text, buttons.build_menu(2))
-    elif data[2] == "cookies_manage" and len(data) > 3:
+    elif data[2] == "cookies_manage":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(
+                f"Missing cookie number in cookies_manage request from user {user_id}"
+            )
+            await query.answer("Invalid cookie management request!", show_alert=True)
+            return
+
         cookie_num = data[3]
         cookie_path = f"cookies/{user_id}_{cookie_num}.txt"
 
@@ -2570,8 +2515,15 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         buttons.data_button("Back", f"userset {user_id} cookies_main")
         buttons.data_button("Close", f"userset {user_id} close")
         await edit_message(message, text, buttons.build_menu(1))
-    elif data[2] == "cookies_remove" and len(data) > 3:
+    elif data[2] == "cookies_remove":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(
+                f"Missing cookie number in cookies_remove request from user {user_id}"
+            )
+            await query.answer("Invalid cookie removal request!", show_alert=True)
+            return
+
         cookie_num = data[3]
         cookie_path = f"cookies/{user_id}_{cookie_num}.txt"
 
@@ -2608,9 +2560,17 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         await edit_message(message, text, buttons.build_menu(2))
     elif data[2] == "menu":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(f"Missing menu option in request from user {user_id}")
+            await query.answer("Invalid menu request!", show_alert=True)
+            return
         await get_menu(data[3], message, user_id)
     elif data[2] == "tog":
         await query.answer()
+        if len(data) <= 4:
+            LOGGER.error(f"Missing toggle parameters in request from user {user_id}")
+            await query.answer("Invalid toggle request!", show_alert=True)
+            return
         update_user_ldata(user_id, data[3], data[4] == "t")
         if data[3] == "STOP_DUPLICATE":
             back_to = "gdrive"
@@ -2618,12 +2578,10 @@ Cookies allow you to access restricted YouTube content and other sites that requ
             back_to = "main"
         elif data[3] in [
             "MEGA_UPLOAD_PUBLIC",
-            "MEGA_UPLOAD_PRIVATE",
-            "MEGA_UPLOAD_UNLISTED",
+            # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+            # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
             "MEGA_UPLOAD_THUMBNAIL",
-            "MEGA_UPLOAD_DELETE_AFTER",
-            "MEGA_CLONE_PRESERVE_STRUCTURE",
-            "MEGA_CLONE_OVERWRITE",
+            # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
         ]:
             back_to = "mega"
         elif data[3] in [
@@ -2647,6 +2605,10 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         await database.update_user_data(user_id)
     elif data[2] == "help":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(f"Missing help topic in request from user {user_id}")
+            await query.answer("Invalid help request!", show_alert=True)
+            return
         buttons = ButtonMaker()
         if data[3] == "USER_COOKIES":
             text = """<b>User Cookies Help</b>
@@ -2671,6 +2633,10 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await edit_message(message, text, buttons.build_menu(2))
     elif data[2] == "file":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(f"Missing file type in request from user {user_id}")
+            await query.answer("Invalid file request!", show_alert=True)
+            return
         buttons = ButtonMaker()
         if data[3] == "THUMBNAIL":
             text = "Send a photo to save it as custom thumbnail. Timeout: 60 sec"
@@ -2693,6 +2659,12 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         )
         await get_menu(data[3], message, user_id)
     elif data[2] == "setprovider":
+        if len(data) <= 3:
+            LOGGER.error(
+                f"Missing provider in setprovider request from user {user_id}"
+            )
+            await query.answer("Invalid provider request!", show_alert=True)
+            return
         await query.answer(f"Setting default AI provider to {data[3].capitalize()}")
         # Update the default AI provider in user settings
         user_dict["DEFAULT_AI_PROVIDER"] = data[3]
@@ -2702,6 +2674,10 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await update_user_settings(query, "ai")
     elif data[2] == "var":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(f"Missing variable name in var request from user {user_id}")
+            await query.answer("Invalid variable request!", show_alert=True)
+            return
         buttons = ButtonMaker()
         if data[3] in user_settings_text:
             text = user_settings_text[data[3]]
@@ -2754,6 +2730,12 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         else:
             await update_user_settings(query, "back")
     elif data[2] in ["set", "addone", "rmone"]:
+        if len(data) <= 3:
+            LOGGER.error(
+                f"Missing option name in {data[2]} request from user {user_id}"
+            )
+            await query.answer("Invalid request format!", show_alert=True)
+            return
         # Special handling for DEFAULT_AI_PROVIDER
         if data[2] == "set" and data[3] == "DEFAULT_AI_PROVIDER":
             await query.answer()
@@ -2798,6 +2780,12 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await get_menu(data[3], message, user_id)
     elif data[2] == "remove":
         await query.answer("Removed!", show_alert=True)
+        if len(data) <= 3:
+            LOGGER.error(
+                f"Missing option name in remove request from user {user_id}"
+            )
+            await query.answer("Invalid remove request!", show_alert=True)
+            return
         if data[3] in [
             "THUMBNAIL",
             "RCLONE_CONFIG",
@@ -2848,6 +2836,10 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
             await database.update_user_data(user_id)
     elif data[2] == "reset":
         await query.answer("Reseted!", show_alert=True)
+        if len(data) <= 3:
+            LOGGER.error(f"Missing option name in reset request from user {user_id}")
+            await query.answer("Invalid reset request!", show_alert=True)
+            return
         if data[3] == "ai":
             # Reset all AI settings
             for key in ai_options:
@@ -2900,6 +2892,10 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         await database.update_user_data(user_id)
     elif data[2] == "view":
         await query.answer()
+        if len(data) <= 3:
+            LOGGER.error(f"Missing option name in view request from user {user_id}")
+            await query.answer("Invalid view request!", show_alert=True)
+            return
         if data[3] == "THUMBNAIL":
             if await aiopath.exists(thumb_path):
                 msg = await send_file(message, thumb_path, name)

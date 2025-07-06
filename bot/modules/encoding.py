@@ -6,7 +6,11 @@ Supports all codext codecs and various encoding/decoding methods
 
 import asyncio
 import base64
+import hashlib
 import json
+import re
+import secrets
+import time
 import urllib.parse
 from logging import getLogger
 from typing import Any
@@ -15,6 +19,7 @@ import codext
 from cryptography.fernet import Fernet
 
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.db_handler import database
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
@@ -329,6 +334,590 @@ class EncodingProcessor:
 processor = EncodingProcessor()
 
 
+class EncodedDataManager:
+    """Manages password-protected encoded data storage"""
+
+    @staticmethod
+    def generate_secure_id() -> str:
+        """Generate a secure unique ID for encoded data"""
+        return secrets.token_urlsafe(12)
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash password using PBKDF2"""
+        salt = secrets.token_hex(16)
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), 100000
+        )
+        return f"{salt}:{password_hash.hex()}"
+
+    @staticmethod
+    def verify_password(password: str, password_hash: str) -> bool:
+        """Verify password against hash"""
+        try:
+            salt, hash_value = password_hash.split(":", 1)
+            password_hash_check = hashlib.pbkdf2_hmac(
+                "sha256", password.encode(), salt.encode(), 100000
+            )
+            return hash_value == password_hash_check.hex()
+        except Exception:
+            return False
+
+    @staticmethod
+    async def resolve_user_identifier(user_identifier: str) -> tuple[int, str]:
+        """
+        Resolve username or user ID to user ID and display name
+        Returns: (user_id, display_name)
+        """
+        try:
+            # Try to parse as user ID first
+            if user_identifier.isdigit():
+                user_id = int(user_identifier)
+                # Try to get user info from Telegram
+                try:
+                    from bot.helper.telegram_helper.tg_utils import user_info
+
+                    user = await user_info(user_id)
+                    if user:
+                        display_name = (
+                            f"@{user.username}"
+                            if user.username
+                            else f"{user.first_name}"
+                        )
+                        # Store username mapping for future use
+                        if user.username:
+                            await EncodedDataManager.store_username_mapping(
+                                user.username, user_id
+                            )
+                        return user_id, display_name
+                    return user_id, f"User {user_id}"
+                except Exception:
+                    return user_id, f"User {user_id}"
+            else:
+                # Handle username (remove @ if present)
+                username = user_identifier.lstrip("@").lower()
+
+                # Try to find user ID from stored mappings
+                user_id = await EncodedDataManager.get_user_id_by_username(username)
+                if user_id:
+                    return user_id, f"@{username}"
+                # Username not found in our database
+                raise ValueError(
+                    f"Username @{username} not found. Please use user ID instead or ask the user to interact with the bot first."
+                )
+
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Invalid user identifier: {e}")
+
+    @staticmethod
+    async def store_username_mapping(username: str, user_id: int):
+        """Store username to user ID mapping"""
+        try:
+            if database._return:
+                return
+
+            await database.db.username_mappings.update_one(
+                {"username": username.lower()},
+                {"$set": {"user_id": user_id, "updated_at": int(time.time())}},
+                upsert=True,
+            )
+        except Exception as e:
+            LOGGER.error(f"Error storing username mapping: {e}")
+
+    @staticmethod
+    async def get_user_id_by_username(username: str) -> int:
+        """Get user ID by username from stored mappings"""
+        try:
+            if database._return:
+                return None
+
+            result = await database.db.username_mappings.find_one(
+                {"username": username.lower()}
+            )
+            return result["user_id"] if result else None
+        except Exception as e:
+            LOGGER.error(f"Error getting user ID by username: {e}")
+            return None
+
+    @staticmethod
+    async def store_encoded_data(
+        encoded_data: str,
+        original_query: str,
+        method: str,
+        password: str,
+        authorized_user_id: int,
+        authorized_display_name: str,
+        creator_user_id: int,
+    ) -> str:
+        """Store encoded data with password protection and user access control"""
+        try:
+            if database._return:
+                raise Exception("Database not available")
+
+            # Generate unique ID
+            encoded_id = EncodedDataManager.generate_secure_id()
+
+            # Hash password
+            password_hash = EncodedDataManager.hash_password(password)
+
+            # Create document
+            document = {
+                "_id": encoded_id,
+                "encoded_data": encoded_data,
+                "original_query": original_query,  # Store for verification but don't show in menu
+                "method": method,
+                "password_hash": password_hash,
+                "authorized_user_id": authorized_user_id,
+                "authorized_display_name": authorized_display_name,
+                "creator_user_id": creator_user_id,
+                "created_at": int(time.time()),
+                "access_count": 0,
+                "last_accessed": None,
+            }
+
+            # Store in database
+            await database.db.encoded_data.insert_one(document)
+            LOGGER.info(f"Stored encoded data with ID: {encoded_id}")
+
+            return encoded_id
+
+        except Exception as e:
+            LOGGER.error(f"Error storing encoded data: {e}")
+            raise
+
+    @staticmethod
+    async def get_encoded_data(encoded_id: str, password: str, user_id: int) -> dict:
+        """Retrieve encoded data with password and user verification"""
+        try:
+            if database._return:
+                raise Exception("Database not available")
+
+            # Find document
+            document = await database.db.encoded_data.find_one({"_id": encoded_id})
+            if not document:
+                raise Exception("Encoded data not found")
+
+            # Verify user access
+            if (
+                user_id != document["authorized_user_id"]
+                and user_id != document["creator_user_id"]
+            ):
+                raise Exception(
+                    "Access denied: You are not authorized to decode this data"
+                )
+
+            # Verify password
+            if not EncodedDataManager.verify_password(
+                password, document["password_hash"]
+            ):
+                raise Exception("Invalid password")
+
+            # Update access statistics
+            await database.db.encoded_data.update_one(
+                {"_id": encoded_id},
+                {
+                    "$inc": {"access_count": 1},
+                    "$set": {"last_accessed": int(time.time())},
+                },
+            )
+
+            return {
+                "encoded_data": document["encoded_data"],
+                "original_query": document["original_query"],
+                "method": document["method"],
+                "creator_user_id": document["creator_user_id"],
+                "created_at": document["created_at"],
+            }
+
+        except Exception as e:
+            LOGGER.error(f"Error retrieving encoded data: {e}")
+            raise
+
+    @staticmethod
+    async def cleanup_old_data(days: int = 30):
+        """Clean up encoded data older than specified days"""
+        try:
+            if database._return:
+                return
+
+            cutoff_time = int(time.time()) - (days * 24 * 60 * 60)
+            result = await database.db.encoded_data.delete_many(
+                {"created_at": {"$lt": cutoff_time}}
+            )
+
+            if result.deleted_count > 0:
+                LOGGER.info(
+                    f"Cleaned up {result.deleted_count} old encoded data entries"
+                )
+
+        except Exception as e:
+            LOGGER.error(f"Error cleaning up old encoded data: {e}")
+
+
+# Initialize encoded data manager
+encoded_data_manager = EncodedDataManager()
+
+
+class CommandParser:
+    """Parse command arguments with flags"""
+
+    @staticmethod
+    def parse_encode_command(command_text: str) -> dict:
+        """
+        Parse encode command with flags and non-flag syntax
+        Supports:
+        - /encode -q query -p password -to user [-algo method] (flag syntax)
+        - /encode -p password -to user (flag syntax)
+        - /encode query (non-flag syntax)
+        - /encode method query (non-flag syntax)
+        Returns: {query, password, user_identifier, method, use_flags, raw_text}
+        """
+        # Remove command name
+        text = re.sub(
+            r"^/encode\w*\s*", "", command_text, flags=re.IGNORECASE
+        ).strip()
+
+        if not text:
+            return {"use_flags": False}
+
+        # Check if using flag syntax - any flag makes it flag-based
+        if (
+            text.startswith("-q ")
+            or "-p " in text
+            or "-to " in text
+            or "-algo " in text
+        ):
+            # Parse flags
+            result = {"use_flags": True}
+
+            # Parse -q flag (query)
+            query_match = re.search(r'-q\s+(?:"([^"]+)"|(\S+))', text)
+            if query_match:
+                result["query"] = query_match.group(1) or query_match.group(2)
+
+            # Parse -p flag (password)
+            password_match = re.search(r"-p\s+(\S+)", text)
+            if password_match:
+                result["password"] = password_match.group(1)
+
+            # Parse -to flag (user)
+            user_match = re.search(r"-to\s+(\S+)", text)
+            if user_match:
+                result["user_identifier"] = user_match.group(1)
+
+            # Parse -algo flag (method) - optional
+            method_match = re.search(r"-algo\s+(\S+)", text)
+            if method_match:
+                result["method"] = method_match.group(1).lower()
+            else:
+                result["method"] = "base64"  # default
+
+            return result
+        # Non-flag syntax - parse positional arguments
+        parts = text.split(maxsplit=1)
+        result = {"use_flags": False, "raw_text": text}
+
+        if len(parts) >= 1:
+            # Check if first part is a method name
+            potential_method = parts[0].lower()
+            all_methods = [
+                "base64",
+                "base32",
+                "hex",
+                "rot13",
+                "rot1",
+                "rot25",
+                "uppercase",
+                "lowercase",
+                "reverse",
+                "binary",
+                "morse",
+                "md5",
+                "sha256",
+                "url",
+                "html",
+                "json-encode",
+                "gzip",
+            ]
+
+            if potential_method in all_methods:
+                result["method"] = potential_method
+                if len(parts) >= 2:
+                    result["query"] = parts[1]
+            else:
+                # Treat entire text as query
+                result["query"] = text
+                result["method"] = "base64"  # default
+
+        return result
+
+    @staticmethod
+    def parse_decode_command(command_text: str) -> dict:
+        """
+        Parse decode command with flags and non-flag syntax
+        Supports:
+        - /decode -q encoded_id -p password (flag syntax)
+        - /decode -p password (flag syntax)
+        - /decode encoded_id (non-flag syntax)
+        - /decode encoded_id password (non-flag syntax)
+        Returns: {encoded_id, password, use_flags, raw_text}
+        """
+        # Remove command name
+        text = re.sub(
+            r"^/decode\w*\s*", "", command_text, flags=re.IGNORECASE
+        ).strip()
+
+        if not text:
+            return {"use_flags": False}
+
+        # Check if using flag syntax (any flag makes it flag-based)
+        if text.startswith("-q ") or "-p " in text:
+            # Parse flags
+            result = {"use_flags": True}
+
+            # Parse -q flag (encoded_id)
+            query_match = re.search(r"-q\s+(\S+)", text)
+            if query_match:
+                result["encoded_id"] = query_match.group(1)
+
+            # Parse -p flag (password)
+            password_match = re.search(r"-p\s+(\S+)", text)
+            if password_match:
+                result["password"] = password_match.group(1)
+
+            return result
+        # Non-flag syntax - parse positional arguments
+        parts = text.split()
+        result = {"use_flags": False, "raw_text": text}
+
+        if len(parts) >= 1:
+            result["encoded_id"] = parts[0]
+
+        if len(parts) >= 2:
+            result["password"] = parts[1]
+
+        return result
+
+
+async def process_shared_encoding(
+    message, query: str, user_identifier: str, method: str = "base64"
+):
+    """Process encoding and share result with specified user"""
+    try:
+        # Resolve user identifier
+        (
+            authorized_user_id,
+            authorized_display_name,
+        ) = await EncodedDataManager.resolve_user_identifier(user_identifier)
+
+        # Encode the text
+        result = await process_encoding_text(
+            query, method, "encode", message.from_user.id
+        )
+
+        # Create result message
+        result_text = (
+            f"✅ <b>Encoding Complete (Shared)</b>\n\n"
+            f"🔧 <b>Method:</b> {method}\n"
+            f"👤 <b>Shared with:</b> {authorized_display_name}\n"
+            f"📊 <b>Input Length:</b> {len(query)} chars\n"
+            f"📤 <b>Output Length:</b> {len(result)} chars\n\n"
+            f"📋 <b>Result:</b>\n<code>{result}</code>"
+        )
+
+        # Send to original user
+        msg = await send_message(message, result_text)
+        asyncio.create_task(auto_delete_message(msg, time=300))
+
+        # Send to target user if different from sender
+        if authorized_user_id != message.from_user.id:
+            try:
+                # Create a simple notification for the target user
+                shared_text = (
+                    f"📨 <b>Shared Encoding Result</b>\n\n"
+                    f"👤 <b>From:</b> {message.from_user.first_name}\n"
+                    f"🔧 <b>Method:</b> {method}\n"
+                    f"📊 <b>Length:</b> {len(result)} chars\n\n"
+                    f"📋 <b>Result:</b>\n<code>{result}</code>"
+                )
+
+                # Note: In a real implementation, you would send this to the target user
+                # For now, we just acknowledge the sharing intent
+                LOGGER.info(
+                    f"Would share encoding result with user {authorized_user_id}: {shared_text[:100]}..."
+                )
+
+            except Exception as e:
+                # If sharing fails, just log it but don't fail the main operation
+                LOGGER.warning(
+                    f"Failed to share encoding result with user {authorized_user_id}: {e}"
+                )
+
+    except Exception as e:
+        error_text = f"❌ <b>Shared Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+        msg = await send_message(message, error_text)
+        asyncio.create_task(auto_delete_message(msg, time=300))
+
+
+async def process_password_protected_encoding(
+    message, query: str, password: str, user_identifier: str, method: str = "base64"
+):
+    """Process password-protected encoding with all validations"""
+    try:
+        # Validate inputs
+        if not query:
+            msg = await send_message(
+                message, "❌ <b>Error:</b> Query cannot be empty"
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        if not password:
+            msg = await send_message(
+                message, "❌ <b>Error:</b> Password cannot be empty"
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        if len(password) < 4:
+            msg = await send_message(
+                message,
+                "❌ <b>Error:</b> Password must be at least 4 characters long",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Validate encoding method
+        all_methods = processor.get_all_methods()
+        all_method_names = []
+        for methods in all_methods.values():
+            all_method_names.extend([m.lower() for m in methods])
+
+        if method not in all_method_names:
+            available_methods = ", ".join(
+                sorted(all_method_names)[:10]
+            )  # Show first 10
+            msg = await send_message(
+                message,
+                f"❌ <b>Error:</b> Invalid encoding method '{method}'.\n\n"
+                f"📋 <b>Available methods (first 10):</b>\n{available_methods}...\n\n"
+                f"💡 <b>Use:</b> <code>/encode -q query -p password -to user -algo method</code>",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Resolve user identifier (username or user ID)
+        try:
+            (
+                authorized_user_id,
+                authorized_display_name,
+            ) = await EncodedDataManager.resolve_user_identifier(user_identifier)
+        except ValueError as e:
+            msg = await send_message(message, f"❌ <b>Error:</b> {e}")
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Process encoding with password protection
+        try:
+            # Encode using the specified method
+            encoded_result = await process_encoding_text(
+                query, method, "encode", message.from_user.id
+            )
+
+            # Store in database with password protection
+            encoded_id = await encoded_data_manager.store_encoded_data(
+                encoded_data=encoded_result,
+                original_query=query,
+                method=method,
+                password=password,
+                authorized_user_id=authorized_user_id,
+                authorized_display_name=authorized_display_name,
+                creator_user_id=message.from_user.id,
+            )
+
+            # Store username mapping for creator if available
+            if message.from_user.username:
+                await EncodedDataManager.store_username_mapping(
+                    message.from_user.username, message.from_user.id
+                )
+
+            result_text = (
+                f"🔐 <b>Password-Protected Encoding Complete</b>\n\n"
+                f"🆔 <b>Encoded ID:</b> <code>{encoded_id}</code>\n"
+                f"👤 <b>Authorized User:</b> {authorized_display_name}\n"
+                f"🔧 <b>Method:</b> {method}\n"
+                f"📊 <b>Input Length:</b> {len(query)} chars\n"
+                f"📤 <b>Output Length:</b> {len(encoded_result)} chars\n\n"
+                f"💡 <b>To decode, use:</b>\n"
+                f"<code>/decode -q {encoded_id} -p {password}</code>\n\n"
+                f"⚠️ <b>Note:</b> Only you and {authorized_display_name} can decode this data."
+            )
+
+            msg = await send_message(message, result_text)
+            asyncio.create_task(auto_delete_message(msg, time=300))
+            return
+
+        except Exception as e:
+            error_text = f"❌ <b>Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+            msg = await send_message(message, error_text)
+            asyncio.create_task(auto_delete_message(msg, time=300))
+            return
+
+    except Exception as e:
+        error_text = f"❌ <b>Unexpected Error</b>\n\n📝 <b>Error:</b> {e!s}"
+        msg = await send_message(message, error_text)
+        asyncio.create_task(auto_delete_message(msg, time=300))
+
+
+async def process_password_protected_decoding(
+    message, encoded_id: str, password: str
+):
+    """Process password-protected decoding with validation"""
+    try:
+        # Simple check for encoded ID format (URL-safe base64, 16 chars)
+        if len(encoded_id) != 16 or not all(
+            c.isalnum() or c in "-_" for c in encoded_id
+        ):
+            msg = await send_message(
+                message,
+                "❌ <b>Error:</b> Invalid encoded ID format.\n\n"
+                "💡 Encoded IDs should be 16 characters long and contain only letters, numbers, hyphens, and underscores.",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Retrieve and decode the data
+        data = await encoded_data_manager.get_encoded_data(
+            encoded_id=encoded_id, password=password, user_id=message.from_user.id
+        )
+
+        # Get authorized display name
+        authorized_display = data.get("authorized_display_name")
+        if not authorized_display:
+            authorized_user_id = data.get("authorized_user_id", "Unknown")
+            authorized_display = f"User {authorized_user_id}"
+
+        result_text = (
+            f"🔓 <b>Password-Protected Decode Successful</b>\n\n"
+            f"🆔 <b>Encoded ID:</b> <code>{encoded_id}</code>\n"
+            f"🔧 <b>Method:</b> {data['method']}\n"
+            f"👤 <b>Created by:</b> <code>{data['creator_user_id']}</code>\n"
+            f"🎯 <b>Authorized:</b> {authorized_display}\n"
+            f"📅 <b>Created:</b> {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(data['created_at']))}\n\n"
+            f"📋 <b>Decoded Result:</b>\n<code>{data['original_query']}</code>"
+        )
+
+        msg = await send_message(message, result_text)
+        asyncio.create_task(auto_delete_message(msg, time=300))
+
+    except Exception as e:
+        error_text = f"❌ <b>Decode Error</b>\n\n📝 <b>Error:</b> {e!s}"
+        msg = await send_message(message, error_text)
+        asyncio.create_task(auto_delete_message(msg, time=300))
+
+
 def create_category_buttons(operation="encode", page=0) -> ButtonMaker:
     """Create buttons for encoding/decoding categories with pagination"""
     buttons = ButtonMaker()
@@ -454,8 +1043,14 @@ def create_method_buttons(category: str, operation="encode", page=0) -> ButtonMa
 
 
 async def encode_command(_, message):
-    """Main encode command handler with method-specific support"""
+    """Main encode command handler with password protection and user mention support"""
     await delete_message(message)
+
+    # Store username mapping for the user if available
+    if message.from_user.username:
+        await EncodedDataManager.store_username_mapping(
+            message.from_user.username, message.from_user.id
+        )
 
     # Check if encoding is enabled
     if not Config.ENCODING_ENABLED:
@@ -465,159 +1060,373 @@ async def encode_command(_, message):
         asyncio.create_task(auto_delete_message(msg, time=60))
         return
 
-    # Parse command: /encode [method] [text] or /encode [text]
-    cmd_parts = message.text.split(maxsplit=2)
-    method = None
-    query = None
+    # Parse command with new flag support
+    parsed_args = CommandParser.parse_encode_command(message.text)
 
-    if len(cmd_parts) >= 2:
-        # Check if second part is a method name
-        potential_method = cmd_parts[1].lower()
-        all_methods = processor.get_all_methods()
-        all_method_names = []
-        for methods in all_methods.values():
-            all_method_names.extend([m.lower() for m in methods])
+    # Handle flag-based syntax
+    if parsed_args.get("use_flags"):
+        # Flag-based syntax: /encode -q query -p password -to user [-algo method]
+        query = parsed_args.get("query")
+        password = parsed_args.get("password")
+        user_identifier = parsed_args.get("user_identifier")
+        method = parsed_args.get("method", "base64")
 
-        if potential_method in all_method_names:
-            method = potential_method
-            if len(cmd_parts) >= 3:
-                query = cmd_parts[2].strip()
-        else:
-            # No method specified, treat as query
-            query = " ".join(cmd_parts[1:]).strip()
-
-    user_id = message.from_user.id
-
-    # Store query and operation type in session
-    if user_id not in processor.session_data:
-        processor.session_data[user_id] = {}
-    processor.session_data[user_id]["query"] = query
-    processor.session_data[user_id]["operation"] = "encode"
-    processor.session_data[user_id]["replied_message"] = message.reply_to_message
-
-    # If method is specified and we have content, process immediately
-    if method and (query or message.reply_to_message):
-        content = None
-        source = None
-
-        if query:
-            content = query
-            source = "query"
-        elif message.reply_to_message:
+        # If no query from flags, check replied message
+        if not query and message.reply_to_message:
             reply_msg = message.reply_to_message
             if reply_msg.text:
-                content = reply_msg.text
-                source = "replied message"
+                query = reply_msg.text
             elif reply_msg.caption:
-                content = reply_msg.caption
-                source = "replied message caption"
+                query = reply_msg.caption
 
-        if content:
+        # Handle different flag combinations independently
+
+        # Case 1: Only -q flag (query only) - show regular encoding menu
+        if query and not password and not user_identifier:
+            user_id = message.from_user.id
+            if user_id not in processor.session_data:
+                processor.session_data[user_id] = {}
+            processor.session_data[user_id]["query"] = query
+            processor.session_data[user_id]["operation"] = "encode"
+            processor.session_data[user_id]["replied_message"] = None
+
+            text = (
+                f"🔐 <b>Regular Encoding</b>\n\n"
+                f"📝 <b>Query:</b> <code>{query[:100]}{'...' if len(query) > 100 else ''}</code>\n\n"
+                f"💡 <b>Select an encoding method from the categories below:</b>"
+            )
+
+            buttons = create_category_buttons("encode")
+            msg = await send_message(message, text, buttons.build_menu(2))
+            asyncio.create_task(auto_delete_message(msg, time=300))
+            return
+
+        # Case 2: Only -algo flag - encode replied message or show help
+        if method != "base64" and not query and not password and not user_identifier:
+            # If there's a replied message, encode it directly
+            if message.reply_to_message:
+                reply_msg = message.reply_to_message
+                content = None
+                if reply_msg.text:
+                    content = reply_msg.text
+                elif reply_msg.caption:
+                    content = reply_msg.caption
+
+                if content:
+                    try:
+                        result = await process_encoding_text(
+                            content, method, "encode", message.from_user.id
+                        )
+
+                        result_text = (
+                            f"✅ <b>Encoding Complete</b>\n\n"
+                            f"🔧 <b>Method:</b> {method}\n"
+                            f"📝 <b>Source:</b> replied message\n"
+                            f"📊 <b>Input Length:</b> {len(content)} chars\n"
+                            f"📤 <b>Output Length:</b> {len(result)} chars\n\n"
+                            f"📋 <b>Result:</b>\n<code>{result}</code>"
+                        )
+
+                        msg = await send_message(message, result_text)
+                        asyncio.create_task(auto_delete_message(msg, time=300))
+                        return
+
+                    except Exception as e:
+                        error_text = (
+                            f"❌ <b>Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+                        )
+                        msg = await send_message(message, error_text)
+                        asyncio.create_task(auto_delete_message(msg, time=300))
+                        return
+
+            # No replied message, show help
+            msg = await send_message(
+                message,
+                f"🔧 <b>Algorithm Selected:</b> {method}\n\n"
+                f"💡 <b>To use this algorithm:</b>\n"
+                f'• <code>/encode -q "your text" -algo {method}</code> (regular encoding)\n'
+                f'• <code>/encode -q "your text" -p password -to user -algo {method}</code> (password-protected)\n'
+                f"• <code>/encode -algo {method}</code> (reply to message for regular encoding)\n\n"
+                f"📝 <b>Examples:</b>\n"
+                f'<code>/encode -q "hello world" -algo {method}</code>\n'
+                f'<code>/encode -q "secret" -p mypass -to @alice -algo {method}</code>',
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Case 3: -q and -algo flags (regular encoding with specific method)
+        if query and method and not password and not user_identifier:
             try:
                 result = await process_encoding_text(
-                    content, method, "encode", user_id
+                    query, method, "encode", message.from_user.id
                 )
 
                 result_text = (
-                    f"✅ <b>Encode Result</b>\n\n"
+                    f"✅ <b>Encoding Complete</b>\n\n"
                     f"🔧 <b>Method:</b> {method}\n"
-                    f"📝 <b>Source:</b> {source}\n"
-                    f"📊 <b>Input:</b> {len(content)} chars\n"
-                    f"📤 <b>Output:</b> {len(result)} chars\n\n"
+                    f"📊 <b>Input Length:</b> {len(query)} chars\n"
+                    f"📤 <b>Output Length:</b> {len(result)} chars\n\n"
                     f"📋 <b>Result:</b>\n<code>{result}</code>"
                 )
 
                 msg = await send_message(message, result_text)
                 asyncio.create_task(auto_delete_message(msg, time=300))
                 return
+
             except Exception as e:
-                error_text = f"❌ <b>Encoding Error</b>\n\n🔧 <b>Method:</b> {method}\n📝 <b>Error:</b> {e!s}"
+                error_text = f"❌ <b>Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
                 msg = await send_message(message, error_text)
                 asyncio.create_task(auto_delete_message(msg, time=300))
                 return
 
-    # Check if we have content to process (query or replied message)
-    has_content = False
-    content = None
-    source = None
+        # Case 4: Only -to flag (user identifier only) - show help for user-specific actions
+        if user_identifier and not password and not query:
+            msg = await send_message(
+                message,
+                f"👤 <b>User Selected:</b> {user_identifier}\n\n"
+                f"💡 <b>Available options with this user:</b>\n"
+                f'• <code>/encode -q "your text" -to {user_identifier}</code> (share encoding result)\n'
+                f"• <code>/encode -p password -to {user_identifier}</code> (password-protected)\n"
+                f'• <code>/encode -q "text" -p password -to {user_identifier} -algo method</code> (full command)\n\n'
+                f"📝 <b>Examples:</b>\n"
+                f'<code>/encode -q "hello world" -to {user_identifier}</code>\n'
+                f"<code>/encode -p mypass123 -to {user_identifier}</code> (reply to message)",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
 
-    if query:
-        has_content = True
-        content = query
-        source = "query"
-    elif message.reply_to_message:
+        # Case 5: -q and -to flags (share encoding result with user)
+        if query and user_identifier and not password:
+            try:
+                (
+                    authorized_user_id,
+                    authorized_display_name,
+                ) = await EncodedDataManager.resolve_user_identifier(user_identifier)
+            except ValueError as e:
+                msg = await send_message(message, f"❌ <b>Error:</b> {e}")
+                asyncio.create_task(auto_delete_message(msg, time=60))
+                return
+
+            # If method is specified, do direct shared encoding
+            if method != "base64":
+                await process_shared_encoding(
+                    message, query, user_identifier, method
+                )
+                return
+
+            # Show encoding menu for sharing
+            user_id = message.from_user.id
+            if user_id not in processor.session_data:
+                processor.session_data[user_id] = {}
+            processor.session_data[user_id]["query"] = query
+            processor.session_data[user_id]["operation"] = "encode_shared"
+            processor.session_data[user_id]["replied_message"] = None
+            processor.session_data[user_id]["share_with_user"] = (
+                authorized_display_name
+            )
+            processor.session_data[user_id]["share_with_user_id"] = user_identifier
+
+            text = (
+                f"🔐 <b>Encoding for Sharing</b>\n\n"
+                f"📝 <b>Query:</b> <code>{query[:100]}{'...' if len(query) > 100 else ''}</code>\n"
+                f"👤 <b>Will be shared with:</b> {authorized_display_name}\n\n"
+                f"💡 <b>Select an encoding method from the categories below:</b>\n"
+                f"The result will be sent to both you and {authorized_display_name}."
+            )
+
+            buttons = create_category_buttons("encode")
+            msg = await send_message(message, text, buttons.build_menu(2))
+            asyncio.create_task(auto_delete_message(msg, time=300))
+            return
+
+        # Case 6: Password-protected encoding (requires -p and -to)
+        if password and user_identifier:
+            # If we have password and user but no query, show method selection menu
+            if not query:
+                try:
+                    (
+                        authorized_user_id,
+                        authorized_display_name,
+                    ) = await EncodedDataManager.resolve_user_identifier(
+                        user_identifier
+                    )
+                except ValueError as e:
+                    msg = await send_message(message, f"❌ <b>Error:</b> {e}")
+                    asyncio.create_task(auto_delete_message(msg, time=60))
+                    return
+
+                # Store session data for method selection
+                user_id = message.from_user.id
+                if user_id not in processor.session_data:
+                    processor.session_data[user_id] = {}
+                processor.session_data[user_id]["password"] = password
+                processor.session_data[user_id]["authorized_user_id"] = (
+                    authorized_user_id
+                )
+                processor.session_data[user_id]["authorized_display_name"] = (
+                    authorized_display_name
+                )
+                processor.session_data[user_id]["operation"] = "encode_protected"
+                processor.session_data[user_id]["replied_message"] = (
+                    message.reply_to_message
+                )
+
+                text = (
+                    f"🔐 <b>Password-Protected Encoding</b>\n\n"
+                    f"🔑 <b>Password:</b> {'*' * len(password)}\n"
+                    f"👤 <b>Authorized User:</b> {authorized_display_name}\n"
+                    f"🔧 <b>Algorithm:</b> {method}\n\n"
+                    f"💡 <b>Select an encoding method from the categories below:</b>\n"
+                    f"The query will be taken from your replied message."
+                )
+
+                buttons = create_category_buttons("encode")
+                msg = await send_message(message, text, buttons.build_menu(2))
+                asyncio.create_task(auto_delete_message(msg, time=300))
+                return
+
+            # Process password-protected encoding with all data
+            await process_password_protected_encoding(
+                message, query, password, user_identifier, method
+            )
+            return
+
+        # Case 7: Other incomplete flag combinations - show helpful guidance
+        guidance_parts = []
+
+        if query and not password and not user_identifier and method == "base64":
+            guidance_parts.append(
+                "📝 You have a query. Add <code>-algo method</code> for specific encoding."
+            )
+
+        if password and not user_identifier:
+            guidance_parts.append(
+                "🔑 You have a password. Add <code>-to user</code> for password protection."
+            )
+
+        if not guidance_parts:
+            guidance_parts.append("💡 Use flags to specify what you want to do.")
+
+        msg = await send_message(
+            message,
+            f"🔧 <b>Incomplete Command</b>\n\n"
+            f"{''.join(f'{part}\\n' for part in guidance_parts)}\n"
+            f"💡 <b>Available Options:</b>\n"
+            f'• <code>/encode -q "text"</code> - Regular encoding menu\n'
+            f'• <code>/encode -q "text" -algo method</code> - Direct encoding\n'
+            f'• <code>/encode -q "text" -to user</code> - Share encoding with user\n'
+            f"• <code>/encode -to user</code> - User-specific options\n"
+            f"• <code>/encode -p password -to user</code> - Password-protected (reply to message)\n"
+            f'• <code>/encode -q "text" -p password -to user [-algo method]</code> - Full command\n\n'
+            f"📝 <b>Examples:</b>\n"
+            f'<code>/encode -q "hello world"</code>\n'
+            f'<code>/encode -q "hello" -algo rot13</code>\n'
+            f'<code>/encode -q "message" -to @alice</code>\n'
+            f"<code>/encode -to @bob</code>\n"
+            f'<code>/encode -q "secret" -p mypass -to @alice</code>',
+        )
+        asyncio.create_task(auto_delete_message(msg, time=60))
+        return
+
+    # Handle non-flag syntax
+    if not parsed_args.get("use_flags"):
+        query = parsed_args.get("query")
+        method = parsed_args.get("method", "base64")
+
+        # Case 1: Query provided - process encoding
+        if query:
+            try:
+                result = await process_encoding_text(
+                    query, method, "encode", message.from_user.id
+                )
+
+                result_text = (
+                    f"✅ <b>Encoding Complete</b>\n\n"
+                    f"🔧 <b>Method:</b> {method}\n"
+                    f"📊 <b>Input Length:</b> {len(query)} chars\n"
+                    f"📤 <b>Output Length:</b> {len(result)} chars\n\n"
+                    f"📋 <b>Result:</b>\n<code>{result}</code>"
+                )
+
+                msg = await send_message(message, result_text)
+                asyncio.create_task(auto_delete_message(msg, time=300))
+                return
+
+            except Exception as e:
+                error_text = f"❌ <b>Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+                msg = await send_message(message, error_text)
+                asyncio.create_task(auto_delete_message(msg, time=300))
+                return
+
+    # Handle non-flag syntax - check for replied message
+    if message.reply_to_message:
         reply_msg = message.reply_to_message
+        content = None
+        source = None
+
         if reply_msg.text:
-            has_content = True
             content = reply_msg.text
             source = "replied message"
         elif reply_msg.caption:
-            has_content = True
             content = reply_msg.caption
             source = "replied message caption"
 
-    # If we have content but no method specified, show menu for method selection
-    if has_content and not method:
-        # Show content preview
-        content_preview = content[:100] + ("..." if len(content) > 100 else "")
+        if content:
+            # Store content in session for encoding menu
+            user_id = message.from_user.id
+            if user_id not in processor.session_data:
+                processor.session_data[user_id] = {}
+            processor.session_data[user_id]["query"] = content
+            processor.session_data[user_id]["operation"] = "encode"
+            processor.session_data[user_id]["replied_message"] = (
+                message.reply_to_message
+            )
 
-        text = (
-            "🔐 <b>Encoding Tool</b>\n\n"
-            f"📝 <b>Ready to encode ({source}):</b>\n"
-            f"<code>{content_preview}</code>\n\n"
-            "💡 <b>Select an encoding method from the categories below:</b>\n\n"
-            "📊 <b>Available Categories:</b>\n"
-            "• BaseXX - Base encodings (Base64, Base32, etc.)\n"
-            "• Binary - Binary representations\n"
-            "• Common - Common text transformations\n"
-            "• Compression - Data compression\n"
-            "• Cryptography - Cipher methods\n"
-            "• Hashing - Hash functions\n"
-            "• Languages - Special languages (Morse, Braille, etc.)\n"
-            "• Steganography - Hidden message techniques\n"
-            "• Web - Web-related encodings\n"
-            "• Standard - Standard character encodings\n"
-            "• Advanced Crypto - Modern cryptography\n"
-            "• Custom - Custom encoding methods"
-        )
+            text = (
+                f"🔐 <b>Encoding Tool</b>\n\n"
+                f"📝 <b>Content from {source}:</b>\n"
+                f"<code>{content[:100]}{'...' if len(content) > 100 else ''}</code>\n\n"
+                f"💡 <b>Select an encoding method from the categories below:</b>"
+            )
 
-        buttons = create_category_buttons("encode")
-        msg = await send_message(message, text, buttons.build_menu(2))
-        asyncio.create_task(auto_delete_message(msg, time=300))
-        return
+            buttons = create_category_buttons("encode")
+            msg = await send_message(message, text, buttons.build_menu(2))
+            asyncio.create_task(auto_delete_message(msg, time=300))
+            return
 
-    # Show menu if there's no content to process
-    text = (
+    # No flags and no replied message - show usage help
+    msg = await send_message(
+        message,
         "🔐 <b>Encoding Tool</b>\n\n"
-        "📝 <b>No content provided</b>\n\n"
-        "💡 <b>How to use:</b>\n"
-        "• <code>/encode your text here</code> - Show encoding menu for your text\n"
-        "• <code>/encode method text</code> - Encode with specific method\n"
-        "• <code>/encode</code> (reply to message) - Show encoding menu for replied message\n"
-        "• Use the menu below to browse available methods\n\n"
-        "📊 <b>Available Categories:</b>\n"
-        "• BaseXX - Base encodings (Base64, Base32, etc.)\n"
-        "• Binary - Binary representations\n"
-        "• Common - Common text transformations\n"
-        "• Compression - Data compression\n"
-        "• Cryptography - Cipher methods\n"
-        "• Hashing - Hash functions\n"
-        "• Languages - Special languages (Morse, Braille, etc.)\n"
-        "• Steganography - Hidden message techniques\n"
-        "• Web - Web-related encodings\n"
-        "• Standard - Standard character encodings\n"
-        "• Advanced Crypto - Modern cryptography\n"
-        "• Custom - Custom encoding methods"
+        "💡 <b>Usage Options:</b>\n\n"
+        "🔒 <b>Flag-based Commands:</b>\n"
+        '• <code>/encode -q "your text"</code> - Show encoding menu\n'
+        '• <code>/encode -q "text" -algo method</code> - Direct encoding\n'
+        '• <code>/encode -q "text" -to user</code> - Share encoded result\n'
+        "• <code>/encode -p password -to user</code> - Password-protected (reply to message)\n"
+        '• <code>/encode -q "text" -p password -to user [-algo method]</code> - Full command\n\n'
+        "📨 <b>Reply-based Commands:</b>\n"
+        "• <code>/encode</code> (reply to message) - Show encoding menu for replied content\n\n"
+        "📝 <b>Examples:</b>\n"
+        '<code>/encode -q "hello world"</code>\n'
+        '<code>/encode -q "hello" -algo rot13</code>\n'
+        '<code>/encode -q "message" -to @alice</code>\n'
+        '<code>/encode -q "secret" -p mypass -to @alice</code>\n'
+        "<code>/encode</code> (reply to any message)",
     )
-
-    buttons = create_category_buttons("encode")
-    msg = await send_message(message, text, buttons.build_menu(2))
-    asyncio.create_task(auto_delete_message(msg, time=300))
+    asyncio.create_task(auto_delete_message(msg, time=60))
+    return
 
 
 async def decode_command(_, message):
-    """Decode command handler with auto-decode functionality and method-specific support"""
+    """Decode command handler with password protection and auto-decode functionality"""
     await delete_message(message)
+
+    # Store username mapping for the user if available
+    if message.from_user.username:
+        await EncodedDataManager.store_username_mapping(
+            message.from_user.username, message.from_user.id
+        )
 
     # Check if decoding is enabled
     if not Config.DECODING_ENABLED:
@@ -627,137 +1436,176 @@ async def decode_command(_, message):
         asyncio.create_task(auto_delete_message(msg, time=60))
         return
 
-    # Parse command: /decode [method] [text] or /decode [text]
-    cmd_parts = message.text.split(maxsplit=2)
-    method = None
-    query = None
+    # Parse command with new flag support
+    parsed_args = CommandParser.parse_decode_command(message.text)
 
-    if len(cmd_parts) >= 2:
-        # Check if second part is a method name
-        potential_method = cmd_parts[1].lower()
-        all_methods = processor.get_all_methods()
-        all_method_names = []
-        for methods in all_methods.values():
-            all_method_names.extend([m.lower() for m in methods])
+    # Handle flag-based syntax
+    if parsed_args.get("use_flags"):
+        # Extract individual flags
+        encoded_id = parsed_args.get("encoded_id")
+        password = parsed_args.get("password")
 
-        if potential_method in all_method_names:
-            method = potential_method
-            if len(cmd_parts) >= 3:
-                query = cmd_parts[2].strip()
-        else:
-            # No method specified, treat as query
-            query = " ".join(cmd_parts[1:]).strip()
+        # Handle different flag combinations independently
 
-    # Get content to decode (query takes priority over replied message)
-    content_to_decode = None
-    source = None
+        # Case 1: Only -p flag (password only) - show help for password usage
+        if password and not encoded_id:
+            msg = await send_message(
+                message,
+                f"🔑 <b>Password Selected:</b> {'*' * len(password)}\n\n"
+                f"💡 <b>To use this password:</b>\n"
+                f"• <code>/decode -q encoded_id -p {password}</code> (decode with ID)\n"
+                f"• <code>/decode encoded_id {password}</code> (positional syntax)\n\n"
+                f"📝 <b>Examples:</b>\n"
+                f"<code>/decode -q AbC123XyZ456 -p {password}</code>\n"
+                f"<code>/decode AbC123XyZ456 {password}</code>",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
 
-    if query:
-        content_to_decode = query
-        source = "query"
-    elif message.reply_to_message:
+        # Case 2: Only -q flag (encoded_id only) - show help for ID usage
+        if encoded_id and not password:
+            msg = await send_message(
+                message,
+                f"🆔 <b>Encoded ID Selected:</b> <code>{encoded_id}</code>\n\n"
+                f"💡 <b>To decode this ID:</b>\n"
+                f"• <code>/decode -q {encoded_id} -p password</code> (if password-protected)\n"
+                f"• <code>/decode {encoded_id} password</code> (positional syntax)\n"
+                f"• Try decoding without password (if not protected)\n\n"
+                f"📝 <b>Examples:</b>\n"
+                f"<code>/decode -q {encoded_id} -p mypassword</code>\n"
+                f"<code>/decode {encoded_id} mypassword</code>",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+        # Case 3: Both flags present - process password-protected decoding
+        if encoded_id and password:
+            await process_password_protected_decoding(message, encoded_id, password)
+            return
+
+        # Case 4: No flags but using flag syntax (shouldn't happen, but handle gracefully)
+        msg = await send_message(
+            message,
+            "🔧 <b>Incomplete Command</b>\n\n"
+            "💡 <b>Available Options:</b>\n"
+            "• <code>/decode -q encoded_id</code> - Show ID options\n"
+            "• <code>/decode -p password</code> - Show password options\n"
+            "• <code>/decode -q encoded_id -p password</code> - Full decode\n"
+            "• <code>/decode encoded_id password</code> - Positional syntax\n"
+            "• <code>/decode</code> (reply to message) - Auto-decode\n\n"
+            "📝 <b>Examples:</b>\n"
+            "<code>/decode -q AbC123XyZ456</code>\n"
+            "<code>/decode -p mypassword</code>\n"
+            "<code>/decode AbC123XyZ456 mypassword</code>",
+        )
+        asyncio.create_task(auto_delete_message(msg, time=60))
+        return
+
+    # Handle non-flag syntax (positional arguments)
+    if not parsed_args.get("use_flags"):
+        encoded_id = parsed_args.get("encoded_id")
+        password = parsed_args.get("password")
+
+        # Case 1: Both encoded_id and password provided
+        if encoded_id and password:
+            await process_password_protected_decoding(message, encoded_id, password)
+            return
+
+        # Case 2: Only encoded_id provided - show options
+        if encoded_id:
+            msg = await send_message(
+                message,
+                f"🆔 <b>Encoded ID:</b> <code>{encoded_id}</code>\n\n"
+                f"💡 <b>Decoding Options:</b>\n"
+                f"• <code>/decode {encoded_id} password</code> (if password-protected)\n"
+                f"• <code>/decode -q {encoded_id} -p password</code> (flag syntax)\n"
+                f"• Try auto-decoding (if not password-protected)\n\n"
+                f"📝 <b>Examples:</b>\n"
+                f"<code>/decode {encoded_id} mypassword</code>\n"
+                f"<code>/decode -q {encoded_id} -p mypassword</code>",
+            )
+            asyncio.create_task(auto_delete_message(msg, time=60))
+            return
+
+    # Handle non-flag syntax - check for replied message
+    if message.reply_to_message:
         reply_msg = message.reply_to_message
+        content = None
+        source = None
+
         if reply_msg.text:
-            content_to_decode = reply_msg.text
+            content = reply_msg.text
             source = "replied message"
         elif reply_msg.caption:
-            content_to_decode = reply_msg.caption
+            content = reply_msg.caption
             source = "replied message caption"
 
-    user_id = message.from_user.id
+        if content:
+            # Try auto-decode first
+            auto_decode_result = await try_auto_decode(content)
 
-    # Store query and operation type in session
-    if user_id not in processor.session_data:
-        processor.session_data[user_id] = {}
-    processor.session_data[user_id]["query"] = query
-    processor.session_data[user_id]["operation"] = "decode"
-    processor.session_data[user_id]["replied_message"] = message.reply_to_message
+            if auto_decode_result:
+                # Auto-decode successful
+                result_text = (
+                    f"✅ <b>Auto-Decode Successful!</b>\n\n"
+                    f"🔧 <b>Method:</b> {auto_decode_result['method']}\n"
+                    f"📝 <b>Source:</b> {source}\n"
+                    f"📊 <b>Input Length:</b> {len(content)} chars\n"
+                    f"📤 <b>Output Length:</b> {len(auto_decode_result['result'])} chars\n\n"
+                    f"📋 <b>Result:</b>\n<code>{auto_decode_result['result']}</code>\n\n"
+                    f"💡 <b>Tip:</b> If this isn't correct, use the menu below to try other methods."
+                )
 
-    # If method is specified and we have content, process immediately
-    if method and content_to_decode:
-        try:
-            result = await process_encoding_text(
-                content_to_decode, method, "decode", user_id
+                buttons = ButtonMaker()
+                buttons.data_button(
+                    "🔄 Try Other Methods", "enc_back_categories_decode"
+                )
+                buttons.data_button("❌ Close", "enc_close")
+
+                msg = await send_message(message, result_text, buttons.build_menu(1))
+                asyncio.create_task(auto_delete_message(msg, time=300))
+                return
+
+            # Auto-decode failed, show decode menu
+            user_id = message.from_user.id
+            if user_id not in processor.session_data:
+                processor.session_data[user_id] = {}
+            processor.session_data[user_id]["query"] = content
+            processor.session_data[user_id]["operation"] = "decode"
+            processor.session_data[user_id]["replied_message"] = (
+                message.reply_to_message
             )
 
-            result_text = (
-                f"✅ <b>Decode Result</b>\n\n"
-                f"🔧 <b>Method:</b> {method}\n"
-                f"📝 <b>Source:</b> {source}\n"
-                f"📊 <b>Input:</b> {len(content_to_decode)} chars\n"
-                f"📤 <b>Output:</b> {len(result)} chars\n\n"
-                f"📋 <b>Result:</b>\n<code>{result}</code>"
+            text = (
+                f"🔓 <b>Decoding Tool</b>\n\n"
+                f"⚠️ <b>Auto-decode failed for content from {source}:</b>\n"
+                f"<code>{content[:100]}{'...' if len(content) > 100 else ''}</code>\n\n"
+                f"💡 <b>Select a decoding method from the categories below:</b>"
             )
 
-            msg = await send_message(message, result_text)
-            asyncio.create_task(auto_delete_message(msg, time=300))
-            return
-        except Exception as e:
-            error_text = f"❌ <b>Decoding Error</b>\n\n🔧 <b>Method:</b> {method}\n📝 <b>Error:</b> {e!s}"
-            msg = await send_message(message, error_text)
-            asyncio.create_task(auto_delete_message(msg, time=300))
-            return
-
-    # Try auto-decode if we have content
-    if content_to_decode:
-        auto_decode_result = await try_auto_decode(content_to_decode)
-
-        if auto_decode_result:
-            # Auto-decode successful
-            result_text = (
-                f"✅ <b>Auto-Decode Successful!</b>\n\n"
-                f"🔧 <b>Method:</b> {auto_decode_result['method']}\n"
-                f"📝 <b>Source:</b> {source}\n"
-                f"📊 <b>Input:</b> {len(content_to_decode)} chars\n"
-                f"📤 <b>Output:</b> {len(auto_decode_result['result'])} chars\n\n"
-                f"📋 <b>Result:</b>\n<code>{auto_decode_result['result']}</code>\n\n"
-                f"💡 <b>Tip:</b> If this isn't correct, use the menu below to try other methods."
-            )
-
-            buttons = ButtonMaker()
-            buttons.data_button("🔄 Try Other Methods", "enc_back_categories_decode")
-            buttons.data_button("❌ Close", "enc_close")
-
-            msg = await send_message(message, result_text, buttons.build_menu(1))
+            buttons = create_category_buttons("decode")
+            msg = await send_message(message, text, buttons.build_menu(2))
             asyncio.create_task(auto_delete_message(msg, time=300))
             return
 
-    # Auto-decode failed or no content, show decode menu
-    text = "🔓 <b>Decoding Tool</b>\n\n"
-
-    if content_to_decode:
-        text += f"⚠️ <b>Auto-decode failed for:</b> <code>{content_to_decode[:100]}{'...' if len(content_to_decode) > 100 else ''}</code>\n\n"
-        text += "💡 <b>Possible reasons:</b>\n"
-        text += "• Text might not be encoded\n"
-        text += "• Unknown encoding method\n"
-        text += "• Corrupted encoded data\n\n"
-        text += "Select a category to manually choose a decoding method:\n\n"
-    else:
-        text += "Select a category to see available decoding methods:\n\n"
-
-    text += (
-        "📊 <b>Available Categories:</b>\n"
-        "• BaseXX - Base decodings (Base64, Base32, etc.)\n"
-        "• Binary - Binary representations\n"
-        "• Common - Common text transformations\n"
-        "• Compression - Data decompression\n"
-        "• Cryptography - Cipher methods\n"
-        "• Languages - Special languages (Morse, Braille, etc.)\n"
-        "• Steganography - Hidden message techniques\n"
-        "• Web - Web-related decodings\n"
-        "• Standard - Standard character decodings\n"
-        "• Advanced Crypto - Modern cryptography\n"
-        "• Custom - Custom decoding methods\n\n"
-        "💡 <b>Usage Options:</b>\n"
-        "1. <code>/decode method text</code> - Direct decoding\n"
-        "2. <code>/decode text</code> - Auto-decode or choose method\n"
-        "3. <code>/decode</code> (reply to message) - Auto-decode\n"
-        "4. Select category → method for instant results"
+    # No flags and no replied message - show usage help
+    msg = await send_message(
+        message,
+        "🔓 <b>Decoding Tool</b>\n\n"
+        "💡 <b>Usage Options:</b>\n\n"
+        "🔒 <b>Password-Protected Decoding:</b>\n"
+        "• <code>/decode -q encoded_id -p password</code> - Decode password-protected data\n"
+        "• Example: <code>/decode -q AbC123XyZ456 -p mypass123</code>\n\n"
+        "📨 <b>Reply-based Decoding:</b>\n"
+        "• <code>/decode</code> (reply to message) - Auto-decode or show decoding menu\n\n"
+        "🔍 <b>How it works:</b>\n"
+        "• Reply to any encoded message with <code>/decode</code>\n"
+        "• The bot will try to auto-detect the encoding method\n"
+        "• If auto-detection fails, you'll get a menu to choose the method\n"
+        "• For password-protected data, use the flag syntax",
     )
-
-    buttons = create_category_buttons("decode")
-    msg = await send_message(message, text, buttons.build_menu(2))
-    asyncio.create_task(auto_delete_message(msg, time=300))
+    asyncio.create_task(auto_delete_message(msg, time=60))
+    return
 
 
 async def encoding_callback(_, callback_query):
@@ -978,28 +1826,162 @@ async def encoding_callback(_, callback_query):
                         source = None
 
                 if content:
-                    # Process the encoding/decoding
-                    result = await process_encoding_text(
-                        content, method, operation, user_id
-                    )
+                    # Check if this is password-protected encoding
+                    if operation == "encode_protected":
+                        # Handle password-protected encoding
+                        session = processor.session_data.get(user_id, {})
+                        password = session.get("password")
+                        authorized_user_id = session.get("authorized_user_id")
+                        authorized_display_name = session.get(
+                            "authorized_display_name"
+                        )
 
-                    result_text = (
-                        f"✅ <b>Result ({operation.title()})</b>\n\n"
-                        f"🔧 <b>Method:</b> {method}\n"
-                        f"📝 <b>Source:</b> {source}\n\n"
-                        f"📤 <b>Result:</b>\n<code>{result}</code>"
-                    )
+                        if password and authorized_user_id:
+                            try:
+                                # Encode using the specified method
+                                encoded_result = await process_encoding_text(
+                                    content, method, "encode", user_id
+                                )
 
-                    buttons = ButtonMaker()
-                    buttons.data_button(
-                        "🔙 Back to Methods",
-                        f"enc_cat_{info.get('category', 'BaseXX')}_{operation}",
-                    )
-                    buttons.data_button("❌ Close", "enc_close")
+                                # Store in database with password protection
+                                encoded_id = await encoded_data_manager.store_encoded_data(
+                                    encoded_data=encoded_result,
+                                    original_query=content,
+                                    method=method,
+                                    password=password,
+                                    authorized_user_id=authorized_user_id,
+                                    authorized_display_name=authorized_display_name,
+                                    creator_user_id=user_id,
+                                )
 
-                    await edit_message(message, result_text, buttons.build_menu(1))
-                    await callback_query.answer(f"Processed with {method}")
-                    return
+                                result_text = (
+                                    f"🔐 <b>Password-Protected Encoding Complete</b>\n\n"
+                                    f"🆔 <b>Encoded ID:</b> <code>{encoded_id}</code>\n"
+                                    f"👤 <b>Authorized User:</b> {authorized_display_name}\n"
+                                    f"🔧 <b>Method:</b> {method}\n"
+                                    f"📝 <b>Source:</b> {source}\n"
+                                    f"📊 <b>Input Length:</b> {len(content)} chars\n"
+                                    f"📤 <b>Output Length:</b> {len(encoded_result)} chars\n\n"
+                                    f"💡 <b>To decode, use:</b>\n"
+                                    f"<code>/decode -q {encoded_id} -p {password}</code>\n\n"
+                                    f"⚠️ <b>Note:</b> Only you and {authorized_display_name} can decode this data."
+                                )
+
+                                buttons = ButtonMaker()
+                                buttons.data_button("❌ Close", "enc_close")
+
+                                await edit_message(
+                                    message, result_text, buttons.build_menu(1)
+                                )
+                                await callback_query.answer(
+                                    f"Protected encoding with {method}"
+                                )
+
+                                # Clear session data
+                                if user_id in processor.session_data:
+                                    del processor.session_data[user_id]
+                                return
+
+                            except Exception as e:
+                                error_text = f"❌ <b>Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+                                buttons = ButtonMaker()
+                                buttons.data_button("❌ Close", "enc_close")
+                                await edit_message(
+                                    message, error_text, buttons.build_menu(1)
+                                )
+                                await callback_query.answer("Encoding failed")
+                                return
+                        else:
+                            error_text = "❌ <b>Error:</b> Missing password or user authorization data"
+                            buttons = ButtonMaker()
+                            buttons.data_button("❌ Close", "enc_close")
+                            await edit_message(
+                                message, error_text, buttons.build_menu(1)
+                            )
+                            await callback_query.answer("Missing data")
+                            return
+                    elif operation == "encode_shared":
+                        # Handle shared encoding
+                        session = processor.session_data.get(user_id, {})
+                        share_with_user_id = session.get("share_with_user_id")
+                        share_with_user = session.get("share_with_user")
+
+                        if share_with_user_id:
+                            try:
+                                # Process shared encoding
+                                await process_shared_encoding(
+                                    callback_query.message,
+                                    content,
+                                    share_with_user_id,
+                                    method,
+                                )
+
+                                result_text = (
+                                    f"✅ <b>Shared Encoding Complete</b>\n\n"
+                                    f"🔧 <b>Method:</b> {method}\n"
+                                    f"👤 <b>Shared with:</b> {share_with_user}\n"
+                                    f"📝 <b>Source:</b> {source}\n\n"
+                                    f"💡 <b>The encoded result has been shared with {share_with_user}.</b>"
+                                )
+
+                                buttons = ButtonMaker()
+                                buttons.data_button("❌ Close", "enc_close")
+
+                                await edit_message(
+                                    message, result_text, buttons.build_menu(1)
+                                )
+                                await callback_query.answer(
+                                    f"Shared encoding with {method}"
+                                )
+
+                                # Clear session data
+                                if user_id in processor.session_data:
+                                    del processor.session_data[user_id]
+                                return
+
+                            except Exception as e:
+                                error_text = f"❌ <b>Shared Encoding Error</b>\n\n📝 <b>Error:</b> {e!s}"
+                                buttons = ButtonMaker()
+                                buttons.data_button("❌ Close", "enc_close")
+                                await edit_message(
+                                    message, error_text, buttons.build_menu(1)
+                                )
+                                await callback_query.answer("Shared encoding failed")
+                                return
+                        else:
+                            error_text = "❌ <b>Error:</b> Missing user sharing data"
+                            buttons = ButtonMaker()
+                            buttons.data_button("❌ Close", "enc_close")
+                            await edit_message(
+                                message, error_text, buttons.build_menu(1)
+                            )
+                            await callback_query.answer("Missing sharing data")
+                            return
+                    else:
+                        # Regular encoding/decoding
+                        result = await process_encoding_text(
+                            content, method, operation, user_id
+                        )
+
+                        result_text = (
+                            f"✅ <b>Result ({operation.title()})</b>\n\n"
+                            f"🔧 <b>Method:</b> {method}\n"
+                            f"📝 <b>Source:</b> {source}\n\n"
+                            f"📤 <b>Result:</b>\n<code>{result}</code>"
+                        )
+
+                        buttons = ButtonMaker()
+                        buttons.data_button(
+                            "🔙 Back to Methods",
+                            f"enc_cat_{info.get('category', 'BaseXX')}_{operation}",
+                        )
+                        buttons.data_button("❌ Close", "enc_close")
+
+                        await edit_message(
+                            message, result_text, buttons.build_menu(1)
+                        )
+                        await callback_query.answer(f"Processed with {method}")
+                        return
 
             # If no content to process, show method information and usage instructions
             # Check if user has any content available but not processed

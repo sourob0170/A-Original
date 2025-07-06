@@ -53,9 +53,15 @@ async def _on_download_error(err, tor, button=None):
                 f"{task.listener.tag} Download Error: {err}",
             )
             create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
-    await TorrentManager.qbittorrent.torrents.stop([ext_hash])
-    await sleep(0.3)
-    await _remove_torrent(ext_hash, tor.tags[0])
+    # Only attempt to stop torrent if qBittorrent client is available
+    if TorrentManager.qbittorrent is not None:
+        await TorrentManager.qbittorrent.torrents.stop([ext_hash])
+        await sleep(0.3)
+        await _remove_torrent(ext_hash, tor.tags[0])
+    else:
+        LOGGER.warning(
+            f"qBittorrent client not available, cannot stop torrent {ext_hash}"
+        )
 
 
 @new_task
@@ -151,6 +157,14 @@ async def _qb_listener():
     while True:
         async with qb_listener_lock:
             try:
+                # Check if qBittorrent client is available
+                if TorrentManager.qbittorrent is None:
+                    LOGGER.warning(
+                        "qBittorrent client not available, stopping listener"
+                    )
+                    intervals["qb"] = ""
+                    break
+
                 torrents = await TorrentManager.qbittorrent.torrents.info()
                 if len(torrents) == 0:
                     intervals["qb"] = ""

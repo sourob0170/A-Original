@@ -63,6 +63,8 @@ class FFmpegStatus:
             return MirrorStatus.STATUS_EXTRACT
         if self._cstatus == "Add":
             return MirrorStatus.STATUS_ADD
+        if self._cstatus == "swap":
+            return MirrorStatus.STATUS_SWAP
         return MirrorStatus.STATUS_FFMPEG
 
     def task(self):

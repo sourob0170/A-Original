@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Management - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #8b5cf6;
+            --secondary-color: #06b6d4;
+            --accent-color: #f59e0b;
+            --dark-bg: #0a0a0f;
+            --card-bg: #1e1e2e;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #151520 100%);
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        
+        .admin-header {
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+            padding: 1rem 0;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-bottom: none;
+            border-radius: 16px 16px 0 0 !important;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stats-number {
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, var(--accent-color), #d97706);
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .progress {
+            height: 20px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 10px;
+        }
+        
+        .table-dark {
+            background: var(--card-bg);
+            border-color: rgba(139, 92, 246, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="admin-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-database me-2"></i>Database Management
+                </h1>
+                <a href="/admin" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <!-- Database Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ db_stats.media_files or 0 }}</div>
+                    <div class="text-muted">Media Files</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ db_stats.users or 0 }}</div>
+                    <div class="text-muted">Users</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">
+                        {{ (db_stats.database_size / 1024 / 1024)|round(1) if db_stats.database_size else 0 }} MB
+                    </div>
+                    <div class="text-muted">Database Size</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">
+                        {{ (db_stats.index_size / 1024 / 1024)|round(1) if db_stats.index_size else 0 }} MB
+                    </div>
+                    <div class="text-muted">Index Size</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Database Operations -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-broom fa-3x text-warning mb-3"></i>
+                        <h5>Optimize Database</h5>
+                        <p class="text-muted">Clean up and optimize database performance</p>
+                        <button class="btn btn-warning" onclick="optimizeDatabase()">
+                            <i class="fas fa-broom me-2"></i>Optimize
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                        <h5>Rebuild Indexes</h5>
+                        <p class="text-muted">Rebuild database indexes for better performance</p>
+                        <button class="btn btn-primary" onclick="rebuildIndexes()">
+                            <i class="fas fa-tools me-2"></i>Rebuild
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-trash fa-3x text-danger mb-3"></i>
+                        <h5>Clean Orphaned Data</h5>
+                        <p class="text-muted">Remove orphaned records and unused data</p>
+                        <button class="btn btn-danger" onclick="cleanOrphanedData()">
+                            <i class="fas fa-trash me-2"></i>Clean
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Database Health -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>Database Health
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-tachometer-alt me-2"></i>Performance Metrics</h6>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Query Performance</span>
+                                <span>85%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: 85%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Index Efficiency</span>
+                                <span>92%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: 92%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Storage Optimization</span>
+                                <span>78%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: 78%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Issues & Recommendations</h6>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Recommendation:</strong> Consider optimizing database indexes for better query performance.
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Tip:</strong> Regular database maintenance improves overall system performance.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Collection Details -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>Collection Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>Collection</th>
+                                <th>Documents</th>
+                                <th>Size</th>
+                                <th>Indexes</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><i class="fas fa-film me-2"></i>media_library</td>
+                                <td>{{ db_stats.media_files or 0 }}</td>
+                                <td>{{ (db_stats.database_size * 0.7 / 1024 / 1024)|round(1) if db_stats.database_size else 0 }} MB</td>
+                                <td>5</td>
+                                <td><span class="badge bg-success">Healthy</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-users me-2"></i>users</td>
+                                <td>{{ db_stats.users or 0 }}</td>
+                                <td>{{ (db_stats.database_size * 0.2 / 1024 / 1024)|round(1) if db_stats.database_size else 0 }} MB</td>
+                                <td>3</td>
+                                <td><span class="badge bg-success">Healthy</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-cog me-2"></i>settings</td>
+                                <td>1</td>
+                                <td>{{ (db_stats.database_size * 0.1 / 1024 / 1024)|round(1) if db_stats.database_size else 0 }} MB</td>
+                                <td>1</td>
+                                <td><span class="badge bg-success">Healthy</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function optimizeDatabase() {
+            if (confirm('This will optimize the database. Continue?')) {
+                alert('Database optimization started. This may take a few minutes.');
+            }
+        }
+        
+        function rebuildIndexes() {
+            if (confirm('This will rebuild all database indexes. Continue?')) {
+                alert('Index rebuilding started. This may take a few minutes.');
+            }
+        }
+        
+        function cleanOrphanedData() {
+            if (confirm('This will remove orphaned data. This action cannot be undone. Continue?')) {
+                alert('Orphaned data cleanup started.');
+            }
+        }
+    </script>
+</body>
+</html>

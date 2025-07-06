@@ -36,7 +36,9 @@ class MirrorStatus:
     STATUS_MERGE = "Merging"
     STATUS_COMPRESS = "Compress"
     STATUS_TRIM = "Trim"
+    STATUS_REMOVE = "Remove"
     STATUS_ADD = "Add"
+    STATUS_SWAP = "Swap"
 
 
 STATUSES = {
@@ -60,7 +62,13 @@ STATUSES = {
     "CK": MirrorStatus.STATUS_CHECK,
     "CP": MirrorStatus.STATUS_COMPRESS,
     "TR": MirrorStatus.STATUS_TRIM,
+    "RM": MirrorStatus.STATUS_REMOVE,
+    "MG": MirrorStatus.STATUS_MERGE,
+    "MD": MirrorStatus.STATUS_METADATA,
+    "WM": MirrorStatus.STATUS_WATERMARK,
+    "ET": MirrorStatus.STATUS_ETHUMB,
     "AD": MirrorStatus.STATUS_ADD,
+    "SW": MirrorStatus.STATUS_SWAP,
 }
 
 
@@ -410,7 +418,9 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
         buttons.data_button("next", f"status {sid} nex", position="header")
         if tasks_no > 30:
             for i in [1, 2, 4, 6, 8, 10, 15]:
-                buttons.data_button(i, f"status {sid} ps {i}", position="footer")
+                buttons.data_button(
+                    str(i), f"status {sid} ps {i}", position="footer"
+                )
     if status != "All" or tasks_no > 20:
         for label, status_value in list(STATUSES.items()):
             if status_value != status:

@@ -33,11 +33,12 @@ async def truecaller_lookup(_, message):
     # Delete the command message instantly
     await delete_message(message)
 
-    # Check if Extra Modules are enabled
-    if not Config.ENABLE_EXTRA_MODULES:
+    # Check if Truecaller module is enabled
+    if not Config.TRUECALLER_ENABLED:
         error_msg = await send_message(
             message,
-            "❌ <b>Truecaller module is currently disabled.</b>\n\nPlease contact the bot owner to enable it.",
+            "<blockquote>❌ <b>Truecaller module is currently disabled.</b>\n\n"
+            "Please contact the bot owner to enable it.</blockquote>",
         )
         # Auto-delete error message after 5 minutes
         await auto_delete_message(error_msg, time=300)
@@ -71,8 +72,11 @@ async def truecaller_lookup(_, message):
     if not phone:
         error_msg = await send_message(
             message,
+            "<blockquote>📱 <b>Phone Number Required</b>\n\n"
             "Please provide a phone number to lookup or reply to a message containing a phone number.\n\n"
-            "Usage: `/truecaller +1234567890` or reply to a message containing a phone number with `/truecaller`",
+            "<b>Usage:</b>\n"
+            "• <code>/truecaller +1234567890</code>\n"
+            "• Reply to a message containing a phone number with <code>/truecaller</code></blockquote>",
         )
         # Auto-delete error message after 5 minutes
         await auto_delete_message(error_msg, time=300)
@@ -85,7 +89,8 @@ async def truecaller_lookup(_, message):
     if not api_url:
         error_msg = await send_message(
             message,
-            "❌ <b>Truecaller API URL is not configured.</b>\n\nPlease contact the bot owner to set up the Truecaller API URL.",
+            "<blockquote>❌ <b>Truecaller API URL is not configured.</b>\n\n"
+            "Please contact the bot owner to set up the Truecaller API URL.</blockquote>",
         )
         # Auto-delete error message after 5 minutes
         await auto_delete_message(error_msg, time=300)
@@ -94,7 +99,7 @@ async def truecaller_lookup(_, message):
     # Send initial status message
     status_msg = await send_message(
         message,
-        f"🔍 Looking up phone number: `{phone}`...",
+        f"🔍 <b>Looking up phone number:</b> <code>{phone}</code>...",
     )
 
     try:
@@ -113,7 +118,8 @@ async def truecaller_lookup(_, message):
                 await delete_message(status_msg)
                 error_msg = await send_message(
                     message,
-                    f"❌ Error: API returned status code {response.status_code}",
+                    f"<blockquote>❌ <b>API Error</b>\n\n"
+                    f"API returned status code: <code>{response.status_code}</code></blockquote>",
                 )
                 # Auto-delete error message after 5 minutes
                 await auto_delete_message(error_msg, time=300)
@@ -126,33 +132,33 @@ async def truecaller_lookup(_, message):
                 # Format the response with beautiful styling
                 truecaller_name = data.get("Truecaller", "Unknown")
 
-                # Create a decorative header
-                msg = "┌─────────────────────────┐\n"
-                msg += "│   🔍 TRUECALLER LOOKUP   │\n"
-                msg += "└─────────────────────────┘\n\n"
+                # Create a decorative header with HTML formatting
+                msg = "<blockquote><b>🔍 TRUECALLER LOOKUP</b></blockquote>\n\n"
 
                 # Add the name with special formatting if available
                 if truecaller_name not in {"Unknown", "N/A"}:
-                    msg += f"✨ **{truecaller_name}** ✨\n\n"
+                    msg += f"✨ <b><u>{truecaller_name}</u></b> ✨\n\n"
 
-                # Create a styled info box without fixed borders
-                msg += "┌─────── 📋 DETAILS ───────┐\n"
+                # Create a styled info section with HTML formatting
+                msg += "<b>📋 DETAILS</b>\n"
+                msg += f"📱 <b>Number:</b> <code>{data.get('international_format', 'N/A')}</code>\n"
                 msg += (
-                    f"│ 📱 **Number:** `{data.get('international_format', 'N/A')}`\n"
+                    f"🔄 <b>Carrier:</b> <code>{data.get('carrier', 'N/A')}</code>\n"
                 )
-                msg += f"│ 🔄 **Carrier:** `{data.get('carrier', 'N/A')}`\n"
-                msg += f"│ 🌍 **Country:** `{data.get('country', 'N/A')}`\n"
-                msg += f"│ 📍 **Location:** `{data.get('location', 'N/A')}`\n"
-                msg += f"│ ⏰ **Timezone:** `{data.get('timezones', 'N/A')}`\n"
+                msg += (
+                    f"🌍 <b>Country:</b> <code>{data.get('country', 'N/A')}</code>\n"
+                )
+                msg += f"📍 <b>Location:</b> <code>{data.get('location', 'N/A')}</code>\n"
+                msg += f"⏰ <b>Timezone:</b> <code>{data.get('timezones', 'N/A')}</code>\n"
 
                 # Add other info if available
                 if data.get("Unknown") and data.get("Unknown") != "N/A":
-                    msg += f"│ ℹ️ **Other:** `{data.get('Unknown', 'N/A')}`\n"
+                    msg += f"ℹ️ <b>Other:</b> <code>{data.get('Unknown', 'N/A')}</code>\n"
 
-                msg += "└────────────────────────┘\n\n"
+                msg += "\n"
 
-                # Add a footer
-                msg += "ℹ️ _This message will be deleted in 5 minutes_"
+                # Add a footer with blockquote styling
+                msg += "<blockquote>ℹ️ <i>This message will be deleted in 5 minutes</i></blockquote>"
 
                 # Update the status message with the result
                 await edit_message(status_msg, msg)
@@ -165,7 +171,8 @@ async def truecaller_lookup(_, message):
                 await delete_message(status_msg)
                 error_msg = await send_message(
                     message,
-                    "❌ Error: Could not parse the API response.",
+                    "<blockquote>❌ <b>Parse Error</b>\n\n"
+                    "Could not parse the API response.</blockquote>",
                 )
                 # Auto-delete error message after 5 minutes
                 await auto_delete_message(error_msg, time=300)
@@ -175,7 +182,9 @@ async def truecaller_lookup(_, message):
         await delete_message(status_msg)
         error_msg = await send_message(
             message,
-            f"❌ Error: Could not connect to the Truecaller API. {e!s}",
+            f"<blockquote>❌ <b>Connection Error</b>\n\n"
+            f"Could not connect to the Truecaller API.\n\n"
+            f"<b>Error:</b> <code>{e!s}</code></blockquote>",
         )
         # Auto-delete error message after 5 minutes
         await auto_delete_message(error_msg, time=300)
@@ -184,7 +193,9 @@ async def truecaller_lookup(_, message):
         await delete_message(status_msg)
         error_msg = await send_message(
             message,
-            f"❌ An unexpected error occurred: {e!s}",
+            f"<blockquote>❌ <b>Unexpected Error</b>\n\n"
+            f"An unexpected error occurred.\n\n"
+            f"<b>Error:</b> <code>{e!s}</code></blockquote>",
         )
         # Auto-delete error message after 5 minutes
         await auto_delete_message(error_msg, time=300)

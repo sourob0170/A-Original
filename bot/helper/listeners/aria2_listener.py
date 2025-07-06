@@ -365,10 +365,29 @@ async def _on_download_error(api, data):
             options = await api.getOption(gid)
             error = download.get("errorMessage", "Download failed")
             LOGGER.info(f"Download Error: {error}")
+
+            # Provide more user-friendly error messages for common issues
+            if "status=403" in error or "Forbidden" in error:
+                error = "Access denied (403): The server refused the request. This could be due to:\n• Link expired or invalid\n• Server blocking the bot\n• Authentication required\n• Rate limiting"
+            elif "status=404" in error or "Not Found" in error:
+                error = "File not found (404): The requested file no longer exists on the server"
+            elif "status=429" in error or "Too Many Requests" in error:
+                error = (
+                    "Rate limited (429): Too many requests. Please try again later"
+                )
+            elif "status=500" in error or "Internal Server Error" in error:
+                error = "Server error (500): The server encountered an internal error. Please try again later"
+            elif "No URI available" in error:
+                error = "No download links available: The download source has no valid URLs. This could be due to:\n• Link expired or removed\n• Server maintenance\n• Torrent with no seeders\n• Invalid or broken link"
+            elif "Connection refused" in error or "Connection reset" in error:
+                error = "Connection failed: Unable to connect to the server. Please check the link and try again"
+            elif "timeout" in error.lower():
+                error = "Download timeout: The server took too long to respond. Please try again"
+
         except Exception as e:
             # If we can't get download info, use a generic error message
             if "is not found" in str(e):
-                error = "Download failed or was removed"
+                error = "Download failed or was removed from aria2"
             else:
                 LOGGER.error(f"Error getting download info: {e}")
                 error = f"Download failed: {e!s}"

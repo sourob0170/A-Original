@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create User - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #8b5cf6;
+            --secondary-color: #06b6d4;
+            --accent-color: #f59e0b;
+            --dark-bg: #0a0a0f;
+            --card-bg: #1e1e2e;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #151520 100%);
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        
+        .admin-header {
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+            padding: 1rem 0;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-bottom: none;
+            border-radius: 16px 16px 0 0 !important;
+        }
+        
+        .form-control, .form-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #ffffff;
+            border-radius: 8px;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(139, 92, 246, 0.25);
+            color: #ffffff;
+        }
+        
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-outline-primary {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+        
+        .alert-info {
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--secondary-color);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="admin-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-user-plus me-2"></i>Create New User
+                </h1>
+                <a href="/admin/users/roles" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to User Roles
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-user-plus me-2"></i>User Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Note:</strong> This form creates a user record in the system. 
+                            The user will need to start the bot on Telegram to activate their account.
+                        </div>
+                        
+                        <form id="createUserForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="user_id" class="form-label">
+                                        <i class="fas fa-id-badge me-2"></i>Telegram User ID *
+                                    </label>
+                                    <input type="number" class="form-control" id="user_id" name="user_id" 
+                                           placeholder="123456789" required>
+                                    <div class="form-text text-muted">
+                                        The user's Telegram ID number
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="username" class="form-label">
+                                        <i class="fas fa-at me-2"></i>Username
+                                    </label>
+                                    <input type="text" class="form-control" id="username" name="username" 
+                                           placeholder="username">
+                                    <div class="form-text text-muted">
+                                        Telegram username (without @)
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="first_name" class="form-label">
+                                        <i class="fas fa-user me-2"></i>First Name *
+                                    </label>
+                                    <input type="text" class="form-control" id="first_name" name="first_name" 
+                                           placeholder="John" required>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="last_name" class="form-label">
+                                        <i class="fas fa-user me-2"></i>Last Name
+                                    </label>
+                                    <input type="text" class="form-control" id="last_name" name="last_name" 
+                                           placeholder="Doe">
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="role" class="form-label">
+                                        <i class="fas fa-shield-alt me-2"></i>User Role *
+                                    </label>
+                                    <select class="form-select" id="role" name="role" required>
+                                        <option value="">Select Role</option>
+                                        <option value="user">User - Basic access</option>
+                                        <option value="moderator">Moderator - Media moderation</option>
+                                        <option value="admin">Admin - Full access</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="status" class="form-label">
+                                        <i class="fas fa-toggle-on me-2"></i>Account Status
+                                    </label>
+                                    <select class="form-select" id="status" name="status">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="banned">Banned</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="notes" class="form-label">
+                                    <i class="fas fa-sticky-note me-2"></i>Admin Notes
+                                </label>
+                                <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                          placeholder="Optional notes about this user..."></textarea>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between">
+                                <a href="/admin/users/roles" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>Create User
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Help Card -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-question-circle me-2"></i>How to find Telegram User ID
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <ol class="mb-0">
+                            <li>Ask the user to send a message to your bot</li>
+                            <li>Check the bot logs for the user ID</li>
+                            <li>Or use @userinfobot on Telegram to get user ID</li>
+                            <li>Forward a message from the user to @userinfobot</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('createUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form data
+            const formData = new FormData(this);
+            const userData = Object.fromEntries(formData);
+            
+            // Basic validation
+            if (!userData.user_id || !userData.first_name || !userData.role) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Here you would typically send the data to your backend
+            console.log('Creating user:', userData);
+            alert('User creation functionality would be implemented here');
+        });
+    </script>
+</body>
+</html>

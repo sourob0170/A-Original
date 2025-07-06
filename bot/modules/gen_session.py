@@ -1,7 +1,7 @@
 from asyncio import create_task
 from logging import getLogger
 
-from pyrogram import Client
+from pyrogram import Client, filters
 from pyrogram.errors import (
     ApiIdInvalid,
     PasswordHashInvalid,
@@ -10,10 +10,12 @@ from pyrogram.errors import (
     PhoneNumberInvalid,
     SessionPasswordNeeded,
 )
+from pyrogram.handlers import MessageHandler
 
 from bot.core.aeon_client import TgClient
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.telegram_helper.button_build import ButtonMaker
+from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     delete_message,
@@ -25,7 +27,24 @@ LOGGER = getLogger(__name__)
 # Dictionary to store user conversation state
 session_state = {}
 
-# We'll use a single persistent handler instead of adding/removing handlers dynamically
+# Flag to track if session input handler is registered
+_session_input_handler_registered = False
+
+
+def register_session_input_handler():
+    """Register session input handler for private messages"""
+    global _session_input_handler_registered
+    if _session_input_handler_registered:
+        return
+
+    # Register session input handler for private messages
+    # Use a more permissive filter to catch all text messages in private chats
+    TgClient.bot.add_handler(
+        MessageHandler(handle_session_input, filters=filters.private & filters.text),
+        group=2,  # Higher group to process after command handlers
+    )
+
+    _session_input_handler_registered = True
 
 
 @new_task
@@ -34,6 +53,10 @@ async def handle_command(_, message):
     Command handler for /gensession or /gs
     Initiates the session generation process
     """
+
+    # Register session input handler if not already done
+    register_session_input_handler()
+
     # Delete the command message immediately for security
     try:
         await message.delete()
@@ -47,8 +70,30 @@ async def handle_command(_, message):
 async def handle_group_gensession(_, message):
     """
     Handler for /gensession or /gs command in groups
-    Informs the user to use the command in private chat
+    Checks authorization and informs the user to use the command in private chat
     """
+    # Check if user is authorized to use the bot in groups
+
+    # Check authorization using the same logic as other commands
+    is_authorized = await CustomFilters.authorized_user(CustomFilters, _, message)
+
+    if not is_authorized:
+        # User is not authorized, send unauthorized message
+        try:
+            await message.delete()
+        except Exception as e:
+            LOGGER.error(f"Error deleting unauthorized command message: {e!s}")
+
+        msg = await send_message(
+            message,
+            "❌ <b>Unauthorized Access</b>\n\n"
+            "You are not authorized to use this bot in groups.\n"
+            "Please contact the bot administrator for access.",
+        )
+        create_task(auto_delete_message(msg, time=60))
+        return
+
+    # User is authorized, but still need to redirect to PM for security
     # Delete the command message immediately for security
     try:
         await message.delete()
@@ -89,14 +134,15 @@ async def handle_session_input(_, message):
         # This message is not for us, ignore it
         return
 
+    # Check if the message is a command (starts with /) - ignore commands during session generation
+    if message.text and message.text.startswith("/"):
+        return
+
     # Delete user's message immediately to keep chat clean and secure
     try:
         await message.delete()
     except Exception as e:
         LOGGER.error(f"Error deleting user credential message: {e!s}")
-
-    # We no longer support /cancel command for gensession
-    # Users should use the cancel button instead
 
     # Get current step
     current_step = session_state[user_id]["step"]
@@ -113,8 +159,12 @@ async def handle_session_input(_, message):
             await handle_verification_code(_, message, user_id)
         elif current_step == "2fa_password":
             await handle_2fa_password(_, message, user_id)
+        else:
+            LOGGER.warning(
+                f"Unknown session step: {current_step} for user {user_id}"
+            )
     except Exception as e:
-        LOGGER.error(f"Error in session generation: {e!s}")
+        LOGGER.error(f"Error in session generation for user {user_id}: {e!s}")
         error_msg = await send_message(
             message.chat.id,
             f"❌ <b>Error:</b> {e!s}\n\n"
@@ -690,23 +740,58 @@ async def cleanup_session(user_id):
 
 async def gen_session(_, callback_query=None, message=None):
     """Handle both command and callback for session generation"""
+    # Register session input handler if not already done
+    register_session_input_handler()
+
     # If called from callback query
     if callback_query:
         await callback_query.answer()
         user_id = callback_query.from_user.id
+        chat_id = callback_query.message.chat.id
 
         # Delete the previous message with session string
-        await delete_message(callback_query.message)
+        try:
+            await delete_message(callback_query.message)
+        except Exception as e:
+            LOGGER.error(f"Error deleting callback message: {e!s}")
 
-        # Create a new message to start the process again
-        message = callback_query.message
+        # Create a new message object for sending
+        class FakeMessage:
+            def __init__(self, chat_id):
+                self.chat = type(
+                    "obj", (object,), {"id": chat_id, "type": "private"}
+                )
+                self.message_id = None
+                self.from_user = None
+                self.date = None
+                self.text = None
+                self.id = None  # Add id attribute
+
+            async def reply(self, text, reply_markup=None, quote=None, **kwargs):
+                """Fake reply method that sends to chat"""
+                # Remove parameters that send_message doesn't accept
+                kwargs.pop("quote", None)
+                kwargs.pop("disable_web_page_preview", None)
+                kwargs.pop("disable_notification", None)
+                kwargs.pop("parse_mode", None)
+
+                from bot.helper.telegram_helper.message_utils import send_message
+
+                return await send_message(self.chat.id, text, reply_markup)
+
+        message = FakeMessage(chat_id)
     elif not message:
+        LOGGER.warning("gen_session called without message or callback_query")
         return
     else:
         user_id = message.from_user.id
 
     # This function should only be called in private chats now
     # The group handler is separate
+
+    # Clean up any existing session for this user
+    if user_id in session_state:
+        await cleanup_session(user_id)
 
     # Initialize user state
     session_state[user_id] = {
@@ -742,6 +827,3 @@ async def gen_session(_, callback_query=None, message=None):
     # Auto-delete the message after 10 minutes for security
     # We don't need to store the task reference as it will be garbage collected properly
     create_task(auto_delete_message(msg, time=600))  # 10 minutes
-
-    # We don't need to add a handler for each user anymore
-    # The persistent handler will check if the user is in the session_state dictionary

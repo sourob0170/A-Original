@@ -5,6 +5,7 @@ from psutil import cpu_percent, disk_usage, virtual_memory
 
 from bot import (
     DOWNLOAD_DIR,
+    LOGGER,
     bot_start_time,
     intervals,
     sabnzbd_client,
@@ -166,6 +167,7 @@ async def status_pages(_, query):
                 "Compress": 0,
                 "FFmpeg": 0,
                 "Trim": 0,
+                "Swap": 0,
             }
             dl_speed = ds
             up_speed = 0
@@ -212,6 +214,8 @@ async def status_pages(_, query):
                             tasks["Compress"] += 1
                         case MirrorStatus.STATUS_TRIM:
                             tasks["Trim"] += 1
+                        case MirrorStatus.STATUS_SWAP:
+                            tasks["Swap"] += 1
                         case MirrorStatus.STATUS_FFMPEG:
                             tasks["FFmpeg"] += 1
                         case _:
@@ -220,7 +224,7 @@ async def status_pages(_, query):
             msg = f"""<b>DL:</b> {tasks["Download"]} | <b>UP:</b> {tasks["Upload"]} | <b>SD:</b> {tasks["Seed"]} | <b>AR:</b> {tasks["Archive"]}
 <b>EX:</b> {tasks["Extract"]} | <b>SP:</b> {tasks["Split"]} | <b>QD:</b> {tasks["QueueDl"]} | <b>QU:</b> {tasks["QueueUp"]}
 <b>CL:</b> {tasks["Clone"]} | <b>CK:</b> {tasks["CheckUp"]} | <b>PA:</b> {tasks["Pause"]} | <b>SV:</b> {tasks["SamVid"]}
-<b>CM:</b> {tasks["ConvertMedia"]} | <b>CP:</b> {tasks["Compress"]} | <b>TR:</b> {tasks["Trim"]} | <b>FF:</b> {tasks["FFmpeg"]}
+<b>CM:</b> {tasks["ConvertMedia"]} | <b>CP:</b> {tasks["Compress"]} | <b>TR:</b> {tasks["Trim"]} | <b>SW:</b> {tasks["Swap"]} | <b>FF:</b> {tasks["FFmpeg"]}
 
 <b>ODLS:</b> {get_readable_file_size(dl_speed)}/s
 <b>OULS:</b> {get_readable_file_size(up_speed)}/s

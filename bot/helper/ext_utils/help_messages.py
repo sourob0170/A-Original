@@ -132,35 +132,59 @@ These placeholders are automatically replaced with the actual file path.
 • You can add telegram link for small size input like photo to set watermark
 </blockquote>"""
 
-nsfw_keywords = [
-    "porn",
-    "onlyfans",
-    "nsfw",
-    "Brazzers",
-    "adult",
-    "xnxx",
-    "xvideos",
-    "nsfwcherry",
-    "hardcore",
-    "Pornhub",
-    "xvideos2",
-    "youporn",
-    "pornrip",
-    "playboy",
-    "hentai",
-    "erotica",
-    "blowjob",
-    "redtube",
-    "stripchat",
-    "camgirl",
-    "nude",
-    "fetish",
-    "cuckold",
-    "orgy",
-    "horny",
-    "swingers",
-    "ullu",
-]
+# Legacy nsfw_keywords removed - now using enhanced detection system in nsfw_detection.py
+
+# Enhanced NSFW Detection Help
+nsfw_detection_help = """
+🛡️ <b>Enhanced NSFW Detection System</b>
+
+The bot now features an advanced NSFW detection system with multiple layers of protection:
+
+<b>🔍 Detection Methods:</b>
+• <b>Enhanced Keywords:</b> Fuzzy matching, leetspeak detection, multi-language support
+• <b>AI Visual Analysis:</b> Computer vision APIs for image content and smart video frame extraction
+• <b>Audio Content Analysis:</b> Metadata extraction and text analysis from audio files
+• <b>Subtitle Text Analysis:</b> Full text extraction and analysis from subtitle files
+• <b>NLP Text Analysis:</b> Advanced text analysis using AI APIs
+• <b>Behavioral Tracking:</b> User behavior pattern analysis
+• <b>Confidence Scoring:</b> Probabilistic detection with adjustable thresholds
+
+<b>⚙️ Configuration Levels:</b>
+• <b>Strict:</b> Very sensitive, catches more content (threshold: 0.3)
+• <b>Moderate:</b> Balanced approach (threshold: 0.7) - Default
+• <b>Permissive:</b> Only obvious NSFW content (threshold: 0.9)
+
+<b>🎯 Features:</b>
+• Real-time content analysis
+• Caching for improved performance
+• Multi-provider API support
+• Detailed logging and statistics
+
+<b>📊 Available Commands:</b>
+• <code>/nsfwstats</code> - View detection statistics
+• <code>/nsfwtest [text]</code> - Test detection on content
+
+<b>🔧 Supported APIs:</b>
+• Google Cloud Vision API
+• OpenAI GPT-4 Vision
+• Google Perspective API
+• OpenAI Moderation API
+• AWS Rekognition (planned)
+• Azure Content Moderator (planned)
+
+<b>🚀 Performance:</b>
+• Cached results for faster repeated checks
+• Async processing to avoid blocking
+• Progressive analysis (quick checks first)
+• Configurable file size limits
+
+<b>📈 Analytics:</b>
+• Detection accuracy tracking
+• Performance metrics
+• Error monitoring and logging
+
+The system is designed to provide excellent performance and accuracy with minimal administrative overhead.
+"""
 
 mirror = """<b>Send link along with command line or </b>
 
@@ -558,6 +582,67 @@ Add specific tracks (video, audio, subtitle, attachment) to media files.
 • Settings with value 'none' will not be used in command generation
 • If a specified index is not available, the system will use the first available index
 • When using multiple indices with multi-link, tracks are added in the order of input files
+"""
+
+swap_media = """<b>Swap Media</b>: -swap -swap-audio -swap-video -swap-subtitle
+
+<blockquote>Reorder media tracks by language priority or index position</blockquote>
+
+Reorder tracks within media files using either language-based or index-based swapping.
+
+<b>Basic Usage:</b>
+- <code>-swap</code>: Swap all enabled track types based on settings
+- <code>-swap-audio</code>: Swap only audio tracks
+- <code>-swap-video</code>: Swap only video tracks
+- <code>-swap-subtitle</code>: Swap only subtitle tracks
+
+<b>Two Swapping Modes:</b>
+
+<b>1. Language-based Swapping:</b>
+Reorders tracks based on language priority. Tracks with higher priority languages are moved to the front.
+
+<b>2. Index-based Swapping:</b>
+Swaps tracks at specific positions according to the defined pattern.
+
+<b>Language-based Examples:</b>
+- Language order: <code>eng,hin,jpn</code>
+- Result: English tracks first, Hindi second, Japanese third, others maintain original order
+- Tracks without language tags are placed after prioritized languages
+
+<b>Index-based Examples:</b>
+- Index order: <code>0,1</code> - Swaps first two tracks (track 0 ↔ track 1)
+- Index order: <code>1,2,0</code> - Rotates first three tracks (0→1, 1→2, 2→0)
+- Index order: <code>2,1,0</code> - Reverses first three tracks
+- Single index: <code>1</code> - No swapping occurs (need at least 2 indices)
+
+<b>Configuration Settings:</b>
+- <b>Use Language Mode</b>: Toggle between language-based (true) or index-based (false) swapping
+- <b>Language Order</b>: Priority order for languages (e.g., "eng,hin,jpn")
+- <b>Index Order</b>: Swap pattern for track positions (e.g., "0,1" or "1,2,0")
+
+<b>Examples:</b>
+/cmd link -swap
+/cmd link -swap-audio -swap-video
+/cmd link -swap -del
+/cmd link -swap-audio -m (with multi-link feature)
+
+<b>Multi-Link Integration:</b>
+- <code>/cmd link1 link2 -swap -m</code>: Swap tracks in all files
+- <code>/cmd link1 link2 -swap-audio -m</code>: Swap only audio tracks in all files
+
+<b>Important Notes:</b>
+• The Swap feature must be enabled in both the bot settings and user settings
+• The main Swap toggle and the specific track type toggles must be enabled
+• Configure swap settings in Media Tools settings
+• Swap priority can be set to control when it runs in the processing pipeline
+• Language-based swapping works best with properly tagged media files
+• Index-based swapping gives precise control over track order
+• Invalid indices are automatically handled and ignored
+• When swap is enabled through settings, original files are automatically deleted after processing
+• Use the -del flag to delete original files after swapping (or -del f to keep original files)
+• Settings with value 'none' will not be used in command generation
+• If specified languages are not found, tracks maintain their original order
+• Swap operations preserve all track metadata and properties
 """
 
 extract_media = """<b>Extract Media</b>: -extract -extract-video -extract-audio -extract-subtitle -extract-attachment
@@ -1133,6 +1218,10 @@ VT_HELP_DICT = {
     "main": virustotal_help,
 }
 
+NSFW_HELP_DICT = {
+    "main": nsfw_detection_help,
+}
+
 # Streamrip help content
 streamrip_main = """<b>🎵 Streamrip Downloads</b>
 
@@ -1677,6 +1766,207 @@ ZOTIFY_HELP_DICT = {
     "Troubleshooting": zotify_troubleshooting,
 }
 
+# Tool Commands Help
+tool_main = f"""<b>🛠️ Tool Commands</b>
+
+The /tool command provides various media conversion and processing utilities.
+
+<b>📱 Usage:</b>
+/{BotCommands.ToolCommand[0]} [tool_type] [options]
+/{BotCommands.ToolCommand[1]} [tool_type] [options]
+
+<b>🎬 Media Conversion Tools:</b>
+• <code>gif</code> - Convert video to Telegram GIF
+• <code>sticker</code> - Convert image/video/text to sticker
+• <code>emoji</code> - Convert image/video to emoji
+• <code>voice</code> - Convert audio to voice message
+• <code>vnote</code> - Convert video to video note (≤1 min)
+
+<b>🖼️ Image Processing Tools:</b>
+• <code>remBgImg</code> - Remove image background
+• <code>enhFace</code> - Enhance facial features
+• <code>resImg</code> - Resize image (shows menu)
+• <code>resImg [width] [height]</code> - Resize to specific dimensions
+
+<b>📝 Text Processing Tools:</b>
+• <code>countWord</code> - Count words in text
+• <code>countChar</code> - Count characters in text
+• <code>revText</code> - Reverse text
+
+<b>📦 Other Tools:</b>
+• <code>[GitHub_URL]</code> - Download GitHub repo as ZIP
+
+<b>💡 Usage Tips:</b>
+• Reply to a file/message when using media tools
+• Use /tool without parameters to see detailed help
+• Most tools work with various file formats
+• Processing time depends on file size and complexity"""
+
+tool_media_conversion = """<b>🎬 Media Conversion Tools</b>
+
+<b>🎞️ GIF Conversion:</b>
+<code>/tool gif</code>
+• Reply to a video to convert to GIF
+• Maximum duration: 10 seconds (optimized for Telegram)
+• Output: Animated GIF with optimized palette
+• Supports: MP4, AVI, MOV, WebM, etc.
+
+<b>🏷️ Sticker Creation:</b>
+<code>/tool sticker</code> (reply to image/video)
+<code>/tool sticker [text]</code> (create text sticker)
+• Image: Converts to 512x512 WebP sticker
+• Video: Creates animated WebP sticker (3 seconds max)
+• Text: Creates text sticker with outline
+• Output format: WebP (Telegram sticker format)
+
+<b>😀 Emoji Creation:</b>
+<code>/tool emoji</code>
+• Reply to image or video
+• Creates 100x100 WebP emoji
+• Video: Animated emoji (3 seconds max)
+• Perfect for custom emoji reactions
+
+<b>🎤 Voice Message:</b>
+<code>/tool voice</code>
+• Reply to any audio file
+• Converts to OGG Opus format
+• Optimized for voice message quality
+• Supports: MP3, WAV, FLAC, M4A, etc.
+
+<b>📹 Video Note:</b>
+<code>/tool vnote</code>
+• Reply to video (max 1 minute)
+• Creates circular video note (240x240)
+• Perfect for quick video messages
+• Auto-crops to square format"""
+
+tool_image_processing = """<b>🖼️ Image Processing Tools</b>
+
+<b>🎨 Background Removal:</b>
+<code>/tool remBgImg</code>
+• Reply to any image
+• Removes background using color detection
+• Output: PNG with transparency
+• Works best with solid backgrounds
+
+<b>✨ Face Enhancement:</b>
+<code>/tool enhFace</code>
+• Reply to image with faces
+• Enhances contrast, sharpness, and color
+• Applies unsharp mask for better detail
+• Output: High-quality JPEG
+
+<b>📐 Image Resizing:</b>
+<code>/tool resImg</code> - Shows preset menu
+<code>/tool resImg [width] [height]</code> - Custom size
+
+<b>📱 Available Presets:</b>
+1. 1:1 DP Square (512×512)
+2. 16:9 Widescreen (1920×1080)
+3. 9:16 Story (1080×1920)
+4. 2:3 Portrait (1080×1620)
+5. 1:2 Vertical (1080×2160)
+6. 2:1 Horizontal (2160×1080)
+7. 3:2 Standard (1920×1280)
+8. IG Post (1080×1080)
+9. YT Banner (2560×1440)
+10. YT Thumb (1280×720)
+11. X Header (1500×500)
+12. X Post (1200×675)
+13. LinkedIn Banner (1584×396)
+14. WhatsApp DP (640×640)
+15. Small Thumb (320×240)
+16. Medium Thumb (640×480)
+17. Wide Banner (1920×600)
+
+<b>💡 Custom Resize Examples:</b>
+<code>/tool resImg 800 600</code> - Resize to 800×600
+<code>/tool resImg 1920 1080</code> - Full HD resolution"""
+
+tool_text_processing = """<b>📝 Text Processing Tools</b>
+
+<b>📊 Word Counter:</b>
+<code>/tool countWord</code>
+• Reply to text message or text file
+• Counts total words in the text
+• Also shows character count and lines
+• Supports large text files
+
+<b>🔢 Character Counter:</b>
+<code>/tool countChar</code>
+• Reply to text message or text file
+• Counts total characters (with and without spaces)
+• Shows word count and line count
+• Detailed text statistics
+
+<b>🔄 Text Reverser:</b>
+<code>/tool revText</code>
+• Reply to text message or text file
+• Reverses the entire text string
+• Shows both original and reversed text
+• Useful for text manipulation
+
+<b>💡 Usage Examples:</b>
+• Reply to any text message
+• Reply to .txt files
+• Provide text after command: <code>/tool countWord Hello World</code>
+• Works with any language and special characters
+
+<b>📋 Output Format:</b>
+All text tools provide detailed statistics including:
+• Word count
+• Character count (with/without spaces)
+• Line count (where applicable)
+• Text preview for long content"""
+
+tool_other_features = """<b>📦 Other Tools & Features</b>
+
+<b>📥 GitHub Repository Download:</b>
+<code>/tool [repository_URL]</code>
+
+<b>🔗 Supported URL Formats:</b>
+• https://github.com/username/repository
+• https://github.com/username/repository.git
+• http://github.com/username/repository
+• git@github.com:username/repository.git
+
+<b>💡 Examples:</b>
+<code>/tool https://github.com/torvalds/linux</code>
+<code>/tool https://github.com/microsoft/vscode</code>
+<code>/tool git@github.com:AeonOrg/Aeon-MLTB.git</code>
+
+<b>📋 Download Details:</b>
+• Downloads the latest main/master branch
+• Provides ZIP file with complete repository
+• Shows file size and repository name
+• Automatic branch detection (main → master fallback)
+
+<b>⚡ Performance Notes:</b>
+• Large repositories may take time to download
+• File size is displayed before upload
+• Temporary files are automatically cleaned up
+• Works with both public and accessible private repos
+
+<b>🛡️ Error Handling:</b>
+• Invalid URLs are detected and rejected
+• Network errors are handled gracefully
+• Repository not found errors are reported
+• Automatic cleanup on failures
+
+<b>🎯 Use Cases:</b>
+• Download source code for analysis
+• Backup repositories locally
+• Share code with team members
+• Quick access to project files"""
+
+TOOL_HELP_DICT = {
+    "main": tool_main,
+    "Media-Conversion": tool_media_conversion,
+    "Image-Processing": tool_image_processing,
+    "Text-Processing": tool_text_processing,
+    "Other-Features": tool_other_features,
+}
+
 # QuickInfo help content
 quickinfo_main = """<b>🆔 QuickInfo</b>
 
@@ -1828,6 +2118,212 @@ QUICKINFO_HELP_DICT = {
     "Examples": quickinfo_examples,
 }
 
+# File-to-Link help content
+file_to_link_main = """<b>📁 File-to-Link Converter</b>
+
+Convert any media file to permanent download and streaming links with superfast access.
+
+<b>🚀 Usage:</b>
+• Reply to any media file with <code>/f2l</code> or <code>/file2link</code>
+• <i>Note: Auto-processing is disabled. You must use the command manually.</i>
+
+<b>📋 Supported Formats:</b>
+• <b>Videos:</b> MP4, AVI, MKV, MOV, WebM, FLV, WMV, M4V, TS, 3GP
+• <b>Audio:</b> MP3, M4A, FLAC, WAV, OGG, OPUS, AAC, WMA
+• <b>Documents:</b> PDF, DOCX, TXT, ZIP, RAR, 7Z, etc.
+• <b>Images:</b> JPG, PNG, GIF, WebP, TIFF, BMP
+
+<b>✨ Features:</b>
+• 💥 Superfast download links
+• 🎬 Direct streaming for videos/audio
+• 🔒 Secure hash-based access
+• 💎 Permanent links (won't expire)
+• 📊 Real-time system monitoring
+• 🌐 Custom domain support
+• 🚫 Ad-free experience
+• 🔐 Password protection (optional)
+• 📍 User DC detection for optimal performance
+
+<b>🎯 How it works:</b>
+1. Reply to any media file with <code>/f2l</code>
+2. Bot processes and forwards file to storage
+3. Generates secure download and stream links
+4. Links are cached for instant future access
+5. Enjoy permanent, fast access to your files!
+
+<b>⚡ Performance:</b>
+• Load balancing across multiple bot clients
+• Intelligent caching system
+• Rate limiting for fair usage
+• Real-time system monitoring"""
+
+file_to_link_config = """<b>🔧 File-to-Link Configuration</b>
+
+Configure File-to-Link settings for optimal performance and security.
+
+<b>📋 Basic Settings:</b>
+
+<b>FILE_TO_LINK_ENABLED</b>
+• <code>True</code> - Enable File-to-Link functionality
+• <code>False</code> - Disable File-to-Link functionality
+• Default: <code>True</code>
+
+<b>BASE_URL</b>
+• Custom domain for links (e.g., "https://mydomain.com/")
+• Leave empty for auto-detection (Heroku deployments)
+• Auto-configured from HEROKU_APP_NAME if available
+• Must start with http:// or https://
+• Should end with "/" for proper URL generation
+
+<b>🔒 Security Settings:</b>
+
+<b>STREAM_SECURITY_HASH</b>
+• <code>True</code> - Enable hash-based security (recommended)
+• <code>False</code> - Disable hash security (less secure)
+• Default: <code>True</code>
+
+<b>STREAM_PASSWORD_PROTECTION</b>
+• <code>True</code> - Enable password protection for links
+• <code>False</code> - No password protection
+• Default: <code>False</code>
+
+<b>STREAM_DEFAULT_PASSWORD</b>
+• Default password for protected links
+• Minimum 6 characters recommended
+• Leave empty if password protection disabled
+
+<b>BANNED_STREAM_CHANNELS</b>
+• Comma-separated list of banned channel IDs
+• Example: <code>"-1001234567890,-1001234567891"</code>
+• Files from these channels won't be processed"""
+
+file_to_link_performance = """<b>⚡ Performance & Optimization</b>
+
+Configure performance settings for optimal File-to-Link operation.
+
+<b>🚀 Caching Settings:</b>
+
+<b>STREAM_CACHE_ENABLED</b>
+• <code>True</code> - Enable caching for better performance
+• <code>False</code> - Disable caching (slower but uses less memory)
+• Default: <code>True</code>
+
+
+
+<b>📊 Load Balancing:</b>
+
+<b>STREAM_LOAD_BALANCING</b>
+• <code>True</code> - Enable multi-client load balancing
+• <code>False</code> - Use single client only
+• Default: <code>True</code>
+
+<b>HELPER_TOKENS</b>
+• Bot tokens for helper bots (space-separated)
+• Example: <code>"token1 token2 token3"</code>
+• Used for load balancing and better performance
+• Unlimited helper bots supported
+
+<b>🎯 Storage Settings:</b>
+
+<b>LEECH_DUMP_CHAT</b>
+• Chat IDs where files are stored (list format)
+• Supports prefixed formats:
+  - <code>["b:-1001234567890"]</code> - Bot upload
+  - <code>["u:@channel"]</code> - User upload
+  - <code>["h:@group|123456"]</code> - Hybrid upload
+• Example: <code>["-1001234567890", "b:@mychannel"]</code>
+• Required for File-to-Link functionality
+
+<b>🌟 Interface Settings:</b>
+
+<b>STREAM_NO_ADS</b>
+• <code>True</code> - Ad-free experience
+• <code>False</code> - Allow ads
+• Default: <code>True</code>
+
+<b>PERMANENT_LINKS</b>
+• <code>True</code> - Links never expire
+• <code>False</code> - Links may expire
+• Default: <code>True</code>"""
+
+file_to_link_troubleshooting = """<b>🔧 Troubleshooting & Tips</b>
+
+Common issues and solutions for File-to-Link functionality.
+
+<b>❌ Common Errors:</b>
+
+<b>"Dump chat not configured"</b>
+• Solution: Set LEECH_DUMP_CHAT with valid chat IDs
+• Format: <code>["-1001234567890"]</code> or <code>["b:@channel"]</code>
+• Ensure bot has admin rights in dump chat
+
+<b>"Rate limit exceeded"</b>
+• Solution: Wait before trying again
+• Rate limiting prevents abuse
+• Contact admin if persistent
+
+<b>"No supported file found"</b>
+• Solution: Ensure you're replying to a media file
+• Supported: videos, audio, documents, images
+• File must be accessible to the bot
+
+<b>"Failed to generate links"</b>
+• Solution: Check streaming configuration
+• Verify FILE_TO_LINK_ENABLED is True
+• Ensure main web server is running
+• Ensure BASE_URL is configured (auto-detected for Heroku)
+
+<b>⚡ Performance Tips:</b>
+
+<b>For Better Speed:</b>
+• Enable STREAM_CACHE_ENABLED
+• Configure HELPER_TOKENS for load balancing
+• Ensure main web server is optimized
+
+<b>For Better Security:</b>
+• Enable STREAM_SECURITY_HASH
+• Use STREAM_PASSWORD_PROTECTION
+• Configure BANNED_STREAM_CHANNELS
+• Use private dump chats
+
+<b>For Reliability:</b>
+• Use multiple dump chats in LEECH_DUMP_CHAT
+• Enable PERMANENT_LINKS
+• Regular monitoring with /streamstats
+• Keep helper bots active
+
+<b>📊 Monitoring:</b>
+• Use <code>/streamstats</code> for system statistics
+• Monitor cache usage and performance
+• Check load balancing status
+• Verify configuration validation
+
+<b>🔄 Maintenance:</b>
+• Restart bot if issues persist
+• Clear cache periodically (automatic)
+• Update helper bot tokens if needed
+• Monitor dump chat storage space
+
+<b>🤖 Auto-Detection (Heroku):</b>
+• BASE_URL auto-configured from HEROKU_APP_NAME
+• Requires HEROKU_API_KEY for API access
+• Automatically sets https://yourapp.herokuapp.com/
+• Manual configuration overrides auto-detection
+• Check logs for auto-detection status
+
+<b>🔗 Web Server Integration:</b>
+• Streaming is automatically integrated with main web server
+• Single port usage - perfect for Heroku deployment
+• Unified web interface with existing features
+• No additional configuration needed"""
+
+FILE_TO_LINK_HELP_DICT = {
+    "main": file_to_link_main,
+    "Configuration": file_to_link_config,
+    "Performance": file_to_link_performance,
+    "Troubleshooting": file_to_link_troubleshooting,
+}
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -1869,20 +2365,16 @@ user_settings_text = {
     "MEGA_EMAIL": "Send your MEGA.nz account email address. This will be used for MEGA uploads when 'My Token/Config' is enabled. Leave empty to use the bot owner's credentials. Timeout: 60 sec",
     "MEGA_PASSWORD": "Send your MEGA.nz account password. This will be used for MEGA uploads when 'My Token/Config' is enabled. Leave empty to use the bot owner's credentials. Timeout: 60 sec",
     # MEGA Upload Settings
-    "MEGA_UPLOAD_FOLDER": "Send the default folder path in your MEGA account for uploads. Leave empty to upload to root folder.\n\nExample: /MyBot/Uploads - upload to specific folder\nExample: (leave empty) - upload to root folder\n\nTimeout: 60 sec",
-    "MEGA_UPLOAD_EXPIRY_DAYS": "Send the number of days after which MEGA links should expire. Set to 0 for no expiry.\n\nExample: 30 - links expire after 30 days\nExample: 7 - links expire after 1 week\nExample: 0 - links never expire\n\nTimeout: 60 sec",
-    "MEGA_UPLOAD_PASSWORD": "Send a password to protect MEGA uploads. Leave empty for no password protection.\n\nExample: mySecurePassword123 - protect with password\nExample: (leave empty) - no password protection\n\nTimeout: 60 sec",
-    "MEGA_UPLOAD_ENCRYPTION_KEY": "Send a custom encryption key for MEGA uploads. Leave empty to use default encryption.\n\nExample: myCustomKey123 - use custom encryption\nExample: (leave empty) - use default encryption\n\nTimeout: 60 sec",
-    # MEGA Clone Settings
-    "MEGA_CLONE_TO_FOLDER": "Send the default folder path in your MEGA account for cloned files. Leave empty to clone to root folder.\n\nExample: /MyBot/Cloned - clone to specific folder\nExample: (leave empty) - clone to root folder\n\nTimeout: 60 sec",
+    # "MEGA_UPLOAD_FOLDER" removed - using folder selector instead
+    # "MEGA_UPLOAD_EXPIRY_DAYS" removed - premium feature not implemented
+    # "MEGA_UPLOAD_PASSWORD" removed - premium feature not implemented
+    # "MEGA_UPLOAD_ENCRYPTION_KEY" removed - not supported by MEGA SDK v4.8.0
     # Additional MEGA settings (these are toggle settings, no text input needed)
     "MEGA_UPLOAD_PUBLIC": "Toggle to enable/disable generating public MEGA links for uploads.",
-    "MEGA_UPLOAD_PRIVATE": "Toggle to enable/disable generating private MEGA links for uploads.",
-    "MEGA_UPLOAD_UNLISTED": "Toggle to enable/disable generating unlisted MEGA links for uploads.",
+    # "MEGA_UPLOAD_PRIVATE" removed - not supported by MEGA SDK v4.8.0
+    # "MEGA_UPLOAD_UNLISTED" removed - not supported by MEGA SDK v4.8.0
     "MEGA_UPLOAD_THUMBNAIL": "Toggle to enable/disable generating thumbnails for MEGA uploads.",
-    "MEGA_UPLOAD_DELETE_AFTER": "Toggle to enable/disable deleting files after successful MEGA upload.",
-    "MEGA_CLONE_PRESERVE_STRUCTURE": "Toggle to enable/disable preserving folder structure when cloning from MEGA.",
-    "MEGA_CLONE_OVERWRITE": "Toggle to enable/disable overwriting existing files when cloning to MEGA.",
+    # "MEGA_UPLOAD_DELETE_AFTER" removed - always delete after upload
     # Metadata Settings
     "METADATA_KEY": "Set legacy metadata key for backward compatibility.\n\nExample: title=My Video,author=John Doe - set title and author\nExample: none - don't use legacy metadata\n\nThis is a legacy option, consider using the specific metadata options instead.\n\nTimeout: 60 sec",
     "METADATA_ALL": "Set metadata text to be used for all metadata fields (title, author, comment) for all track types.\n\nExample: My Project - apply to all metadata fields\nExample: none - don't set global metadata\n\nThis takes priority over all other metadata settings.\n\nTimeout: 60 sec",
@@ -1990,7 +2482,7 @@ Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp
     "HELPER_TOKENS": """Send your helper bot tokens separated by space. These bots will be used for hyper download to speed up your downloads.
 Example: 1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ 0987654321:ZYXWVUTSRQPONMLKJIHGFEDCBA
 
-NOTE: You can add up to 20 helper bots. Make sure the bots are created using @BotFather and are not being used by any other bot.
+NOTE: You can add unlimited helper bots. Make sure the bots are created using @BotFather and are not being used by any other bot.
 To use these bots, you need to enable them using the 'Enable Helper Bots' button in the leech settings menu.
 Timeout: 60 sec""",
     "ENABLE_HELPER_BOTS": """Enable or disable helper bots for hyper download.
@@ -2021,7 +2513,7 @@ Timeout: 60 sec""",
 # - Examples with explanations
 # - Timeout information (where applicable)
 media_tools_text = {
-    "MEDIA_TOOLS_ENABLED": "Enable or disable media tools features. You can enable specific tools by providing a comma-separated list.\n\nExample: true - enable all media tools\nExample: watermark,merge,convert - enable only these tools\nExample: false - disable all media tools\n\nAvailable tools: watermark, merge, convert, compression, trim, extract, add, metadata, ffmpeg, sample\n\nTimeout: 60 sec",
+    "MEDIA_TOOLS_ENABLED": "Enable or disable media tools features. You can enable specific tools by providing a comma-separated list.\n\nExample: true - enable all media tools\nExample: watermark,merge,convert - enable only these tools\nExample: false - disable all media tools\n\nAvailable tools: watermark, merge, convert, compression, trim, extract, remove, add, swap, metadata, xtra, sample, screenshot\n\nTimeout: 60 sec",
     "MEDIA_TOOLS_PRIORITY": "Set priority for media tools processing. Lower number means higher priority.\n\nExample: 1 - highest priority\nExample: 10 - lower priority\n\nTimeout: 60 sec",
     # Watermark Settings
     "WATERMARK_ENABLED": "Enable or disable watermark feature. Send 'true' to enable or 'false' to disable.\n\nExample: true - enable watermark\nExample: false - disable watermark\n\nPriority:\n1. Global (enabled) & User (disabled) -> Apply global\n2. User (enabled) & Global (disabled) -> Apply user\n3. Global (enabled) & User (enabled) -> Apply user\n4. Global (disabled) & User (disabled) -> Don't apply\n\nUse the Reset button to reset all watermark settings to default.",
@@ -2318,6 +2810,25 @@ media_tools_text = {
     "REMOVE_ATTACHMENT_FORMAT": "Set the format for output after attachment removal. Usually not needed as the container format is preserved.\n\nExample: none - keep original format (recommended)\n\nTimeout: 60 sec",
     "REMOVE_ATTACHMENT_INDEX": "Specify which attachment(s) to remove by index (0-based). Leave empty or set to 'none' to remove all attachments.\n\nExample: 0 - remove first attachment only\nExample: 1 - remove second attachment only\nExample: 0,1,2 - remove first, second, and third attachments\nExample: all - remove all attachments\n\nTimeout: 60 sec",
     "REMOVE_ATTACHMENT_FILTER": "Set a filter pattern for removing attachments. Only attachments matching the pattern will be removed.\n\nExample: *.ttf - remove only font files\nExample: *.png - remove only PNG images\nExample: none - remove all attachments\n\nTimeout: 60 sec",
+    # Swap Settings
+    "SWAP_ENABLED": "Enable or disable the swap feature globally.\n\nExample: true - enable swap feature\nExample: false - disable swap feature\n\nWhen enabled, you can reorder media tracks using the -swap flag or through the configured settings.\n\nTimeout: 60 sec",
+    "SWAP_PRIORITY": "Set the priority of the swap process in the media processing pipeline.\n\nExample: 6 - run swap between add and remove (default)\nExample: 3 - run swap before convert\n\nLower numbers run earlier. Default order:\n1. Merge\n2. Watermark\n3. Convert\n4. Trim\n5. Compression\n6. Extract\n7. Add\n8. Swap (default: 6)\n9. Remove\n\nTimeout: 60 sec",
+    "SWAP_REMOVE_ORIGINAL": "Enable or disable deleting the original file after swapping tracks.\n\nExample: true - delete original file after successful swap operation\nExample: false - keep both original and modified files\n\nThis can be overridden by using the -del flag in the command.\n\nTimeout: 60 sec",
+    # Audio Swap Settings
+    "SWAP_AUDIO_ENABLED": "Enable or disable audio track swapping.\n\nExample: true - enable audio track swapping\nExample: false - disable audio track swapping\n\nWhen enabled, audio tracks will be reordered according to the specified settings.\n\nTimeout: 60 sec",
+    "SWAP_AUDIO_USE_LANGUAGE": "Choose between language-based or index-based audio track swapping.\n\nExample: true - use language-based swapping (reorder by language priority)\nExample: false - use index-based swapping (swap specific track positions)\n\nTimeout: 60 sec",
+    "SWAP_AUDIO_LANGUAGE_ORDER": "Set the language priority order for audio track swapping (used when USE_LANGUAGE is true).\n\nExample: eng,hin,jpn - English first, Hindi second, Japanese third\nExample: spa,eng - Spanish first, English second\nExample: none - don't set language order\n\nTimeout: 60 sec",
+    "SWAP_AUDIO_INDEX_ORDER": "Set the index swap pattern for audio tracks (used when USE_LANGUAGE is false).\n\nExample: 0,1 - swap first two tracks\nExample: 1,2,0 - rotate first three tracks\nExample: 2,1,0 - reverse first three tracks\nExample: none - don't swap by index\n\nTimeout: 60 sec",
+    # Video Swap Settings
+    "SWAP_VIDEO_ENABLED": "Enable or disable video track swapping.\n\nExample: true - enable video track swapping\nExample: false - disable video track swapping\n\nWhen enabled, video tracks will be reordered according to the specified settings.\n\nTimeout: 60 sec",
+    "SWAP_VIDEO_USE_LANGUAGE": "Choose between language-based or index-based video track swapping.\n\nExample: true - use language-based swapping (reorder by language priority)\nExample: false - use index-based swapping (swap specific track positions)\n\nTimeout: 60 sec",
+    "SWAP_VIDEO_LANGUAGE_ORDER": "Set the language priority order for video track swapping (used when USE_LANGUAGE is true).\n\nExample: eng,hin,jpn - English first, Hindi second, Japanese third\nExample: spa,eng - Spanish first, English second\nExample: none - don't set language order\n\nTimeout: 60 sec",
+    "SWAP_VIDEO_INDEX_ORDER": "Set the index swap pattern for video tracks (used when USE_LANGUAGE is false).\n\nExample: 0,1 - swap first two tracks\nExample: 1,2,0 - rotate first three tracks\nExample: 2,1,0 - reverse first three tracks\nExample: none - don't swap by index\n\nTimeout: 60 sec",
+    # Subtitle Swap Settings
+    "SWAP_SUBTITLE_ENABLED": "Enable or disable subtitle track swapping.\n\nExample: true - enable subtitle track swapping\nExample: false - disable subtitle track swapping\n\nWhen enabled, subtitle tracks will be reordered according to the specified settings.\n\nTimeout: 60 sec",
+    "SWAP_SUBTITLE_USE_LANGUAGE": "Choose between language-based or index-based subtitle track swapping.\n\nExample: true - use language-based swapping (reorder by language priority)\nExample: false - use index-based swapping (swap specific track positions)\n\nTimeout: 60 sec",
+    "SWAP_SUBTITLE_LANGUAGE_ORDER": "Set the language priority order for subtitle track swapping (used when USE_LANGUAGE is true).\n\nExample: eng,hin,jpn - English first, Hindi second, Japanese third\nExample: spa,eng - Spanish first, English second\nExample: none - don't set language order\n\nTimeout: 60 sec",
+    "SWAP_SUBTITLE_INDEX_ORDER": "Set the index swap pattern for subtitle tracks (used when USE_LANGUAGE is false).\n\nExample: 0,1 - swap first two tracks\nExample: 1,2,0 - rotate first three tracks\nExample: 2,1,0 - reverse first three tracks\nExample: none - don't swap by index\n\nTimeout: 60 sec",
     # MediaInfo Settings
     "MEDIAINFO_ENABLED": "Enable or disable the MediaInfo command for detailed media information.\n\nExample: true - enable MediaInfo command\nExample: false - disable MediaInfo command\n\nWhen enabled, you can use the /mediainfo command to get detailed information about media files.\n\nTimeout: 60 sec",
     # Sample Video Settings
@@ -2351,7 +2862,7 @@ download_commands = f"""
 /{BotCommands.ZotifyLeechCommand[0]} or /{BotCommands.ZotifyLeechCommand[1]}: Leech music from Spotify to Telegram using Zotify. Supports URLs, search queries, and special downloads.
 /{BotCommands.ZotifySearchCommand[0]} or /{BotCommands.ZotifySearchCommand[1]}: Search for music on Spotify using Zotify.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
-/{BotCommands.MegaCloneCommand[0]} or /{BotCommands.MegaCloneCommand[1]} [mega_url]: Clone file/folder directly from MEGA to MEGA account.
+
 /{BotCommands.MegaSearchCommand[0]} or /{BotCommands.MegaSearchCommand[1]} [query]: Search through MEGA drive for files and folders.
 """
 
@@ -2389,6 +2900,9 @@ file_commands = f"""
 /{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
 /{BotCommands.SoxCommand[0]} or /{BotCommands.SoxCommand[1]}: Generate audio spectrum from audio files.
 /{BotCommands.PasteCommand}: Paste text/code to a pastebin service.
+/{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}: Convert media files to permanent download and streaming links with category management.
+/{BotCommands.ToolCommand[0]} or /{BotCommands.ToolCommand[1]}: Media conversion and processing tools (gif, sticker, emoji, voice, vnote, image processing, text tools). Also supports direct GitHub repo download with URL.
+/{BotCommands.IndexCommand}: Reindex all media files by comparing dump chat with database (Owner & Sudo only).
 """
 
 # Security & Authentication page
@@ -2403,6 +2917,8 @@ security_commands = f"""
 /{BotCommands.UsersCommand}: Show authorized users (Owner & Sudo only).
 /{BotCommands.GenSessionCommand[0]} or /{BotCommands.GenSessionCommand[1]}: Generate a Pyrogram session string securely.
 /{BotCommands.VirusTotalCommand}: Scan files or URLs for viruses using VirusTotal.
+/{BotCommands.NSFWStatsCommand}: View NSFW detection statistics and system status.
+/{BotCommands.NSFWTestCommand}: Test NSFW detection on text or media content.
 """
 
 # Settings & Configuration page
@@ -2426,6 +2942,9 @@ special_commands = f"""
 /{BotCommands.EncodeCommand[0]} or /{BotCommands.EncodeCommand[1]} [query]: Encode text using various encoding methods (Base64, Binary, Cryptography, etc.).
 /{BotCommands.DecodeCommand[0]} or /{BotCommands.DecodeCommand[1]} [query]: Decode text using various decoding methods.
 /{BotCommands.QuickInfoCommand[0]} or /{BotCommands.QuickInfoCommand[1]} [chat]: Get chat/user information with interactive buttons.
+/{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}: Convert media files to permanent download and streaming links.
+/{BotCommands.StreamStatsCommand[0]} or /{BotCommands.StreamStatsCommand[1]}: View File-to-Link system statistics and performance.
+/{BotCommands.WhisperCommand}: Send private whisper messages in group chats (reply to user or use -to flag for multiple targets).
 """
 
 # System Commands page
@@ -2439,6 +2958,7 @@ system_commands = f"""
 /{BotCommands.AExecCommand}: Execute async functions.
 /{BotCommands.ClearLocalsCommand}: Clear locals in exec functions.
 /{BotCommands.BroadcastCommand[0]} or /{BotCommands.BroadcastCommand[1]}: Broadcast a message to bot users.
+/{BotCommands.IndexCommand}: Reindex all media files by comparing dump chat with database.
 """
 
 # Help page
@@ -2460,4 +2980,5 @@ help_string = {
     "special": special_commands,
     "system": system_commands,
     "help": help_commands,
+    "f2l": "<b>📁 File-to-Link Help</b>\n\nUse the buttons below to explore File-to-Link features and configuration options.",
 }

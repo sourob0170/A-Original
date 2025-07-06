@@ -1,6 +1,6 @@
 import contextlib
 import re
-from asyncio import gather, sleep
+from asyncio import create_task, gather, sleep
 from re import match as re_match
 from time import time as get_time
 
@@ -151,8 +151,13 @@ async def send_message(
             bot_client,
         )
     except Exception as e:
-        LOGGER.error(str(e))
-        return str(e)
+        error_str = str(e)
+        # Don't log UserIsBlocked and InputUserDeactivated as errors since they're handled by callers
+        if not (
+            "USER_IS_BLOCKED" in error_str or "INPUT_USER_DEACTIVATED" in error_str
+        ):
+            LOGGER.error(error_str)
+        return error_str
 
 
 async def edit_message(
@@ -363,7 +368,7 @@ async def delete_message(*args):
                         )
                 continue
 
-            msgs.append(msg.delete())
+            msgs.append(create_task(msg.delete()))
             # Remove from database if it exists
             if hasattr(msg, "id") and hasattr(msg, "chat"):
                 try:

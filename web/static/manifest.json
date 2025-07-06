@@ -1,0 +1,82 @@
+{
+  "name": "StreamBot - Personal Media Platform",
+  "short_name": "StreamBot",
+  "description": "Your personal media streaming platform. Stream movies, TV shows, music, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#e50914",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["entertainment", "multimedia", "video", "audio"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/screenshots/desktop-home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "StreamBot Desktop Homepage"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Browse Movies",
+      "short_name": "Movies",
+      "description": "Browse movie collection",
+      "url": "/?type=video",
+      "icons": [
+        {
+          "src": "/static/icons/movie-icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Browse Music",
+      "short_name": "Music",
+      "description": "Browse music collection",
+      "url": "/?type=audio",
+      "icons": [
+        {
+          "src": "/static/icons/music-icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "description": "Search media library",
+      "url": "/?search=",
+      "icons": [
+        {
+          "src": "/static/icons/search-icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
+}

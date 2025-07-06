@@ -672,9 +672,9 @@ async def get_watermark_cmd(
             ]
 
             # Execute the command
-            stdout, _, code = await cmd_exec(cmd)
+            stdout, stderr, code = await cmd_exec(cmd)
 
-            if code == 0:
+            if code == 0 and stdout:
                 data = json.loads(stdout)
                 if data.get("streams"):
                     width = int(data["streams"][0].get("width", 0))
@@ -685,9 +685,13 @@ async def get_watermark_cmd(
                         needs_padding = True
                     else:
                         needs_padding = False
+            else:
+                LOGGER.warning(
+                    f"Failed to get video dimensions for {file}: {stderr}"
+                )
 
-        except Exception:
-            pass
+        except Exception as e:
+            LOGGER.warning(f"Error getting video dimensions for {file}: {e}")
 
     # Determine output file extension based on input file
     file_ext = os.path.splitext(file)[1].lower()
@@ -1130,13 +1134,15 @@ async def get_watermark_cmd(
                 "json",
                 file,
             ]
-            stdout, _, code = await cmd_exec(audio_info_cmd)
+            stdout, stderr, code = await cmd_exec(audio_info_cmd)
             duration = 10  # Default duration if we can't determine
 
-            if code == 0:
+            if code == 0 and stdout:
                 data = json.loads(stdout)
                 if data.get("format") and data["format"].get("duration"):
                     duration = float(data["format"]["duration"])
+            else:
+                LOGGER.warning(f"Failed to get audio duration for {file}: {stderr}")
 
             # Use the key as the watermark text
             watermark_text = key
@@ -2907,6 +2913,19 @@ async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=No
             else:
                 output_format = "mkv"
 
+    # Set default output format based on media type if not specified or empty
+    elif not output_format or output_format == "none":
+        if media_type == "video":
+            output_format = "mkv"
+        elif media_type == "audio":
+            output_format = "mp3"
+        elif media_type == "subtitle":
+            output_format = "srt"
+        elif media_type == "image":
+            output_format = "jpg"
+        else:
+            output_format = "mkv"
+
     # Check if all files have the same codec for video and audio
     # This is important for concat demuxer to work properly
     if media_type in ["video", "audio"]:
@@ -3351,7 +3370,7 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
                 )
             ):
                 output_format = first_file_ext
-            # Default formats based on media type
+            # Default formats based on media type if extension is not valid
             elif media_type == "video":
                 output_format = "mkv"
             elif media_type == "audio":
@@ -3360,9 +3379,18 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
                 output_format = "srt"
             else:
                 output_format = "mkv"
+        # No extension found, use default formats based on media type
+        elif media_type == "video":
+            output_format = "mkv"
+        elif media_type == "audio":
+            output_format = "mp3"
+        elif media_type == "subtitle":
+            output_format = "srt"
+        else:
+            output_format = "mkv"
 
-    # Set default output format based on media type if not specified
-    elif not output_format:
+    # Set default output format based on media type if not specified or empty
+    elif not output_format or output_format == "none":
         if media_type == "video":
             output_format = "mkv"
         elif media_type == "audio":
@@ -3574,8 +3602,8 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
                         + f"concat=n={len(normalized_inputs)}:v=1:a=0[outv]"
                     )
             # Fallback to original approach if there's an issue with dimensions
-            elif all_have_audio:
-                # All videos have audio, use video+audio concat
+            elif all_have_audio and not audio_inputs:
+                # All videos have audio and no separate audio processing needed, use video+audio concat
                 video_audio_inputs = []
                 for i, idx in video_inputs:
                     video_audio_inputs.append(f"[{i}:v:{idx}][{i}:a:0]")
@@ -3585,7 +3613,7 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
                     + f"concat=n={len(video_inputs)}:v=1:a=1[outv][outa]"
                 )
             else:
-                # Some videos don't have audio, use video-only concat
+                # Use video-only concat (either some videos don't have audio or we'll handle audio separately)
                 video_filter = (
                     "".join([f"[{i}:v:{idx}]" for i, idx in video_inputs])
                     + f"concat=n={len(video_inputs)}:v=1:a=0[outv]"
@@ -3689,12 +3717,17 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
 
         if outa_matches:
             # Map all audio outputs from filter_complex
+            # Use set to avoid duplicate mappings
+            mapped_tracks = set()
             for match in outa_matches:
                 track_num = match if match else "0"
-                map_args.extend(["-map", f"[outa{track_num}]"])
-                LOGGER.info(
-                    f"Mapping audio track from filter_complex: [outa{track_num}]"
-                )
+                track_label = f"[outa{track_num}]"
+                if track_label not in mapped_tracks:
+                    map_args.extend(["-map", track_label])
+                    mapped_tracks.add(track_label)
+                    LOGGER.info(
+                        f"Mapping audio track from filter_complex: {track_label}"
+                    )
         elif "[outa]" in filter_complex:
             # Single audio track from filter_complex
             map_args.extend(["-map", "[outa]"])
@@ -10526,3 +10559,246 @@ async def get_extract_cmd(
         return ["EXTRACT_MULTI_COMMAND", *commands], temp_file
     # No commands were generated
     return [], temp_file
+
+
+async def get_swap_cmd(
+    file_path,
+    swap_audio=False,
+    swap_video=False,
+    swap_subtitle=False,
+    audio_use_language=True,
+    video_use_language=True,
+    subtitle_use_language=True,
+    audio_language_order="eng,hin",
+    video_language_order="eng,hin",
+    subtitle_language_order="eng,hin",
+    audio_index_order="0,1",
+    video_index_order="0,1",
+    subtitle_index_order="0,1",
+    delete_original=False,
+):
+    """Generate FFmpeg command for swapping audio/video/subtitle tracks.
+
+    Args:
+        file_path: Path to the input file
+        swap_audio: Whether to swap audio tracks
+        swap_video: Whether to swap video tracks
+        swap_subtitle: Whether to swap subtitle tracks
+        audio_use_language: Whether to use language-based swapping for audio
+        video_use_language: Whether to use language-based swapping for video
+        subtitle_use_language: Whether to use language-based swapping for subtitle
+        audio_language_order: Comma-separated language order for audio (e.g., "eng,hin")
+        video_language_order: Comma-separated language order for video
+        subtitle_language_order: Comma-separated language order for subtitle
+        audio_index_order: Comma-separated index order for audio (e.g., "0,1")
+        video_index_order: Comma-separated index order for video
+        subtitle_index_order: Comma-separated index order for subtitle
+        delete_original: Whether to delete the original file
+
+    Returns:
+        tuple: (command_list, output_file_path)
+    """
+    import os
+
+    from bot.core.config_manager import Config
+    from bot.helper.ext_utils.media_utils import get_streams
+
+    # Get stream info
+    try:
+        streams = await get_streams(file_path)
+        if not streams:
+            LOGGER.error(f"No streams found in {file_path}")
+            return [], None
+
+    except Exception as e:
+        LOGGER.error(f"Error getting stream info: {e}")
+        return [], None
+
+    # Check if any swap is enabled
+    if not any([swap_audio, swap_video, swap_subtitle]):
+        LOGGER.info("No swap operations enabled")
+        return [], None
+
+    # Generate output file path
+    file_dir = os.path.dirname(file_path)
+    file_name = os.path.basename(file_path)
+    file_base, file_ext = os.path.splitext(file_name)
+    temp_file = os.path.join(file_dir, f"{file_base}.swapped{file_ext}")
+
+    # Get CPU count for threading
+    cpu_no = getattr(Config, "CPU_COUNT", 2)
+    thread_count = max(1, cpu_no // 2)
+
+    # Build the command
+    cmd = [
+        "xtra",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-progress",
+        "pipe:1",
+        "-i",
+        file_path,
+    ]
+
+    # Build mapping arguments
+    map_args = []
+
+    # Process video streams
+    video_streams = [s for s in streams if s.get("codec_type") == "video"]
+    if swap_video and video_streams:
+        if video_use_language:
+            # Language-based swapping
+            video_map_order = _get_language_based_order(
+                video_streams, video_language_order
+            )
+        else:
+            # Index-based swapping
+            video_map_order = _get_index_based_order(
+                video_streams, video_index_order
+            )
+
+        for _new_idx, original_idx in enumerate(video_map_order):
+            if original_idx is not None:
+                map_args.extend(["-map", f"0:v:{original_idx}"])
+    else:
+        # Map all video streams in original order
+        for i, _ in enumerate(video_streams):
+            map_args.extend(["-map", f"0:v:{i}"])
+
+    # Process audio streams
+    audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+    if swap_audio and audio_streams:
+        if audio_use_language:
+            # Language-based swapping
+            audio_map_order = _get_language_based_order(
+                audio_streams, audio_language_order
+            )
+        else:
+            # Index-based swapping
+            audio_map_order = _get_index_based_order(
+                audio_streams, audio_index_order
+            )
+
+        for _new_idx, original_idx in enumerate(audio_map_order):
+            if original_idx is not None:
+                map_args.extend(["-map", f"0:a:{original_idx}"])
+    else:
+        # Map all audio streams in original order
+        for i, _ in enumerate(audio_streams):
+            map_args.extend(["-map", f"0:a:{i}"])
+
+    # Process subtitle streams
+    subtitle_streams = [s for s in streams if s.get("codec_type") == "subtitle"]
+    if swap_subtitle and subtitle_streams:
+        if subtitle_use_language:
+            # Language-based swapping
+            subtitle_map_order = _get_language_based_order(
+                subtitle_streams, subtitle_language_order
+            )
+        else:
+            # Index-based swapping
+            subtitle_map_order = _get_index_based_order(
+                subtitle_streams, subtitle_index_order
+            )
+
+        for _new_idx, original_idx in enumerate(subtitle_map_order):
+            if original_idx is not None:
+                map_args.extend(["-map", f"0:s:{original_idx}"])
+    else:
+        # Map all subtitle streams in original order
+        for i, _ in enumerate(subtitle_streams):
+            map_args.extend(["-map", f"0:s:{i}"])
+
+    # Add mapping arguments to command
+    cmd.extend(map_args)
+
+    # Copy all streams without re-encoding
+    cmd.extend(["-c", "copy"])
+
+    # Add threading
+    cmd.extend(["-threads", str(thread_count)])
+
+    # Add output file
+    cmd.append(temp_file)
+
+    # Add delete original flag if requested
+    if delete_original:
+        cmd.append("-del")
+
+    return cmd, temp_file
+
+
+def _get_language_based_order(streams, language_order):
+    """Get stream order based on language priority.
+
+    Args:
+        streams: List of stream dictionaries
+        language_order: Comma-separated language codes (e.g., "eng,hin")
+
+    Returns:
+        list: List of original stream indices in the desired order
+    """
+    if not language_order or language_order == "none":
+        return list(range(len(streams)))
+
+    languages = [lang.strip().lower() for lang in language_order.split(",")]
+    ordered_indices = []
+    used_indices = set()
+
+    # First, add streams matching the language order
+    for lang in languages:
+        for i, stream in enumerate(streams):
+            if i in used_indices:
+                continue
+
+            stream_lang = stream.get("tags", {}).get("language", "und").lower()
+            if stream_lang == lang:
+                ordered_indices.append(i)
+                used_indices.add(i)
+                break  # Only take the first match for each language
+
+    # Then add remaining streams
+    for i, stream in enumerate(streams):
+        if i not in used_indices:
+            ordered_indices.append(i)
+
+    return ordered_indices
+
+
+def _get_index_based_order(streams, index_order):
+    """Get stream order based on index swapping.
+
+    Args:
+        streams: List of stream dictionaries
+        index_order: Comma-separated indices (e.g., "1,0" to swap first two)
+
+    Returns:
+        list: List of original stream indices in the desired order
+    """
+    if not index_order or index_order == "none":
+        return list(range(len(streams)))
+
+    try:
+        indices = [int(idx.strip()) for idx in index_order.split(",")]
+    except ValueError:
+        LOGGER.error(f"Invalid index order: {index_order}")
+        return list(range(len(streams)))
+
+    # Start with original order
+    ordered_indices = list(range(len(streams)))
+
+    # Apply swapping based on the provided indices
+    # If only one index is provided, no swapping occurs
+    if len(indices) >= 2:
+        # Swap the streams at the specified indices
+        for i in range(0, len(indices) - 1, 2):
+            if i + 1 < len(indices):
+                idx1, idx2 = indices[i], indices[i + 1]
+                if 0 <= idx1 < len(streams) and 0 <= idx2 < len(streams):
+                    ordered_indices[idx1], ordered_indices[idx2] = (
+                        ordered_indices[idx2],
+                        ordered_indices[idx1],
+                    )
+
+    return ordered_indices

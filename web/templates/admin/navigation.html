@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navigation Management - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #8b5cf6;
+            --secondary-color: #06b6d4;
+            --accent-color: #f59e0b;
+            --dark-bg: #0a0a0f;
+            --card-bg: #1e1e2e;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #151520 100%);
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        
+        .admin-header {
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+            padding: 1rem 0;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-bottom: none;
+            border-radius: 16px 16px 0 0 !important;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-outline-primary {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .form-control, .form-select {
+            background: rgba(30, 30, 46, 0.8);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #ffffff;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: rgba(30, 30, 46, 0.9);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(139, 92, 246, 0.25);
+            color: #ffffff;
+        }
+        
+        .nav-item-card {
+            background: rgba(30, 30, 46, 0.6);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="admin-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-compass me-2"></i>Navigation Management
+                </h1>
+                <a href="/admin" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <!-- Create Navigation Item -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plus me-2"></i>Create Navigation Item
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="createNavForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="navName" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="navName" name="name" required>
+                                <small class="form-text text-muted">Lowercase, no spaces (e.g., "about")</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="navDisplayName" class="form-label">Display Name</label>
+                                <input type="text" class="form-control" id="navDisplayName" name="display_name" required>
+                                <small class="form-text text-muted">Human-readable name (e.g., "About Us")</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="navUrl" class="form-label">URL</label>
+                                <input type="text" class="form-control" id="navUrl" name="url" required>
+                                <small class="form-text text-muted">Full URL or relative path (e.g., "/about" or "https://example.com")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="navIcon" class="form-label">Icon</label>
+                                <input type="text" class="form-control" id="navIcon" name="icon" value="📁">
+                                <small class="form-text text-muted">Emoji icon for the navigation item</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="navLocation" class="form-label">Location</label>
+                                <select class="form-select" id="navLocation" name="location">
+                                    <option value="header">Header</option>
+                                    <option value="footer">Footer</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="navPosition" class="form-label">Position</label>
+                                <input type="number" class="form-control" id="navPosition" name="position" value="0" min="0">
+                                <small class="form-text text-muted">Order position (0 = first)</small>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Create Navigation Item
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Header Navigation Items -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bars me-2"></i>Header Navigation Items
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if header_nav %}
+                    {% for nav_item in header_nav %}
+                    <div class="nav-item-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">
+                                    <span class="me-2">{{ nav_item.icon or '📁' }}</span>
+                                    {{ nav_item.display_name or nav_item.name.title() }}
+                                </h6>
+                                <small class="text-muted">{{ nav_item.url or '/category/' + nav_item.name }}</small>
+                                <br>
+                                <small class="text-muted">Position: {{ nav_item.position or 0 }}</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-warning me-2" onclick="editNavigation('{{ nav_item._id }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteNavigation('{{ nav_item._id }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-bars fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No header navigation items found.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Footer Navigation Items -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-grip-horizontal me-2"></i>Footer Navigation Items
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if footer_nav %}
+                    {% for nav_item in footer_nav %}
+                    <div class="nav-item-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">
+                                    <span class="me-2">{{ nav_item.icon or '📁' }}</span>
+                                    {{ nav_item.display_name or nav_item.name.title() }}
+                                </h6>
+                                <small class="text-muted">{{ nav_item.url or '/category/' + nav_item.name }}</small>
+                                <br>
+                                <small class="text-muted">Position: {{ nav_item.position or 0 }}</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-warning me-2" onclick="editNavigation('{{ nav_item._id }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteNavigation('{{ nav_item._id }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-grip-horizontal fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No footer navigation items found.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Create navigation form handler
+        document.getElementById('createNavForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/admin/navigation/create', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Navigation item created successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating navigation item: ' + error.message);
+            }
+        });
+        
+        // Edit navigation function
+        async function editNavigation(navId) {
+            const newDisplayName = prompt('Enter new display name:', '');
+            const newUrl = prompt('Enter new URL:', '');
+            const newIcon = prompt('Enter new icon:', '📁');
+            const newPosition = prompt('Enter new position:', '0');
+            
+            if (newDisplayName) {
+                const formData = new FormData();
+                formData.append('display_name', newDisplayName);
+                if (newUrl) formData.append('url', newUrl);
+                if (newIcon) formData.append('icon', newIcon);
+                if (newPosition) formData.append('position', newPosition);
+                
+                try {
+                    const response = await fetch(`/admin/navigation/${navId}/update`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Navigation item updated successfully!');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Error updating navigation item: ' + error.message);
+                }
+            }
+        }
+        
+        // Delete navigation function
+        async function deleteNavigation(navId) {
+            if (confirm('Are you sure you want to delete this navigation item? This action cannot be undone.')) {
+                try {
+                    const response = await fetch(`/admin/navigation/${navId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Navigation item deleted successfully!');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Error deleting navigation item: ' + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
