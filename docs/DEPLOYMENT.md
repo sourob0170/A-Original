@@ -16,7 +16,7 @@ Follow these steps to deploy Aeon to Heroku:
 ### 4. Run the Deployment Workflow
 1. Open the **Actions** tab.
 2. Select the `Deploy to Heroku` workflow from the available list.
-3. Click **Run workflow** and fill out the required inputs:
+3. Click **Run workflow** and select the branch you want to deploy and fill out the required inputs:
    - **BOT_TOKEN**: Your Telegram bot token.
    - **OWNER_ID**: Your Telegram ID.
    - **DATABASE_URL**: MongoDB connection string.

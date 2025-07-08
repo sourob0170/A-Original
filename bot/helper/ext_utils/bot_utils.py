@@ -26,6 +26,7 @@ from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     FILE_TO_LINK_HELP_DICT,
+    GALLERY_DL_HELP_DICT,
     MIRROR_HELP_DICT,
     NSFW_HELP_DICT,
     STREAMRIP_HELP_DICT,
@@ -137,6 +138,7 @@ def create_help_buttons():
     _build_command_usage(NSFW_HELP_DICT, "nsfw")
     _build_command_usage(STREAMRIP_HELP_DICT, "streamrip")
     _build_command_usage(ZOTIFY_HELP_DICT, "zotify")
+    _build_command_usage(GALLERY_DL_HELP_DICT, "gdl")
     _build_command_usage(FILE_TO_LINK_HELP_DICT, "f2l")
 
 
@@ -255,6 +257,12 @@ def arg_parser(items, arg_base):
         "-preserve",
         "-replace",
         "-mt",
+        # Gallery-dl flags
+        "--archive",
+        "--no-archive",
+        "--metadata",
+        "--no-metadata",
+        "--write-info-json",
     }
 
     while i < total:
@@ -329,6 +337,12 @@ def arg_parser(items, arg_base):
                 "-bt",
                 "-ut",
                 "-es",
+                # Gallery-dl flags
+                "--archive",
+                "--no-archive",
+                "--metadata",
+                "--no-metadata",
+                "--write-info-json",
             ]:
                 arg_base[part] = True
             else:
@@ -416,12 +430,11 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
 
     user_dict = user_data.get(user_id, {})
 
-    # Calculate max split size based on owner's session only
-    # Always use owner's session for max split size calculation, not user's own session
+    # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
+    # USER_TRANSMISSION is owner setting only, not user-specific
+    # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
     max_split_size = (
-        TgClient.MAX_SPLIT_SIZE
-        if hasattr(Config, "USER_SESSION_STRING") and Config.USER_SESSION_STRING
-        else 2097152000
+        TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
     )
 
     # If equal splits is enabled, always split the file into equal parts based on max split size
@@ -1296,6 +1309,15 @@ def is_flag_enabled(flag_name):
         "metadata-subtitle-author": "metadata",
         "z": "archive",  # Archive compression flag
         "e": "archive",  # Archive extraction flag
+        # Gallery-dl flags
+        "-archive": "gallery-dl",
+        "-no-archive": "gallery-dl",
+        "-metadata": "gallery-dl",
+        "-no-metadata": "gallery-dl",
+        "-write-info-json": "gallery-dl",
+        "-limit": "gallery-dl",
+        "-username": "gallery-dl",
+        "-password": "gallery-dl",
     }
 
     # Special case for -m flag (same directory operations)
@@ -1307,6 +1329,10 @@ def is_flag_enabled(flag_name):
         return (
             hasattr(Config, "ARCHIVE_FLAGS_ENABLED") and Config.ARCHIVE_FLAGS_ENABLED
         )
+
+    # Special case for gallery-dl flags
+    if clean_flag in ["-archive", "-no-archive", "-metadata", "-no-metadata", "-write-info-json", "-limit", "-username", "-password"]:
+        return Config.GALLERY_DL_ENABLED
 
     # If the flag is not in the map, assume it's enabled
     if clean_flag not in flag_to_tool_map:

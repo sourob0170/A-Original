@@ -331,6 +331,37 @@ def music_download_cleanup():
         return False
 
 
+def gallery_dl_cleanup():
+    """Optimized cleanup for gallery-dl download tasks."""
+    # Check if GC is enabled
+    if not _is_gc_enabled():
+        LOGGER.debug("Garbage collection is disabled via configuration")
+        return False
+
+    try:
+        if gc.garbage:
+            gc.garbage.clear()
+
+        # Gallery-dl can download many files, so be more aggressive with cleanup
+        gc.collect(0)
+        gc.collect(1)
+
+        # Always collect gen 2 for gallery-dl due to potential large file counts
+        if psutil is not None:
+            try:
+                if psutil.virtual_memory().percent > 70:  # Lower threshold for gallery-dl
+                    gc.collect(2)
+            except Exception:
+                pass
+        else:
+            # Fallback if psutil not available
+            gc.collect(2)
+
+        return True
+    except Exception:
+        return False
+
+
 def get_gc_status():
     """Get current garbage collection configuration and status."""
     gc_config = _get_gc_config()

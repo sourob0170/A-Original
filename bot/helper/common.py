@@ -4044,13 +4044,9 @@ class TaskConfig:
             if not is_gdrive_id(self.link):
                 raise ValueError(self.link)
 
-        self.user_transmission = TgClient.IS_PREMIUM_USER and (
-            self.user_dict.get("USER_TRANSMISSION")
-            or (
-                Config.USER_TRANSMISSION
-                and "USER_TRANSMISSION" not in self.user_dict
-            )
-        )
+        # USER_TRANSMISSION is owner setting only, not user-specific
+        # It determines if owner's premium session should be used for uploads
+        self.user_transmission = Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
 
         if self.user_dict.get("UPLOAD_PATHS", False):
             if self.up_dest in self.user_dict["UPLOAD_PATHS"]:
@@ -4246,10 +4242,9 @@ class TaskConfig:
                 and Config.LEECH_DUMP_CHAT
                 else ""
             )
-            self.hybrid_leech = TgClient.IS_PREMIUM_USER and (
-                self.user_dict.get("HYBRID_LEECH")
-                or (Config.HYBRID_LEECH and "HYBRID_LEECH" not in self.user_dict)
-            )
+            # HYBRID_LEECH is owner setting only, not user-specific
+            # It determines if bot should switch between bot/user session based on file size
+            self.hybrid_leech = Config.HYBRID_LEECH and TgClient.IS_PREMIUM_USER
             if self.bot_trans:
                 self.user_transmission = False
                 self.hybrid_leech = False
@@ -4340,13 +4335,9 @@ class TaskConfig:
             ):
                 self.user_transmission = False
                 self.hybrid_leech = False
-            # Calculate max split size based on owner's session only
-            # Always use owner's session for max split size calculation, not user's own session
+            # Calculate max split size based on USER_TRANSMISSION setting
             self.max_split_size = (
-                TgClient.MAX_SPLIT_SIZE
-                if hasattr(Config, "USER_SESSION_STRING")
-                and Config.USER_SESSION_STRING
-                else 2097152000
+                TgClient.MAX_SPLIT_SIZE if self.user_transmission else 2097152000
             )
 
             # Process command-line split size if provided
@@ -4354,7 +4345,12 @@ class TaskConfig:
                 if self.split_size.isdigit():
                     self.split_size = int(self.split_size)
                 else:
-                    self.split_size = get_size_bytes(self.split_size)
+                    parsed_size = get_size_bytes(self.split_size)
+                    if parsed_size and parsed_size > 0:
+                        self.split_size = parsed_size
+                    else:
+                        LOGGER.warning(f"Invalid split size format: {self.split_size}. Using default.")
+                        self.split_size = None
 
             # Get split size from command args, user settings, or bot config (in that order)
             # This ensures custom split sizes set by user or owner get priority
@@ -4387,6 +4383,11 @@ class TaskConfig:
 
             # Ensure split size doesn't exceed maximum allowed
             self.split_size = min(self.split_size, self.max_split_size)
+
+            # Final safety check: ensure split_size is never 0 or negative
+            if not self.split_size or self.split_size <= 0:
+                LOGGER.warning(f"Split size is invalid ({self.split_size}). Setting to max_split_size ({self.max_split_size})")
+                self.split_size = self.max_split_size
 
             if not self.as_doc:
                 self.as_doc = (
@@ -9608,23 +9609,16 @@ class TaskConfig:
             return dl_path
 
     async def proceed_split(self, dl_path, gid):
-        # Import the get_user_split_size function
-        from bot.helper.ext_utils.bot_utils import get_user_split_size
-
+        """Splits files larger than the specified split size. (Original Aeon-MLTB logic)"""
         self.files_to_proceed = {}
 
-        # Get the actual split size that should be used for this user
-        # We need to check each file individually to determine if it needs splitting
+        # Safety check: ensure split_size is valid
+        if not self.split_size or self.split_size <= 0:
+            return False
+
         if self.is_file:
             f_size = await get_path_size(dl_path)
-            # Use get_user_split_size to determine if this file needs splitting
-            args = self.args if hasattr(self, "args") else None
-            split_size, skip_splitting = get_user_split_size(
-                self.user_id, args, f_size, equal_splits=False
-            )
-            if (
-                not skip_splitting
-            ):  # If skip_splitting is False, the file needs to be split
+            if f_size > self.split_size:
                 self.files_to_proceed[dl_path] = [f_size, ospath.basename(dl_path)]
         else:
             for dirpath, _, files in await sync_to_async(
@@ -9635,14 +9629,7 @@ class TaskConfig:
                 for file_ in files:
                     f_path = ospath.join(dirpath, file_)
                     f_size = await get_path_size(f_path)
-                    # Use get_user_split_size to determine if this file needs splitting
-                    args = self.args if hasattr(self, "args") else None
-                    split_size, skip_splitting = get_user_split_size(
-                        self.user_id, args, f_size, equal_splits=False
-                    )
-                    if (
-                        not skip_splitting
-                    ):  # If skip_splitting is False, the file needs to be split
+                    if f_size > self.split_size:
                         self.files_to_proceed[f_path] = [f_size, file_]
         if self.files_to_proceed:
             ffmpeg = FFMpeg(self)
@@ -9657,7 +9644,14 @@ class TaskConfig:
                     self.subsize = f_size
                     self.subname = file_
 
-                # Check if equal splits is enabled in user settings
+                # Original Aeon-MLTB logic: simple parts calculation
+                # Safety check to prevent division by zero
+                if self.split_size <= 0:
+                    continue
+                parts = -(-f_size // self.split_size)  # Ceiling division
+                split_size = self.split_size
+
+                # Support for equal splits (aimleechbot feature)
                 user_dict = self.user_dict
                 equal_splits = user_dict.get("EQUAL_SPLITS", False) or (
                     Config.EQUAL_SPLITS and "EQUAL_SPLITS" not in user_dict
@@ -9670,48 +9664,26 @@ class TaskConfig:
                     elif self.args.get("-es") == "f":
                         equal_splits = False
 
-                # Equal Splits will get priority over leech split size
-                # Use get_user_split_size to determine split size and whether to skip splitting
+                # If equal splits is enabled, calculate equal split size
                 if equal_splits:
-                    # Set a flag to indicate equal splits is enabled for this task
+                    # Set a flag for FFmpeg to know equal splits is enabled
                     self.equal_splits_enabled = True
-                    # Use get_user_split_size with equal_splits=True to get equal split size
-                    # Equal splits always divides the file into equal parts based on max split size
-                    # Pass args only if it exists
-                    args = self.args if hasattr(self, "args") else None
-                    split_size, skip_splitting = get_user_split_size(
-                        self.user_id, args, f_size, equal_splits=True
-                    )
-
-                    if skip_splitting:
-                        LOGGER.info(
-                            f"File size ({f_size} bytes) is less than max split size ({self.max_split_size} bytes). No need for equal splits."
-                        )
-                        return False
-
-                    # Calculate number of parts for logging
-                    parts = math.ceil(f_size / split_size)
-                    LOGGER.info(
-                        f"Equal Splits enabled. File will be split into {parts} equal parts of approximately {split_size} bytes each."
-                    )
+                    # Calculate equal split size based on max split size
+                    if f_size <= self.max_split_size:
+                        # File is small enough, no need to split
+                        continue
+                    # Safety check for max_split_size
+                    if self.max_split_size <= 0:
+                        continue
+                    # Calculate equal parts based on max split size
+                    equal_parts = -(-f_size // self.max_split_size)  # Ceiling division
+                    if equal_parts <= 0:
+                        continue
+                    split_size = f_size // equal_parts
+                    parts = equal_parts
+                    LOGGER.info(f"Equal Splits: File will be split into {parts} equal parts of {split_size} bytes each")
                 else:
-                    # Set a flag to indicate equal splits is disabled for this task
                     self.equal_splits_enabled = False
-                    # Use get_user_split_size to determine split size and whether to skip splitting
-                    # Pass args only if it exists
-                    args = self.args if hasattr(self, "args") else None
-                    split_size, skip_splitting = get_user_split_size(
-                        self.user_id, args, f_size, equal_splits=False
-                    )
-
-                    if skip_splitting:
-                        LOGGER.info(
-                            f"File size ({f_size} bytes) is less than split size ({self.split_size} bytes). Skipping split."
-                        )
-                        return False
-
-                # Calculate number of parts using math.ceil for consistency
-                parts = math.ceil(f_size / split_size)
 
                 if not self.as_doc and (await get_document_type(f_path))[0]:
                     self.progress = True

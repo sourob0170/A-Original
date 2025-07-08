@@ -611,6 +611,52 @@ ZOTIFY_PRINT_SKIPS = False  # Print skip messages for existing files
 # Zotify Match Functionality
 ZOTIFY_MATCH_EXISTING = False  # Match existing files for skip functionality
 
+# Gallery-dl Settings - Multi-platform Media Downloader
+GALLERY_DL_ENABLED = True  # Enable/disable gallery-dl feature for 200+ platforms
+GALLERY_DL_QUALITY_SELECTION = True  # Enable interactive quality selection
+GALLERY_DL_MAX_DOWNLOADS = 50  # Maximum files per download (0 = unlimited)
+GALLERY_DL_RATE_LIMIT = "1/s"  # Rate limit (requests per second, e.g., "2/s", "1/2s")
+GALLERY_DL_ARCHIVE_ENABLED = True  # Enable archive to avoid re-downloading
+GALLERY_DL_METADATA_ENABLED = True  # Save metadata files (JSON, YAML, TXT)
+
+# Gallery-dl Authentication Settings
+# Instagram - For private accounts and stories
+GALLERY_DL_INSTAGRAM_USERNAME = ""  # Instagram username
+GALLERY_DL_INSTAGRAM_PASSWORD = ""  # Instagram password
+
+# Twitter/X - For private accounts and higher quality
+GALLERY_DL_TWITTER_USERNAME = ""  # Twitter username
+GALLERY_DL_TWITTER_PASSWORD = ""  # Twitter password
+
+# Reddit - For private subreddits and enhanced access
+GALLERY_DL_REDDIT_CLIENT_ID = ""  # Reddit app client ID
+GALLERY_DL_REDDIT_CLIENT_SECRET = ""  # Reddit app client secret
+GALLERY_DL_REDDIT_USERNAME = ""  # Reddit username
+GALLERY_DL_REDDIT_PASSWORD = ""  # Reddit password
+GALLERY_DL_REDDIT_REFRESH_TOKEN = ""  # Reddit refresh token
+
+# Pixiv - For following artists and premium content
+GALLERY_DL_PIXIV_USERNAME = ""  # Pixiv username
+GALLERY_DL_PIXIV_PASSWORD = ""  # Pixiv password
+GALLERY_DL_PIXIV_REFRESH_TOKEN = ""  # Pixiv refresh token
+
+# DeviantArt - For premium content and Eclipse features
+GALLERY_DL_DEVIANTART_CLIENT_ID = ""  # DeviantArt app client ID
+GALLERY_DL_DEVIANTART_CLIENT_SECRET = ""  # DeviantArt app client secret
+GALLERY_DL_DEVIANTART_USERNAME = ""  # DeviantArt username
+GALLERY_DL_DEVIANTART_PASSWORD = ""  # DeviantArt password
+
+# Tumblr - For enhanced access and API features
+GALLERY_DL_TUMBLR_API_KEY = ""  # Tumblr API key
+GALLERY_DL_TUMBLR_API_SECRET = ""  # Tumblr API secret
+GALLERY_DL_TUMBLR_TOKEN = ""  # Tumblr access token
+GALLERY_DL_TUMBLR_TOKEN_SECRET = ""  # Tumblr access token secret
+
+# Discord - For server content
+GALLERY_DL_DISCORD_TOKEN = ""  # Discord bot token
+
+
+
 # YouTube Upload Settings
 YOUTUBE_UPLOAD_ENABLED = False  # Enable/disable YouTube upload feature
 YOUTUBE_UPLOAD_DEFAULT_PRIVACY = (

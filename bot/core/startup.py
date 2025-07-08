@@ -491,14 +491,14 @@ async def save_settings():
 
 
 async def update_variables():
-    # Calculate max split size based on owner's session only
+    # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
+    # If owner has USER_TRANSMISSION enabled and premium, use 4GB limit, otherwise 2GB
+    owner_user_transmission = bool(Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER)
     max_split_size = (
-        TgClient.MAX_SPLIT_SIZE
-        if hasattr(Config, "USER_SESSION_STRING") and Config.USER_SESSION_STRING
-        else 2097152000
+        TgClient.MAX_SPLIT_SIZE if owner_user_transmission else 2097152000
     )
 
-    # Set default leech split size to max split size based on owner session premium status
+    # Set default leech split size to max split size based on owner transmission setting
     # Only if not explicitly set by owner or if it exceeds max split size
     if (
         not Config.LEECH_SPLIT_SIZE  # Not set

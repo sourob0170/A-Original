@@ -28,6 +28,8 @@ COMMANDS = {
     "NzbLeechCommand": "- Leech nzb files",
     "YtdlCommand": "- Mirror yt-dlp supported link",
     "YtdlLeechCommand": "- Leech through yt-dlp supported link",
+    "GdlCommand": "- Mirror gallery-dl supported link",
+    "GdlLeechCommand": "- Leech through gallery-dl supported link",
     "StreamripMirrorCommand": "- Mirror music from streaming platforms",
     "StreamripLeechCommand": "- Leech music from streaming platforms",
     "StreamripSearchCommand": "- Search music across platforms",
@@ -65,6 +67,8 @@ COMMANDS = {
     "LogCommand": "- [ADMIN] View log",
     "RestartCommand": "- [ADMIN] Restart the bot",
     "WhisperCommand": "- Send private whisper messages in group chats",
+    # Scraping Commands
+    "ScrapCommand": "- Scrape movie info (title, size, magnet) from 1tamilmv",
 }
 
 # Add AI command if enabled

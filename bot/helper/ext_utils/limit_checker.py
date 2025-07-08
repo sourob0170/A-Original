@@ -228,6 +228,16 @@ async def limit_checker(
             error_msg = f"⚠️ Zotify limit is {get_readable_file_size(limit)}. Your task has been cancelled."
             return await send_limit_error(listener, error_msg)
 
+    elif (
+        hasattr(listener, "tool")
+        and listener.tool == "gallery-dl"
+        and (GALLERY_DL_LIMIT := Config.GALLERY_DL_LIMIT)
+    ):
+        limit = GALLERY_DL_LIMIT * 1024**3
+        if size > limit:
+            error_msg = f"⚠️ Gallery-dl limit is {get_readable_file_size(limit)}. Your task has been cancelled."
+            return await send_limit_error(listener, error_msg)
+
     elif DIRECT_LIMIT := Config.DIRECT_LIMIT:
         limit = DIRECT_LIMIT * 1024**3
         if size > limit:

@@ -29,6 +29,7 @@ from .file_selector import confirm_selection, select
 from .file_to_link import file_to_link_command, stream_stats_command
 from .font_styles import font_styles_cmd
 from .force_start import remove_from_queue
+from .gallery_dl import gdl_leech, gdl_mirror
 from .gd_count import count_node
 from .gd_delete import delete_file
 from .gd_search import gdrive_search, select_type
@@ -77,6 +78,7 @@ from .restart import (
     restart_notification,
 )
 from .rss import get_rss_menu, rss_listener
+from .scrap import scrap_command
 from .search import initiate_search_tools, torrent_search, torrent_search_update
 from .services import aeon_callback, log, login, ping, start
 from .shell import run_shell
@@ -133,6 +135,8 @@ __all__ = [
     "file_to_link_command",
     "font_styles_cmd",
     "force_delete_all_messages",
+    "gdl_leech",
+    "gdl_mirror",
     "gdrive_search",
     "gen_session",
     "get_packages_version",
@@ -183,6 +187,7 @@ __all__ = [
     "restart_notification",
     "rss_listener",
     "run_shell",
+    "scrap_command",
     "select",
     "select_type",
     "send_bot_settings",

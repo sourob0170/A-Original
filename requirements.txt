@@ -11,8 +11,6 @@ cloudscraper
 cryptography>=41.0.0
 codext>=1.15.6
 dnspython
-ElectroCrypto
-kurigram
 fastapi
 feedparser
 passlib[bcrypt]==1.7.4
@@ -26,9 +24,11 @@ google-auth-oauthlib
 gunicorn
 httpx
 jinja2
+kurigram
 langcodes
 lxml
 natsort
+orjson
 pycountry
 pillow
 psutil
@@ -41,6 +41,7 @@ pytdbot[tdjson]
 reportlab>=4.0.0
 requests
 speedtest-cli
+tgcrypto
 telegraph
 tenacity
 toml
@@ -51,3 +52,4 @@ xattr
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev
 git+https://github.com/DraftKinner/zotify.git@dev
+git+https://github.com/mikf/gallery-dl.git@master

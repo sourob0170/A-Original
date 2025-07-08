@@ -47,6 +47,10 @@ commands = {
         ["python3", "-c", "import streamrip; print(streamrip.__version__)"],
         r"([\d.\w-]+)",
     ),
+    "gallery-dl": (
+        ["python3", "-c", "import gallery_dl; print(gallery_dl.__version__)"],
+        r"([\d.\w-]+)",
+    ),
     "zotify": (
         [
             "python3",
@@ -113,6 +117,7 @@ async def bot_stats(_, message):
 <b>JDownloader Limit:</b> {format_limit(Config.JD_LIMIT)}
 <b>NZB Limit:</b> {format_limit(Config.NZB_LIMIT)}
 
+<b>Gallery-dl Limit:</b> {format_limit(Config.GALLERY_DL_LIMIT)}
 <b>Zotify Limit:</b> {format_limit(Config.ZOTIFY_LIMIT)}
 <b>Playlist Limit:</b> {format_limit(Config.PLAYLIST_LIMIT, unit="videos")}
 
@@ -136,6 +141,7 @@ async def bot_stats(_, message):
 <b>yt-dlp:</b> {commands["yt-dlp"]}
 <b>mega:</b> {commands["mega"]}
 <b>streamrip:</b> {commands["streamrip"]}
+<b>gallery-dl:</b> {commands["gallery-dl"]}
 <b>zotify:</b> {commands["zotify"]}
 <b>xtra:</b> {commands["xtra"]}
 <b>7z:</b> {commands["7z"]}

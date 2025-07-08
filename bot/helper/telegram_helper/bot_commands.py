@@ -10,10 +10,12 @@ class BotCommands:
     JdMirrorCommand = [f"jdmirror{i}", f"jm{i}"]
     NzbMirrorCommand = [f"nzbmirror{i}", f"nm{i}"]
     YtdlCommand = [f"ytdl{i}", f"y{i}"]
+    GdlCommand = [f"gdlmirror{i}", f"gm{i}"]
     LeechCommand = [f"leech{i}", f"l{i}"]
     JdLeechCommand = [f"jdleech{i}", f"jl{i}"]
     NzbLeechCommand = [f"nzbleech{i}", f"nl{i}"]
     YtdlLeechCommand = [f"ytdlleech{i}", f"yl{i}"]
+    GdlLeechCommand = [f"gdlleech{i}", f"gl{i}"]
     CloneCommand = f"clone{i}"
 
     MediaInfoCommand = [f"mediainfo{i}", f"mi{i}"]
@@ -81,3 +83,5 @@ class BotCommands:
     # Enhanced NSFW Detection Commands
     NSFWStatsCommand = f"nsfwstats{i}"
     NSFWTestCommand = f"nsfwtest{i}"
+    # Scraping Commands
+    ScrapCommand = f"scrap{i}"

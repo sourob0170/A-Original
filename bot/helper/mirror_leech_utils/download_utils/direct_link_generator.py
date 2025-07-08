@@ -520,6 +520,7 @@ def direct_link_generator(link):
             "ds2video.com",
             "do0od.com",
             "d000d.com",
+            "vide0.net",
         ]
     ):
         return doods(link)

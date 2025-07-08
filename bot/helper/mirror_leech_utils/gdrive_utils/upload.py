@@ -255,11 +255,44 @@ class GoogleDriveUpload(GoogleDriveHelper):
                     if reason not in [
                         "userRateLimitExceeded",
                         "dailyLimitExceeded",
+                        "storageQuotaExceeded",
                     ]:
                         raise err
 
-                    # Handle rate limit errors with better backoff strategy
+                    # Handle storage quota exceeded errors
+                    if reason == "storageQuotaExceeded":
+                        LOGGER.warning(f"Storage quota exceeded for current service account")
+                        if self.use_sa:
+                            if self.sa_count >= self.sa_number:
+                                LOGGER.error(
+                                    f"All {self.sa_number} service accounts have exceeded storage quota"
+                                )
+                                raise Exception(
+                                    "❌ All Google Drive service accounts have exceeded their storage quota. "
+                                    "Please free up space or add more service accounts with available storage."
+                                )
+                            if self.listener.is_cancelled:
+                                return None
 
+                            # Switch to next service account for storage quota issues
+                            self.switch_service_account()
+                            LOGGER.info(
+                                f"Switched to next service account due to storage quota exceeded"
+                            )
+                            return self._upload_file(
+                                file_path,
+                                file_name,
+                                mime_type,
+                                dest_id,
+                                in_dir,
+                            )
+                        else:
+                            raise Exception(
+                                "❌ Google Drive storage quota exceeded. "
+                                "Please free up space in your Google Drive or enable service accounts."
+                            )
+
+                    # Handle rate limit errors with better backoff strategy
                     if self.use_sa:
                         if self.sa_count >= self.sa_number:
                             LOGGER.info(

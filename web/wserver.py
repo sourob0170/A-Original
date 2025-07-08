@@ -1157,8 +1157,54 @@ async def get_navigation_data() -> dict:
 
 @app.get("/app/files", response_class=HTMLResponse)
 async def files(request: Request):
-    # Redirect to main reelnn interface
-    return RedirectResponse(url="/", status_code=302)
+    """Torrent file selection interface - independent of FILE_TO_LINK_ENABLED"""
+    from fastapi.templating import Jinja2Templates
+
+    templates = Jinja2Templates(directory="web/templates")
+
+    # Get query parameters for torrent selection
+    gid = request.query_params.get("gid")
+    pin = request.query_params.get("pin")
+
+    if not gid:
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Torrent File Selection</title>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .error { color: #e74c3c; text-align: center; }
+                    h1 { color: #2c3e50; text-align: center; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🗂️ Torrent File Selection</h1>
+                    <div class="error">
+                        <p>❌ No GID provided</p>
+                        <p>Please use the torrent selection button from your download message.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=400
+        )
+
+    # Use the dedicated torrent selector template instead of redirecting
+    return templates.TemplateResponse(
+        "torrent_selector.html",
+        {
+            "request": request,
+            "gid": gid,
+            "pin": pin or "",
+        }
+    )
 
 
 @app.api_route(

@@ -1509,6 +1509,183 @@ STREAMRIP_HELP_DICT = {
     "Platforms": streamrip_platforms,
 }
 
+# Gallery-dl help content
+gallery_dl_main = """<b>🖼️ Gallery-dl Downloads</b>
+
+Download images, videos, and media from 200+ platforms including social media, art sites, and image boards.
+
+<b>Commands:</b>
+• <code>/gdlmirror</code> or <code>/gm</code> - Download and upload to cloud
+• <code>/gdlleech</code> or <code>/gl</code> - Download and send to Telegram
+
+<b>Basic Usage:</b>
+<code>/gdlmirror https://www.instagram.com/p/ABC123/</code>
+<code>/gl https://twitter.com/user/status/123456</code>
+
+<b>Supported Platforms:</b>
+• <b>Social Media:</b> Instagram, Twitter, Reddit, Tumblr, Discord, Pinterest
+• <b>Art Platforms:</b> DeviantArt, Pixiv, ArtStation, Behance, Flickr
+• <b>Image Hosts:</b> Imgur, Catbox, GoFile, Bunkr, Cyberdrop
+• <b>Booru Sites:</b> Danbooru, Gelbooru, Konachan, Yande.re
+• <b>Subscription:</b> Patreon, Pixiv Fanbox
+• <b>Manga/Comics:</b> MangaDex, Webtoons, Dynasty Scans
+• <b>And 180+ more platforms!</b>
+
+<b>Features:</b>
+• Quality selection for supported platforms
+• Batch downloads (galleries, profiles, collections)
+• Authentication support for private content
+• Metadata extraction and archiving
+• Rate limiting to prevent bans
+• Archive management to avoid duplicates"""
+
+gallery_dl_quality = """<b>🎨 Quality Selection</b>
+
+Gallery-dl supports quality selection for many platforms:
+
+<b>Instagram:</b>
+• Original - Full resolution images/videos
+• High - High quality (1080p)
+• Medium - Medium quality (720p)
+• Low - Low quality (480p)
+
+<b>Twitter:</b>
+• Original - Full resolution media
+• Large - Large size images
+• Medium - Medium size images
+• Small - Small size images
+
+<b>Pixiv:</b>
+• Original - Full resolution artwork
+• Large - Large size images
+• Medium - Medium size images
+• Square - Square thumbnails
+
+<b>Danbooru/Gelbooru:</b>
+• Original - Full resolution images
+• Sample - Sample size images
+• Preview - Preview thumbnails
+
+<b>Usage:</b>
+The bot will automatically show quality options for supported platforms when you use gallery-dl commands."""
+
+gallery_dl_options = """<b>⚙️ Gallery-dl Options</b>
+
+<b>Archive Management:</b>
+• <code>--archive</code> - Enable archive to avoid re-downloading
+• <code>--no-archive</code> - Disable archive (download duplicates)
+
+<b>Download Control:</b>
+• <code>--limit N</code> - Limit downloads to N files
+• <code>--offset N</code> - Skip first N files
+• <code>--range START-END</code> - Download specific range
+
+<b>Authentication:</b>
+• <code>--cookies FILE</code> - Use cookies file
+• <code>--username USER</code> - Login username
+• <code>--password PASS</code> - Login password
+
+<b>Output Control:</b>
+• <code>--metadata</code> - Save metadata files
+• <code>--no-metadata</code> - Skip metadata
+• <code>--write-info-json</code> - Save info JSON
+
+<b>Examples:</b>
+<code>/gm https://imgur.com/a/abc123 --limit 10</code>
+<code>/gl https://reddit.com/r/pics --archive --metadata</code>"""
+
+gallery_dl_examples = """<b>📝 Gallery-dl Examples</b>
+
+<b>Instagram:</b>
+<code>/gm https://www.instagram.com/p/ABC123/</code> - Single post
+<code>/gl https://www.instagram.com/username/</code> - User profile
+
+<b>Twitter:</b>
+<code>/gm https://twitter.com/user/status/123456</code> - Single tweet
+<code>/gl https://twitter.com/username/media</code> - User media
+
+<b>Reddit:</b>
+<code>/gm https://reddit.com/r/pics/comments/abc123/</code> - Single post
+<code>/gl https://reddit.com/r/EarthPorn/top/</code> - Subreddit top posts
+
+<b>Pixiv:</b>
+<code>/gm https://www.pixiv.net/artworks/123456</code> - Single artwork
+<code>/gl https://www.pixiv.net/users/123456</code> - Artist profile
+
+<b>Imgur:</b>
+<code>/gm https://imgur.com/a/abc123</code> - Album
+<code>/gl https://imgur.com/gallery/abc123</code> - Gallery
+
+<b>DeviantArt:</b>
+<code>/gm https://www.deviantart.com/artist/art/title-123456</code> - Single art
+<code>/gl https://www.deviantart.com/artist/gallery/</code> - Artist gallery
+
+<b>With Options:</b>
+<code>/gm https://imgur.com/a/abc123 --limit 5 --archive</code>
+<code>/gl https://reddit.com/r/pics --metadata --range 1-10</code>"""
+
+gallery_dl_platforms = """<b>🌐 Supported Platforms (200+)</b>
+
+<b>🔥 Popular Platforms:</b>
+• Instagram, Twitter, Reddit, Tumblr, Discord
+• DeviantArt, Pixiv, ArtStation, Behance
+• Imgur, Catbox, GoFile, Bunkr
+• YouTube (images/thumbnails), TikTok
+• Pinterest, Flickr, 500px
+
+<b>🎨 Art & Design:</b>
+• Pixiv, DeviantArt, ArtStation, Behance
+• Newgrounds, FurAffinity, Weasyl
+• Derpibooru, e926, Inkbunny
+
+
+
+<b>💰 Subscription Platforms:</b>
+• Patreon, Pixiv Fanbox, Fantia
+• SubscribeStar, Boosty, Ci-en
+
+<b>📚 Manga & Comics:</b>
+• MangaDex, Webtoons, Batoto
+• Dynasty Scans, Hentai2Read
+• Hitomi, Tsumino
+
+<b>🌍 Regional Platforms:</b>
+• Bilibili, Weibo, Baidu
+• VK, Yandex, Mail.ru
+• Naver, Daum, DCInside
+
+<b>📁 File Hosts:</b>
+• Catbox, GoFile, Bunkr, Cyberdrop
+• Erome, Fapello, ImageBam
+• PostImg, ImgBox, ImageVenue
+
+<b>💬 Forums & Boards:</b>
+• 4chan, 8chan, 2ch, ArcaLive
+• FoolFuuka archives
+• Various imageboards
+
+<b>🎵 Music Platforms:</b>
+• SoundCloud, Bandcamp
+• Last.fm, MusicBrainz
+
+<b>And many more!</b> Gallery-dl supports over 200 platforms with regular updates."""
+
+GALLERY_DL_HELP_DICT = {
+    "main": gallery_dl_main,
+    "Quality": gallery_dl_quality,
+    "Options": gallery_dl_options,
+    "Examples": gallery_dl_examples,
+    "Platforms": gallery_dl_platforms,
+    "New-Name": f"{new_name}\nNote: Don't add file extension",
+    "Zip": zip_arg,
+    "Upload-Destination": upload,
+    "Rclone-Flags": rcf,
+    "Same-Directory": same_dir,
+    "Thumb": thumb,
+    "Split-Size": split_size,
+    "Bulk": bulk,
+}
+
 # Zotify help content
 zotify_main = """<b>🎵 Zotify Downloads</b>
 
@@ -2393,6 +2570,34 @@ user_settings_text = {
     "USER_SESSION": "Send your pyrogram user session string for download from private telegram chat. Timeout: 60 sec",
     "USER_DUMP": "Send your channel or group id where you want to store your leeched files. Bot must have permission to send message in your chat. Timeout: 60 sec",
     "USER_COOKIES": "Send your cookies.txt file for YouTube and other yt-dlp downloads. This will be used instead of the owner's cookies file. Create it using browser extensions like 'Get cookies.txt' or 'EditThisCookie'. Timeout: 60 sec",
+
+    # Gallery-dl Authentication Settings
+    "GALLERY_DL_INSTAGRAM_USERNAME": "Send your Instagram username for accessing private accounts and stories. This will override the bot owner's Instagram credentials. Timeout: 60 sec",
+    "GALLERY_DL_INSTAGRAM_PASSWORD": "Send your Instagram password for accessing private accounts and stories. This will override the bot owner's Instagram credentials. Timeout: 60 sec",
+    "GALLERY_DL_TWITTER_USERNAME": "Send your Twitter/X username for accessing private accounts and higher quality downloads. This will override the bot owner's Twitter credentials. Timeout: 60 sec",
+    "GALLERY_DL_TWITTER_PASSWORD": "Send your Twitter/X password for accessing private accounts and higher quality downloads. This will override the bot owner's Twitter credentials. Timeout: 60 sec",
+    "GALLERY_DL_REDDIT_CLIENT_ID": "Send your Reddit app client ID for accessing NSFW content and private subreddits. Create a Reddit app at https://www.reddit.com/prefs/apps/. This will override the bot owner's Reddit credentials. Timeout: 60 sec",
+    "GALLERY_DL_REDDIT_CLIENT_SECRET": "Send your Reddit app client secret for accessing NSFW content and private subreddits. Get this from your Reddit app settings. This will override the bot owner's Reddit credentials. Timeout: 60 sec",
+    "GALLERY_DL_REDDIT_USERNAME": "Send your Reddit username for accessing private subreddits and enhanced content. This will override the bot owner's Reddit credentials. Timeout: 60 sec",
+    "GALLERY_DL_REDDIT_PASSWORD": "Send your Reddit password for accessing private subreddits and enhanced content. This will override the bot owner's Reddit credentials. Timeout: 60 sec",
+    "GALLERY_DL_REDDIT_REFRESH_TOKEN": "Send your Reddit OAuth refresh token for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Reddit credentials. Timeout: 60 sec",
+    "GALLERY_DL_PIXIV_USERNAME": "Send your Pixiv username for accessing R-18 content and following artists. This will override the bot owner's Pixiv credentials. Timeout: 60 sec",
+    "GALLERY_DL_PIXIV_PASSWORD": "Send your Pixiv password for accessing R-18 content and following artists. This will override the bot owner's Pixiv credentials. Timeout: 60 sec",
+    "GALLERY_DL_PIXIV_REFRESH_TOKEN": "Send your Pixiv OAuth refresh token for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Pixiv credentials. Timeout: 60 sec",
+    "GALLERY_DL_DEVIANTART_CLIENT_ID": "Send your DeviantArt app client ID for accessing mature content and Eclipse features. Create a DeviantArt app in your account settings. This will override the bot owner's DeviantArt credentials. Timeout: 60 sec",
+    "GALLERY_DL_DEVIANTART_CLIENT_SECRET": "Send your DeviantArt app client secret for accessing mature content and Eclipse features. Get this from your DeviantArt app settings. This will override the bot owner's DeviantArt credentials. Timeout: 60 sec",
+    "GALLERY_DL_DEVIANTART_USERNAME": "Send your DeviantArt username for accessing private galleries and mature content. This will override the bot owner's DeviantArt credentials. Timeout: 60 sec",
+    "GALLERY_DL_DEVIANTART_PASSWORD": "Send your DeviantArt password for accessing private galleries and mature content. This will override the bot owner's DeviantArt credentials. Timeout: 60 sec",
+    "GALLERY_DL_TUMBLR_API_KEY": "Send your Tumblr API key for accessing NSFW content and private blogs. Get this from https://www.tumblr.com/oauth/apps. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
+    "GALLERY_DL_TUMBLR_API_SECRET": "Send your Tumblr API secret for accessing NSFW content and private blogs. Get this from your Tumblr app settings. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
+    "GALLERY_DL_TUMBLR_TOKEN": "Send your Tumblr OAuth token for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
+    "GALLERY_DL_TUMBLR_TOKEN_SECRET": "Send your Tumblr OAuth token secret for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
+    "GALLERY_DL_DISCORD_TOKEN": "Send your Discord bot token or user token for accessing server content and private channels. This will override the bot owner's Discord credentials. Timeout: 60 sec",
+
+    # Gallery-dl General Settings
+    "GALLERY_DL_QUALITY_SELECTION": "Toggle to enable/disable interactive quality selection for gallery-dl downloads. When enabled, you'll be prompted to choose quality before downloading.",
+    "GALLERY_DL_ARCHIVE_ENABLED": "Toggle to enable/disable archive functionality for gallery-dl. When enabled, downloaded files are tracked to prevent re-downloading duplicates.",
+    "GALLERY_DL_METADATA_ENABLED": "Toggle to enable/disable metadata extraction for gallery-dl downloads. When enabled, additional information about downloaded content is saved.",
     "LEECH_FILENAME_CAPTION": """Send caption template for all your leech files.
 
 <b>Basic Variables:</b>
@@ -2889,6 +3094,7 @@ search_commands = f"""
 /{BotCommands.HydraSearchCommamd} [query]: Search for NZB files.
 /{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
 /{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.
+/{BotCommands.ScrapCommand} [url|help|domains]: Scrape movie info (title, qualities, sizes, magnet links) from 1tamilmv websites.
 """
 
 # File Management page

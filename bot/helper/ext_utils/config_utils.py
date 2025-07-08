@@ -1310,6 +1310,83 @@ async def reset_zotify_configs(database):
                 )
 
 
+async def reset_gallery_dl_configs(database):
+    """Reset all gallery-dl-related configurations to their default values when gallery-dl is disabled.
+
+    Args:
+        database: The database instance to update configurations
+    """
+    from bot import LOGGER
+
+    # Reset user-specific gallery-dl configurations
+    for user_id, user_dict in list(user_data.items()):
+        user_configs_to_reset = False
+
+        # Gallery-dl-related keys to reset
+        gallery_dl_keys = [
+            "gallery_dl_quality",
+            "gallery_dl_format",
+            "gallery_dl_archive",
+            "gallery_dl_metadata",
+            "gallery_dl_limit",
+        ]
+
+        for key in gallery_dl_keys:
+            if key in user_dict:
+                del user_dict[key]
+                user_configs_to_reset = True
+
+        if user_configs_to_reset:
+            await database.update_user_data(user_id)
+
+    # Reset global gallery-dl configurations to default values
+    gallery_dl_global_configs = {
+        "GALLERY_DL_ENABLED": False,
+        "GALLERY_DL_QUALITY_SELECTION": True,
+        "GALLERY_DL_MAX_DOWNLOADS": 50,
+        "GALLERY_DL_RATE_LIMIT": "1/s",
+        "GALLERY_DL_ARCHIVE_ENABLED": True,
+        "GALLERY_DL_METADATA_ENABLED": True,
+        "GALLERY_DL_LIMIT": 0,
+        # Authentication configs
+        "GALLERY_DL_INSTAGRAM_USERNAME": "",
+        "GALLERY_DL_INSTAGRAM_PASSWORD": "",
+        "GALLERY_DL_TWITTER_USERNAME": "",
+        "GALLERY_DL_TWITTER_PASSWORD": "",
+        "GALLERY_DL_REDDIT_CLIENT_ID": "",
+        "GALLERY_DL_REDDIT_CLIENT_SECRET": "",
+        "GALLERY_DL_REDDIT_USERNAME": "",
+        "GALLERY_DL_REDDIT_PASSWORD": "",
+        "GALLERY_DL_REDDIT_REFRESH_TOKEN": "",
+        "GALLERY_DL_PIXIV_USERNAME": "",
+        "GALLERY_DL_PIXIV_PASSWORD": "",
+        "GALLERY_DL_PIXIV_REFRESH_TOKEN": "",
+        "GALLERY_DL_DEVIANTART_CLIENT_ID": "",
+        "GALLERY_DL_DEVIANTART_CLIENT_SECRET": "",
+        "GALLERY_DL_DEVIANTART_USERNAME": "",
+        "GALLERY_DL_DEVIANTART_PASSWORD": "",
+        "GALLERY_DL_TUMBLR_API_KEY": "",
+        "GALLERY_DL_TUMBLR_API_SECRET": "",
+        "GALLERY_DL_TUMBLR_TOKEN": "",
+        "GALLERY_DL_TUMBLR_TOKEN_SECRET": "",
+        "GALLERY_DL_DISCORD_TOKEN": "",
+    }
+
+    # Update the global configurations in the database
+    await database.update_config(gallery_dl_global_configs)
+
+    # Update Config object with the reset values
+    from bot.core.config_manager import Config
+
+    for key, value in gallery_dl_global_configs.items():
+        setattr(Config, key, value)
+
+    # Gallery-dl operations disabled without logging
+    LOGGER.info(
+        "Gallery-dl has been disabled. All related configurations have been reset to default values."
+    )
+
+
 async def reset_ddl_configs(database):
     """Reset all DDL-related configurations to their default values when DDL is disabled.
 

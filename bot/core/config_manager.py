@@ -218,6 +218,53 @@ class Config:
     WEB_PINCODE: bool = False
     YT_DLP_OPTIONS: ClassVar[dict[str, Any]] = {}
 
+    # Gallery-dl Settings
+    GALLERY_DL_ENABLED: bool = True
+    GALLERY_DL_OPTIONS: ClassVar[dict[str, Any]] = {}
+    GALLERY_DL_QUALITY_SELECTION: bool = True
+    GALLERY_DL_ARCHIVE_ENABLED: bool = True
+    GALLERY_DL_METADATA_ENABLED: bool = True
+    GALLERY_DL_MAX_DOWNLOADS: int = 50
+    GALLERY_DL_RATE_LIMIT: str = "1/s"
+
+    # Gallery-dl Authentication Settings
+    # Instagram
+    GALLERY_DL_INSTAGRAM_USERNAME: str = ""
+    GALLERY_DL_INSTAGRAM_PASSWORD: str = ""
+
+    # Twitter/X
+    GALLERY_DL_TWITTER_USERNAME: str = ""
+    GALLERY_DL_TWITTER_PASSWORD: str = ""
+
+    # Reddit
+    GALLERY_DL_REDDIT_CLIENT_ID: str = ""
+    GALLERY_DL_REDDIT_CLIENT_SECRET: str = ""
+    GALLERY_DL_REDDIT_USERNAME: str = ""
+    GALLERY_DL_REDDIT_PASSWORD: str = ""
+    GALLERY_DL_REDDIT_REFRESH_TOKEN: str = ""
+
+    # Pixiv
+    GALLERY_DL_PIXIV_USERNAME: str = ""
+    GALLERY_DL_PIXIV_PASSWORD: str = ""
+    GALLERY_DL_PIXIV_REFRESH_TOKEN: str = ""
+
+    # DeviantArt
+    GALLERY_DL_DEVIANTART_CLIENT_ID: str = ""
+    GALLERY_DL_DEVIANTART_CLIENT_SECRET: str = ""
+    GALLERY_DL_DEVIANTART_USERNAME: str = ""
+    GALLERY_DL_DEVIANTART_PASSWORD: str = ""
+
+    # Tumblr
+    GALLERY_DL_TUMBLR_API_KEY: str = ""
+    GALLERY_DL_TUMBLR_API_SECRET: str = ""
+    GALLERY_DL_TUMBLR_TOKEN: str = ""
+    GALLERY_DL_TUMBLR_TOKEN_SECRET: str = ""
+
+    # Discord
+    GALLERY_DL_DISCORD_TOKEN: str = ""
+
+
+
     # Streamrip Settings
     STREAMRIP_ENABLED: bool = True
     STREAMRIP_CONCURRENT_DOWNLOADS: int = 4
@@ -1073,6 +1120,7 @@ class Config:
     JD_LIMIT: float = 0  # GB
     NZB_LIMIT: float = 0  # GB
     ZOTIFY_LIMIT: float = 0  # GB
+    GALLERY_DL_LIMIT: float = 0  # GB
     PLAYLIST_LIMIT: int = 0  # Number of videos
     DAILY_TASK_LIMIT: int = 0  # Number of tasks per day
     DAILY_MIRROR_LIMIT: float = 0  # GB per day
@@ -1132,6 +1180,9 @@ class Config:
     TMDB_ADULT_CONTENT: bool = False
     TMDB_CACHE_DURATION: int = 86400  # 24 hours in seconds
 
+    # Auto Thumbnail Settings
+    AUTO_THUMBNAIL: bool = True  # Enable/disable auto thumbnail from IMDB/TMDB
+
     # Rclone Settings
     RCLONE_ENABLED: bool = True
 
@@ -1147,6 +1198,9 @@ class Config:
 
     # DeepSeek AI Settings
     DEEPSEEK_API_URL: str = ""
+
+    # Shortener Settings
+    SHORTENER_MIN_TIME: int = 10  # Minimum time in seconds for shortener to process
 
     # Command Suffix Settings
     CORRECT_CMD_SUFFIX: str = ""  # Comma-separated list of allowed command suffixes
@@ -1458,7 +1512,6 @@ class Config:
         try:
             settings = import_module("config")
         except ModuleNotFoundError:
-            logger.warning("No config.py module found.")
             return
 
         # Clear cache before loading new configuration

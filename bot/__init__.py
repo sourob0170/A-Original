@@ -157,6 +157,14 @@ basicConfig(handlers=[file_handler, stream_handler], level=INFO)
 
 LOGGER = getLogger(__name__)
 
+# Enable global orjson optimization for maximum JSON performance across entire bot
+try:
+    from bot.helper.ext_utils.orjson_optimizer import auto_enable_global_orjson
+    auto_enable_global_orjson()
+except ImportError:
+    # orjson optimizer not available, continue with standard json
+    LOGGER.info("orjson optimizer not available - using standard json")
+
 cpu_no = os.cpu_count()
 
 DOWNLOAD_DIR = "/usr/src/app/downloads/"

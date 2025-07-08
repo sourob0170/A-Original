@@ -1,6 +1,6 @@
 import contextlib
 import re
-from asyncio import create_task, gather, sleep
+from asyncio import create_task, gather, sleep, wait_for, TimeoutError as AsyncTimeoutError
 from re import match as re_match
 from time import time as get_time
 
@@ -33,6 +33,27 @@ session_cache = TTLCache(
     maxsize=100,
     ttl=3600,
 )  # Reduced from 1000 to 100, and 36000 to 3600
+
+
+async def with_timeout_retry(coro, timeout=30, max_retries=3, backoff_factor=2):
+    """
+    Execute a coroutine with timeout and retry logic for handling request timeouts
+    """
+    for attempt in range(max_retries):
+        try:
+            return await wait_for(coro, timeout=timeout)
+        except AsyncTimeoutError:
+            if attempt < max_retries - 1:
+                wait_time = backoff_factor ** attempt
+                LOGGER.warning(f"Request timed out (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                await sleep(wait_time)
+                continue
+            else:
+                LOGGER.error(f"Request timed out after {max_retries} attempts")
+                raise
+        except Exception as e:
+            # For non-timeout errors, don't retry
+            raise e
 
 
 async def send_message(
@@ -213,17 +234,26 @@ async def edit_message(
             if photo:
                 # Create InputMediaPhoto with the correct parse_mode
                 media = InputMediaPhoto(photo, caption=text, parse_mode=parse_mode)
-                return await message.edit_media(media=media, reply_markup=buttons)
-            return await message.edit_caption(
-                caption=text,
+                return await with_timeout_retry(
+                    message.edit_media(media=media, reply_markup=buttons),
+                    timeout=30
+                )
+            return await with_timeout_retry(
+                message.edit_caption(
+                    caption=text,
+                    reply_markup=buttons,
+                    parse_mode=parse_mode,
+                ),
+                timeout=30
+            )
+        await with_timeout_retry(
+            message.edit(
+                text=text,
+                disable_web_page_preview=True,
                 reply_markup=buttons,
                 parse_mode=parse_mode,
-            )
-        await message.edit(
-            text=text,
-            disable_web_page_preview=True,
-            reply_markup=buttons,
-            parse_mode=parse_mode,
+            ),
+            timeout=30
         )
     except FloodWait as f:
         if not block:
@@ -355,31 +385,47 @@ async def delete_message(*args):
     msgs = []
     for msg in args:
         if msg:
+            # Enhanced validation for message attributes
+            if not hasattr(msg, "id") or msg.id is None:
+                continue
+
+            if not hasattr(msg, "chat") or msg.chat is None:
+                continue
+
+            # Additional check for chat ID
+            if not hasattr(msg.chat, "id") or msg.chat.id is None:
+                continue
+
             # Check if this is a service message that cannot be deleted
             is_service_msg = hasattr(msg, "service") and msg.service is not None
             if is_service_msg:
                 # Remove from database if it exists since we can't delete it
-                if hasattr(msg, "id") and hasattr(msg, "chat"):
-                    try:
-                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error removing scheduled deletion for service message: {e}"
-                        )
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for service message: {e}"
+                    )
                 continue
 
             msgs.append(create_task(msg.delete()))
             # Remove from database if it exists
-            if hasattr(msg, "id") and hasattr(msg, "chat"):
-                try:
-                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
-                except Exception as e:
-                    LOGGER.error(f"Error removing scheduled deletion: {e}")
+            try:
+                await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+            except Exception as e:
+                LOGGER.error(f"Error removing scheduled deletion: {e}")
 
     results = await gather(*msgs, return_exceptions=True)
 
     for msg, result in zip(args, results, strict=False):
         if isinstance(result, Exception):
+            # Enhanced validation before accessing message attributes
+            if not msg or not hasattr(msg, "id") or msg.id is None:
+                continue
+
+            if not hasattr(msg, "chat") or msg.chat is None or not hasattr(msg.chat, "id") or msg.chat.id is None:
+                continue
+
             error_str = str(result)
             # Handle permission-related errors more gracefully
             if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
@@ -387,25 +433,23 @@ async def delete_message(*args):
                     f"Cannot delete message {msg.id} in chat {msg.chat.id}: {error_str}"
                 )
                 # Remove from database since we can't delete it
-                if hasattr(msg, "id") and hasattr(msg, "chat"):
-                    try:
-                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error removing scheduled deletion for forbidden message: {e}"
-                        )
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for forbidden message: {e}"
+                    )
             elif "MESSAGE_ID_INVALID" in error_str or "400" in error_str:
                 LOGGER.error(
                     f"Message {msg.id} in chat {msg.chat.id} no longer exists: {error_str}"
                 )
                 # Remove from database since message doesn't exist
-                if hasattr(msg, "id") and hasattr(msg, "chat"):
-                    try:
-                        await database.remove_scheduled_deletion(msg.chat.id, msg.id)
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Error removing scheduled deletion for invalid message: {e}"
-                        )
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for invalid message: {e}"
+                    )
             else:
                 # Log other errors as actual errors
                 LOGGER.error(

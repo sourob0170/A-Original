@@ -124,9 +124,6 @@ class TaskListener(TaskConfig):
                             user_dump_int != int(self.up_dest)
                             and user_dump_int != self.user_id
                         ):
-                            LOGGER.info(
-                                f"Sending task details message to user's dump: {user_dump}"
-                            )
                             await send_message(
                                 user_dump_int,
                                 f"{msg}<blockquote expandable>{fmsg}</blockquote>",
@@ -193,9 +190,6 @@ class TaskListener(TaskConfig):
                                     or int(Config.LEECH_DUMP_CHAT) != int(user_dump)
                                 )
                             ):
-                                LOGGER.info(
-                                    f"Sending task details message to single dump chat: {Config.LEECH_DUMP_CHAT}"
-                                )
                                 await send_message(
                                     int(Config.LEECH_DUMP_CHAT),
                                     f"{msg}<blockquote expandable>{fmsg}</blockquote>",
@@ -313,9 +307,6 @@ class TaskListener(TaskConfig):
                 # This ensures task details are always sent to the user's dump
                 try:
                     leech_destinations.append(int(user_dump))
-                    LOGGER.info(
-                        f"Adding user's dump {user_dump} to task details destinations"
-                    )
                 except Exception as e:
                     LOGGER.error(f"Error adding user's dump to destinations: {e}")
 
@@ -374,7 +365,6 @@ class TaskListener(TaskConfig):
             and self.same_dir
             and self.mid in self.same_dir[self.folder_name]["tasks"]
         ):
-            LOGGER.info("Entering same_dir processing logic")
             async with same_directory_lock:
                 while True:
                     async with task_dict_lock:
@@ -397,9 +387,6 @@ class TaskListener(TaskConfig):
                                     f"{DOWNLOAD_DIR}{des_id}{self.folder_name}"
                                 )
                                 await makedirs(des_path, exist_ok=True)
-                                LOGGER.info(
-                                    f"Moving files from {self.mid} to {des_id}",
-                                )
                                 try:
                                     if not await aiopath.exists(spath):
                                         LOGGER.error(
@@ -499,12 +486,6 @@ class TaskListener(TaskConfig):
             )
 
         if is_clone_operation:
-            LOGGER.info(
-                f"Clone operation detected - proceeding to upload phase for: {self.name}"
-            )
-            LOGGER.info(
-                f"Clone operation - checking paths: dir={self.dir}, name={self.name}"
-            )
 
             # For clone operations, we need to find the actual downloaded content
             # Try multiple path combinations to find the downloaded files
@@ -516,48 +497,27 @@ class TaskListener(TaskConfig):
 
             dl_path = None
             for path in possible_paths:
-                LOGGER.info(f"Clone operation - checking path: {path}")
                 if await aiopath.exists(path):
                     dl_path = path
                     self.size = await get_path_size(path)
                     self.is_file = await aiopath.isfile(path)
-                    LOGGER.info(
-                        f"Clone operation - found downloaded content at: {path}"
-                    )
                     break
 
             if not dl_path:
                 # Last resort: check if files are in the download directory
                 try:
-                    LOGGER.info(
-                        f"Clone operation - checking directory contents: {self.dir}"
-                    )
-                    LOGGER.info(
-                        f"Clone operation - directory exists check: {await aiopath.exists(self.dir)}"
-                    )
-
                     # Add a small delay to ensure any filesystem operations are complete
                     await sleep(1)
-                    LOGGER.info(
-                        f"Clone operation - directory exists after delay: {await aiopath.exists(self.dir)}"
-                    )
 
                     if await aiopath.exists(self.dir):
                         files = await listdir(self.dir)
-                        LOGGER.info(f"Clone operation - directory contents: {files}")
                         if files:
                             # Use the first file/folder found
                             self.name = files[0]
                             dl_path = f"{self.dir}/{self.name}"
                             self.size = await get_path_size(dl_path)
                             self.is_file = await aiopath.isfile(dl_path)
-                            LOGGER.info(
-                                f"Clone operation - using found content: {dl_path}"
-                            )
                         else:
-                            LOGGER.error(
-                                f"Clone operation - directory exists but is empty: {self.dir}"
-                            )
                             await self.on_upload_error(
                                 f"Download directory is empty: {self.dir}"
                             )
@@ -569,30 +529,18 @@ class TaskListener(TaskConfig):
 
                         # Check if there are any directories in the parent directory
                         parent_dir = str(Path(self.dir).parent)
-                        LOGGER.info(
-                            f"Clone operation - checking parent directory: {parent_dir}"
-                        )
                         if await aiopath.exists(parent_dir):
                             try:
                                 parent_files = await listdir(parent_dir)
-                                LOGGER.info(
-                                    f"Clone operation - parent directory contents: {parent_files}"
-                                )
 
                                 # Look for directories that might contain our download
                                 for item in parent_files:
                                     item_path = f"{parent_dir}/{item}"
                                     if await aiopath.isdir(item_path):
-                                        LOGGER.info(
-                                            f"Clone operation - checking potential download dir: {item_path}"
-                                        )
                                         try:
                                             item_contents = await listdir(item_path)
-                                            LOGGER.info(
-                                                f"Clone operation - {item_path} contents: {item_contents}"
-                                            )
                                         except Exception as e:
-                                            LOGGER.info(
+                                            LOGGER.error(
                                                 f"Clone operation - error checking {item_path}: {e}"
                                             )
                             except Exception as e:
@@ -653,50 +601,51 @@ class TaskListener(TaskConfig):
                     await self.on_upload_error(str(e))
                     return
 
-            # Check if this is a MEGA folder download
-            # For MEGA folder downloads, files are directly in self.dir, not in a subdirectory
+            # Check download type and handle accordingly
+            # Get the download tool to make proper detection
+            download_tool = getattr(self, 'tool', None)
+            if not download_tool and self.mid in task_dict:
+                download_obj = task_dict[self.mid]
+                download_tool = getattr(download_obj, 'tool', None)
+
             potential_folder_path = f"{self.dir}/{self.name}"
 
-            # First, check if self.dir contains multiple files (indicating a folder download)
+            # First, check if self.dir contains multiple files
             try:
                 dir_contents = await listdir(self.dir)
-                LOGGER.info(f"📁 Directory contents check: {dir_contents}")
 
                 if len(dir_contents) > 1:
-                    # Multiple files = MEGA folder download, use the directory itself
-                    dl_path = self.dir
-                    LOGGER.info(
-                        f"📁 MEGA folder download detected, using directory: {dl_path}"
-                    )
-                    LOGGER.info(f"📁 Directory contains {len(dir_contents)} items")
+                    # Multiple files - check the download tool to determine handling
+                    if download_tool == "gallery-dl":
+                        # Gallery-dl creates subdirectories, use the main content directory
+                        # Look for the actual content directory (skip .archive and similar)
+                        content_dirs = [d for d in dir_contents if not d.startswith('.')]
+                        if content_dirs:
+                            dl_path = f"{self.dir}/{content_dirs[0]}"
+                        else:
+                            dl_path = self.dir
+                    else:
+                        # For MEGA and other folder downloads, files are directly in self.dir
+                        dl_path = self.dir
                 elif len(dir_contents) == 1:
                     # Single item - check if it matches our expected name
                     single_item = dir_contents[0]
                     if single_item == self.name:
                         # Single item with expected name - use standard path
                         dl_path = potential_folder_path
-                        LOGGER.info(
-                            f"📄 Single item with expected name, using: {dl_path}"
-                        )
                     else:
                         # Single item with different name - probably a renamed file
                         dl_path = f"{self.dir}/{single_item}"
-                        LOGGER.info(
-                            f"📄 Single item with different name, using: {dl_path}"
-                        )
                 else:
                     # Empty directory - fallback to standard path
                     dl_path = potential_folder_path
-                    LOGGER.info(f"📁 Empty directory, using fallback: {dl_path}")
             except Exception as e:
                 LOGGER.error(f"Error checking directory contents: {e}")
                 # Fallback to checking if standard path exists
                 if await aiopath.exists(potential_folder_path):
                     dl_path = potential_folder_path
-                    LOGGER.info(f"📁 Fallback to standard path: {dl_path}")
                 else:
                     dl_path = self.dir
-                    LOGGER.info(f"📁 Fallback to directory: {dl_path}")
 
             self.size = await get_path_size(dl_path)
             self.is_file = await aiopath.isfile(dl_path)
@@ -710,7 +659,6 @@ class TaskListener(TaskConfig):
             up_dir = self.up_dir = f"{self.dir}10000"
             up_path = f"{self.up_dir}/{self.name}"
             await create_recursive_symlink(self.dir, self.up_dir)
-            LOGGER.info(f"Shortcut created: {dl_path} -> {up_path}")
         else:
             up_dir = self.dir
             up_path = dl_path
@@ -786,8 +734,7 @@ class TaskListener(TaskConfig):
         media_tools.sort(key=lambda x: x[0])
 
         # Run media tools in priority order
-        for _, tool_name, tool_func in media_tools:
-            LOGGER.info(f"Running {tool_name} with priority {_}")
+        for _, _tool_name, tool_func in media_tools:
             up_path = await tool_func(up_path, gid)
             if self.is_cancelled:
                 return
@@ -891,7 +838,6 @@ class TaskListener(TaskConfig):
         # Check if archive flags are enabled in config using is_flag_enabled
 
         if self.compress and not self.compression_enabled and is_flag_enabled("-z"):
-            LOGGER.info(f"Direct compression triggered by -z flag for: {self.name}")
             up_path = await self.compress_with_7z(up_path, gid)
             if self.is_cancelled:
                 return
@@ -1223,9 +1169,6 @@ class TaskListener(TaskConfig):
         if (hasattr(self, "is_multi_file_upload") and self.is_multi_file_upload) or (
             hasattr(self, "is_uploading") and self.is_uploading
         ):
-            LOGGER.info(
-                f"🚫 Skipping task completion - multi-file upload in progress: {current_name}"
-            )
             return
 
         msg = f"<b>Name: </b><code>{escape(display_name)}</code>\n\n<blockquote><b>Size: </b>{get_readable_file_size(self.size)}"

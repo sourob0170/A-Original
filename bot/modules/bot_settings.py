@@ -679,6 +679,10 @@ async def get_buttons(key=None, edit_type=None, page=0, user_id=None):
         if Config.STREAMRIP_ENABLED:
             buttons.data_button("🎵 Streamrip", "botset streamrip")
 
+        # Only show Gallery-dl Settings button if Gallery-dl is enabled
+        if Config.GALLERY_DL_ENABLED:
+            buttons.data_button("🖼️ Gallery-dl", "botset gallerydl")
+
         # Only show Zotify Settings button if Zotify is enabled
         if Config.ZOTIFY_ENABLED:
             buttons.data_button("🎧 Zotify", "botset zotify")
@@ -1502,11 +1506,13 @@ Send one of the following position options:
                         "EXTRACT_",
                         "REMOVE_",
                         "ADD_",
+                        "SWAP_",  # Added SWAP_ to exclude swap configs from main config menu
                         "SCREENSHOT_",
                         "TASK_MONITOR_",
                         "MISTRAL_",
                         "DEEPSEEK_",
                         "STREAMRIP_",  # Added STREAMRIP_ to exclude streamrip configs from main config menu
+                        "GALLERY_DL_",  # Added GALLERY_DL_ to exclude gallery-dl configs from main config menu
                         "ZOTIFY_",  # Added ZOTIFY_ to exclude zotify configs from main config menu
                         "YOUTUBE_UPLOAD_",  # Added YOUTUBE_UPLOAD_ to exclude youtube upload configs from main config menu
                         "MEGA_",  # Added MEGA_ to exclude mega configs from main config menu
@@ -2483,6 +2489,217 @@ All credentials are stored securely in the database and encrypted."""
 
 <b>Note:</b>
 Custom config files take precedence over bot settings. If you upload a custom config, the individual setting menus will show the custom values."""
+
+    elif key == "gallerydl":
+        # Gallery-dl Settings section
+        buttons.data_button("⚙️ General Settings", "botset gallerydl_general")
+        buttons.data_button("🔐 Authentication & Platforms", "botset gallerydl_auth")
+        buttons.data_button("📁 Download Settings", "botset gallerydl_download")
+        buttons.data_button("⬅️ Back", "botset back", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+        msg = "<b>🖼️ Gallery-dl Settings</b>\nSelect a category to configure:"
+
+    elif key == "gallerydl_general":
+        # General Gallery-dl Settings
+        general_settings = [
+            "GALLERY_DL_ENABLED",
+            "GALLERY_DL_QUALITY_SELECTION",
+            "GALLERY_DL_ARCHIVE_ENABLED",
+            "GALLERY_DL_METADATA_ENABLED",
+        ]
+
+        for setting in general_settings:
+            display_name = (
+                setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            )
+
+            # For boolean settings, add toggle buttons with status
+            if setting in [
+                "GALLERY_DL_ENABLED",
+                "GALLERY_DL_QUALITY_SELECTION",
+                "GALLERY_DL_ARCHIVE_ENABLED",
+                "GALLERY_DL_METADATA_ENABLED",
+            ]:
+                setting_value = getattr(Config, setting, False)
+                status = "✅ ON" if setting_value else "❌ OFF"
+                display_name = f"{display_name}: {status}"
+                buttons.data_button(
+                    display_name, f"botset toggle {setting} {not setting_value}"
+                )
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit gallerydl_general", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view gallerydl_general", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_gallerydl_general", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset gallerydl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current general settings
+        enabled = "✅ Enabled" if Config.GALLERY_DL_ENABLED else "❌ Disabled"
+        quality_selection = (
+            "✅ Enabled" if Config.GALLERY_DL_QUALITY_SELECTION else "❌ Disabled"
+        )
+        archive_enabled = (
+            "✅ Enabled" if Config.GALLERY_DL_ARCHIVE_ENABLED else "❌ Disabled"
+        )
+        metadata_enabled = (
+            "✅ Enabled" if Config.GALLERY_DL_METADATA_ENABLED else "❌ Disabled"
+        )
+
+        msg = f"""<b>🖼️ Gallery-dl General Settings</b> | State: {state}
+
+<b>Status:</b> {enabled}
+<b>Quality Selection:</b> {quality_selection}
+<b>Archive:</b> {archive_enabled}
+<b>Metadata:</b> {metadata_enabled}
+
+<b>Description:</b>
+• <b>Enabled:</b> Master toggle for gallery-dl functionality
+• <b>Quality Selection:</b> Show quality selection interface for downloads
+• <b>Archive:</b> Keep track of downloaded files to avoid duplicates
+• <b>Metadata:</b> Save metadata files (JSON, YAML, TXT) with downloads
+
+<b>Note:</b>
+Gallery-dl supports 200+ platforms including Instagram, Twitter, Reddit, Pixiv, DeviantArt, and many more."""
+
+    elif key == "gallerydl_auth":
+        # Authentication Settings
+        auth_settings = [
+            "GALLERY_DL_INSTAGRAM_USERNAME",
+            "GALLERY_DL_INSTAGRAM_PASSWORD",
+            "GALLERY_DL_TWITTER_USERNAME",
+            "GALLERY_DL_TWITTER_PASSWORD",
+            "GALLERY_DL_REDDIT_CLIENT_ID",
+            "GALLERY_DL_REDDIT_CLIENT_SECRET",
+            "GALLERY_DL_REDDIT_USERNAME",
+            "GALLERY_DL_REDDIT_PASSWORD",
+            "GALLERY_DL_REDDIT_REFRESH_TOKEN",
+            "GALLERY_DL_PIXIV_USERNAME",
+            "GALLERY_DL_PIXIV_PASSWORD",
+            "GALLERY_DL_PIXIV_REFRESH_TOKEN",
+            "GALLERY_DL_DEVIANTART_CLIENT_ID",
+            "GALLERY_DL_DEVIANTART_CLIENT_SECRET",
+            "GALLERY_DL_DEVIANTART_USERNAME",
+            "GALLERY_DL_DEVIANTART_PASSWORD",
+            "GALLERY_DL_TUMBLR_API_KEY",
+            "GALLERY_DL_TUMBLR_API_SECRET",
+            "GALLERY_DL_TUMBLR_TOKEN",
+            "GALLERY_DL_TUMBLR_TOKEN_SECRET",
+            "GALLERY_DL_DISCORD_TOKEN",
+        ]
+
+        for setting in auth_settings:
+            display_name = (
+                setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit gallerydl_auth", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view gallerydl_auth", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_gallerydl_auth", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset gallerydl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        msg = f"""<b>🖼️ Gallery-dl Authentication Settings</b> | State: {state}
+
+<b>Platform Authentication:</b>
+Configure credentials for accessing private content and higher quality downloads.
+
+<b>Supported Platforms:</b>
+• <b>Instagram:</b> Username/password for private accounts and stories
+• <b>Twitter/X:</b> Username/password for private accounts and higher quality
+• <b>Reddit:</b> OAuth credentials for NSFW content and private subreddits
+• <b>Pixiv:</b> Username/password for R-18 content and following artists
+• <b>DeviantArt:</b> OAuth credentials for mature content and Eclipse features
+• <b>Tumblr:</b> API credentials for NSFW content
+• <b>Discord:</b> Bot token for server content
+
+<b>Cookies Support:</b>
+Upload cookies.txt file via Private Files for universal authentication.
+
+<b>Security Note:</b>
+All credentials are stored securely in the database and encrypted."""
+
+    elif key == "gallerydl_download":
+        # Download Settings
+        download_settings = [
+            "GALLERY_DL_MAX_DOWNLOADS",
+            "GALLERY_DL_RATE_LIMIT",
+            "GALLERY_DL_LIMIT",
+        ]
+
+        for setting in download_settings:
+            display_name = (
+                setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            )
+            buttons.data_button(display_name, f"botset editvar {setting}")
+
+        if state == "view":
+            buttons.data_button("✏️ Edit", "botset edit gallerydl_download", "footer")
+        else:
+            buttons.data_button("👁️ View", "botset view gallerydl_download", "footer")
+
+        buttons.data_button(
+            "🔄 Reset to Default", "botset default_gallerydl_download", "footer"
+        )
+        buttons.data_button("⬅️ Back", "botset gallerydl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        # Get current download settings
+        max_downloads = Config.GALLERY_DL_MAX_DOWNLOADS or "50 (Default)"
+        rate_limit = Config.GALLERY_DL_RATE_LIMIT or "1/s (Default)"
+        limit = Config.GALLERY_DL_LIMIT or "0 (Unlimited)"
+
+        msg = f"""<b>🖼️ Gallery-dl Download Settings</b> | State: {state}
+
+<b>Performance Settings:</b>
+• <b>Max Downloads:</b> <code>{max_downloads}</code>
+• <b>Rate Limit:</b> <code>{rate_limit}</code>
+• <b>Limit:</b> <code>{limit}</code>
+
+<b>Description:</b>
+• <b>Max Downloads:</b> Maximum concurrent downloads
+• <b>Rate Limit:</b> Delay between requests to avoid rate limiting
+• <b>Limit:</b> Maximum number of files to download (0 = unlimited)
+
+<b>Recommended Settings:</b>
+• For Instagram: 1/s or slower
+• For Twitter: 2/s
+• For Reddit: 1/s
+• For Pixiv: 1/2s (slower)"""
+
+    elif key == "gallerydl_platforms":
+        # Platform-specific Settings - Note: These are duplicates of auth settings, redirecting to auth
+        buttons.data_button("⚠️ Platform Settings Moved", "botset gallerydl_auth")
+        buttons.data_button("⬅️ Back", "botset gallerydl", "footer")
+        buttons.data_button("❌ Close", "botset close", "footer")
+
+        msg = f"""<b>🖼️ Gallery-dl Platform Settings</b> | State: {state}
+
+<b>⚠️ Settings Moved</b>
+Platform-specific authentication settings have been moved to the <b>Authentication</b> section to avoid duplicates.
+
+<b>Click "Platform Settings Moved" to access:</b>
+• Instagram credentials
+• Twitter credentials
+• Reddit API settings
+• Pixiv credentials
+• DeviantArt API settings
+• Tumblr API settings
+• Discord token
+
+<b>Note:</b> All platform credentials are now managed in one place under Authentication."""
+
+
 
     elif key == "streamrip_platforms":
         # Platform-specific Settings
@@ -3716,6 +3933,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
             "STREAMRIP_ENABLED",
+            "GALLERY_DL_ENABLED",
             "ZOTIFY_ENABLED",
             "GDRIVE_UPLOAD_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
@@ -3773,6 +3991,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         streamrip_enabled = (
             "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
         )
+        gallery_dl_enabled = "✅ Enabled" if Config.GALLERY_DL_ENABLED else "❌ Disabled"
         zotify_enabled = "✅ Enabled" if Config.ZOTIFY_ENABLED else "❌ Disabled"
         gdrive_upload_enabled = (
             "✅ Enabled" if Config.GDRIVE_UPLOAD_ENABLED else "❌ Disabled"
@@ -3852,6 +4071,10 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             f"botset toggle STREAMRIP_ENABLED {not Config.STREAMRIP_ENABLED}",
         )
         buttons.data_button(
+            f"🖼️ Gallery-dl Downloads: {gallery_dl_enabled}",
+            f"botset toggle GALLERY_DL_ENABLED {not Config.GALLERY_DL_ENABLED}",
+        )
+        buttons.data_button(
             f"🎧 Zotify Downloads: {zotify_enabled}",
             f"botset toggle ZOTIFY_ENABLED {not Config.ZOTIFY_ENABLED}",
         )
@@ -3904,6 +4127,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 <b>Media Search:</b> {media_search_enabled}
 <b>Rclone Operations:</b> {rclone_enabled}
 <b>Streamrip Downloads:</b> {streamrip_enabled}
+<b>Gallery-dl Downloads:</b> {gallery_dl_enabled}
 <b>Zotify Downloads:</b> {zotify_enabled}
 <b>Gdrive Upload:</b> {gdrive_upload_enabled}
 <b>YouTube Upload:</b> {youtube_upload_enabled}
@@ -3929,6 +4153,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 • <b>Media Search:</b> Controls whether users can search for media in configured channels
 • <b>Rclone Operations:</b> Controls whether users can use Rclone for cloud storage operations
 • <b>Streamrip Downloads:</b> Controls whether users can download music from streaming platforms (Qobuz, Tidal, Deezer, SoundCloud)
+• <b>Gallery-dl Downloads:</b> Controls whether users can download media from 200+ platforms (Instagram, Twitter, Reddit, Pixiv, DeviantArt, etc.)
 • <b>Zotify Downloads:</b> Controls whether users can download music from Spotify using Zotify
 • <b>YouTube Upload:</b> Controls whether users can upload videos directly to YouTube after downloading
 • <b>DDL Operations:</b> Controls whether users can upload files to Direct Download Link servers (Gofile, Streamtape)
@@ -9794,6 +10019,28 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "streamrip")
 
+    elif data[1] == "gallerydl":
+        await query.answer()
+        await update_buttons(message, "gallerydl")
+
+    elif data[1] == "gallerydl_general":
+        await query.answer()
+        await update_buttons(message, "gallerydl_general")
+
+    elif data[1] == "gallerydl_auth":
+        await query.answer()
+        await update_buttons(message, "gallerydl_auth")
+
+    elif data[1] == "gallerydl_download":
+        await query.answer()
+        await update_buttons(message, "gallerydl_download")
+
+    elif data[1] == "gallerydl_platforms":
+        await query.answer("Platform settings moved to Authentication section!")
+        await update_buttons(message, "gallerydl_auth")
+
+
+
     elif data[1] == "zotify":
         await query.answer()
         # Get the current state before making changes
@@ -12533,6 +12780,110 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "zotify_advanced")
 
+    elif data[1] == "default_gallerydl_platforms":
+        # Redirect to auth section since platforms section is now merged with auth
+        await query.answer("Platform settings moved to Authentication section!")
+        await update_buttons(message, "gallerydl_auth")
+
+    elif data[1] == "default_gallerydl_general":
+        await query.answer("Resetting gallery-dl general settings to default...")
+        # Reset gallery-dl general settings to default
+        Config.GALLERY_DL_QUALITY_SELECTION = True
+        Config.GALLERY_DL_ARCHIVE_ENABLED = True
+        Config.GALLERY_DL_METADATA_ENABLED = True
+
+        # Update the database
+        await database.update_config(
+            {
+                "GALLERY_DL_QUALITY_SELECTION": True,
+                "GALLERY_DL_ARCHIVE_ENABLED": True,
+                "GALLERY_DL_METADATA_ENABLED": True,
+            }
+        )
+        # Get the current state before making changes
+        current_state = globals()["state"]
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "gallerydl_general")
+
+    elif data[1] == "default_gallerydl_auth":
+        await query.answer("Resetting gallery-dl authentication settings to default...")
+        # Reset gallery-dl auth settings to default
+        Config.GALLERY_DL_INSTAGRAM_USERNAME = ""
+        Config.GALLERY_DL_INSTAGRAM_PASSWORD = ""
+        Config.GALLERY_DL_TWITTER_USERNAME = ""
+        Config.GALLERY_DL_TWITTER_PASSWORD = ""
+        Config.GALLERY_DL_REDDIT_CLIENT_ID = ""
+        Config.GALLERY_DL_REDDIT_CLIENT_SECRET = ""
+        Config.GALLERY_DL_REDDIT_USERNAME = ""
+        Config.GALLERY_DL_REDDIT_PASSWORD = ""
+        Config.GALLERY_DL_REDDIT_REFRESH_TOKEN = ""
+        Config.GALLERY_DL_PIXIV_USERNAME = ""
+        Config.GALLERY_DL_PIXIV_PASSWORD = ""
+        Config.GALLERY_DL_PIXIV_REFRESH_TOKEN = ""
+        Config.GALLERY_DL_DEVIANTART_CLIENT_ID = ""
+        Config.GALLERY_DL_DEVIANTART_CLIENT_SECRET = ""
+        Config.GALLERY_DL_DEVIANTART_USERNAME = ""
+        Config.GALLERY_DL_DEVIANTART_PASSWORD = ""
+        Config.GALLERY_DL_TUMBLR_API_KEY = ""
+        Config.GALLERY_DL_TUMBLR_API_SECRET = ""
+        Config.GALLERY_DL_TUMBLR_TOKEN = ""
+        Config.GALLERY_DL_TUMBLR_TOKEN_SECRET = ""
+        Config.GALLERY_DL_DISCORD_TOKEN = ""
+
+        # Update the database
+        await database.update_config(
+            {
+                "GALLERY_DL_INSTAGRAM_USERNAME": "",
+                "GALLERY_DL_INSTAGRAM_PASSWORD": "",
+                "GALLERY_DL_TWITTER_USERNAME": "",
+                "GALLERY_DL_TWITTER_PASSWORD": "",
+                "GALLERY_DL_REDDIT_CLIENT_ID": "",
+                "GALLERY_DL_REDDIT_CLIENT_SECRET": "",
+                "GALLERY_DL_REDDIT_USERNAME": "",
+                "GALLERY_DL_REDDIT_PASSWORD": "",
+                "GALLERY_DL_REDDIT_REFRESH_TOKEN": "",
+                "GALLERY_DL_PIXIV_USERNAME": "",
+                "GALLERY_DL_PIXIV_PASSWORD": "",
+                "GALLERY_DL_PIXIV_REFRESH_TOKEN": "",
+                "GALLERY_DL_DEVIANTART_CLIENT_ID": "",
+                "GALLERY_DL_DEVIANTART_CLIENT_SECRET": "",
+                "GALLERY_DL_DEVIANTART_USERNAME": "",
+                "GALLERY_DL_DEVIANTART_PASSWORD": "",
+                "GALLERY_DL_TUMBLR_API_KEY": "",
+                "GALLERY_DL_TUMBLR_API_SECRET": "",
+                "GALLERY_DL_TUMBLR_TOKEN": "",
+                "GALLERY_DL_TUMBLR_TOKEN_SECRET": "",
+                "GALLERY_DL_DISCORD_TOKEN": "",
+            }
+        )
+        # Get the current state before making changes
+        current_state = globals()["state"]
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "gallerydl_auth")
+
+    elif data[1] == "default_gallerydl_download":
+        await query.answer("Resetting gallery-dl download settings to default...")
+        # Reset gallery-dl download settings to default
+        Config.GALLERY_DL_MAX_DOWNLOADS = 50
+        Config.GALLERY_DL_RATE_LIMIT = "1/s"
+        Config.GALLERY_DL_LIMIT = 0
+
+        # Update the database
+        await database.update_config(
+            {
+                "GALLERY_DL_MAX_DOWNLOADS": 50,
+                "GALLERY_DL_RATE_LIMIT": "1/s",
+                "GALLERY_DL_LIMIT": 0,
+            }
+        )
+        # Get the current state before making changes
+        current_state = globals()["state"]
+        # Set the state back to what it was
+        globals()["state"] = current_state
+        await update_buttons(message, "gallerydl_download")
+
     elif data[1] == "default_ai":
         await query.answer("Resetting all AI settings to default...")
         # Reset all AI settings to default
@@ -12548,8 +12899,7 @@ async def edit_bot_settings(client, query):
                 "DEEPSEEK_API_URL": "",
             }
         )
-        # Update the UI - maintain the current state (edit/view)
-        # Get the current state before updating the UI
+        # Get the current state before making changes
         current_state = globals()["state"]
         # Set the state back to what it was
         globals()["state"] = current_state
@@ -14117,6 +14467,12 @@ async def edit_bot_settings(client, query):
         "streamrip_cli",
         "streamrip_advanced",
         "streamrip_config",
+        "gallerydl",
+        "gallerydl_general",
+        "gallerydl_auth",
+        "gallerydl_download",
+
+
         "zotify",
         "zotify_general",
         "zotify_quality",
@@ -16553,6 +16909,22 @@ No database-only files found."""
                 # Streamrip operations enabled without logging
                 pass
 
+        # Special handling for GALLERY_DL_ENABLED
+        elif key == "GALLERY_DL_ENABLED":
+            # Set the value in Config
+            Config.set(key, value)
+            # Update the database with the new setting
+            await database.update_config({key: value})
+
+            if not value:
+                # If Gallery-dl is being disabled, reset all gallery-dl-related configs
+                from bot.helper.ext_utils.config_utils import reset_gallery_dl_configs
+
+                await reset_gallery_dl_configs(database)
+            else:
+                # Gallery-dl operations enabled without logging
+                pass
+
         # Special handling for ZOTIFY_ENABLED
         elif key == "ZOTIFY_ENABLED":
             # Set the value in Config
@@ -16829,6 +17201,46 @@ No database-only files found."""
                 return_menu = "streamrip_advanced"
             else:
                 return_menu = "streamrip"
+        elif key.startswith("GALLERY_DL_") and key != "GALLERY_DL_ENABLED":
+            # For gallery-dl settings (except GALLERY_DL_ENABLED which is handled in operations), determine which submenu to return to
+            if key in [
+                "GALLERY_DL_QUALITY_SELECTION",
+                "GALLERY_DL_ARCHIVE_ENABLED",
+                "GALLERY_DL_METADATA_ENABLED",
+            ]:
+                return_menu = "gallerydl_general"
+            elif key in [
+                "GALLERY_DL_INSTAGRAM_USERNAME",
+                "GALLERY_DL_INSTAGRAM_PASSWORD",
+                "GALLERY_DL_TWITTER_USERNAME",
+                "GALLERY_DL_TWITTER_PASSWORD",
+                "GALLERY_DL_REDDIT_CLIENT_ID",
+                "GALLERY_DL_REDDIT_CLIENT_SECRET",
+                "GALLERY_DL_REDDIT_USERNAME",
+                "GALLERY_DL_REDDIT_PASSWORD",
+                "GALLERY_DL_REDDIT_REFRESH_TOKEN",
+                "GALLERY_DL_PIXIV_USERNAME",
+                "GALLERY_DL_PIXIV_PASSWORD",
+                "GALLERY_DL_PIXIV_REFRESH_TOKEN",
+                "GALLERY_DL_DEVIANTART_CLIENT_ID",
+                "GALLERY_DL_DEVIANTART_CLIENT_SECRET",
+                "GALLERY_DL_DEVIANTART_USERNAME",
+                "GALLERY_DL_DEVIANTART_PASSWORD",
+                "GALLERY_DL_TUMBLR_API_KEY",
+                "GALLERY_DL_TUMBLR_API_SECRET",
+                "GALLERY_DL_TUMBLR_TOKEN",
+                "GALLERY_DL_TUMBLR_TOKEN_SECRET",
+                "GALLERY_DL_DISCORD_TOKEN",
+            ]:
+                return_menu = "gallerydl_auth"
+            elif key in [
+                "GALLERY_DL_MAX_DOWNLOADS",
+                "GALLERY_DL_RATE_LIMIT",
+                "GALLERY_DL_LIMIT",
+            ]:
+                return_menu = "gallerydl_download"
+            else:
+                return_menu = "gallerydl"
         elif key.startswith("YOUTUBE_UPLOAD_") and key != "YOUTUBE_UPLOAD_ENABLED":
             # For YouTube upload settings (except YOUTUBE_UPLOAD_ENABLED which is handled in operations), determine which submenu to return to
             if key in [
@@ -16893,6 +17305,7 @@ No database-only files found."""
             "MEDIA_SEARCH_ENABLED",
             "RCLONE_ENABLED",
             "STREAMRIP_ENABLED",
+            "GALLERY_DL_ENABLED",
             "ZOTIFY_ENABLED",
             "YOUTUBE_UPLOAD_ENABLED",
             "MEGA_ENABLED",

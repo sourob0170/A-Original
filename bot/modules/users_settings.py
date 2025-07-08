@@ -224,6 +224,7 @@ async def migrate_user_cookies_to_db(user_id):
 
 leech_options = [
     "THUMBNAIL",
+    "AUTO_THUMBNAIL",
     "LEECH_SPLIT_SIZE",
     "EQUAL_SPLITS",
     "LEECH_FILENAME_PREFIX",
@@ -332,6 +333,23 @@ async def get_user_settings(from_user, stype="main"):
 
     if stype == "leech":
         buttons.data_button("Thumbnail", f"userset {user_id} menu THUMBNAIL")
+
+        # Auto Thumbnail toggle
+        auto_thumb = user_dict.get("AUTO_THUMBNAIL")
+        if auto_thumb is None:
+            auto_thumb = Config.AUTO_THUMBNAIL
+
+        if auto_thumb:
+            buttons.data_button(
+                "Auto Thumbnail: ✅ ON",
+                f"userset {user_id} tog AUTO_THUMBNAIL f",
+            )
+        else:
+            buttons.data_button(
+                "Auto Thumbnail: ❌ OFF",
+                f"userset {user_id} tog AUTO_THUMBNAIL t",
+            )
+
         buttons.data_button(
             "Leech Prefix",
             f"userset {user_id} menu LEECH_FILENAME_PREFIX",
@@ -514,10 +532,17 @@ async def get_user_settings(from_user, stype="main"):
             except (ValueError, TypeError):
                 lsplit_display = "None"
 
+        # Get auto thumbnail status
+        auto_thumb = user_dict.get("AUTO_THUMBNAIL")
+        if auto_thumb is None:
+            auto_thumb = Config.AUTO_THUMBNAIL
+        auto_thumb_status = "✅ Enabled" if auto_thumb else "❌ Disabled"
+
         text = f"""<u><b>Leech Settings for {name}</b></u>
 -> Leech Type: <b>{ltype}</b>
 -> Media Group: <b>{media_group}</b>
 -> Media Store: <b>{media_store}</b>
+-> Auto Thumbnail: <b>{auto_thumb_status}</b>
 -> Leech Prefix: <code>{escape(lprefix)}</code>
 -> Leech Suffix: <code>{escape(lsuffix)}</code>
 -> Leech Font: <code>{escape(lfont)}</code>
@@ -955,6 +980,147 @@ Convert settings have been moved to Media Tools settings.
 Please use /mediatools command to configure convert settings.
 """
 
+    elif stype == "gallerydl_main":
+        # Gallery-dl Settings - only show if Gallery-dl is enabled
+        if not Config.GALLERY_DL_ENABLED:
+            buttons.data_button("Back", f"userset {user_id} back")
+            buttons.data_button("Close", f"userset {user_id} close")
+            text = f"""<u><b>🖼️ Gallery-dl Settings for {name}</b></u>
+
+<b>⚠️ Gallery-dl is currently disabled by the bot owner.</b>
+
+Gallery-dl allows downloading media from 200+ platforms including:
+• Instagram, Twitter, Reddit
+• Pixiv, DeviantArt, ArtStation
+• Tumblr, Discord, and many more
+
+Contact the bot owner to enable Gallery-dl functionality."""
+        else:
+            # Gallery-dl is enabled, show settings menu
+            buttons.data_button("⚙️ General Settings", f"userset {user_id} gallerydl_general")
+            buttons.data_button("🔐 Authentication", f"userset {user_id} gallerydl_auth")
+            buttons.data_button("Back", f"userset {user_id} back")
+            buttons.data_button("Close", f"userset {user_id} close")
+
+            # Get user's gallery-dl settings status
+            user_general_settings = any(
+                key in user_dict for key in [
+                    "GALLERY_DL_QUALITY_SELECTION", "GALLERY_DL_ARCHIVE_ENABLED", "GALLERY_DL_METADATA_ENABLED"
+                ]
+            )
+            user_auth_settings = any(
+                key in user_dict for key in [
+                    "GALLERY_DL_INSTAGRAM_USERNAME", "GALLERY_DL_TWITTER_USERNAME", "GALLERY_DL_REDDIT_CLIENT_ID",
+                    "GALLERY_DL_PIXIV_USERNAME", "GALLERY_DL_DEVIANTART_CLIENT_ID", "GALLERY_DL_TUMBLR_API_KEY",
+                    "GALLERY_DL_DISCORD_TOKEN"
+                ]
+            )
+
+            general_status = "User configured" if user_general_settings else "Using owner settings"
+            auth_status = "User configured" if user_auth_settings else "Using owner settings"
+
+            text = f"""<u><b>🖼️ Gallery-dl Settings for {name}</b></u>
+
+<b>Configuration Status:</b>
+• General Settings: <b>{general_status}</b>
+• Authentication: <b>{auth_status}</b>
+
+<b>Supported Platforms:</b>
+Gallery-dl supports 200+ platforms including Instagram, Twitter, Reddit, Pixiv, DeviantArt, Tumblr, Discord, and many more.
+
+<i>💡 Your settings will override the bot owner's settings.</i>
+<i>🔒 All credentials are stored securely and privately.</i>"""
+
+    elif stype == "gallerydl_general":
+        # Gallery-dl General Settings
+        general_settings = [
+            "GALLERY_DL_QUALITY_SELECTION",
+            "GALLERY_DL_ARCHIVE_ENABLED",
+            "GALLERY_DL_METADATA_ENABLED",
+        ]
+
+        for setting in general_settings:
+            display_name = setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            buttons.data_button(display_name, f"userset {user_id} menu {setting}")
+
+        buttons.data_button("Back", f"userset {user_id} gallerydl_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        # Get current values
+        quality_selection = user_dict.get("GALLERY_DL_QUALITY_SELECTION", Config.GALLERY_DL_QUALITY_SELECTION)
+        archive_enabled = user_dict.get("GALLERY_DL_ARCHIVE_ENABLED", Config.GALLERY_DL_ARCHIVE_ENABLED)
+        metadata_enabled = user_dict.get("GALLERY_DL_METADATA_ENABLED", Config.GALLERY_DL_METADATA_ENABLED)
+
+        quality_status = "✅ Enabled" if quality_selection else "❌ Disabled"
+        archive_status = "✅ Enabled" if archive_enabled else "❌ Disabled"
+        metadata_status = "✅ Enabled" if metadata_enabled else "❌ Disabled"
+
+        text = f"""<u><b>🖼️ Gallery-dl General Settings for {name}</b></u>
+
+<b>Current Settings:</b>
+• Quality Selection: <b>{quality_status}</b>
+• Archive: <b>{archive_status}</b>
+• Metadata: <b>{metadata_status}</b>
+
+<b>Description:</b>
+• <b>Quality Selection:</b> Show quality selection interface for downloads
+• <b>Archive:</b> Keep track of downloaded files to avoid duplicates
+• <b>Metadata:</b> Save metadata files (JSON, YAML, TXT) with downloads
+
+<i>💡 Your settings will override the bot owner's settings.</i>"""
+
+    elif stype == "gallerydl_auth":
+        # Gallery-dl Authentication Settings
+        auth_settings = [
+            "GALLERY_DL_INSTAGRAM_USERNAME",
+            "GALLERY_DL_INSTAGRAM_PASSWORD",
+            "GALLERY_DL_TWITTER_USERNAME",
+            "GALLERY_DL_TWITTER_PASSWORD",
+            "GALLERY_DL_REDDIT_CLIENT_ID",
+            "GALLERY_DL_REDDIT_CLIENT_SECRET",
+            "GALLERY_DL_REDDIT_USERNAME",
+            "GALLERY_DL_REDDIT_PASSWORD",
+            "GALLERY_DL_REDDIT_REFRESH_TOKEN",
+            "GALLERY_DL_PIXIV_USERNAME",
+            "GALLERY_DL_PIXIV_PASSWORD",
+            "GALLERY_DL_PIXIV_REFRESH_TOKEN",
+            "GALLERY_DL_DEVIANTART_CLIENT_ID",
+            "GALLERY_DL_DEVIANTART_CLIENT_SECRET",
+            "GALLERY_DL_DEVIANTART_USERNAME",
+            "GALLERY_DL_DEVIANTART_PASSWORD",
+            "GALLERY_DL_TUMBLR_API_KEY",
+            "GALLERY_DL_TUMBLR_API_SECRET",
+            "GALLERY_DL_TUMBLR_TOKEN",
+            "GALLERY_DL_TUMBLR_TOKEN_SECRET",
+            "GALLERY_DL_DISCORD_TOKEN",
+        ]
+
+        for setting in auth_settings:
+            display_name = setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            buttons.data_button(display_name, f"userset {user_id} menu {setting}")
+
+        buttons.data_button("Back", f"userset {user_id} gallerydl_main")
+        buttons.data_button("Close", f"userset {user_id} close")
+
+        text = f"""<u><b>🖼️ Gallery-dl Authentication Settings for {name}</b></u>
+
+<b>Platform Authentication:</b>
+Configure credentials for accessing private content and higher quality downloads.
+
+<b>Supported Platforms:</b>
+• <b>Instagram:</b> Username/password for private accounts and stories
+• <b>Twitter/X:</b> Username/password for private accounts and higher quality
+• <b>Reddit:</b> OAuth credentials for NSFW content and private subreddits
+• <b>Pixiv:</b> Username/password for R-18 content and following artists
+• <b>DeviantArt:</b> OAuth credentials for mature content and Eclipse features
+• <b>Tumblr:</b> API credentials for NSFW content
+• <b>Discord:</b> Bot token for server content
+
+<i>💡 Your settings will override the bot owner's settings.</i>
+<i>🔒 All credentials are stored securely and privately.</i>"""
+
+
+
     elif stype == "cookies_main":
         # User Cookies Management
         # First, migrate any existing cookies to database
@@ -999,7 +1165,7 @@ Please use /mediatools command to configure convert settings.
 """
 
         footer_text = """
-<i>💡 You can upload unlimited cookies. When downloading, the bot will try each cookie until one works.</i>
+<i>💡 You can upload unlimited cookies for different sites. When downloading with YT-DLP or Gallery-dl, the bot will try each cookie until one works.</i>
 <i>🔒 Only you can access your cookies - they are completely private.</i>"""
 
         # Calculate available space for cookies list (Telegram limit is 1024 chars)
@@ -1621,8 +1787,15 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
         else:
             ytopt = "None"
 
-        # Only show User Cookies button if YT-DLP operations are enabled
-        if Config.YTDLP_ENABLED:
+        # Only show Gallery-dl button if Gallery-dl operations are enabled
+        if Config.GALLERY_DL_ENABLED:
+            buttons.data_button(
+                "Gallery-dl",
+                f"userset {user_id} gallerydl_main",
+            )
+
+        # Show User Cookies button if YT-DLP or Gallery-dl operations are enabled
+        if Config.YTDLP_ENABLED or Config.GALLERY_DL_ENABLED:
             buttons.data_button(
                 "User Cookies",
                 f"userset {user_id} cookies_main",
@@ -1766,12 +1939,21 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
 
         # Only show YT-DLP related settings if YT-DLP is enabled
         if Config.YTDLP_ENABLED:
-            text_parts.extend(
-                [
-                    f"-> YT-DLP Options: <code>{ytopt}</code>",
-                    f"-> User Cookies: <b>{cookies_status}</b>",
-                ]
+            text_parts.append(f"-> YT-DLP Options: <code>{ytopt}</code>")
+
+        # Only show Gallery-dl settings if Gallery-dl is enabled
+        if Config.GALLERY_DL_ENABLED:
+            # Get gallery-dl settings status
+            gallery_dl_settings = any(
+                key.startswith("GALLERY_DL_") and key != "GALLERY_DL_ENABLED"
+                for key in user_dict
             )
+            gallery_dl_status = "User configured" if gallery_dl_settings else "Using owner settings"
+            text_parts.append(f"-> Gallery-dl Settings: <b>{gallery_dl_status}</b>")
+
+        # Show cookies status if either YT-DLP or Gallery-dl is enabled
+        if Config.YTDLP_ENABLED or Config.GALLERY_DL_ENABLED:
+            text_parts.append(f"-> User Cookies: <b>{cookies_status}</b>")
 
         # Only show FFmpeg settings if media tools are enabled
         if is_media_tool_enabled("xtra"):
@@ -1805,6 +1987,8 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
             disabled_services.append("DDL Upload")
         if not Config.YTDLP_ENABLED:
             disabled_services.append("YT-DLP")
+        if not Config.GALLERY_DL_ENABLED:
+            disabled_services.append("Gallery-dl")
 
         if disabled_services:
             text += f"\n\n<i>Disabled services: {', '.join(disabled_services)}</i>"
@@ -2063,12 +2247,11 @@ async def set_option(_, message, option):
             # Try to convert the value to an integer
             value = int(value) if value.isdigit() else get_size_bytes(value)
 
-            # Always use owner's session for max split size calculation, not user's own session
+            # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
+            # USER_TRANSMISSION is owner setting only, not user-specific
+            # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
             max_split_size = (
-                TgClient.MAX_SPLIT_SIZE
-                if hasattr(Config, "USER_SESSION_STRING")
-                and Config.USER_SESSION_STRING
-                else 2097152000
+                TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
             )
 
             # Ensure split size never exceeds Telegram's limit (based on premium status)
@@ -2092,11 +2275,10 @@ async def set_option(_, message, option):
             value = min(int(value), max_split_size)
         except (ValueError, TypeError):
             # If conversion fails, set to default max split size
+            # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
+            # USER_TRANSMISSION is owner setting only, not user-specific
             max_split_size = (
-                TgClient.MAX_SPLIT_SIZE
-                if hasattr(Config, "USER_SESSION_STRING")
-                and Config.USER_SESSION_STRING
-                else 2097152000
+                TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
             )
             value = max_split_size
     elif option == "EXCLUDED_EXTENSIONS":
@@ -2105,6 +2287,8 @@ async def set_option(_, message, option):
         for x in fx:
             x = x.lstrip(".")
             value.append(x.strip().lower())
+    elif option == "INDEX_URL":
+        value = value.strip("/")
     elif option == "LEECH_FILENAME_CAPTION":
         # Check if caption exceeds Telegram's limit (1024 characters)
         if len(value) > 1024:
@@ -2383,6 +2567,9 @@ async def edit_user_settings(client, query):
         "ddl_general",
         "ddl_gofile",
         "ddl_streamtape",
+        "gallerydl_main",
+        "gallerydl_general",
+        "gallerydl_auth",
     ]:
         await query.answer()
         # Redirect to main menu if trying to access disabled features
@@ -2402,7 +2589,11 @@ async def edit_user_settings(client, query):
                 data[2] in ["ddl", "ddl_general", "ddl_gofile", "ddl_streamtape"]
                 and not Config.DDL_ENABLED
             )
-            or (data[2] == "cookies_main" and not Config.YTDLP_ENABLED)
+            or (
+                data[2] in ["gallerydl_main", "gallerydl_general", "gallerydl_auth"]
+                and not Config.GALLERY_DL_ENABLED
+            )
+            or (data[2] == "cookies_main" and not (Config.YTDLP_ENABLED or Config.GALLERY_DL_ENABLED))
         ):
             await update_user_settings(query, "main")
         else:
@@ -2423,16 +2614,20 @@ async def edit_user_settings(client, query):
         text = """<b>🍪 User Cookies Help</b>
 
 <b>What are cookies?</b>
-Cookies allow you to access restricted YouTube content and other sites that require authentication.
+Cookies allow you to access restricted content on YouTube, Instagram, Twitter, and other sites that require authentication.
+
+<b>Supported Downloads:</b>
+• YT-DLP downloads (YouTube, etc.)
+• Gallery-dl downloads (Instagram, Twitter, DeviantArt, Pixiv, etc.)
 
 <b>How to get cookies:</b>
 1. Install browser extension "Get cookies.txt" or "EditThisCookie"
-2. Login to YouTube/site in your browser
+2. Login to the website in your browser (YouTube, Instagram, Twitter, etc.)
 3. Use extension to export cookies as .txt file
 4. Upload the file here
 
 <b>Multiple Cookies:</b>
-• Upload unlimited cookies
+• Upload unlimited cookies for different sites
 • Bot tries each cookie until one works
 • Each cookie gets a unique number
 • Only you can access your cookies
@@ -2613,11 +2808,15 @@ Cookies allow you to access restricted YouTube content and other sites that requ
         if data[3] == "USER_COOKIES":
             text = """<b>User Cookies Help</b>
 
-You can provide your own cookies for YouTube and other yt-dlp downloads to access restricted content.
+You can provide your own cookies for YT-DLP and Gallery-dl downloads to access restricted content.
+
+<b>Supported Downloads:</b>
+• YT-DLP: YouTube, Twitch, and 1000+ sites
+• Gallery-dl: Instagram, Twitter, DeviantArt, Pixiv, Reddit, and 200+ platforms
 
 <b>How to create a cookies.txt file:</b>
 1. Install a browser extension like 'Get cookies.txt' or 'EditThisCookie'
-2. Log in to the website (YouTube, etc.) where you want to use your cookies
+2. Log in to the website (YouTube, Instagram, Twitter, etc.) where you want to use your cookies
 3. Use the extension to export cookies as a cookies.txt file
 4. Upload that file here
 
@@ -2625,7 +2824,8 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
 - Access age-restricted content
 - Fix 'Sign in to confirm you're not a bot' errors
 - Access subscriber-only content
-- Download private videos (if you have access)
+- Download private videos/posts (if you have access)
+- Access platform-specific content (Instagram stories, Twitter media, etc.)
 
 <b>Note:</b> Your cookies are stored securely and only used for your downloads. The bot owner cannot access your account."""
         buttons.data_button("Back", f"userset {user_id} menu {data[3]}")
@@ -2643,7 +2843,7 @@ You can provide your own cookies for YouTube and other yt-dlp downloads to acces
         elif data[3] == "RCLONE_CONFIG":
             text = "Send rclone.conf. Timeout: 60 sec"
         elif data[3] == "USER_COOKIES":
-            text = "Send your cookies.txt file for YouTube and other yt-dlp downloads. Create it using browser extensions like 'Get cookies.txt' or 'EditThisCookie'. Timeout: 60 sec"
+            text = "Send your cookies.txt file for YT-DLP and Gallery-dl downloads (YouTube, Instagram, Twitter, etc.). Create it using browser extensions like 'Get cookies.txt' or 'EditThisCookie'. Timeout: 60 sec"
         else:
             text = "Send token.pickle. Timeout: 60 sec"
         buttons.data_button("Back", f"userset {user_id} setevent")

@@ -84,6 +84,7 @@ from bot.modules import (
     restart_bot,
     rss_listener,
     run_shell,
+    scrap_command,
     select,
     select_type,
     send_bot_settings,
@@ -105,6 +106,7 @@ from bot.modules import (
     ytdl_leech,
 )
 from bot.modules.font_styles import font_styles_callback
+from bot.modules.gallery_dl import gdl_leech, gdl_mirror
 from bot.modules.media_tools_help import media_tools_help_callback
 
 from .aeon_client import TgClient
@@ -292,6 +294,16 @@ def add_handlers():
             BotCommands.YtdlLeechCommand,
             CustomFilters.authorized,
         ),
+        "gdl_mirror": (
+            gdl_mirror,
+            BotCommands.GdlCommand,
+            CustomFilters.authorized,
+        ),
+        "gdl_leech": (
+            gdl_leech,
+            BotCommands.GdlLeechCommand,
+            CustomFilters.authorized,
+        ),
         "mediainfo": (
             mediainfo,
             BotCommands.MediaInfoCommand,
@@ -379,6 +391,12 @@ def add_handlers():
         "quickinfo": (
             quickinfo_command,
             BotCommands.QuickInfoCommand,
+            CustomFilters.authorized,
+        ),
+        # Scraping commands
+        "scrap": (
+            scrap_command,
+            BotCommands.ScrapCommand,
             CustomFilters.authorized,
         ),
         # Tool commands
@@ -617,6 +635,12 @@ def add_handlers():
         # MEGA search now uses Telegraph (no pagination callbacks needed)
         public_regex_filters["^mgq"] = mega_folder_callback
 
+    # Add Gallery-dl callback handlers if enabled
+    if Config.GALLERY_DL_ENABLED:
+        from bot.modules.gallery_dl import gdl_callback
+
+        public_regex_filters["^gdlq"] = gdl_callback
+
     # Add handlers for callbacks that don't need authorization (accessible to all users)
     # These have higher priority (group=-1) to ensure they're processed first
     for regex_filter, handler_func in public_regex_filters.items():
@@ -679,6 +703,10 @@ def add_handlers():
         "y",
         "ytdlleech",
         "yl",
+        "gdlmirror",
+        "gm",
+        "gdlleech",
+        "gl",
         "streamripmirror",
         "srmirror",
         "srm",

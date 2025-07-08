@@ -3,6 +3,7 @@ from bot.helper.ext_utils.help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
     FILE_TO_LINK_HELP_DICT,
+    GALLERY_DL_HELP_DICT,
     MIRROR_HELP_DICT,
     NSFW_HELP_DICT,
     STREAMRIP_HELP_DICT,
@@ -119,6 +120,12 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["zotify"][0],
                 COMMAND_USAGE["zotify"][1],
             )
+        elif data[2] == "gdl":
+            await edit_message(
+                message,
+                COMMAND_USAGE["gdl"][0],
+                COMMAND_USAGE["gdl"][1],
+            )
         elif data[2] == "f2l":
             # For File-to-Link, we'll show the main help page with buttons
             buttons = ButtonMaker()
@@ -187,6 +194,12 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, ZOTIFY_HELP_DICT[data[2]], button)
+    elif data[1] == "gdl":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back gdl")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, GALLERY_DL_HELP_DICT[data[2]], button)
     elif data[1] == "f2l":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back f2l")
