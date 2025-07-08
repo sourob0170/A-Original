@@ -434,7 +434,9 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
     # USER_TRANSMISSION is owner setting only, not user-specific
     # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
     max_split_size = (
-        TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
+        TgClient.MAX_SPLIT_SIZE
+        if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        else 2097152000
     )
 
     # If equal splits is enabled, always split the file into equal parts based on max split size
@@ -1331,7 +1333,16 @@ def is_flag_enabled(flag_name):
         )
 
     # Special case for gallery-dl flags
-    if clean_flag in ["-archive", "-no-archive", "-metadata", "-no-metadata", "-write-info-json", "-limit", "-username", "-password"]:
+    if clean_flag in [
+        "-archive",
+        "-no-archive",
+        "-metadata",
+        "-no-metadata",
+        "-write-info-json",
+        "-limit",
+        "-username",
+        "-password",
+    ]:
         return Config.GALLERY_DL_ENABLED
 
     # If the flag is not in the map, assume it's enabled

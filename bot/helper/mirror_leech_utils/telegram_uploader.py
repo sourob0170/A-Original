@@ -36,12 +36,12 @@ from bot.core.config_manager import Config
 from bot.helper.aeon_utils.caption_gen import generate_caption
 from bot.helper.ext_utils.aiofiles_compat import path as aiopath
 from bot.helper.ext_utils.aiofiles_compat import remove, rename
+from bot.helper.ext_utils.auto_thumbnail import AutoThumbnailHelper
 from bot.helper.ext_utils.bot_utils import sync_to_async
 from bot.helper.ext_utils.files_utils import (
     get_base_name,
     is_archive,
 )
-from bot.helper.ext_utils.auto_thumbnail import AutoThumbnailHelper
 from bot.helper.ext_utils.media_utils import (
     get_audio_thumbnail,
     get_document_type,
@@ -165,9 +165,13 @@ class TelegramUploader:
                     TgClient.user.stop_transmission()
                 elif self._listener.client:
                     self._listener.client.stop_transmission()
-                self._transmission_stopped = True  # Set flag to prevent further calls
-            except Exception as e:
-                self._transmission_stopped = True  # Set flag even on error to prevent spam
+                self._transmission_stopped = (
+                    True  # Set flag to prevent further calls
+                )
+            except Exception:
+                self._transmission_stopped = (
+                    True  # Set flag even on error to prevent spam
+                )
             return  # Exit early when cancelled to prevent further progress monitoring
 
         # Skip progress monitoring if already cancelled
@@ -1379,7 +1383,7 @@ class TelegramUploader:
             "info.json",
             ".DS_Store",
             "Thumbs.db",
-            "desktop.ini"
+            "desktop.ini",
         }
 
         if filename in excluded_files:
@@ -1387,14 +1391,31 @@ class TelegramUploader:
 
         # Exclude by extension - non-media files
         excluded_extensions = {
-            ".db", ".sqlite", ".sqlite3",  # Database files
-            ".json", ".xml", ".txt", ".log",  # Metadata/text files
-            ".nfo", ".sfv", ".md5", ".sha1", ".sha256",  # Info/checksum files
-            ".torrent", ".magnet",  # Torrent files
-            ".ini", ".cfg", ".conf",  # Config files
-            ".tmp", ".temp", ".cache",  # Temporary files
-            ".part", ".crdownload",  # Partial downloads
-            ".url", ".lnk", ".desktop"  # Shortcuts/links
+            ".db",
+            ".sqlite",
+            ".sqlite3",  # Database files
+            ".json",
+            ".xml",
+            ".txt",
+            ".log",  # Metadata/text files
+            ".nfo",
+            ".sfv",
+            ".md5",
+            ".sha1",
+            ".sha256",  # Info/checksum files
+            ".torrent",
+            ".magnet",  # Torrent files
+            ".ini",
+            ".cfg",
+            ".conf",  # Config files
+            ".tmp",
+            ".temp",
+            ".cache",  # Temporary files
+            ".part",
+            ".crdownload",  # Partial downloads
+            ".url",
+            ".lnk",
+            ".desktop",  # Shortcuts/links
         }
 
         file_ext = os.path.splitext(filename)[1].lower()
@@ -1404,29 +1425,93 @@ class TelegramUploader:
         # Only generate MediaInfo for actual media files
         media_extensions = {
             # Video
-            ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v",
-            ".3gp", ".3g2", ".asf", ".rm", ".rmvb", ".vob", ".ts", ".mts",
-            ".m2ts", ".divx", ".xvid", ".ogv", ".f4v", ".mpg", ".mpeg",
-            ".m1v", ".m2v", ".mpe", ".mpv", ".mp2", ".mpa", ".mpe", ".mpg2",
-
+            ".mp4",
+            ".mkv",
+            ".avi",
+            ".mov",
+            ".wmv",
+            ".flv",
+            ".webm",
+            ".m4v",
+            ".3gp",
+            ".3g2",
+            ".asf",
+            ".rm",
+            ".rmvb",
+            ".vob",
+            ".ts",
+            ".mts",
+            ".m2ts",
+            ".divx",
+            ".xvid",
+            ".ogv",
+            ".f4v",
+            ".mpg",
+            ".mpeg",
+            ".m1v",
+            ".m2v",
+            ".mpe",
+            ".mpv",
+            ".mp2",
+            ".mpa",
+            ".mpg2",
             # Audio
-            ".mp3", ".flac", ".wav", ".aac", ".ogg", ".wma", ".m4a", ".opus",
-            ".ape", ".ac3", ".dts", ".amr", ".au", ".ra", ".aiff", ".aif",
-            ".aifc", ".caf", ".sd2", ".snd", ".mp2", ".mpa", ".m1a", ".m2a",
-
+            ".mp3",
+            ".flac",
+            ".wav",
+            ".aac",
+            ".ogg",
+            ".wma",
+            ".m4a",
+            ".opus",
+            ".ape",
+            ".ac3",
+            ".dts",
+            ".amr",
+            ".au",
+            ".ra",
+            ".aiff",
+            ".aif",
+            ".aifc",
+            ".caf",
+            ".sd2",
+            ".snd",
+            ".m1a",
+            ".m2a",
             # Images (for size/dimension info)
-            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp",
-            ".svg", ".ico", ".psd", ".raw", ".cr2", ".nef", ".arw", ".dng",
-            ".heic", ".heif", ".avif", ".jxl"
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".webp",
+            ".svg",
+            ".ico",
+            ".psd",
+            ".raw",
+            ".cr2",
+            ".nef",
+            ".arw",
+            ".dng",
+            ".heic",
+            ".heif",
+            ".avif",
+            ".jxl",
         }
 
         return file_ext in media_extensions
 
     async def _upload_file(self, cap_mono, file, o_path, force_document=False):
         # Generate MediaInfo only for media files
-        if (hasattr(self._listener, "user_dict") and
-            self._listener.user_dict.get("MEDIAINFO_ENABLED", Config.MEDIAINFO_ENABLED) and
-            self._should_generate_mediainfo(self._up_path)):
+        if (
+            hasattr(self._listener, "user_dict")
+            and self._listener.user_dict.get(
+                "MEDIAINFO_ENABLED", Config.MEDIAINFO_ENABLED
+            )
+            and self._should_generate_mediainfo(self._up_path)
+        ):
             try:
                 from bot.modules.mediainfo import gen_mediainfo
 
@@ -1460,7 +1545,9 @@ class TelegramUploader:
             # Skip MediaInfo for non-media files
             self._listener.mediainfo_link = None
             if not self._should_generate_mediainfo(self._up_path):
-                LOGGER.debug(f"Skipping MediaInfo for non-media file: {os.path.basename(self._up_path)}")
+                LOGGER.debug(
+                    f"Skipping MediaInfo for non-media file: {os.path.basename(self._up_path)}"
+                )
 
         if (
             self._thumb is not None
@@ -1487,8 +1574,10 @@ class TelegramUploader:
 
                     if auto_thumb_enabled and (is_video or is_audio):
                         try:
-                            auto_thumb = await AutoThumbnailHelper.get_auto_thumbnail(
-                                file, self._listener.user_id
+                            auto_thumb = (
+                                await AutoThumbnailHelper.get_auto_thumbnail(
+                                    file, self._listener.user_id
+                                )
                             )
                             if auto_thumb:
                                 thumb = auto_thumb
@@ -2114,10 +2203,15 @@ class TelegramUploader:
                     LOGGER.error(f"Attempt {attempt + 1} failed: {e}")
 
                     # Handle timeout errors with exponential backoff
-                    if "Request timed out" in error_str or "timeout" in error_str.lower():
+                    if (
+                        "Request timed out" in error_str
+                        or "timeout" in error_str.lower()
+                    ):
                         if attempt < retries - 1:
-                            backoff_time = (2 ** attempt) * 2  # 2, 4, 8 seconds
-                            LOGGER.info(f"Timeout detected, waiting {backoff_time}s before retry...")
+                            backoff_time = (2**attempt) * 2  # 2, 4, 8 seconds
+                            LOGGER.info(
+                                f"Timeout detected, waiting {backoff_time}s before retry..."
+                            )
                             await sleep(backoff_time)
                             continue
                     elif attempt < retries - 1:
@@ -2201,13 +2295,13 @@ class TelegramUploader:
                     try:
                         TgClient.user.stop_transmission()
                         self._transmission_stopped = True
-                    except Exception as e:
+                    except Exception:
                         self._transmission_stopped = True
                 elif self._listener.client:
                     try:
                         self._listener.client.stop_transmission()
                         self._transmission_stopped = True
-                    except Exception as e:
+                    except Exception:
                         self._transmission_stopped = True
 
             # Clear media dictionaries to prevent further processing

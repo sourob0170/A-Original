@@ -44,7 +44,7 @@ class GalleryDLHelper:
         # Initialize advanced components
         self.auth_manager = GalleryDLAuthManager()
         self.post_processor = GalleryDLPostProcessor(listener.dir, listener)
-        self.platform = getattr(listener, 'platform', 'unknown')
+        self.platform = getattr(listener, "platform", "unknown")
         self._quality_config = {}
 
     def _get_filename_template(self):
@@ -60,7 +60,6 @@ class GalleryDLHelper:
             "facebook": "{user[name]}_{id}_{filename}.{extension}",  # Posts, User Profiles
             "youtube": "{id}_{title}_{filename}.{extension}",  # Videos, Playlists
             "tiktok": "{user[username]}_{id}_{filename}.{extension}",  # Videos, User Profiles
-
             # Art & Photography Platforms - using ID + meaningful identifiers
             "pixiv": "{user[name]}_{id}_{title}_{filename}.{extension}",  # Artworks, User Profiles, individual Images
             "artstation": "{user[username]}_{id}_{title}_{filename}.{extension}",  # Artwork Listings, User Profiles, individual Images
@@ -70,7 +69,6 @@ class GalleryDLHelper:
             "unsplash": "{user[username]}_{id}_{description}_{filename}.{extension}",  # individual Images, Search Results
             "behance": "{user[username]}_{id}_{title}_{filename}.{extension}",  # Projects, User Profiles
             "pinterest": "{user[username]}_{id}_{description}_{filename}.{extension}",  # Pins, Boards, User Profiles
-
             # Image Hosting & Sharing
             "imgur": "{title}.{extension}",  # Albums, individual Images, Galleries
             "catbox": "{filename}.{extension}",  # Direct file hosting
@@ -78,14 +76,12 @@ class GalleryDLHelper:
             "postimg": "{filename}.{extension}",  # Image hosting
             "turboimagehost": "{filename}.{extension}",  # Image hosting
             "acidimg": "{filename}.{extension}",  # Image hosting
-
             # Booru Sites (SFW) - using ID + filename for meaningful names
             "danbooru": "{id}_{filename}.{extension}",  # Posts, Tag Searches, Pools
             "safebooru": "{id}_{filename}.{extension}",  # Posts, Tag Searches, Pools
             "gelbooru": "{id}_{filename}.{extension}",  # Posts, Tag Searches, Pools
             "twibooru": "{id}_{filename}.{extension}",  # Posts, Tag Searches
             "zerochan": "{id}_{filename}.{extension}",  # Posts, Tag Searches
-
             # Manga/Comics Platforms
             "dynastyscans": "{title}_{chapter}.{extension}",  # Chapters, Series
             "batoto": "{title}_{chapter}.{extension}",  # Manga chapters
@@ -93,52 +89,43 @@ class GalleryDLHelper:
             "tcbscans": "{title}_{chapter}.{extension}",  # Manga chapters
             "webtoons": "{title}_{episode}.{extension}",  # Episodes, Series
             "tapas": "{title}_{episode}.{extension}",  # Episodes, Series
-
             # Video Platforms
             "bilibili": "{title}.{extension}",  # Articles, User Articles
             "vimeo": "{title}.{extension}",  # Videos, User Profiles
             "twitch": "{user[name]}_{title}.{extension}",  # Streams, User Profiles
             "tenor": "{title}.{extension}",  # GIFs, Search Results
-
             # Professional Platforms
             "patreon": "{user[name]}_{title}.{extension}",  # Posts, User Profiles
             "fanbox": "{user[name]}_{title}.{extension}",  # Posts, Creators
             "fantia": "{user[name]}_{title}.{extension}",  # Posts, Creators
             "boosty": "{user[name]}_{title}.{extension}",  # Posts, Creators
-
             # News & Media
             "bbc": "{title}.{extension}",  # Articles, Media
             "telegraph": "{title}.{extension}",  # Articles
             "slideshare": "{title}.{extension}",  # Presentations
             "speakerdeck": "{title}.{extension}",  # Presentations
-
             # Gaming Platforms
             "newgrounds": "{user[name]}_{title}.{extension}",  # Art, Games, Movies, User Profiles
             "steamgriddb": "{title}.{extension}",  # Game assets
             "civitai": "{title}.{extension}",  # AI models, Images
-
             # Wallpaper Sites
             "wallhaven": "{category}_{purity}.{extension}",  # Wallpapers, Categories
             "wallpapercave": "{title}.{extension}",  # Wallpapers
             "desktopography": "{title}.{extension}",  # Wallpapers, Exhibitions
-
             # Forums
             "4chan": "{board}_{thread}.{extension}",  # Boards, Threads
             "2ch": "{board}_{thread}.{extension}",  # Boards, Threads
             "8chan": "{board}_{thread}.{extension}",  # Boards, Threads
             "warosu": "{board}_{thread}.{extension}",  # Archive, Threads
-
             # File Sharing
             "cyberdrop": "{filename}.{extension}",  # Albums, Files
             "bunkr": "{filename}.{extension}",  # Albums, Files
             "saint": "{filename}.{extension}",  # Media files
             "uploadir": "{filename}.{extension}",  # File uploads
-
             # Alternative Social
             "bluesky": "{user[handle]}_{date:%Y%m%d}.{extension}",  # Posts, User Profiles
             "discord": "{channel[name]}_{date:%Y%m%d_%H%M}.{extension}",  # Messages, Channels
             "mastodon": "{user[username]}_{date:%Y%m%d}.{extension}",  # Posts, User Profiles
-
             # Other Popular Platforms
             "ao3": "{title}.{extension}",  # Works, Stories
             "weibo": "{user[name]}_{date:%Y%m%d}.{extension}",  # Posts, User Profiles
@@ -247,8 +234,10 @@ class GalleryDLHelper:
                 self._config.update(Config.GALLERY_DL_OPTIONS)
 
             # Setup authentication (pass user_id for user-specific cookies)
-            user_id = getattr(self.listener, 'user_id', None)
-            auth_config = await self.auth_manager.setup_authentication(self.platform, {}, user_id)
+            user_id = getattr(self.listener, "user_id", None)
+            auth_config = await self.auth_manager.setup_authentication(
+                self.platform, {}, user_id
+            )
             if auth_config:
                 if self.platform not in self._config["extractor"]:
                     self._config["extractor"][self.platform] = {}
@@ -270,7 +259,9 @@ class GalleryDLHelper:
                 "convert": {"enabled": False},
                 "hooks": {"enabled": False},
             }
-            processors = await self.post_processor.setup_post_processors(post_processor_config)
+            processors = await self.post_processor.setup_post_processors(
+                post_processor_config
+            )
             if processors:
                 self._config["postprocessor"] = processors
 
@@ -289,13 +280,19 @@ class GalleryDLHelper:
                                 if unit == "s":
                                     self._config["extractor"]["sleep-request"] = num
                                 elif unit == "m":
-                                    self._config["extractor"]["sleep-request"] = num * 60
+                                    self._config["extractor"]["sleep-request"] = (
+                                        num * 60
+                                    )
                                 else:
                                     self._config["extractor"]["sleep-request"] = num
                             else:
-                                self._config["extractor"]["sleep-request"] = float(rate_limit)
+                                self._config["extractor"]["sleep-request"] = float(
+                                    rate_limit
+                                )
                         else:
-                            self._config["extractor"]["sleep-request"] = float(rate_limit)
+                            self._config["extractor"]["sleep-request"] = float(
+                                rate_limit
+                            )
                     else:
                         self._config["extractor"]["sleep-request"] = rate_limit
                 except (ValueError, TypeError):
@@ -607,15 +604,21 @@ class GalleryDLHelper:
             # General format settings - simple extension replacement approach
             if format_type in ["png", "jpg", "jpeg", "webp"]:
                 # Replace extension in filename template to force desired format
-                current_filename = self._config.get("filename", "{id}_{title!s:50.50}.{extension}")
-                self._config["filename"] = current_filename.replace("{extension}", format_type)
-
-
+                current_filename = self._config.get(
+                    "filename", "{id}_{title!s:50.50}.{extension}"
+                )
+                self._config["filename"] = current_filename.replace(
+                    "{extension}", format_type
+                )
 
             elif format_type != "best":
                 # For other format types
-                current_filename = self._config.get("filename", "{id}_{title!s:50.50}.{extension}")
-                self._config["filename"] = current_filename.replace("{extension}", format_type)
+                current_filename = self._config.get(
+                    "filename", "{id}_{title!s:50.50}.{extension}"
+                )
+                self._config["filename"] = current_filename.replace(
+                    "{extension}", format_type
+                )
 
         except Exception as e:
             LOGGER.error(f"Error applying quality config: {e}")
@@ -712,7 +715,8 @@ class GalleryDLHelper:
                 return
 
             # Import gallery-dl modules
-            from gallery_dl import config as gdl_config, job
+            from gallery_dl import config as gdl_config
+            from gallery_dl import job
 
             # Apply configuration using correct API
             gdl_config.clear()
@@ -832,21 +836,26 @@ class GalleryDLHelper:
                 if os.path.exists(search_path):
                     for root, dirs, files in os.walk(search_path):
                         # Skip hidden directories and archive directories
-                        dirs[:] = [d for d in dirs if not d.startswith('.')]
+                        dirs[:] = [d for d in dirs if not d.startswith(".")]
 
                         for file in files:
                             file_path = os.path.join(root, file)
 
                             # Skip hidden files and very small files (likely metadata)
-                            if file.startswith('.'):
+                            if file.startswith("."):
                                 continue
 
                             # Skip common metadata file extensions
-                            if file.endswith(('.json', '.yaml', '.yml', '.txt', '.db', '.log')):
+                            if file.endswith(
+                                (".json", ".yaml", ".yml", ".txt", ".db", ".log")
+                            ):
                                 continue
 
                             # Only count files that actually exist and have content
-                            if os.path.exists(file_path) and os.path.getsize(file_path) > 100:  # At least 100 bytes
+                            if (
+                                os.path.exists(file_path)
+                                and os.path.getsize(file_path) > 100
+                            ):  # At least 100 bytes
                                 file_count += 1
 
                                 # If file is not in our target directory, move it there
@@ -881,7 +890,7 @@ class GalleryDLHelper:
         self._is_cancelled = True
 
         # Also ensure listener cancellation is set
-        if hasattr(self.listener, 'is_cancelled'):
+        if hasattr(self.listener, "is_cancelled"):
             self.listener.is_cancelled = True
 
         if self._job:
@@ -898,14 +907,15 @@ class GalleryDLHelper:
     async def _cleanup(self):
         """Cleanup download helper resources"""
         try:
-            if hasattr(self, 'auth_manager'):
+            if hasattr(self, "auth_manager"):
                 await self.auth_manager.cleanup()
-            if hasattr(self, 'post_processor'):
+            if hasattr(self, "post_processor"):
                 await self.post_processor.cleanup()
 
             # Run gallery-dl specific garbage collection
             try:
                 from bot.helper.ext_utils.gc_utils import gallery_dl_cleanup
+
                 gallery_dl_cleanup()
             except Exception as e:
                 LOGGER.info(f"Gallery-dl GC cleanup error: {e}")

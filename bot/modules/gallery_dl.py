@@ -86,6 +86,7 @@ class Gdl(TaskListener):
         # Import Config here to avoid import issues (needed throughout the class)
         try:
             from bot.core.config_manager import Config
+
             self.Config = Config
         except ImportError:
             self.Config = None
@@ -125,11 +126,9 @@ class Gdl(TaskListener):
         # Set tool for limit checking
         self.tool = "gallery-dl"
 
-
-
         # Set tag for user mention in completion messages (same logic as other listeners)
 
-        if hasattr(self, 'user') and self.user:
+        if hasattr(self, "user") and self.user:
             if username := getattr(self.user, "username", None):
                 self.tag = f"@{username}"
             elif hasattr(self.user, "mention"):
@@ -164,7 +163,11 @@ class Gdl(TaskListener):
                 return
 
             # Check if gallery-dl is enabled
-            if not (self.Config and hasattr(self.Config, 'GALLERY_DL_ENABLED') and self.Config.GALLERY_DL_ENABLED):
+            if not (
+                self.Config
+                and hasattr(self.Config, "GALLERY_DL_ENABLED")
+                and self.Config.GALLERY_DL_ENABLED
+            ):
                 await send_message(
                     self.message, "❌ Gallery-dl downloads are disabled."
                 )
@@ -243,8 +246,14 @@ class Gdl(TaskListener):
             # Handle DEFAULT_UPLOAD for mirror operations (same logic as mirror_leech.py)
             if not self.is_leech and not self.up_dest:
                 # Check user's DEFAULT_UPLOAD setting first, then fall back to global setting
-                default_upload = self.Config.DEFAULT_UPLOAD if self.Config and hasattr(self.Config, 'DEFAULT_UPLOAD') else "gd"
-                user_default_upload = self.user_dict.get("DEFAULT_UPLOAD", default_upload)
+                default_upload = (
+                    self.Config.DEFAULT_UPLOAD
+                    if self.Config and hasattr(self.Config, "DEFAULT_UPLOAD")
+                    else "gd"
+                )
+                user_default_upload = self.user_dict.get(
+                    "DEFAULT_UPLOAD", default_upload
+                )
                 if user_default_upload == "gd":
                     self.up_dest = "gd"
                 elif user_default_upload == "mg":
@@ -255,8 +264,13 @@ class Gdl(TaskListener):
                     self.up_dest = "ddl"
                 elif user_default_upload == "rc":
                     # For rclone, we need a valid path - if none configured, fall back to gd
-                    if (self.Config and hasattr(self.Config, 'RCLONE_ENABLED') and self.Config.RCLONE_ENABLED and
-                        hasattr(self.Config, 'RCLONE_PATH') and self.Config.RCLONE_PATH):
+                    if (
+                        self.Config
+                        and hasattr(self.Config, "RCLONE_ENABLED")
+                        and self.Config.RCLONE_ENABLED
+                        and hasattr(self.Config, "RCLONE_PATH")
+                        and self.Config.RCLONE_PATH
+                    ):
                         self.up_dest = self.Config.RCLONE_PATH
                     else:
                         # Fall back to Google Drive if rclone not properly configured
@@ -298,7 +312,9 @@ class Gdl(TaskListener):
             self.metadata_audio_comment = args.get("metadata_audio_comment", "")
             self.metadata_subtitle_title = args.get("metadata_subtitle_title", "")
             self.metadata_subtitle_author = args.get("metadata_subtitle_author", "")
-            self.metadata_subtitle_comment = args.get("metadata_subtitle_comment", "")
+            self.metadata_subtitle_comment = args.get(
+                "metadata_subtitle_comment", ""
+            )
 
             # Listener is already initialized by super().__init__()
 
@@ -306,7 +322,7 @@ class Gdl(TaskListener):
 
             # Fix 1: Restore tag property (gets overwritten by args.get("tag", ""))
             if not self.tag:
-                if hasattr(self, 'user') and self.user:
+                if hasattr(self, "user") and self.user:
                     if username := getattr(self.user, "username", None):
                         self.tag = f"@{username}"
                     elif hasattr(self.user, "mention"):
@@ -318,7 +334,9 @@ class Gdl(TaskListener):
                             f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>",
                         )
                 else:
-                    self.tag = f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>"
+                    self.tag = (
+                        f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>"
+                    )
 
             # Fix 2: Implement correct leech destination logic
             # For BOTH PM and Group operations: Primary destination = Dump chats, Secondary = User's PM
@@ -326,7 +344,11 @@ class Gdl(TaskListener):
             if self.is_leech and not self.up_dest:
                 # Both PM and Group operations: Set up_dest to dump chats (primary destination)
                 # Files will be sent to dump chats first, then copied to user's PM
-                if (self.Config and hasattr(self.Config, 'LEECH_DUMP_CHAT') and self.Config.LEECH_DUMP_CHAT):
+                if (
+                    self.Config
+                    and hasattr(self.Config, "LEECH_DUMP_CHAT")
+                    and self.Config.LEECH_DUMP_CHAT
+                ):
                     # Use the first dump chat as primary destination
                     if isinstance(self.Config.LEECH_DUMP_CHAT, list):
                         dump_chat = self.Config.LEECH_DUMP_CHAT[0]
@@ -339,23 +361,22 @@ class Gdl(TaskListener):
                     else:
                         self.up_dest = str(self.Config.LEECH_DUMP_CHAT)
 
-                    operation_type = "PM" if self.message.chat.id == self.user_id else "Group"
                 else:
                     # Fallback: If no dump chat configured, use user's PM
                     self.up_dest = str(self.user_id)
-                    operation_type = "PM" if self.message.chat.id == self.user_id else "Group"
-
 
             # Check quality selection with enhanced platform detection
             quality_config = None
             detected_platform = "default"
 
-            if (self.Config and hasattr(self.Config, 'GALLERY_DL_QUALITY_SELECTION') and
-                self.Config.GALLERY_DL_QUALITY_SELECTION):
-
+            if (
+                self.Config
+                and hasattr(self.Config, "GALLERY_DL_QUALITY_SELECTION")
+                and self.Config.GALLERY_DL_QUALITY_SELECTION
+            ):
                 # Detect platform from URL for better quality options
                 detected_platform = get_platform_from_url(self.link)
-                platform_info_enhanced = get_platform_info(detected_platform)
+                get_platform_info(detected_platform)
 
                 # Store detected platform in listener for filename template
                 self.platform = detected_platform
@@ -370,16 +391,23 @@ class Gdl(TaskListener):
                         # User cancelled or error occurred
                         return
 
-
                     # Add platform info to quality config
                     if quality_config:
                         quality_config["platform"] = detected_platform
                 else:
-                    quality_config = {"quality": "original", "format": "best", "platform": detected_platform}
+                    quality_config = {
+                        "quality": "original",
+                        "format": "best",
+                        "platform": detected_platform,
+                    }
             else:
                 # Even without quality selection, detect platform for proper configuration
                 detected_platform = get_platform_from_url(self.link)
-                quality_config = {"quality": "original", "format": "best", "platform": detected_platform}
+                quality_config = {
+                    "quality": "original",
+                    "format": "best",
+                    "platform": detected_platform,
+                }
 
             # Store platform for use in download helper
             self.platform = detected_platform
@@ -444,7 +472,9 @@ class Gdl(TaskListener):
         """Handle download complete - required by TaskListener"""
         await super().on_download_complete()
 
-    async def on_upload_complete(self, link, files, total_files, corrupted, rclone_path="", dir_id=""):
+    async def on_upload_complete(
+        self, link, files, total_files, corrupted, rclone_path="", dir_id=""
+    ):
         """Handle upload complete - required by TaskListener"""
         # For leech operations, call the parent method with proper parameters
         # The parent method expects: link, files, folders, mime_type, rclone_path, dir_id
@@ -458,8 +488,8 @@ class Gdl(TaskListener):
         # These properties get overwritten somewhere, so we need to restore them
 
         # Restore tag property
-        if not hasattr(self, 'tag') or not self.tag:
-            if hasattr(self, 'user') and self.user:
+        if not hasattr(self, "tag") or not self.tag:
+            if hasattr(self, "user") and self.user:
                 if username := getattr(self.user, "username", None):
                     self.tag = f"@{username}"
                 elif hasattr(self.user, "mention"):
@@ -471,12 +501,18 @@ class Gdl(TaskListener):
                         f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>",
                     )
             else:
-                self.tag = f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>"
+                self.tag = (
+                    f"<a href='tg://user?id={self.user_id}'>{self.user_id}</a>"
+                )
 
         # Restore up_dest property if it gets cleared during upload process
-        if self.is_leech and (not hasattr(self, 'up_dest') or not self.up_dest):
+        if self.is_leech and (not hasattr(self, "up_dest") or not self.up_dest):
             # Both PM and Group operations: Restore to dump chats (primary destination)
-            if (self.Config and hasattr(self.Config, 'LEECH_DUMP_CHAT') and self.Config.LEECH_DUMP_CHAT):
+            if (
+                self.Config
+                and hasattr(self.Config, "LEECH_DUMP_CHAT")
+                and self.Config.LEECH_DUMP_CHAT
+            ):
                 if isinstance(self.Config.LEECH_DUMP_CHAT, list):
                     dump_chat = self.Config.LEECH_DUMP_CHAT[0]
                     if isinstance(dump_chat, str) and ":" in dump_chat:
@@ -487,14 +523,13 @@ class Gdl(TaskListener):
                 else:
                     self.up_dest = str(self.Config.LEECH_DUMP_CHAT)
 
-                operation_type = "PM" if self.message.chat.id == self.user_id else "Group"
             else:
                 # Fallback: If no dump chat configured, use user's PM
                 self.up_dest = str(self.user_id)
-                operation_type = "PM" if self.message.chat.id == self.user_id else "Group"
 
-
-        await super().on_upload_complete(link, files, folders, mime_type, rclone_path, dir_id)
+        await super().on_upload_complete(
+            link, files, folders, mime_type, rclone_path, dir_id
+        )
 
     async def on_upload_error(self, error):
         """Handle upload error - required by TaskListener"""

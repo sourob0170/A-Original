@@ -30,7 +30,7 @@ async def is_gallery_dl_url(url: str) -> bool:
             None, extractor.find, url
         )
         return result is not None
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -85,7 +85,6 @@ def _get_platform_display_name(category: str) -> str:
         "pinterest": "Pinterest",
         "weibo": "Weibo",
         "bilibili": "Bilibili",
-
         # Art & Design Platforms
         "deviantart": "DeviantArt",
         "pixiv": "Pixiv",
@@ -101,7 +100,6 @@ def _get_platform_display_name(category: str) -> str:
         "desktopography": "Desktopography",
         "wikiart": "WikiArt",
         "xfolio": "Xfolio",
-
         # Image Hosts & File Sharing
         "imgur": "Imgur",
         "catbox": "Catbox",
@@ -113,7 +111,6 @@ def _get_platform_display_name(category: str) -> str:
         "webmshare": "WebMShare",
         "chevereto": "Chevereto",
         "lolisafe": "Lolisafe",
-
         # Booru & Anime
         "danbooru": "Danbooru",
         "gelbooru": "Gelbooru",
@@ -125,7 +122,6 @@ def _get_platform_display_name(category: str) -> str:
         "sankaku": "Sankaku",
         "zerochan": "Zerochan",
         "3dbooru": "3DBooru",
-
         # Manga & Comics
         "mangadex": "MangaDex",
         "webtoons": "Webtoons",
@@ -139,7 +135,6 @@ def _get_platform_display_name(category: str) -> str:
         "batoto": "Batoto",
         "comick": "Comick",
         "comicvine": "Comic Vine",
-
         # Adult Content
         "kemono": "Kemono Party",
         "coomer": "Coomer Party",
@@ -151,7 +146,6 @@ def _get_platform_display_name(category: str) -> str:
         "aryion": "Aryion",
         "furry34": "Furry34",
         "yiffverse": "Yiffverse",
-
         # Subscription & Premium
         "patreon": "Patreon",
         "fanbox": "Pixiv Fanbox",
@@ -159,7 +153,6 @@ def _get_platform_display_name(category: str) -> str:
         "boosty": "Boosty",
         "cien": "Ci-en",
         "subscribestar": "SubscribeStar",
-
         # Forums & Imageboards
         "4chan": "4chan",
         "8chan": "8chan",
@@ -171,32 +164,26 @@ def _get_platform_display_name(category: str) -> str:
         "arcalive": "ArcaLive",
         "foolfuuka": "FoolFuuka",
         "foolslide": "FoolSlide",
-
         # Video & Streaming
         "youtube": "YouTube",
         "vimeo": "Vimeo",
         "twitch": "Twitch",
         "bbc": "BBC",
         "ytdl": "YouTube-DL",
-
         # Professional & Business
         "linkedin": "LinkedIn",
         "civitai": "CivitAI",
         "shopify": "Shopify",
-
         # Blogs & Personal Sites
         "blogger": "Blogger",
         "hatenablog": "Hatena Blog",
         "35photo": "35Photo",
-
         # Literature & Text
         "ao3": "Archive of Our Own",
         "fanfiction": "FanFiction.Net",
-
         # Wikis & Knowledge
         "wikimedia": "Wikimedia",
         "wikifeet": "WikiFeet",
-
         # Misc & Specialized
         "agnph": "AGNPH",
         "everia": "Everia",
@@ -217,34 +204,60 @@ def _requires_authentication(category: str) -> bool:
     """Check if platform typically requires authentication"""
     auth_required_platforms = {
         # Social Media (OAuth/Login required)
-        "instagram", "twitter", "facebook", "tiktok", "reddit", "tumblr",
-        "mastodon", "bluesky", "discord", "pinterest", "weibo", "bilibili",
-
+        "instagram",
+        "twitter",
+        "facebook",
+        "tiktok",
+        "reddit",
+        "tumblr",
+        "mastodon",
+        "bluesky",
+        "discord",
+        "pinterest",
+        "weibo",
+        "bilibili",
         # Art Platforms (Account required for full access)
-        "deviantart", "pixiv", "artstation", "behance", "flickr",
-        "furaffinity", "weasyl", "newgrounds",
-
+        "deviantart",
+        "pixiv",
+        "artstation",
+        "behance",
+        "flickr",
+        "furaffinity",
+        "weasyl",
+        "newgrounds",
         # Subscription/Premium Platforms
-        "patreon", "fanbox", "fantia", "boosty", "cien", "subscribestar",
-
+        "patreon",
+        "fanbox",
+        "fantia",
+        "boosty",
+        "cien",
+        "subscribestar",
         # Adult Content (Age verification)
-        "kemono", "coomer", "exhentai", "nhentai", "hentaifoundry",
-        "sankaku", "gelbooru", "danbooru", "e621",
-
+        "kemono",
+        "coomer",
+        "exhentai",
+        "nhentai",
+        "hentaifoundry",
+        "sankaku",
+        "gelbooru",
+        "danbooru",
+        "e621",
         # Professional Platforms
-        "linkedin", "civitai",
-
+        "linkedin",
+        "civitai",
         # Literature Platforms
-        "ao3", "fanfiction",
-
+        "ao3",
+        "fanfiction",
         # Forums (Registration required)
-        "arcalive", "girlswithmuscle",
-
+        "arcalive",
+        "girlswithmuscle",
         # File Hosts (API keys)
-        "gofile", "catbox",
-
+        "gofile",
+        "catbox",
         # Video Platforms
-        "youtube", "vimeo", "twitch",
+        "youtube",
+        "vimeo",
+        "twitch",
     }
     return category in auth_required_platforms
 
@@ -253,28 +266,62 @@ def _supports_quality_selection(category: str) -> bool:
     """Check if platform supports quality selection"""
     quality_platforms = {
         # Social Media (multiple resolutions)
-        "instagram", "twitter", "facebook", "tiktok", "reddit", "tumblr",
-        "mastodon", "bluesky", "discord", "pinterest", "weibo", "bilibili",
-
+        "instagram",
+        "twitter",
+        "facebook",
+        "tiktok",
+        "reddit",
+        "tumblr",
+        "mastodon",
+        "bluesky",
+        "discord",
+        "pinterest",
+        "weibo",
+        "bilibili",
         # Art Platforms (original/preview sizes)
-        "deviantart", "pixiv", "artstation", "behance", "flickr", "unsplash",
-        "500px", "furaffinity", "weasyl", "newgrounds", "35photo",
-
+        "deviantart",
+        "pixiv",
+        "artstation",
+        "behance",
+        "flickr",
+        "unsplash",
+        "500px",
+        "furaffinity",
+        "weasyl",
+        "newgrounds",
+        "35photo",
         # Image Hosts (size variants)
-        "imgur", "catbox", "gofile", "bunkr", "cyberdrop", "fapello",
-
+        "imgur",
+        "catbox",
+        "gofile",
+        "bunkr",
+        "cyberdrop",
+        "fapello",
         # Booru Sites (sample/original)
-        "danbooru", "gelbooru", "safebooru", "e621", "e926", "konachan",
-        "yandere", "sankaku", "zerochan", "3dbooru",
-
+        "danbooru",
+        "gelbooru",
+        "safebooru",
+        "e621",
+        "e926",
+        "konachan",
+        "yandere",
+        "sankaku",
+        "zerochan",
+        "3dbooru",
         # Video Platforms (resolution options)
-        "youtube", "vimeo", "twitch", "bbc",
-
+        "youtube",
+        "vimeo",
+        "twitch",
+        "bbc",
         # Manga/Comics (page quality)
-        "mangadex", "webtoons", "nhentai", "hitomi", "hentai2read",
-
+        "mangadex",
+        "webtoons",
+        "nhentai",
+        "hitomi",
+        "hentai2read",
         # Professional Platforms
-        "civitai", "linkedin",
+        "civitai",
+        "linkedin",
     }
     return category in quality_platforms
 
@@ -283,46 +330,101 @@ def _supports_batch_download(category: str) -> bool:
     """Check if platform supports batch downloads (galleries, user profiles, etc.)"""
     batch_platforms = {
         # Social Media (user profiles, feeds)
-        "instagram", "twitter", "facebook", "tiktok", "reddit", "tumblr",
-        "mastodon", "bluesky", "discord", "pinterest", "weibo", "bilibili",
-
+        "instagram",
+        "twitter",
+        "facebook",
+        "tiktok",
+        "reddit",
+        "tumblr",
+        "mastodon",
+        "bluesky",
+        "discord",
+        "pinterest",
+        "weibo",
+        "bilibili",
         # Art Platforms (galleries, collections)
-        "deviantart", "pixiv", "artstation", "behance", "flickr", "unsplash",
-        "500px", "furaffinity", "weasyl", "newgrounds", "35photo", "wikiart",
-
+        "deviantart",
+        "pixiv",
+        "artstation",
+        "behance",
+        "flickr",
+        "unsplash",
+        "500px",
+        "furaffinity",
+        "weasyl",
+        "newgrounds",
+        "35photo",
+        "wikiart",
         # Image Hosts (albums, galleries)
-        "imgur", "catbox", "gofile", "bunkr", "cyberdrop", "fapello",
-        "erome", "webmshare",
-
+        "imgur",
+        "catbox",
+        "gofile",
+        "bunkr",
+        "cyberdrop",
+        "fapello",
+        "erome",
+        "webmshare",
         # Booru Sites (tag searches, pools)
-        "danbooru", "gelbooru", "safebooru", "e621", "e926", "konachan",
-        "yandere", "sankaku", "zerochan", "3dbooru",
-
+        "danbooru",
+        "gelbooru",
+        "safebooru",
+        "e621",
+        "e926",
+        "konachan",
+        "yandere",
+        "sankaku",
+        "zerochan",
+        "3dbooru",
         # Subscription Platforms (creator feeds)
-        "patreon", "fanbox", "fantia", "boosty", "cien", "subscribestar",
-
+        "patreon",
+        "fanbox",
+        "fantia",
+        "boosty",
+        "cien",
+        "subscribestar",
         # Adult Content (user galleries)
-        "kemono", "coomer", "exhentai", "nhentai", "hentaifoundry",
-        "xhamster", "xvideos", "8muses", "aryion", "furry34", "yiffverse",
-
+        "kemono",
+        "coomer",
+        "exhentai",
+        "nhentai",
+        "hentaifoundry",
+        "xhamster",
+        "xvideos",
+        "8muses",
+        "aryion",
+        "furry34",
+        "yiffverse",
         # Manga/Comics (series, chapters)
-        "mangadex", "webtoons", "hitomi", "hentai2read", "hentaihand",
-        "dynastyscans", "batoto", "comick", "comicvine",
-
+        "mangadex",
+        "webtoons",
+        "hitomi",
+        "hentai2read",
+        "hentaihand",
+        "dynastyscans",
+        "batoto",
+        "comick",
+        "comicvine",
         # Forums (threads, boards)
-        "4chan", "8chan", "2ch", "2chan", "arcalive", "foolfuuka",
-
+        "4chan",
+        "8chan",
+        "2ch",
+        "2chan",
+        "arcalive",
+        "foolfuuka",
         # Video Platforms (playlists, channels)
-        "youtube", "vimeo", "twitch", "bbc",
-
+        "youtube",
+        "vimeo",
+        "twitch",
+        "bbc",
         # Professional Platforms
-        "civitai", "linkedin",
-
+        "civitai",
+        "linkedin",
         # Literature (series, collections)
-        "ao3", "fanfiction",
-
+        "ao3",
+        "fanfiction",
         # Blogs (post archives)
-        "blogger", "hatenablog",
+        "blogger",
+        "hatenablog",
     }
     return category in batch_platforms
 
@@ -362,7 +464,6 @@ def _get_content_types(category: str) -> list:
         "unsplash": ["images"],
         "500px": ["images"],
         "weibo": ["images", "videos"],
-
         # Additional platforms with comprehensive content types
         "catbox": ["images", "videos", "files"],
         "gofile": ["files", "images", "videos"],
@@ -474,6 +575,3 @@ async def get_supported_platforms() -> list:
     except Exception as e:
         LOGGER.error(f"Failed to get supported platforms: {e}")
         return []
-
-
-

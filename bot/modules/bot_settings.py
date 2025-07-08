@@ -2699,8 +2699,6 @@ Platform-specific authentication settings have been moved to the <b>Authenticati
 
 <b>Note:</b> All platform credentials are now managed in one place under Authentication."""
 
-
-
     elif key == "streamrip_platforms":
         # Platform-specific Settings
         platform_settings = [
@@ -3991,7 +3989,9 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         streamrip_enabled = (
             "✅ Enabled" if Config.STREAMRIP_ENABLED else "❌ Disabled"
         )
-        gallery_dl_enabled = "✅ Enabled" if Config.GALLERY_DL_ENABLED else "❌ Disabled"
+        gallery_dl_enabled = (
+            "✅ Enabled" if Config.GALLERY_DL_ENABLED else "❌ Disabled"
+        )
         zotify_enabled = "✅ Enabled" if Config.ZOTIFY_ENABLED else "❌ Disabled"
         gdrive_upload_enabled = (
             "✅ Enabled" if Config.GDRIVE_UPLOAD_ENABLED else "❌ Disabled"
@@ -10039,8 +10039,6 @@ async def edit_bot_settings(client, query):
         await query.answer("Platform settings moved to Authentication section!")
         await update_buttons(message, "gallerydl_auth")
 
-
-
     elif data[1] == "zotify":
         await query.answer()
         # Get the current state before making changes
@@ -12807,7 +12805,9 @@ async def edit_bot_settings(client, query):
         await update_buttons(message, "gallerydl_general")
 
     elif data[1] == "default_gallerydl_auth":
-        await query.answer("Resetting gallery-dl authentication settings to default...")
+        await query.answer(
+            "Resetting gallery-dl authentication settings to default..."
+        )
         # Reset gallery-dl auth settings to default
         Config.GALLERY_DL_INSTAGRAM_USERNAME = ""
         Config.GALLERY_DL_INSTAGRAM_PASSWORD = ""
@@ -14471,8 +14471,6 @@ async def edit_bot_settings(client, query):
         "gallerydl_general",
         "gallerydl_auth",
         "gallerydl_download",
-
-
         "zotify",
         "zotify_general",
         "zotify_quality",
@@ -16918,7 +16916,9 @@ No database-only files found."""
 
             if not value:
                 # If Gallery-dl is being disabled, reset all gallery-dl-related configs
-                from bot.helper.ext_utils.config_utils import reset_gallery_dl_configs
+                from bot.helper.ext_utils.config_utils import (
+                    reset_gallery_dl_configs,
+                )
 
                 await reset_gallery_dl_configs(database)
             else:

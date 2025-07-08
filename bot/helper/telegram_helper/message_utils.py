@@ -1,6 +1,6 @@
 import contextlib
 import re
-from asyncio import create_task, gather, sleep, wait_for, TimeoutError as AsyncTimeoutError
+from asyncio import create_task, gather, sleep, wait_for
 from re import match as re_match
 from time import time as get_time
 
@@ -42,18 +42,20 @@ async def with_timeout_retry(coro, timeout=30, max_retries=3, backoff_factor=2):
     for attempt in range(max_retries):
         try:
             return await wait_for(coro, timeout=timeout)
-        except AsyncTimeoutError:
+        except TimeoutError:
             if attempt < max_retries - 1:
-                wait_time = backoff_factor ** attempt
-                LOGGER.warning(f"Request timed out (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                wait_time = backoff_factor**attempt
+                LOGGER.warning(
+                    f"Request timed out (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s..."
+                )
                 await sleep(wait_time)
                 continue
-            else:
-                LOGGER.error(f"Request timed out after {max_retries} attempts")
-                raise
+            LOGGER.error(f"Request timed out after {max_retries} attempts")
+            raise
         except Exception as e:
             # For non-timeout errors, don't retry
             raise e
+    return None
 
 
 async def send_message(
@@ -235,8 +237,7 @@ async def edit_message(
                 # Create InputMediaPhoto with the correct parse_mode
                 media = InputMediaPhoto(photo, caption=text, parse_mode=parse_mode)
                 return await with_timeout_retry(
-                    message.edit_media(media=media, reply_markup=buttons),
-                    timeout=30
+                    message.edit_media(media=media, reply_markup=buttons), timeout=30
                 )
             return await with_timeout_retry(
                 message.edit_caption(
@@ -244,7 +245,7 @@ async def edit_message(
                     reply_markup=buttons,
                     parse_mode=parse_mode,
                 ),
-                timeout=30
+                timeout=30,
             )
         await with_timeout_retry(
             message.edit(
@@ -253,7 +254,7 @@ async def edit_message(
                 reply_markup=buttons,
                 parse_mode=parse_mode,
             ),
-            timeout=30
+            timeout=30,
         )
     except FloodWait as f:
         if not block:
@@ -423,7 +424,12 @@ async def delete_message(*args):
             if not msg or not hasattr(msg, "id") or msg.id is None:
                 continue
 
-            if not hasattr(msg, "chat") or msg.chat is None or not hasattr(msg.chat, "id") or msg.chat.id is None:
+            if (
+                not hasattr(msg, "chat")
+                or msg.chat is None
+                or not hasattr(msg.chat, "id")
+                or msg.chat.id is None
+            ):
                 continue
 
             error_str = str(result)

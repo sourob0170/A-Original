@@ -12,11 +12,11 @@ from time import time
 import aiohttp
 from aiofiles import open as aioopen
 
-# Use compatibility layer for aiofiles
-from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
-
 from bot import LOGGER
 from bot.core.config_manager import Config
+
+# Use compatibility layer for aiofiles
+from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.template_processor import extract_metadata_from_filename
 from bot.helper.stream_utils.tmdb_helper import TMDBHelper
 
@@ -30,7 +30,7 @@ class AutoThumbnailHelper:
 
     @classmethod
     async def get_auto_thumbnail(
-        cls, filename: str, user_id: int = None
+        cls, filename: str, user_id: int | None = None
     ) -> str | None:
         """
         Get auto thumbnail for a file based on its metadata
@@ -82,18 +82,28 @@ class AutoThumbnailHelper:
             # For TV shows, also try with just the main title (before any episode info)
             if is_tv_show:
                 # Extract just the main series name
-                main_title = re.split(r'\s+S\d+E\d+|\s+Season|\s+Episode', clean_title, flags=re.IGNORECASE)[0].strip()
+                main_title = re.split(
+                    r"\s+S\d+E\d+|\s+Season|\s+Episode",
+                    clean_title,
+                    flags=re.IGNORECASE,
+                )[0].strip()
                 if main_title and main_title != clean_title:
                     search_title = main_title
-                    LOGGER.info(f"🔍 Using main series title for search: '{search_title}'")
+                    LOGGER.info(
+                        f"🔍 Using main series title for search: '{search_title}'"
+                    )
 
             if Config.TMDB_API_KEY and Config.TMDB_ENABLED:
-                thumbnail_url = await cls._get_tmdb_thumbnail(search_title, year, is_tv_show)
+                thumbnail_url = await cls._get_tmdb_thumbnail(
+                    search_title, year, is_tv_show
+                )
 
                 # If no result with main title, try original clean title
                 if not thumbnail_url and search_title != clean_title:
                     LOGGER.info(f"🔄 Retrying TMDB with full title: '{clean_title}'")
-                    thumbnail_url = await cls._get_tmdb_thumbnail(clean_title, year, is_tv_show)
+                    thumbnail_url = await cls._get_tmdb_thumbnail(
+                        clean_title, year, is_tv_show
+                    )
 
             # Fallback to IMDB if TMDB fails
             if not thumbnail_url and Config.IMDB_ENABLED:
@@ -106,7 +116,9 @@ class AutoThumbnailHelper:
                     thumbnail_url = await cls._get_imdb_thumbnail(clean_title, year)
 
             if not thumbnail_url:
-                LOGGER.info(f"❌ No thumbnail found for: '{search_title}' (original: '{clean_title}')")
+                LOGGER.info(
+                    f"❌ No thumbnail found for: '{search_title}' (original: '{clean_title}')"
+                )
                 return None
 
             # Download and cache the thumbnail
@@ -151,7 +163,7 @@ class AutoThumbnailHelper:
             match = re.search(pattern, title, re.IGNORECASE)
             if match:
                 # Take everything before the season/episode info
-                title = title[:match.start()].strip()
+                title = title[: match.start()].strip()
                 is_tv_show = True
                 break
 
@@ -173,7 +185,16 @@ class AutoThumbnailHelper:
 
         # Remove specific technical terms that might remain
         tech_terms = [
-            "CR", "WEB", "DL", "DUAL", "AAC2", "DDP", "GROUP", "RARBG", "YTS", "YIFY"
+            "CR",
+            "WEB",
+            "DL",
+            "DUAL",
+            "AAC2",
+            "DDP",
+            "GROUP",
+            "RARBG",
+            "YTS",
+            "YIFY",
         ]
         for term in tech_terms:
             title = re.sub(rf"\b{re.escape(term)}\b", "", title, flags=re.IGNORECASE)
@@ -184,11 +205,20 @@ class AutoThumbnailHelper:
         # If title is empty or too short, try a different approach
         if not title or len(title) < 3:
             # Fallback: take first few words before any technical indicators
-            words = original_title.replace(".", " ").replace("_", " ").replace("-", " ").split()
+            words = (
+                original_title.replace(".", " ")
+                .replace("_", " ")
+                .replace("-", " ")
+                .split()
+            )
             title_words = []
             for word in words:
                 # Stop at technical indicators
-                if re.match(r"(S\d+E\d+|\d{3,4}p|x264|x265|BluRay|WEBRip|HDTV)", word, re.IGNORECASE):
+                if re.match(
+                    r"(S\d+E\d+|\d{3,4}p|x264|x265|BluRay|WEBRip|HDTV)",
+                    word,
+                    re.IGNORECASE,
+                ):
                     break
                 if not re.match(r"^\d{4}$", word):  # Skip standalone years for now
                     title_words.append(word)
@@ -225,7 +255,7 @@ class AutoThumbnailHelper:
 
     @classmethod
     async def _get_tmdb_thumbnail(
-        cls, title: str, year: int = None, is_tv_show: bool = False
+        cls, title: str, year: int | None = None, is_tv_show: bool = False
     ) -> str | None:
         """Get thumbnail URL from TMDB"""
         try:
@@ -244,17 +274,21 @@ class AutoThumbnailHelper:
             return None
 
     @classmethod
-    async def _get_imdb_thumbnail(cls, title: str, year: int = None) -> str | None:
+    async def _get_imdb_thumbnail(
+        cls, title: str, year: int | None = None
+    ) -> str | None:
         """Get thumbnail URL from IMDB"""
         try:
             # Dynamic import to avoid circular imports
             from bot.modules.imdb import get_poster
 
             # Clean title for IMDB search (remove parentheses with year)
-            clean_search_title = re.sub(r'\s*\(\d{4}\)\s*', '', title).strip()
+            clean_search_title = re.sub(r"\s*\(\d{4}\)\s*", "", title).strip()
 
             # Use the existing IMDB helper
-            search_query = f"{clean_search_title} {year}" if year else clean_search_title
+            search_query = (
+                f"{clean_search_title} {year}" if year else clean_search_title
+            )
             LOGGER.info(f"🔍 IMDB search query: '{search_query}'")
 
             imdb_data = await asyncio.get_event_loop().run_in_executor(
@@ -274,7 +308,7 @@ class AutoThumbnailHelper:
 
     @classmethod
     def _generate_cache_key(
-        cls, title: str, year: int = None, is_tv_show: bool = False
+        cls, title: str, year: int | None = None, is_tv_show: bool = False
     ) -> str:
         """Generate cache key for thumbnail"""
         key_parts = [title.lower().replace(" ", "_")]
@@ -299,9 +333,8 @@ class AutoThumbnailHelper:
                 file_time = await aiopath.getmtime(cache_file)
                 if time() - file_time < cls.CACHE_DURATION:
                     return cache_file
-                else:
-                    # Remove expired cache
-                    await remove(cache_file)
+                # Remove expired cache
+                await remove(cache_file)
 
             return None
 

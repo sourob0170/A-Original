@@ -615,7 +615,9 @@ ZOTIFY_MATCH_EXISTING = False  # Match existing files for skip functionality
 GALLERY_DL_ENABLED = True  # Enable/disable gallery-dl feature for 200+ platforms
 GALLERY_DL_QUALITY_SELECTION = True  # Enable interactive quality selection
 GALLERY_DL_MAX_DOWNLOADS = 50  # Maximum files per download (0 = unlimited)
-GALLERY_DL_RATE_LIMIT = "1/s"  # Rate limit (requests per second, e.g., "2/s", "1/2s")
+GALLERY_DL_RATE_LIMIT = (
+    "1/s"  # Rate limit (requests per second, e.g., "2/s", "1/2s")
+)
 GALLERY_DL_ARCHIVE_ENABLED = True  # Enable archive to avoid re-downloading
 GALLERY_DL_METADATA_ENABLED = True  # Save metadata files (JSON, YAML, TXT)
 
@@ -654,7 +656,6 @@ GALLERY_DL_TUMBLR_TOKEN_SECRET = ""  # Tumblr access token secret
 
 # Discord - For server content
 GALLERY_DL_DISCORD_TOKEN = ""  # Discord bot token
-
 
 
 # YouTube Upload Settings

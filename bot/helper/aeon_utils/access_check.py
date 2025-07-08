@@ -281,9 +281,13 @@ async def token_check(user_id, button=None):
 
         # Check if shortener was bypassed
         if short_link.startswith("⚠️ Shortener bypassed"):
-            msg = f"Your token has expired, please collect a new token\n\n{short_link}"
+            msg = (
+                f"Your token has expired, please collect a new token\n\n{short_link}"
+            )
             # Use original link if bypassed
-            button.url_button("Collect token", f"https://telegram.me/{TgClient.NAME}?start={token}")
+            button.url_button(
+                "Collect token", f"https://telegram.me/{TgClient.NAME}?start={token}"
+            )
         else:
             button.url_button("Collect token", short_link)
             msg = "Your token has expired, please collect a new token"

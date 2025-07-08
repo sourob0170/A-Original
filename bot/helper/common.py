@@ -1,5 +1,4 @@
 import contextlib
-import math
 import os
 import shlex
 from asyncio import gather, sleep
@@ -4046,7 +4045,9 @@ class TaskConfig:
 
         # USER_TRANSMISSION is owner setting only, not user-specific
         # It determines if owner's premium session should be used for uploads
-        self.user_transmission = Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        self.user_transmission = (
+            Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        )
 
         if self.user_dict.get("UPLOAD_PATHS", False):
             if self.up_dest in self.user_dict["UPLOAD_PATHS"]:
@@ -4349,7 +4350,9 @@ class TaskConfig:
                     if parsed_size and parsed_size > 0:
                         self.split_size = parsed_size
                     else:
-                        LOGGER.warning(f"Invalid split size format: {self.split_size}. Using default.")
+                        LOGGER.warning(
+                            f"Invalid split size format: {self.split_size}. Using default."
+                        )
                         self.split_size = None
 
             # Get split size from command args, user settings, or bot config (in that order)
@@ -4386,7 +4389,9 @@ class TaskConfig:
 
             # Final safety check: ensure split_size is never 0 or negative
             if not self.split_size or self.split_size <= 0:
-                LOGGER.warning(f"Split size is invalid ({self.split_size}). Setting to max_split_size ({self.max_split_size})")
+                LOGGER.warning(
+                    f"Split size is invalid ({self.split_size}). Setting to max_split_size ({self.max_split_size})"
+                )
                 self.split_size = self.max_split_size
 
             if not self.as_doc:
@@ -9676,12 +9681,16 @@ class TaskConfig:
                     if self.max_split_size <= 0:
                         continue
                     # Calculate equal parts based on max split size
-                    equal_parts = -(-f_size // self.max_split_size)  # Ceiling division
+                    equal_parts = -(
+                        -f_size // self.max_split_size
+                    )  # Ceiling division
                     if equal_parts <= 0:
                         continue
                     split_size = f_size // equal_parts
                     parts = equal_parts
-                    LOGGER.info(f"Equal Splits: File will be split into {parts} equal parts of {split_size} bytes each")
+                    LOGGER.info(
+                        f"Equal Splits: File will be split into {parts} equal parts of {split_size} bytes each"
+                    )
                 else:
                     self.equal_splits_enabled = False
 

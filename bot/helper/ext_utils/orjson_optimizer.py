@@ -23,8 +23,7 @@ Usage:
 """
 
 import json
-import sys
-from typing import Any, Optional
+from typing import Any
 
 from bot import LOGGER
 
@@ -80,7 +79,7 @@ def orjson_dumps_wrapper(obj: Any, **kwargs) -> str:
         result = orjson.dumps(obj, **orjson_kwargs)
         return result.decode("utf-8")
 
-    except Exception as e:
+    except Exception:
         # Fallback to standard json on any error
         return _original_dumps(obj, **kwargs)
 
@@ -101,7 +100,7 @@ def orjson_loads_wrapper(s: str | bytes, **kwargs) -> Any:
 
         return orjson.loads(s)
 
-    except Exception as e:
+    except Exception:
         # Fallback to standard json on any error
         return _original_loads(s, **kwargs)
 

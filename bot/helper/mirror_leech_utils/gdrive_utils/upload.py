@@ -261,7 +261,9 @@ class GoogleDriveUpload(GoogleDriveHelper):
 
                     # Handle storage quota exceeded errors
                     if reason == "storageQuotaExceeded":
-                        LOGGER.warning(f"Storage quota exceeded for current service account")
+                        LOGGER.warning(
+                            "Storage quota exceeded for current service account"
+                        )
                         if self.use_sa:
                             if self.sa_count >= self.sa_number:
                                 LOGGER.error(
@@ -277,7 +279,7 @@ class GoogleDriveUpload(GoogleDriveHelper):
                             # Switch to next service account for storage quota issues
                             self.switch_service_account()
                             LOGGER.info(
-                                f"Switched to next service account due to storage quota exceeded"
+                                "Switched to next service account due to storage quota exceeded"
                             )
                             return self._upload_file(
                                 file_path,
@@ -286,11 +288,10 @@ class GoogleDriveUpload(GoogleDriveHelper):
                                 dest_id,
                                 in_dir,
                             )
-                        else:
-                            raise Exception(
-                                "❌ Google Drive storage quota exceeded. "
-                                "Please free up space in your Google Drive or enable service accounts."
-                            )
+                        raise Exception(
+                            "❌ Google Drive storage quota exceeded. "
+                            "Please free up space in your Google Drive or enable service accounts."
+                        )
 
                     # Handle rate limit errors with better backoff strategy
                     if self.use_sa:

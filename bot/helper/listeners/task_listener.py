@@ -486,7 +486,6 @@ class TaskListener(TaskConfig):
             )
 
         if is_clone_operation:
-
             # For clone operations, we need to find the actual downloaded content
             # Try multiple path combinations to find the downloaded files
             possible_paths = [
@@ -538,7 +537,7 @@ class TaskListener(TaskConfig):
                                     item_path = f"{parent_dir}/{item}"
                                     if await aiopath.isdir(item_path):
                                         try:
-                                            item_contents = await listdir(item_path)
+                                            await listdir(item_path)
                                         except Exception as e:
                                             LOGGER.error(
                                                 f"Clone operation - error checking {item_path}: {e}"
@@ -603,10 +602,10 @@ class TaskListener(TaskConfig):
 
             # Check download type and handle accordingly
             # Get the download tool to make proper detection
-            download_tool = getattr(self, 'tool', None)
+            download_tool = getattr(self, "tool", None)
             if not download_tool and self.mid in task_dict:
                 download_obj = task_dict[self.mid]
-                download_tool = getattr(download_obj, 'tool', None)
+                download_tool = getattr(download_obj, "tool", None)
 
             potential_folder_path = f"{self.dir}/{self.name}"
 
@@ -619,7 +618,9 @@ class TaskListener(TaskConfig):
                     if download_tool == "gallery-dl":
                         # Gallery-dl creates subdirectories, use the main content directory
                         # Look for the actual content directory (skip .archive and similar)
-                        content_dirs = [d for d in dir_contents if not d.startswith('.')]
+                        content_dirs = [
+                            d for d in dir_contents if not d.startswith(".")
+                        ]
                         if content_dirs:
                             dl_path = f"{self.dir}/{content_dirs[0]}"
                         else:
