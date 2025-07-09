@@ -112,6 +112,7 @@ def is_archive(file):
 def is_archive_split(file):
     return bool(re_search(SPLIT_REGEX, file.lower(), IGNORECASE))
 
+
 async def sanitize_file_path(file_path):
     """
     Sanitize file path to handle special characters and spaces.
@@ -146,7 +147,7 @@ async def sanitize_file_path(file_path):
         pass  # Skip if path normalization fails
 
     # Method 4: Handle special characters by escaping
-    escaped_path = re.sub(r'([()[\]{}])', r'\\\1', file_path)
+    escaped_path = re.sub(r"([()[\]{}])", r"\\\1", file_path)
     if escaped_path != file_path:
         fixed_paths.append(escaped_path)
 
@@ -428,8 +429,6 @@ async def split_file(f_path, split_size, listener):
 
         # Simple validation - just log the split files created (Old Aeon-MLTB approach)
         LOGGER.info(f"Successfully split {f_path} into {len(split_files)} parts")
-
-
 
         return True
     except Exception as e:

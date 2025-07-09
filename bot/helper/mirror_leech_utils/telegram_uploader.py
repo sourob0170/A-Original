@@ -181,15 +181,12 @@ class TelegramUploader:
         self._last_uploaded = current
         self._processed_bytes += chunk_size
 
-
-
     async def _user_settings(self):
         self._media_group = self._listener.user_dict.get("MEDIA_GROUP") or (
             Config.MEDIA_GROUP
             if "MEDIA_GROUP" not in self._listener.user_dict
             else False
         )
-
 
         self._lprefix = self._listener.user_dict.get("LEECH_FILENAME_PREFIX") or (
             Config.LEECH_FILENAME_PREFIX
@@ -687,8 +684,6 @@ class TelegramUploader:
                 await rmtree(dirpath, ignore_errors=True)
                 continue
 
-
-
             # Process files with dynamic file list refresh to handle renames during upload
             processed_files = set()  # Track processed files to avoid duplicates
 
@@ -703,17 +698,19 @@ class TelegramUploader:
                     ]
                 )
 
-
-
                 # Find next unprocessed file
                 next_file = None
                 for file_ in current_files:
                     if file_ not in processed_files:
                         # Check if file should be excluded based on EXCLUDED_EXTENSIONS
-                        file_ext = ospath.splitext(file_)[1].lower().lstrip('.')
+                        file_ext = ospath.splitext(file_)[1].lower().lstrip(".")
                         if file_ext in excluded_extensions:
-                            LOGGER.info(f"Skipping file due to excluded extension: {file_}")
-                            processed_files.add(file_)  # Mark as processed to avoid checking again
+                            LOGGER.info(
+                                f"Skipping file due to excluded extension: {file_}"
+                            )
+                            processed_files.add(
+                                file_
+                            )  # Mark as processed to avoid checking again
                             continue
 
                         next_file = file_
@@ -1343,8 +1340,11 @@ class TelegramUploader:
                 and self._media_group
                 and self._sent_msg
                 and (
-                    (hasattr(self._sent_msg, 'video') and self._sent_msg.video) or
-                    (hasattr(self._sent_msg, 'document') and self._sent_msg.document)
+                    (hasattr(self._sent_msg, "video") and self._sent_msg.video)
+                    or (
+                        hasattr(self._sent_msg, "document")
+                        and self._sent_msg.document
+                    )
                 )
             ):
                 key = "documents" if self._sent_msg.document else "videos"
@@ -1488,7 +1488,11 @@ class TelegramUploader:
             user_dump = self._user_dump
 
             # Case 1: If user set their own dump and owner has set leech dump chat
-            if user_dump and Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
+            if (
+                user_dump
+                and Config.LEECH_DUMP_CHAT
+                and len(Config.LEECH_DUMP_CHAT) > 0
+            ):
                 # Send to user dump, leech dump chat, and bot PM
                 if source_chat_id != int(user_dump):
                     destinations.append(int(user_dump))
@@ -1518,21 +1522,29 @@ class TelegramUploader:
                     destinations.append(self._user_id)
 
             # Case 2: If user set their own dump and owner didn't set leech dump chat
-            elif user_dump and (not Config.LEECH_DUMP_CHAT or len(Config.LEECH_DUMP_CHAT) == 0):
+            elif user_dump and (
+                not Config.LEECH_DUMP_CHAT or len(Config.LEECH_DUMP_CHAT) == 0
+            ):
                 # Send to user dump and bot PM
                 try:
                     user_dump_int = int(user_dump)
                     if source_chat_id != user_dump_int:
                         destinations.append(user_dump_int)
                 except (ValueError, TypeError) as e:
-                    LOGGER.error(f"Failed to convert user_dump '{user_dump}' to int: {e}")
+                    LOGGER.error(
+                        f"Failed to convert user_dump '{user_dump}' to int: {e}"
+                    )
 
                 # Add user's PM if not already there
                 if source_chat_id != self._user_id:
                     destinations.append(self._user_id)
 
             # Case 3: If user didn't set their own dump and owner set leech dump chat
-            elif not user_dump and Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
+            elif (
+                not user_dump
+                and Config.LEECH_DUMP_CHAT
+                and len(Config.LEECH_DUMP_CHAT) > 0
+            ):
                 # Send to leech dump chat and bot PM
                 # Handle LEECH_DUMP_CHAT as a list
                 if isinstance(Config.LEECH_DUMP_CHAT, list):
@@ -1559,10 +1571,9 @@ class TelegramUploader:
                     destinations.append(self._user_id)
 
             # Case 4: If user didn't set their own dump and owner didn't set leech dump chat
-            else:
-                # Only send to user's PM
-                if source_chat_id != self._user_id:
-                    destinations.append(self._user_id)
+            # Only send to user's PM
+            elif source_chat_id != self._user_id:
+                destinations.append(self._user_id)
 
         # Remove duplicates while preserving order
         seen = set()
@@ -1677,7 +1688,6 @@ class TelegramUploader:
                         disable_notification=True,
                     )
 
-
             except Exception as e:
                 error_str = str(e).lower()
                 # Check for PEER_ID_INVALID error which means the bot is not in the chat
@@ -1773,7 +1783,9 @@ class TelegramUploader:
                     if source_chat_id != user_dump_int:
                         destinations.append(user_dump_int)
                 except (ValueError, TypeError) as e:
-                    LOGGER.error(f"Failed to convert user_dump '{user_dump}' to int (with -up flag): {e}")
+                    LOGGER.error(
+                        f"Failed to convert user_dump '{user_dump}' to int (with -up flag): {e}"
+                    )
 
             # We only need to copy to user's PM if it's not already there
             if source_chat_id != self._user_id:
@@ -1786,7 +1798,11 @@ class TelegramUploader:
             user_dump = self._user_dump
 
             # Case 1: If user set their own dump and owner has set leech dump chat
-            if user_dump and Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
+            if (
+                user_dump
+                and Config.LEECH_DUMP_CHAT
+                and len(Config.LEECH_DUMP_CHAT) > 0
+            ):
                 # Send to user dump, leech dump chat, and bot PM
                 if source_chat_id != int(user_dump):
                     destinations.append(int(user_dump))
@@ -1816,21 +1832,29 @@ class TelegramUploader:
                     destinations.append(self._user_id)
 
             # Case 2: If user set their own dump and owner didn't set leech dump chat
-            elif user_dump and (not Config.LEECH_DUMP_CHAT or len(Config.LEECH_DUMP_CHAT) == 0):
+            elif user_dump and (
+                not Config.LEECH_DUMP_CHAT or len(Config.LEECH_DUMP_CHAT) == 0
+            ):
                 # Send to user dump and bot PM
                 try:
                     user_dump_int = int(user_dump)
                     if source_chat_id != user_dump_int:
                         destinations.append(user_dump_int)
                 except (ValueError, TypeError) as e:
-                    LOGGER.error(f"Failed to convert user_dump '{user_dump}' to int in _copy_message: {e}")
+                    LOGGER.error(
+                        f"Failed to convert user_dump '{user_dump}' to int in _copy_message: {e}"
+                    )
 
                 # Add user's PM if not already there
                 if source_chat_id != self._user_id:
                     destinations.append(self._user_id)
 
             # Case 3: If user didn't set their own dump and owner set leech dump chat
-            elif not user_dump and Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
+            elif (
+                not user_dump
+                and Config.LEECH_DUMP_CHAT
+                and len(Config.LEECH_DUMP_CHAT) > 0
+            ):
                 # Send to leech dump chat and bot PM
                 # Handle LEECH_DUMP_CHAT as a list
                 if isinstance(Config.LEECH_DUMP_CHAT, list):

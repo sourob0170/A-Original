@@ -135,7 +135,11 @@ class TaskListener(TaskConfig):
 
                 # Now send to all dump chats except the one specified with -up flag
                 # Only use leech dump chats if leech operations are enabled
-                if Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0 and Config.LEECH_ENABLED:
+                if (
+                    Config.LEECH_DUMP_CHAT
+                    and len(Config.LEECH_DUMP_CHAT) > 0
+                    and Config.LEECH_ENABLED
+                ):
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
                             processed_chat_id = chat_id

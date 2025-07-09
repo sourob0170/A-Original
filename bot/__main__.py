@@ -324,17 +324,32 @@ def handle_loop_exception(loop, context):
         ):
             LOGGER.debug(f"Callback query expired (expected behavior): {exception}")
         # Filter out Pyrogram session read errors that are common during concurrent operations
-        elif "read() called while another coroutine is already waiting for incoming data" in str(exception):
-            LOGGER.debug(f"Pyrogram concurrent read operation (expected during high load): {exception}")
+        elif (
+            "read() called while another coroutine is already waiting for incoming data"
+            in str(exception)
+        ):
+            LOGGER.debug(
+                f"Pyrogram concurrent read operation (expected during high load): {exception}"
+            )
         # Filter out NoneType read errors from Pyrogram sessions
         elif "'NoneType' object has no attribute 'read'" in str(exception):
-            LOGGER.debug(f"Pyrogram session read error (session may be closed): {exception}")
+            LOGGER.debug(
+                f"Pyrogram session read error (session may be closed): {exception}"
+            )
         # Filter out other common Pyrogram session errors
-        elif any(keyword in str(exception).lower() for keyword in [
-            "session.recv_worker", "session.restart", "connection reset",
-            "connection aborted", "session closed"
-        ]):
-            LOGGER.debug(f"Pyrogram session error (expected during network issues): {exception}")
+        elif any(
+            keyword in str(exception).lower()
+            for keyword in [
+                "session.recv_worker",
+                "session.restart",
+                "connection reset",
+                "connection aborted",
+                "session closed",
+            ]
+        ):
+            LOGGER.debug(
+                f"Pyrogram session error (expected during network issues): {exception}"
+            )
         else:
             LOGGER.error(f"Unhandled loop exception: {exception}")
             LOGGER.error(f"Exception context: {context}")

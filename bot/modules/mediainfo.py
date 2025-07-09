@@ -65,7 +65,7 @@ async def parse_mediainfo_output(mediainfo_output, file_size, filename):
     tc += f"{'Complete name':<28}: {filename}\n"
 
     # Parse mediainfo output line by line
-    lines = mediainfo_output.strip().split('\n')
+    lines = mediainfo_output.strip().split("\n")
     current_section = "General"
     section_data = {}
 
@@ -76,17 +76,25 @@ async def parse_mediainfo_output(mediainfo_output, file_size, filename):
             continue
 
         # Check if this is a section header (no colon, starts with capital, known section)
-        if ':' not in line and line and line[0].isupper():
+        if ":" not in line and line and line[0].isupper():
             # Known section headers
-            if line in ["General", "Video", "Audio", "Text", "Menu", "Image", "Chapters"]:
+            if line in [
+                "General",
+                "Video",
+                "Audio",
+                "Text",
+                "Menu",
+                "Image",
+                "Chapters",
+            ]:
                 current_section = line
                 if current_section not in section_data:
                     section_data[current_section] = []
                 continue
 
         # Parse key-value pairs
-        if ':' in line:
-            key, value = line.split(':', 1)
+        if ":" in line:
+            key, value = line.split(":", 1)
             key = key.strip()
             value = value.strip()
 
@@ -1059,7 +1067,10 @@ async def gen_mediainfo(
     temp_send = (
         None
         if silent
-        else await send_message(message, "Generating MediaInfo with ffprobe (mediainfo fallback available)...")
+        else await send_message(
+            message,
+            "Generating MediaInfo with ffprobe (mediainfo fallback available)...",
+        )
     )
     des_path = None
     tc = ""
@@ -2750,19 +2761,22 @@ async def gen_mediainfo(
 
                 # Method 2: Quote the path for shell safety
                 import shlex
+
                 quoted_path = shlex.quote(des_path)
                 if quoted_path != des_path:
                     fixed_paths.append(quoted_path.strip("'\""))
 
                 # Method 3: Use pathlib for normalization
                 from pathlib import Path
+
                 normalized_path = str(Path(des_path).resolve())
                 if normalized_path != des_path:
                     fixed_paths.append(normalized_path)
 
                 # Method 4: Handle special characters by escaping
                 import re
-                escaped_path = re.sub(r'([()[\]{}])', r'\\\1', des_path)
+
+                escaped_path = re.sub(r"([()[\]{}])", r"\\\1", des_path)
                 if escaped_path != des_path:
                     fixed_paths.append(escaped_path)
 
@@ -2813,39 +2827,60 @@ async def gen_mediainfo(
             try:
                 # Update status message if not in silent mode
                 if not silent and temp_send:
-                    await edit_message(temp_send, "ffprobe failed, trying mediainfo binary...")
+                    await edit_message(
+                        temp_send, "ffprobe failed, trying mediainfo binary..."
+                    )
 
                 # Try mediainfo binary
                 mediainfo_cmd = ["mediainfo", des_path]
-                mediainfo_stdout, mediainfo_stderr, mediainfo_return_code = await cmd_exec(mediainfo_cmd)
+                (
+                    mediainfo_stdout,
+                    mediainfo_stderr,
+                    mediainfo_return_code,
+                ) = await cmd_exec(mediainfo_cmd)
 
                 if mediainfo_return_code == 0 and mediainfo_stdout:
                     LOGGER.info(f"mediainfo binary succeeded for {des_path}")
                     # Parse mediainfo output
-                    tc = await parse_mediainfo_output(mediainfo_stdout, file_size, ospath.basename(des_path))
+                    tc = await parse_mediainfo_output(
+                        mediainfo_stdout, file_size, ospath.basename(des_path)
+                    )
 
                     # Add note about using mediainfo fallback
                     tc += "<blockquote>Analysis Info</blockquote><pre>"
                     tc += f"{'Analysis method':<28}: MediaInfo binary (ffprobe fallback)\n"
                     # Clean up error message for display
-                    error_msg = stderr.strip() if stderr and stderr.strip() else 'ffprobe failed to analyze this file'
+                    error_msg = (
+                        stderr.strip()
+                        if stderr and stderr.strip()
+                        else "ffprobe failed to analyze this file"
+                    )
                     tc += f"{'ffprobe status':<28}: {error_msg}\n"
                     tc += "</pre><br>"
 
                     # If in silent mode, create Telegraph page and return link ID
                     if silent:
-                        return await create_telegraph_page_from_content(tc, silent=True)
+                        return await create_telegraph_page_from_content(
+                            tc, silent=True
+                        )
 
                     # Update status message if not in silent mode
                     if not silent and temp_send:
-                        await edit_message(temp_send, "MediaInfo generated successfully using mediainfo binary!")
+                        await edit_message(
+                            temp_send,
+                            "MediaInfo generated successfully using mediainfo binary!",
+                        )
 
                     return tc
 
-                LOGGER.warning(f"mediainfo binary also failed for {des_path}: {mediainfo_stderr}")
+                LOGGER.warning(
+                    f"mediainfo binary also failed for {des_path}: {mediainfo_stderr}"
+                )
 
             except Exception as mediainfo_error:
-                LOGGER.warning(f"mediainfo binary fallback failed: {mediainfo_error}")
+                LOGGER.warning(
+                    f"mediainfo binary fallback failed: {mediainfo_error}"
+                )
                 # Continue to other fallback methods
 
             # If it's a subtitle file and both ffprobe and mediainfo failed, try a more basic approach
@@ -2930,12 +2965,14 @@ async def gen_mediainfo(
 
                     # Method 2: Quote the path for shell safety
                     import shlex
+
                     quoted_path = shlex.quote(des_path)
                     if quoted_path != des_path:
                         fixed_paths.append(quoted_path.strip("'\""))
 
                     # Method 3: Use pathlib for normalization
                     from pathlib import Path
+
                     normalized_path = str(Path(des_path).resolve())
                     if normalized_path != des_path:
                         fixed_paths.append(normalized_path)
@@ -3118,9 +3155,14 @@ async def gen_mediainfo(
         if not silent and temp_send:
             # Determine which analysis method was used based on content
             if "Analysis method" in tc and "mediainfo binary" in tc.lower():
-                await edit_message(temp_send, "Generating MediaInfo report (using mediainfo binary fallback)...")
+                await edit_message(
+                    temp_send,
+                    "Generating MediaInfo report (using mediainfo binary fallback)...",
+                )
             else:
-                await edit_message(temp_send, "Generating MediaInfo report (using ffprobe)...")
+                await edit_message(
+                    temp_send, "Generating MediaInfo report (using ffprobe)..."
+                )
 
         # Create Telegraph page with the results
         try:

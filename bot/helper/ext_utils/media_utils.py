@@ -8368,16 +8368,12 @@ class FFMpeg:
         self._total_time = duration = (await get_media_info(f_path))[0]
         base_name, extension = ospath.splitext(file_)
 
-
-
         # Check if equal splits is enabled - ONLY use the explicit setting from proceed_split
         # Do NOT use heuristics as they can be wrong
         is_equal_splits = (
             hasattr(self._listener, "equal_splits_enabled")
             and self._listener.equal_splits_enabled
         )
-
-
 
         # For equal splits, calculate the exact duration for each part
         if is_equal_splits and duration > 0:
@@ -8494,7 +8490,6 @@ class FFMpeg:
             return True
         # Use traditional file size-based splitting for non-equal splits
 
-
         # Get the appropriate Telegram limit based on premium status
         from bot.core.aeon_client import TgClient
 
@@ -8520,7 +8515,6 @@ class FFMpeg:
         i = 1
         while i <= parts or start_time < duration - 4:
             out_path = f_path.replace(file_, f"{base_name}.part{i:03}{extension}")
-
 
             cmd = [
                 "xtra",  # Using xtra instead of ffmpeg
@@ -8612,7 +8606,9 @@ class FFMpeg:
                     stderr = stderr.decode().strip()
                 except Exception:
                     stderr = "Unable to decode the error!"
-                LOGGER.error(f"FFmpeg split failed for part {i}, code: {code}, error: {stderr}")
+                LOGGER.error(
+                    f"FFmpeg split failed for part {i}, code: {code}, error: {stderr}"
+                )
                 with contextlib.suppress(Exception):
                     await remove(out_path)
                 if multi_streams:
@@ -8662,8 +8658,6 @@ class FFMpeg:
             self._last_processed_bytes += out_size
             start_time += lpd - 3
             i += 1
-
-
 
         return True
 

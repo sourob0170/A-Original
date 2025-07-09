@@ -1,18 +1,10 @@
 import contextlib
-import json
-import mimetypes
 import os
-import re
 import shlex
 import shutil
-import subprocess
 import time
-import traceback
-import xml.etree.ElementTree as ET
 from asyncio import gather, sleep
-from asyncio.subprocess import PIPE, create_subprocess_exec
 from collections import Counter
-from contextlib import suppress
 from copy import deepcopy
 from os import path as ospath
 from os import walk
@@ -37,7 +29,6 @@ from bot import (
 )
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
-from bot.helper.ext_utils.bot_utils import get_user_split_size
 from bot.helper.aeon_utils.command_gen import (
     analyze_media_for_merge,
     get_embed_thumb_cmd,
@@ -49,6 +40,7 @@ from bot.helper.aeon_utils.command_gen import (
     get_watermark_cmd,
 )
 from bot.helper.ext_utils.aiofiles_compat import aiopath, listdir, makedirs, remove
+from bot.helper.ext_utils.bot_utils import get_user_split_size
 
 from .ext_utils.bot_utils import get_size_bytes, new_task, sync_to_async
 from .ext_utils.bulk_links import extract_bulk_links
@@ -4377,7 +4369,9 @@ class TaskConfig:
                     self.split_size = Config.LEECH_SPLIT_SIZE
                 # Don't set a default split_size - let proceed_split handle the logic
                 else:
-                    self.split_size = 0  # 0 means use max_split_size for splitting decisions
+                    self.split_size = (
+                        0  # 0 means use max_split_size for splitting decisions
+                    )
 
             # If a custom split size is set, ensure it doesn't exceed Telegram's limits
             if self.split_size and self.split_size > 0:
@@ -9664,9 +9658,9 @@ class TaskConfig:
             # Use get_user_split_size to determine if splitting is needed
             split_size, skip_splitting = get_user_split_size(
                 self.user_id,
-                getattr(self, 'args', None),
+                getattr(self, "args", None),
                 f_size,
-                equal_splits=equal_splits
+                equal_splits=equal_splits,
             )
 
             # If splitting is not skipped, add to files_to_proceed
@@ -9688,9 +9682,9 @@ class TaskConfig:
                 # Get the split size and parts calculation
                 split_size, _ = get_user_split_size(
                     self.user_id,
-                    getattr(self, 'args', None),
+                    getattr(self, "args", None),
                     f_size,
-                    equal_splits=equal_splits
+                    equal_splits=equal_splits,
                 )
 
                 # Calculate parts needed
