@@ -4059,6 +4059,9 @@ class TaskConfig:
         self.user_transmission = (
             Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
         )
+        self.user_transmission = (
+            Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        )
 
         if self.user_dict.get("UPLOAD_PATHS", False):
             if self.up_dest in self.user_dict["UPLOAD_PATHS"]:
@@ -4361,6 +4364,9 @@ class TaskConfig:
                     if parsed_size and parsed_size > 0:
                         self.split_size = parsed_size
                     else:
+                        LOGGER.warning(
+                            f"Invalid split size format: {self.split_size}. Using default."
+                        )
                         LOGGER.warning(
                             f"Invalid split size format: {self.split_size}. Using default."
                         )
