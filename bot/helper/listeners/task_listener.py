@@ -135,7 +135,7 @@ class TaskListener(TaskConfig):
 
                 # Now send to all dump chats except the one specified with -up flag
                 # Only use leech dump chats if leech operations are enabled
-                if Config.LEECH_DUMP_CHAT and Config.LEECH_ENABLED:
+                if Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0 and Config.LEECH_ENABLED:
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
                             processed_chat_id = chat_id
@@ -224,7 +224,7 @@ class TaskListener(TaskConfig):
             # Case 1: If user didn't set any dump
             if not user_dump:
                 # Send to leech dump chat and bot PM
-                if Config.LEECH_DUMP_CHAT:
+                if Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -252,7 +252,7 @@ class TaskListener(TaskConfig):
             elif user_dump and not owner_has_premium:
                 # Send to user's own dump, leech dump chat, and bot PM
                 leech_destinations.append(int(user_dump))
-                if Config.LEECH_DUMP_CHAT:
+                if Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -279,7 +279,7 @@ class TaskListener(TaskConfig):
             # Case 3: If user set their own dump and owner has premium string
             elif user_dump and owner_has_premium:
                 # By default, send to leech dump chat and bot PM
-                if Config.LEECH_DUMP_CHAT:
+                if Config.LEECH_DUMP_CHAT and len(Config.LEECH_DUMP_CHAT) > 0:
                     # Handle LEECH_DUMP_CHAT as a list
                     if isinstance(Config.LEECH_DUMP_CHAT, list):
                         for chat_id in Config.LEECH_DUMP_CHAT:
@@ -486,7 +486,6 @@ class TaskListener(TaskConfig):
             )
 
         if is_clone_operation:
-
             # For clone operations, we need to find the actual downloaded content
             # Try multiple path combinations to find the downloaded files
             possible_paths = [
@@ -538,7 +537,7 @@ class TaskListener(TaskConfig):
                                     item_path = f"{parent_dir}/{item}"
                                     if await aiopath.isdir(item_path):
                                         try:
-                                            item_contents = await listdir(item_path)
+                                            await listdir(item_path)
                                         except Exception as e:
                                             LOGGER.error(
                                                 f"Clone operation - error checking {item_path}: {e}"
@@ -603,10 +602,10 @@ class TaskListener(TaskConfig):
 
             # Check download type and handle accordingly
             # Get the download tool to make proper detection
-            download_tool = getattr(self, 'tool', None)
+            download_tool = getattr(self, "tool", None)
             if not download_tool and self.mid in task_dict:
                 download_obj = task_dict[self.mid]
-                download_tool = getattr(download_obj, 'tool', None)
+                download_tool = getattr(download_obj, "tool", None)
 
             potential_folder_path = f"{self.dir}/{self.name}"
 
@@ -619,7 +618,9 @@ class TaskListener(TaskConfig):
                     if download_tool == "gallery-dl":
                         # Gallery-dl creates subdirectories, use the main content directory
                         # Look for the actual content directory (skip .archive and similar)
-                        content_dirs = [d for d in dir_contents if not d.startswith('.')]
+                        content_dirs = [
+                            d for d in dir_contents if not d.startswith(".")
+                        ]
                         if content_dirs:
                             dl_path = f"{self.dir}/{content_dirs[0]}"
                         else:

@@ -349,7 +349,9 @@ def gallery_dl_cleanup():
         # Always collect gen 2 for gallery-dl due to potential large file counts
         if psutil is not None:
             try:
-                if psutil.virtual_memory().percent > 70:  # Lower threshold for gallery-dl
+                if (
+                    psutil.virtual_memory().percent > 70
+                ):  # Lower threshold for gallery-dl
                     gc.collect(2)
             except Exception:
                 pass

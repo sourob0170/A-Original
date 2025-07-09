@@ -17,6 +17,7 @@ try:
         edit_message,
         send_message,
     )
+
     TELEGRAM_AVAILABLE = True
 except Exception as e:
     LOGGER.warning(f"Telegram helpers not available: {e}")
@@ -26,8 +27,10 @@ except Exception as e:
     class ButtonMaker:
         def __init__(self):
             pass
+
         def data_button(self, text, data):
             pass
+
         def build_menu(self, cols):
             return []
 
@@ -36,6 +39,7 @@ except Exception as e:
 
     async def send_message(message, text, buttons=None):
         pass
+
 
 # Global registry for quality selectors (following streamrip pattern)
 _gallery_dl_quality_selectors = {}
@@ -64,32 +68,100 @@ class GalleryDLQualitySelector:
     PLATFORM_QUALITIES: ClassVar[dict[str, Any]] = {
         # Social Media Platforms (7 platforms, 6 require auth)
         "instagram": {
-            "original": {"name": "Original Quality", "description": "Best available quality", "emoji": "💎"},
-            "high": {"name": "High Quality", "description": "Compressed but high quality", "emoji": "🔸"},
-            "medium": {"name": "Medium Quality", "description": "Balanced size/quality", "emoji": "🔹"},
-            "low": {"name": "Low Quality", "description": "Smallest size", "emoji": "📱"},
+            "original": {
+                "name": "Original Quality",
+                "description": "Best available quality",
+                "emoji": "💎",
+            },
+            "high": {
+                "name": "High Quality",
+                "description": "Compressed but high quality",
+                "emoji": "🔸",
+            },
+            "medium": {
+                "name": "Medium Quality",
+                "description": "Balanced size/quality",
+                "emoji": "🔹",
+            },
+            "low": {
+                "name": "Low Quality",
+                "description": "Smallest size",
+                "emoji": "📱",
+            },
         },
         "twitter": {
-            "orig": {"name": "Original", "description": "Best quality (orig)", "emoji": "💎"},
-            "4096x4096": {"name": "4K", "description": "4096x4096 resolution", "emoji": "🔸"},
-            "large": {"name": "Large", "description": "High quality (large)", "emoji": "🔹"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "📱"},
-            "small": {"name": "Small", "description": "Low quality (small)", "emoji": "📶"},
+            "orig": {
+                "name": "Original",
+                "description": "Best quality (orig)",
+                "emoji": "💎",
+            },
+            "4096x4096": {
+                "name": "4K",
+                "description": "4096x4096 resolution",
+                "emoji": "🔸",
+            },
+            "large": {
+                "name": "Large",
+                "description": "High quality (large)",
+                "emoji": "🔹",
+            },
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "📱",
+            },
+            "small": {
+                "name": "Small",
+                "description": "Low quality (small)",
+                "emoji": "📶",
+            },
         },
         "tiktok": {
-            "best": {"name": "Best Quality", "description": "Highest available", "emoji": "💎"},
-            "720p": {"name": "720p HD", "description": "High definition", "emoji": "🔸"},
-            "480p": {"name": "480p", "description": "Standard definition", "emoji": "🔹"},
+            "best": {
+                "name": "Best Quality",
+                "description": "Highest available",
+                "emoji": "💎",
+            },
+            "720p": {
+                "name": "720p HD",
+                "description": "High definition",
+                "emoji": "🔸",
+            },
+            "480p": {
+                "name": "480p",
+                "description": "Standard definition",
+                "emoji": "🔹",
+            },
             "360p": {"name": "360p", "description": "Low definition", "emoji": "📱"},
         },
         "facebook": {
-            "original": {"name": "Original", "description": "Best available quality", "emoji": "💎"},
-            "hd": {"name": "HD Quality", "description": "High definition", "emoji": "🔸"},
-            "sd": {"name": "SD Quality", "description": "Standard definition", "emoji": "🔹"},
+            "original": {
+                "name": "Original",
+                "description": "Best available quality",
+                "emoji": "💎",
+            },
+            "hd": {
+                "name": "HD Quality",
+                "description": "High definition",
+                "emoji": "🔸",
+            },
+            "sd": {
+                "name": "SD Quality",
+                "description": "Standard definition",
+                "emoji": "🔹",
+            },
         },
         "youtube": {
-            "best": {"name": "Best Quality", "description": "Highest available", "emoji": "💎"},
-            "2160p": {"name": "4K (2160p)", "description": "Ultra HD", "emoji": "🔸"},
+            "best": {
+                "name": "Best Quality",
+                "description": "Highest available",
+                "emoji": "💎",
+            },
+            "2160p": {
+                "name": "4K (2160p)",
+                "description": "Ultra HD",
+                "emoji": "🔸",
+            },
             "1440p": {"name": "1440p", "description": "Quad HD", "emoji": "🔹"},
             "1080p": {"name": "1080p", "description": "Full HD", "emoji": "📺"},
             "720p": {"name": "720p", "description": "HD", "emoji": "📱"},
@@ -97,114 +169,273 @@ class GalleryDLQualitySelector:
             "360p": {"name": "360p", "description": "Low quality", "emoji": "📉"},
         },
         "reddit": {
-            "source": {"name": "Source", "description": "Original quality", "emoji": "💎"},
+            "source": {
+                "name": "Source",
+                "description": "Original quality",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
             "low": {"name": "Low", "description": "Low quality", "emoji": "📱"},
         },
         "tumblr": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "1280": {"name": "1280px", "description": "Large size", "emoji": "🔸"},
             "540": {"name": "540px", "description": "Medium size", "emoji": "🔹"},
             "250": {"name": "250px", "description": "Small size", "emoji": "📱"},
         },
-
         # Art & Photography Platforms
         "deviantart": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
-            "fullview": {"name": "Full View", "description": "High quality view", "emoji": "🔸"},
-            "preview": {"name": "Preview", "description": "Preview quality", "emoji": "🔹"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
+            "fullview": {
+                "name": "Full View",
+                "description": "High quality view",
+                "emoji": "🔸",
+            },
+            "preview": {
+                "name": "Preview",
+                "description": "Preview quality",
+                "emoji": "🔹",
+            },
         },
         "pixiv": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
-            "square_medium": {"name": "Square Medium", "description": "Square thumbnail", "emoji": "📱"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
+            "square_medium": {
+                "name": "Square Medium",
+                "description": "Square thumbnail",
+                "emoji": "📱",
+            },
         },
         "artstation": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
             "small": {"name": "Small", "description": "Small size", "emoji": "📱"},
         },
         "flickr": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
             "small": {"name": "Small", "description": "Small size", "emoji": "📱"},
         },
         "500px": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
         },
         "behance": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
         },
         "pinterest": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
             "small": {"name": "Small", "description": "Small size", "emoji": "📱"},
         },
         "unsplash": {
-            "full": {"name": "Full", "description": "Full resolution", "emoji": "💎"},
-            "regular": {"name": "Regular", "description": "Regular size", "emoji": "🔸"},
+            "full": {
+                "name": "Full",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
+            "regular": {
+                "name": "Regular",
+                "description": "Regular size",
+                "emoji": "🔸",
+            },
             "small": {"name": "Small", "description": "Small size", "emoji": "🔹"},
-            "thumb": {"name": "Thumbnail", "description": "Thumbnail size", "emoji": "📱"},
+            "thumb": {
+                "name": "Thumbnail",
+                "description": "Thumbnail size",
+                "emoji": "📱",
+            },
         },
-
         # Image Hosting & File Sharing
         "imgur": {
-            "original": {"name": "Original", "description": "Full size", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full size",
+                "emoji": "💎",
+            },
             "huge": {"name": "Huge", "description": "Large size", "emoji": "🔸"},
-            "large": {"name": "Large", "description": "Medium-large size", "emoji": "🔹"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "📱"},
+            "large": {
+                "name": "Large",
+                "description": "Medium-large size",
+                "emoji": "🔹",
+            },
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "📱",
+            },
             "small": {"name": "Small", "description": "Small size", "emoji": "📶"},
         },
         "catbox": {
-            "original": {"name": "Original", "description": "As uploaded", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "As uploaded",
+                "emoji": "💎",
+            },
         },
         "gofile": {
-            "original": {"name": "Original", "description": "As uploaded", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "As uploaded",
+                "emoji": "💎",
+            },
         },
         "postimg": {
-            "original": {"name": "Original", "description": "Full size", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full size",
+                "emoji": "💎",
+            },
         },
-
         # Booru Sites (SFW only)
         "danbooru": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
-            "sample": {"name": "Sample", "description": "Sample size", "emoji": "🔸"},
-            "preview": {"name": "Preview", "description": "Preview size", "emoji": "🔹"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
+            "sample": {
+                "name": "Sample",
+                "description": "Sample size",
+                "emoji": "🔸",
+            },
+            "preview": {
+                "name": "Preview",
+                "description": "Preview size",
+                "emoji": "🔹",
+            },
         },
         "safebooru": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
-            "sample": {"name": "Sample", "description": "Sample size", "emoji": "🔸"},
-            "preview": {"name": "Preview", "description": "Preview size", "emoji": "🔹"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
+            "sample": {
+                "name": "Sample",
+                "description": "Sample size",
+                "emoji": "🔸",
+            },
+            "preview": {
+                "name": "Preview",
+                "description": "Preview size",
+                "emoji": "🔹",
+            },
         },
         "gelbooru": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
-            "sample": {"name": "Sample", "description": "Sample size", "emoji": "🔸"},
-            "preview": {"name": "Preview", "description": "Preview size", "emoji": "🔹"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
+            "sample": {
+                "name": "Sample",
+                "description": "Sample size",
+                "emoji": "🔸",
+            },
+            "preview": {
+                "name": "Preview",
+                "description": "Preview size",
+                "emoji": "🔹",
+            },
         },
-
         # Manga & Comics
         "mangadex": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
             "low": {"name": "Low", "description": "Low quality", "emoji": "📱"},
         },
         "dynasty": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
         },
         "mangakakalot": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
         },
-
         # Video Platforms
         "bilibili": {
             "1080p": {"name": "1080p", "description": "Full HD", "emoji": "💎"},
@@ -213,13 +444,21 @@ class GalleryDLQualitySelector:
             "360p": {"name": "360p", "description": "Low quality", "emoji": "📱"},
         },
         "vimeo": {
-            "original": {"name": "Original", "description": "Best available", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Best available",
+                "emoji": "💎",
+            },
             "1080p": {"name": "1080p", "description": "Full HD", "emoji": "🔸"},
             "720p": {"name": "720p", "description": "HD", "emoji": "🔹"},
             "480p": {"name": "480p", "description": "SD", "emoji": "📱"},
         },
         "twitch": {
-            "source": {"name": "Source", "description": "Original quality", "emoji": "💎"},
+            "source": {
+                "name": "Source",
+                "description": "Original quality",
+                "emoji": "💎",
+            },
             "1080p": {"name": "1080p", "description": "Full HD", "emoji": "🔸"},
             "720p": {"name": "720p", "description": "HD", "emoji": "🔹"},
             "480p": {"name": "480p", "description": "SD", "emoji": "📱"},
@@ -230,70 +469,148 @@ class GalleryDLQualitySelector:
             "720": {"name": "720p", "description": "HD", "emoji": "🔹"},
             "480": {"name": "480p", "description": "SD", "emoji": "📱"},
         },
-
         # Professional & Subscription Platforms
         "patreon": {
-            "original": {"name": "Original", "description": "Full quality", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full quality",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
         },
         "fanbox": {
-            "original": {"name": "Original", "description": "Full quality", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full quality",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
         },
         "gumroad": {
-            "original": {"name": "Original", "description": "Full quality", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full quality",
+                "emoji": "💎",
+            },
         },
-
         # Alternative Social Media
         "mastodon": {
-            "original": {"name": "Original", "description": "Full size", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full size",
+                "emoji": "💎",
+            },
             "small": {"name": "Small", "description": "Thumbnail", "emoji": "🔹"},
         },
         "bluesky": {
-            "fullsize": {"name": "Full Size", "description": "Original size", "emoji": "💎"},
-            "thumbnail": {"name": "Thumbnail", "description": "Small size", "emoji": "🔹"},
+            "fullsize": {
+                "name": "Full Size",
+                "description": "Original size",
+                "emoji": "💎",
+            },
+            "thumbnail": {
+                "name": "Thumbnail",
+                "description": "Small size",
+                "emoji": "🔹",
+            },
         },
         "discord": {
-            "original": {"name": "Original", "description": "As uploaded", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "As uploaded",
+                "emoji": "💎",
+            },
         },
-
         # News & Media
         "bbc": {
-            "original": {"name": "Original", "description": "Best available", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Best available",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
         },
         "cnn": {
-            "original": {"name": "Original", "description": "Best available", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Best available",
+                "emoji": "💎",
+            },
         },
-
         # Gaming & Entertainment
         "newgrounds": {
-            "original": {"name": "Original", "description": "Best available", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Best available",
+                "emoji": "💎",
+            },
             "high": {"name": "High", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium quality", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
         },
         "itch": {
-            "original": {"name": "Original", "description": "As uploaded", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "As uploaded",
+                "emoji": "💎",
+            },
         },
-
         # Wallpaper & Design Sites
         "wallhaven": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
             "large": {"name": "Large", "description": "Large size", "emoji": "🔸"},
-            "medium": {"name": "Medium", "description": "Medium size", "emoji": "🔹"},
+            "medium": {
+                "name": "Medium",
+                "description": "Medium size",
+                "emoji": "🔹",
+            },
         },
         "wallpaperscraft": {
-            "original": {"name": "Original", "description": "Full resolution", "emoji": "💎"},
+            "original": {
+                "name": "Original",
+                "description": "Full resolution",
+                "emoji": "💎",
+            },
         },
-
         # Default fallback
         "default": {
-            "original": {"name": "Original Quality", "description": "Best available", "emoji": "💎"},
-            "high": {"name": "High Quality", "description": "High quality", "emoji": "🔸"},
-            "medium": {"name": "Medium Quality", "description": "Medium quality", "emoji": "🔹"},
-            "low": {"name": "Low Quality", "description": "Low quality", "emoji": "📱"},
+            "original": {
+                "name": "Original Quality",
+                "description": "Best available",
+                "emoji": "💎",
+            },
+            "high": {
+                "name": "High Quality",
+                "description": "High quality",
+                "emoji": "🔸",
+            },
+            "medium": {
+                "name": "Medium Quality",
+                "description": "Medium quality",
+                "emoji": "🔹",
+            },
+            "low": {
+                "name": "Low Quality",
+                "description": "Low quality",
+                "emoji": "📱",
+            },
         },
     }
 
@@ -301,32 +618,36 @@ class GalleryDLQualitySelector:
     # Based on gallery-dl v1.29.7 extractor analysis (excluding adult sites)
     PLATFORM_DETECTION = {
         # Social Media (7 platforms)
-        "x.com": "twitter", "twitter.com": "twitter", "t.co": "twitter",
+        "x.com": "twitter",
+        "twitter.com": "twitter",
+        "t.co": "twitter",
         "instagram.com": "instagram",
-        "tiktok.com": "tiktok", "vm.tiktok.com": "tiktok",
-        "facebook.com": "facebook", "fb.com": "facebook",
-        "youtube.com": "youtube", "youtu.be": "youtube",
+        "tiktok.com": "tiktok",
+        "vm.tiktok.com": "tiktok",
+        "facebook.com": "facebook",
+        "fb.com": "facebook",
+        "youtube.com": "youtube",
+        "youtu.be": "youtube",
         "reddit.com": "reddit",
         "tumblr.com": "tumblr",
-
         # Art Platforms (8 platforms)
         "pixiv.net": "pixiv",
         "artstation.com": "artstation",
-        "deviantart.com": "deviantart", "sta.sh": "deviantart",
+        "deviantart.com": "deviantart",
+        "sta.sh": "deviantart",
         "flickr.com": "flickr",
         "500px.com": "500px",
         "behance.net": "behance",
         "pinterest.com": "pinterest",
         "unsplash.com": "unsplash",
-
         # Image Hosting (6 platforms)
         "imgur.com": "imgur",
-        "catbox.moe": "catbox", "files.catbox.moe": "catbox",
+        "catbox.moe": "catbox",
+        "files.catbox.moe": "catbox",
         "gofile.io": "gofile",
         "postimg.cc": "postimg",
         "turboimagehost.com": "turboimagehost",
         "acidimg.cc": "acidimg",
-
         # Booru Sites - SFW (5 platforms)
         "danbooru.donmai.us": "danbooru",
         "safebooru.donmai.us": "safebooru",  # Fixed: safebooru uses donmai.us domain
@@ -334,7 +655,6 @@ class GalleryDLQualitySelector:
         "gelbooru.com": "gelbooru",
         "twibooru.org": "twibooru",
         "zerochan.net": "zerochan",
-
         # Manga/Comics (6 platforms)
         "dynasty-scans.com": "dynastyscans",
         "xbato.org": "batoto",
@@ -342,52 +662,47 @@ class GalleryDLQualitySelector:
         "tcbscans.me": "tcbscans",
         "webtoons.com": "webtoons",
         "tapas.io": "tapas",
-
         # Video Platforms (4 platforms)
-        "bilibili.com": "bilibili", "space.bilibili.com": "bilibili",
+        "bilibili.com": "bilibili",
+        "space.bilibili.com": "bilibili",
         "vimeo.com": "vimeo",
         "twitch.tv": "twitch",
         "tenor.com": "tenor",
-
         # Professional (4 platforms)
         "patreon.com": "patreon",
         "fanbox.cc": "fanbox",
         "fantia.jp": "fantia",
         "boosty.to": "boosty",
-
         # News & Media (4 platforms)
-        "bbc.co.uk": "bbc", "bbc.com": "bbc",
+        "bbc.co.uk": "bbc",
+        "bbc.com": "bbc",
         "telegra.ph": "telegraph",
         "slideshare.net": "slideshare",
         "speakerdeck.com": "speakerdeck",
-
         # Gaming (3 platforms)
         "newgrounds.com": "newgrounds",
         "steamgriddb.com": "steamgriddb",
         "civitai.com": "civitai",
-
         # Wallpapers (3 platforms)
         "wallhaven.cc": "wallhaven",
         "wallpapercave.com": "wallpapercave",
         "desktopography.net": "desktopography",
-
         # Forums (4 platforms)
-        "boards.4channel.org": "4chan", "boards.4chan.org": "4chan",
+        "boards.4channel.org": "4chan",
+        "boards.4chan.org": "4chan",
         "2ch.hk": "2ch",
-        "8chan.moe": "8chan", "8kun.top": "8chan",
+        "8chan.moe": "8chan",
+        "8kun.top": "8chan",
         "warosu.org": "warosu",
-
         # File Sharing (4 platforms)
         "cyberdrop.me": "cyberdrop",
         "bunkr.si": "bunkr",
         "saint2.su": "saint",
         "uploadir.com": "uploadir",
-
         # Alternative Social (2 platforms)
         "bsky.app": "bluesky",
         "discord.com": "discord",
         "mastodon": "mastodon",  # Various instances
-
         # Other Popular (8 platforms)
         "archiveofourown.org": "ao3",
         "weibo.com": "weibo",
@@ -399,9 +714,13 @@ class GalleryDLQualitySelector:
         "toyhou.se": "toyhouse",
     }
 
-    def __init__(self, listener, platform: str, content_type: str = "media", url: str = ""):
+    def __init__(
+        self, listener, platform: str, content_type: str = "media", url: str = ""
+    ):
         self.listener = listener
-        self.platform = self.detect_platform_from_url(url) if url else platform.lower()
+        self.platform = (
+            self.detect_platform_from_url(url) if url else platform.lower()
+        )
         self.content_type = content_type
         self.url = url
         self._reply_to = None
@@ -426,7 +745,7 @@ class GalleryDLQualitySelector:
         url_lower = url.lower()
 
         # Extract domain from URL for more accurate matching
-        domain_match = re.search(r'https?://(?:www\.)?([^/]+)', url_lower)
+        domain_match = re.search(r"https?://(?:www\.)?([^/]+)", url_lower)
         if domain_match:
             domain = domain_match.group(1)
 
@@ -436,22 +755,29 @@ class GalleryDLQualitySelector:
 
             # Check for subdomain matches (e.g., user.tumblr.com)
             for detection_domain, platform in cls.PLATFORM_DETECTION.items():
-                if domain.endswith('.' + detection_domain) or domain == detection_domain:
+                if (
+                    domain.endswith("." + detection_domain)
+                    or domain == detection_domain
+                ):
                     return platform
 
         # Fallback: Check each domain in our detection mapping (less precise)
         # Sort by length (longest first) to avoid partial matches
-        sorted_domains = sorted(cls.PLATFORM_DETECTION.items(), key=lambda x: len(x[0]), reverse=True)
+        sorted_domains = sorted(
+            cls.PLATFORM_DETECTION.items(), key=lambda x: len(x[0]), reverse=True
+        )
         for domain, platform in sorted_domains:
             if domain in url_lower:
                 return platform
 
         # Special handling for Mastodon instances (various domains)
-        if any(mastodon_indicator in url_lower for mastodon_indicator in [
-            "mastodon", "@", "/users/", "/web/@"
-        ]) and not any(excluded in url_lower for excluded in [
-            "twitter", "instagram", "facebook"
-        ]):
+        if any(
+            mastodon_indicator in url_lower
+            for mastodon_indicator in ["mastodon", "@", "/users/", "/web/@"]
+        ) and not any(
+            excluded in url_lower
+            for excluded in ["twitter", "instagram", "facebook"]
+        ):
             return "mastodon"
 
         # Default fallback
@@ -464,7 +790,9 @@ class GalleryDLQualitySelector:
             platform = "default"
 
         platform = platform.lower()
-        platform_config = cls.PLATFORM_QUALITIES.get(platform, cls.PLATFORM_QUALITIES.get("default", {}))
+        platform_config = cls.PLATFORM_QUALITIES.get(
+            platform, cls.PLATFORM_QUALITIES.get("default", {})
+        )
 
         return list(platform_config.keys())
 
@@ -478,12 +806,13 @@ class GalleryDLQualitySelector:
             try:
                 await asyncio.wait_for(self.event.wait(), timeout=self._timeout)
             except TimeoutError:
+                from asyncio import create_task
+
                 from bot.helper.telegram_helper.message_utils import (
+                    auto_delete_message,
                     delete_message,
                     send_message,
-                    auto_delete_message,
                 )
-                from asyncio import create_task
 
                 LOGGER.warning(
                     f"Gallery-dl quality selection timeout for user {self.listener.user_id}"
@@ -644,7 +973,9 @@ class GalleryDLQualitySelector:
 
             if action == "quality":
                 if len(data) >= 3:
-                    from bot.helper.telegram_helper.message_utils import delete_message
+                    from bot.helper.telegram_helper.message_utils import (
+                        delete_message,
+                    )
 
                     self.selected_quality = data[2]
                     self.selected_format = "best"  # Default format
@@ -659,7 +990,9 @@ class GalleryDLQualitySelector:
 
             elif action == "format":
                 if len(data) >= 3:
-                    from bot.helper.telegram_helper.message_utils import delete_message
+                    from bot.helper.telegram_helper.message_utils import (
+                        delete_message,
+                    )
 
                     self.selected_format = data[2]
                     if not self.selected_quality:
@@ -680,12 +1013,13 @@ class GalleryDLQualitySelector:
                 await self._show_quality_selection()
 
             elif action == "cancel":
+                from asyncio import create_task
+
                 from bot.helper.telegram_helper.message_utils import (
+                    auto_delete_message,
                     delete_message,
                     send_message,
-                    auto_delete_message,
                 )
-                from asyncio import create_task
 
                 # Send cancellation message
                 cancel_msg = await send_message(
@@ -749,9 +1083,24 @@ def get_platform_info(platform: str) -> dict[str, Any]:
         "supported": bool(qualities),
         "qualities": list(qualities.keys()),
         "quality_details": qualities,
-        "requires_auth": platform in [
-            "twitter", "instagram", "tiktok", "reddit", "tumblr", "facebook",
-            "pixiv", "deviantart", "flickr", "pinterest", "patreon", "fanbox",
-            "discord", "twitch", "danbooru", "mangadex", "wallhaven"
-        ]
+        "requires_auth": platform
+        in [
+            "twitter",
+            "instagram",
+            "tiktok",
+            "reddit",
+            "tumblr",
+            "facebook",
+            "pixiv",
+            "deviantart",
+            "flickr",
+            "pinterest",
+            "patreon",
+            "fanbox",
+            "discord",
+            "twitch",
+            "danbooru",
+            "mangadex",
+            "wallhaven",
+        ],
     }

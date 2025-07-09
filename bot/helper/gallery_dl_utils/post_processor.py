@@ -7,12 +7,9 @@ import asyncio
 import json
 import os
 import sqlite3
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from bot import LOGGER
-from bot.core.config_manager import Config
-from bot.helper.ext_utils.files_utils import get_path_size
 
 
 class GalleryDLPostProcessor:

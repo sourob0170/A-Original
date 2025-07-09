@@ -48,6 +48,9 @@ except ImportError:
     )
 
 
+import builtins
+import contextlib
+
 from bot import LOGGER
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
@@ -64,6 +67,7 @@ class HyperTGDownload:
     - Main bot must have copy permissions in dump chat
     - Helper bots must have access to dump chat (or original chat as fallback)
     """
+
     def __init__(self):
         self.clients = TgClient.helper_bots
         if not self.clients:
@@ -72,8 +76,8 @@ class HyperTGDownload:
 
         # helper_bots is a dict with integer keys, not a list
         for client_id, client in self.clients.items():
-            if hasattr(client, 'me') and client.me:
-                username = getattr(client.me, "username", f"client_{client_id}")
+            if hasattr(client, "me") and client.me:
+                getattr(client.me, "username", f"client_{client_id}")
 
         self.work_loads = TgClient.helper_loads
         self.message = None
@@ -103,18 +107,28 @@ class HyperTGDownload:
         for client_id, client in self.clients.items():
             try:
                 # Try to get chat info to verify access
-                chat_info = await client.get_chat(chat_id)
+                await client.get_chat(chat_id)
                 try:
-                    username = getattr(client.me, "username", f"client_{client_id}") if hasattr(client, 'me') and client.me else f"client_{client_id}"
+                    username = (
+                        getattr(client.me, "username", f"client_{client_id}")
+                        if hasattr(client, "me") and client.me
+                        else f"client_{client_id}"
+                    )
                 except:
                     username = f"client_{client_id}"
                 accessible_bots += 1
             except Exception as e:
                 try:
-                    username = getattr(client.me, "username", f"client_{client_id}") if hasattr(client, 'me') and client.me else f"client_{client_id}"
+                    username = (
+                        getattr(client.me, "username", f"client_{client_id}")
+                        if hasattr(client, "me") and client.me
+                        else f"client_{client_id}"
+                    )
                 except:
                     username = f"client_{client_id}"
-                LOGGER.warning(f"❌ Helper bot {client_id} (@{username}) cannot access chat {chat_id}: {str(e)}")
+                LOGGER.warning(
+                    f"❌ Helper bot {client_id} (@{username}) cannot access chat {chat_id}: {e!s}"
+                )
                 continue
 
         return accessible_bots > 0
@@ -140,8 +154,6 @@ class HyperTGDownload:
             return True
         except Exception:
             return False
-
-
 
     @staticmethod
     async def get_media_type(message):
@@ -246,7 +258,9 @@ class HyperTGDownload:
                     if key in self.cache_last_access:
                         del self.cache_last_access[key]
 
-    async def generate_media_session(self, client, file_id, client_id, max_retries=3):
+    async def generate_media_session(
+        self, client, file_id, client_id, max_retries=3
+    ):
         session_key = (client_id, file_id.dc_id)
 
         if session_key in self.session_pool:
@@ -269,7 +283,7 @@ class HyperTGDownload:
                     )
                     await media_session.start()
 
-                    for attempt in range(6):
+                    for _attempt in range(6):
                         exported_auth = await client.invoke(
                             raw.functions.auth.ExportAuthorization(
                                 dc_id=file_id.dc_id
@@ -364,10 +378,10 @@ class HyperTGDownload:
         # Select client with minimum workload
         client_id = min(self.work_loads, key=self.work_loads.get)
         client = self.clients[client_id]
-        try:
-            username = getattr(client.me, "username", f"client_{client_id}") if hasattr(client, 'me') and client.me else f"client_{client_id}"
-        except:
-            username = f"client_{client_id}"
+        with contextlib.suppress(builtins.BaseException):
+            getattr(client.me, "username", f"client_{client_id}") if hasattr(
+                client, "me"
+            ) and client.me else f"client_{client_id}"
 
         self.work_loads[client_id] += 1
         current_retry = 0
@@ -581,7 +595,7 @@ class HyperTGDownload:
                         await remove(part_file_path)
 
                     except Exception as e:
-                        LOGGER.error(f"❌ Error combining part {part_index}: {str(e)}")
+                        LOGGER.error(f"❌ Error combining part {part_index}: {e!s}")
                         raise
 
             if prog_task and not prog_task.done():
@@ -591,7 +605,11 @@ class HyperTGDownload:
             await move(temp_file_path, file_path)
 
             download_time = time() - download_start_time
-            speed = (total_bytes_combined / (1024*1024)) / download_time if download_time > 0 else 0
+            speed = (
+                (total_bytes_combined / (1024 * 1024)) / download_time
+                if download_time > 0
+                else 0
+            )
             LOGGER.info("HyperDL download completed successfully!")
 
             return file_path
@@ -603,7 +621,7 @@ class HyperTGDownload:
             LOGGER.info("Download cancelled by user")
             return None
         except Exception as e:
-            LOGGER.error(f"HyperDL download failed: {str(e)}")
+            LOGGER.error(f"HyperDL download failed: {e!s}")
             return None
         finally:
             self._cancel_event.set()
@@ -674,7 +692,9 @@ class HyperTGDownload:
                 original_media = await self.get_media_type(message)
                 if not original_media:
                     # This should never happen as get_media_type should raise an exception if no media is found
-                    LOGGER.error("❌ Original message doesn't contain any downloadable media")
+                    LOGGER.error(
+                        "❌ Original message doesn't contain any downloadable media"
+                    )
                     raise ValueError(
                         "Original message doesn't contain any downloadable media"
                     )
@@ -684,7 +704,7 @@ class HyperTGDownload:
                 raise
             except Exception as e:
                 # This is an unexpected error
-                LOGGER.error(f"❌ Failed to verify original message media: {str(e)}")
+                LOGGER.error(f"❌ Failed to verify original message media: {e!s}")
                 raise ValueError("Failed to verify original message media") from e
 
             if dump_chat:
@@ -708,12 +728,18 @@ class HyperTGDownload:
 
                             # Check if bot is admin or has necessary permissions
                             try:
-                                await TgClient.bot.get_chat_member(chat_id, TgClient.bot.me.id)
+                                await TgClient.bot.get_chat_member(
+                                    chat_id, TgClient.bot.me.id
+                                )
                             except Exception as perm_error:
-                                LOGGER.warning(f"⚠️ Could not check bot permissions: {str(perm_error)}")
+                                LOGGER.warning(
+                                    f"⚠️ Could not check bot permissions: {perm_error!s}"
+                                )
 
                         except Exception as e:
-                            LOGGER.error(f"❌ Bot cannot access dump chat {chat_id}: {str(e)}")
+                            LOGGER.error(
+                                f"❌ Bot cannot access dump chat {chat_id}: {e!s}"
+                            )
                             if attempt == max_attempts - 1:
                                 break
                             continue
@@ -743,14 +769,18 @@ class HyperTGDownload:
                                 )
 
                                 if media:
-                                    media_type = type(media).__name__
+                                    type(media).__name__
                                 else:
-                                    LOGGER.warning("⚠️ No media found in original message")
+                                    LOGGER.warning(
+                                        "⚠️ No media found in original message"
+                                    )
                                     if attempt == max_attempts - 1:
                                         break
                                     continue
                             except Exception as media_error:
-                                LOGGER.warning(f"⚠️ Could not get media info: {media_error!s}")
+                                LOGGER.warning(
+                                    f"⚠️ Could not get media info: {media_error!s}"
+                                )
                                 if attempt == max_attempts - 1:
                                     break
                                 continue
@@ -764,7 +794,9 @@ class HyperTGDownload:
                                         disable_notification=True,
                                     )
                                 except Exception as copy_method_error:
-                                    LOGGER.warning(f"⚠️ Message.copy() failed: {str(copy_method_error)}")
+                                    LOGGER.warning(
+                                        f"⚠️ Message.copy() failed: {copy_method_error!s}"
+                                    )
                                     # Method 2: Fallback to Client.copy_message
                                     copied_msg = await TgClient.bot.copy_message(
                                         chat_id=chat_id,
@@ -774,17 +806,23 @@ class HyperTGDownload:
                                     )
 
                             except Exception as copy_api_error:
-                                LOGGER.error(f"❌ All copy methods failed: {str(copy_api_error)}")
+                                LOGGER.error(
+                                    f"❌ All copy methods failed: {copy_api_error!s}"
+                                )
                                 if attempt == max_attempts - 1:
                                     break
                                 continue
 
                             # Check if copy was successful
-                            if copied_msg and hasattr(copied_msg, 'id'):
+                            if copied_msg and hasattr(copied_msg, "id"):
                                 # Verify the copied message has media using Kurigram approach
                                 try:
                                     # Get the copied message to verify it has media
-                                    copied_message_obj = await TgClient.bot.get_messages(chat_id, copied_msg.id)
+                                    copied_message_obj = (
+                                        await TgClient.bot.get_messages(
+                                            chat_id, copied_msg.id
+                                        )
+                                    )
                                     if copied_message_obj:
                                         # Check media using the same logic
                                         copied_media = (
@@ -803,23 +841,29 @@ class HyperTGDownload:
                                             self.message = copied_message_obj
                                             message_copied = True
                                             break
-                                        else:
-                                            LOGGER.warning("Copied message doesn't have media")
-                                            if attempt == max_attempts - 1:
-                                                break
-                                            continue
-                                    else:
-                                        LOGGER.warning("Could not retrieve copied message")
+                                        LOGGER.warning(
+                                            "Copied message doesn't have media"
+                                        )
                                         if attempt == max_attempts - 1:
                                             break
                                         continue
+                                    LOGGER.warning(
+                                        "Could not retrieve copied message"
+                                    )
+                                    if attempt == max_attempts - 1:
+                                        break
+                                    continue
                                 except Exception as verify_error:
-                                    LOGGER.warning(f"Failed to verify copied message: {verify_error!s}")
+                                    LOGGER.warning(
+                                        f"Failed to verify copied message: {verify_error!s}"
+                                    )
                                     if attempt == max_attempts - 1:
                                         break
                                     continue
                             else:
-                                LOGGER.warning(f"Copy operation returned invalid result: {copied_msg}")
+                                LOGGER.warning(
+                                    f"Copy operation returned invalid result: {copied_msg}"
+                                )
                                 if attempt == max_attempts - 1:
                                     LOGGER.error("All copy attempts failed")
                                     break
@@ -827,7 +871,9 @@ class HyperTGDownload:
                                 continue
 
                         except Exception as copy_error:
-                            LOGGER.warning(f"Copy attempt {attempt + 1} failed: {copy_error!s}")
+                            LOGGER.warning(
+                                f"Copy attempt {attempt + 1} failed: {copy_error!s}"
+                            )
                             if attempt == max_attempts - 1:
                                 LOGGER.error("All copy attempts failed")
                                 break
@@ -840,13 +886,15 @@ class HyperTGDownload:
                             await self.get_media_type(self.message)
                         except Exception as e:
                             # Fall back to using the original message
-                            LOGGER.warning(f"⚠️ Copied message verification failed: {str(e)}")
+                            LOGGER.warning(
+                                f"⚠️ Copied message verification failed: {e!s}"
+                            )
                             self.message = message
                             message_copied = False
 
                 except Exception as e:
                     # Fall back to using the original message
-                    LOGGER.warning(f"⚠️ Copy process failed: {str(e)}")
+                    LOGGER.warning(f"⚠️ Copy process failed: {e!s}")
                     self.message = message
                     message_copied = False
 
@@ -854,18 +902,26 @@ class HyperTGDownload:
                 if not message_copied:
                     # Check if helper bots have access to the original chat
                     try:
-                        has_access = await self._check_helper_bot_access(message.chat.id)
+                        has_access = await self._check_helper_bot_access(
+                            message.chat.id
+                        )
                         if not has_access:
-                            LOGGER.error("HyperDL cannot work: Copy to dump chat failed AND helper bots can't access original chat")
+                            LOGGER.error(
+                                "HyperDL cannot work: Copy to dump chat failed AND helper bots can't access original chat"
+                            )
                             LOGGER.warning("Falling back to regular download method")
                             raise ValueError(
                                 "HyperDL requires either: 1) Successful copy to dump chat, OR 2) Helper bots access to source chat. "
                                 "Currently neither is working."
                             )
                     except Exception as access_check_error:
-                        LOGGER.error(f"Error checking helper bot access: {str(access_check_error)}")
+                        LOGGER.error(
+                            f"Error checking helper bot access: {access_check_error!s}"
+                        )
                         # Fall back to regular download
-                        raise ValueError(f"Failed to check helper bot access: {str(access_check_error)}")
+                        raise ValueError(
+                            f"Failed to check helper bot access: {access_check_error!s}"
+                        )
 
             else:
                 self.message = message

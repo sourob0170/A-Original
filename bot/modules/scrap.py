@@ -30,8 +30,8 @@ class TamilMVScraper:
             timeout=30.0,
             follow_redirects=True,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            },
         )
         return self
 
@@ -46,8 +46,8 @@ class TamilMVScraper:
             parsed = urlparse(url)
             if parsed.netloc:
                 # Extract domain from provided URL
-                domain = parsed.netloc.replace('www.', '')
-                if any(base in domain for base in ['1tamilmv', 'tamilmv']):
+                domain = parsed.netloc.replace("www.", "")
+                if any(base in domain for base in ["1tamilmv", "tamilmv"]):
                     self.current_domain = domain
                     LOGGER.info(f"Using TamilMV domain from URL: {domain}")
                     return domain
@@ -64,8 +64,8 @@ class TamilMVScraper:
 
         # Look for file size patterns while avoiding bitrates
         size_patterns = [
-            r'(\d+(?:\.\d+)?)\s*(GB|TB)',  # GB and TB are almost always file sizes
-            r'([1-9]\d{2,})\s*(MB)',  # MB values >= 100 (avoid small MB that might be bitrates)
+            r"(\d+(?:\.\d+)?)\s*(GB|TB)",  # GB and TB are almost always file sizes
+            r"([1-9]\d{2,})\s*(MB)",  # MB values >= 100 (avoid small MB that might be bitrates)
         ]
 
         for pattern in size_patterns:
@@ -77,11 +77,16 @@ class TamilMVScraper:
                 match_pos = text.lower().find(match.group(0).lower())
                 if match_pos != -1:
                     context_start = max(0, match_pos - 15)
-                    context_end = min(len(text), match_pos + len(match.group(0)) + 15)
+                    context_end = min(
+                        len(text), match_pos + len(match.group(0)) + 15
+                    )
                     context = text[context_start:context_end].lower()
 
                     # Skip if context suggests it's a bitrate
-                    if any(indicator in context for indicator in ['kbps', 'mbps', 'bitrate', 'audio']):
+                    if any(
+                        indicator in context
+                        for indicator in ["kbps", "mbps", "bitrate", "audio"]
+                    ):
                         continue
 
                 return f"{match.group(1)} {size_unit}"
@@ -97,14 +102,18 @@ class TamilMVScraper:
         magnet_patterns = [
             'a[href^="magnet:"]',
             'a[href*="magnet:"]',
-            'input[value^="magnet:"]'
+            'input[value^="magnet:"]',
         ]
 
         for pattern in magnet_patterns:
             elements = soup.select(pattern)
             for element in elements:
-                magnet = element.get('href') or element.get('value')
-                if magnet and magnet.startswith('magnet:') and magnet not in magnet_links_found:
+                magnet = element.get("href") or element.get("value")
+                if (
+                    magnet
+                    and magnet.startswith("magnet:")
+                    and magnet not in magnet_links_found
+                ):
                     magnet_links_found.append(magnet)
                     # Extract details from the magnet link itself
                     details = self._parse_magnet_details(magnet)
@@ -125,7 +134,7 @@ class TamilMVScraper:
     def _parse_magnet_details(self, magnet_link):
         """Parse individual magnet link details"""
         # Extract title from magnet link dn parameter
-        title_match = re.search(r'dn=([^&]+)', magnet_link)
+        title_match = re.search(r"dn=([^&]+)", magnet_link)
         if title_match:
             # URL decode the title
             title = urllib.parse.unquote_plus(title_match.group(1))
@@ -139,10 +148,10 @@ class TamilMVScraper:
         size = self._extract_size_from_title(title)
 
         return {
-            'title': title,
-            'quality': quality,
-            'size': size,
-            'magnet_link': magnet_link
+            "title": title,
+            "quality": quality,
+            "size": size,
+            "magnet_link": magnet_link,
         }
 
     def _clean_magnet_title(self, title):
@@ -151,13 +160,20 @@ class TamilMVScraper:
             return "Unknown Title"
 
         # Remove common prefixes
-        title = re.sub(r'^(www\.)?1TamilMV\.(onl|com|org|net|in|me|tv|cc|fi)\s*-\s*', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"^(www\.)?1TamilMV\.(onl|com|org|net|in|me|tv|cc|fi)\s*-\s*",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Remove file extensions
-        title = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\.(mkv|mp4|avi|mov|wmv|flv|webm)$", "", title, flags=re.IGNORECASE
+        )
 
         # Clean up spacing
-        title = re.sub(r'\s+', ' ', title.strip())
+        title = re.sub(r"\s+", " ", title.strip())
 
         return title or "Unknown Title"
 
@@ -168,16 +184,16 @@ class TamilMVScraper:
 
         # Quality patterns in order of preference
         quality_patterns = [
-            r'(\d+p)',  # 1080p, 720p, etc.
-            r'(4K|UHD)',
-            r'(HD)',
-            r'(BluRay|BR)',
-            r'(WEB-DL)',
-            r'(HDRip)',
-            r'(DVDRip)',
-            r'(CAM)',
-            r'(TS)',
-            r'(TC)'
+            r"(\d+p)",  # 1080p, 720p, etc.
+            r"(4K|UHD)",
+            r"(HD)",
+            r"(BluRay|BR)",
+            r"(WEB-DL)",
+            r"(HDRip)",
+            r"(DVDRip)",
+            r"(CAM)",
+            r"(TS)",
+            r"(TC)",
         ]
 
         for pattern in quality_patterns:
@@ -194,8 +210,8 @@ class TamilMVScraper:
 
         # Look for size patterns while avoiding bitrates
         size_patterns = [
-            r'(\d+(?:\.\d+)?)\s*(GB|TB)',  # GB and TB are almost always file sizes
-            r'([1-9]\d{2,})\s*(MB)',  # MB values >= 100 (avoid small MB that might be bitrates)
+            r"(\d+(?:\.\d+)?)\s*(GB|TB)",  # GB and TB are almost always file sizes
+            r"([1-9]\d{2,})\s*(MB)",  # MB values >= 100 (avoid small MB that might be bitrates)
         ]
 
         for pattern in size_patterns:
@@ -205,18 +221,23 @@ class TamilMVScraper:
                 size_unit = match.group(2).upper()
 
                 # Additional filtering to avoid bitrates
-                if size_unit == 'MB' and size_value < 50:
+                if size_unit == "MB" and size_value < 50:
                     continue
 
                 # Check context to avoid bitrates
                 match_pos = title.lower().find(match.group(0).lower())
                 if match_pos != -1:
                     context_start = max(0, match_pos - 15)
-                    context_end = min(len(title), match_pos + len(match.group(0)) + 15)
+                    context_end = min(
+                        len(title), match_pos + len(match.group(0)) + 15
+                    )
                     context = title[context_start:context_end].lower()
 
                     # Skip if context suggests it's a bitrate
-                    if any(indicator in context for indicator in ['kbps', 'mbps', 'bitrate', 'audio']):
+                    if any(
+                        indicator in context
+                        for indicator in ["kbps", "mbps", "bitrate", "audio"]
+                    ):
                         continue
 
                 return f"{match.group(1)} {size_unit}"
@@ -229,16 +250,16 @@ class TamilMVScraper:
 
         # Enhanced quality patterns
         quality_patterns = [
-            r'(\d+p)',  # 1080p, 720p, etc.
-            r'(4K|UHD)',
-            r'(HD)',
-            r'(BluRay|BR)',
-            r'(WEB-DL)',
-            r'(HDRip)',
-            r'(DVDRip)',
-            r'(CAM)',
-            r'(TS)',
-            r'(TC)'
+            r"(\d+p)",  # 1080p, 720p, etc.
+            r"(4K|UHD)",
+            r"(HD)",
+            r"(BluRay|BR)",
+            r"(WEB-DL)",
+            r"(HDRip)",
+            r"(DVDRip)",
+            r"(CAM)",
+            r"(TS)",
+            r"(TC)",
         ]
 
         qualities_found = set()
@@ -249,9 +270,9 @@ class TamilMVScraper:
         # Enhanced size extraction - look for file size patterns while avoiding bitrates
         size_patterns = [
             # Look for sizes that are likely file sizes (avoid small KB values that might be bitrates)
-            r'(\d+(?:\.\d+)?)\s*(GB|TB)',  # GB and TB are almost always file sizes
-            r'([1-9]\d{2,})\s*(MB)',  # MB values >= 100 (avoid small MB that might be bitrates)
-            r'(\d+(?:\.\d+)?)\s*(MB)(?!\s*[/\-]?\s*s)',  # MB not followed by "/s" or "-s" (to avoid Mbps)
+            r"(\d+(?:\.\d+)?)\s*(GB|TB)",  # GB and TB are almost always file sizes
+            r"([1-9]\d{2,})\s*(MB)",  # MB values >= 100 (avoid small MB that might be bitrates)
+            r"(\d+(?:\.\d+)?)\s*(MB)(?!\s*[/\-]?\s*s)",  # MB not followed by "/s" or "-s" (to avoid Mbps)
         ]
 
         sizes_found = []
@@ -262,7 +283,7 @@ class TamilMVScraper:
                 size_unit = match[1].upper()
 
                 # Additional filtering to avoid bitrates
-                if size_unit == 'MB' and size_value < 50:
+                if size_unit == "MB" and size_value < 50:
                     # Skip very small MB values that are likely bitrates
                     continue
 
@@ -270,15 +291,29 @@ class TamilMVScraper:
                 size_str = f"{match[0]} {size_unit}"
 
                 # Look for bitrate indicators around this match
-                match_pos = content_text.lower().find(f"{match[0]} {match[1].lower()}")
+                match_pos = content_text.lower().find(
+                    f"{match[0]} {match[1].lower()}"
+                )
                 if match_pos != -1:
                     # Check 20 characters before and after for bitrate indicators
                     context_start = max(0, match_pos - 20)
-                    context_end = min(len(content_text), match_pos + len(size_str) + 20)
+                    context_end = min(
+                        len(content_text), match_pos + len(size_str) + 20
+                    )
                     context = content_text[context_start:context_end].lower()
 
                     # Skip if context suggests it's a bitrate
-                    if any(indicator in context for indicator in ['kbps', 'mbps', 'bitrate', 'audio', 'dd5.1', 'aac']):
+                    if any(
+                        indicator in context
+                        for indicator in [
+                            "kbps",
+                            "mbps",
+                            "bitrate",
+                            "audio",
+                            "dd5.1",
+                            "aac",
+                        ]
+                    ):
                         continue
 
                 sizes_found.append(size_str)
@@ -291,10 +326,7 @@ class TamilMVScraper:
                 seen_sizes.add(size)
                 unique_sizes.append(size)
 
-        return {
-            'qualities': list(qualities_found),
-            'sizes': unique_sizes
-        }
+        return {"qualities": list(qualities_found), "sizes": unique_sizes}
 
     def _clean_title(self, title):
         """Clean and format the title"""
@@ -302,9 +334,9 @@ class TamilMVScraper:
             return "Unknown Title"
 
         # Remove extra whitespace and common prefixes/suffixes
-        title = re.sub(r'\s+', ' ', title.strip())
-        title = re.sub(r'^(Download\s*|Watch\s*)', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s*-\s*1TamilMV.*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\s+", " ", title.strip())
+        title = re.sub(r"^(Download\s*|Watch\s*)", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*-\s*1TamilMV.*$", "", title, flags=re.IGNORECASE)
 
         return title.strip() or "Unknown Title"
 
@@ -336,17 +368,17 @@ class TamilMVScraper:
             response.raise_for_status()
 
             # Parse HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, "html.parser")
 
             # Extract title
             title = None
             title_selectors = [
-                'h1.entry-title',
-                'h1',
-                'title',
-                '.post-title',
-                '.entry-header h1',
-                '.ipsType_pageTitle'
+                "h1.entry-title",
+                "h1",
+                "title",
+                ".post-title",
+                ".entry-header h1",
+                ".ipsType_pageTitle",
             ]
 
             for selector in title_selectors:
@@ -361,14 +393,16 @@ class TamilMVScraper:
             magnet_details = self._extract_magnet_links_with_details(soup)
 
             result = {
-                'title': title,
-                'magnet_details': magnet_details,
-                'total_magnets': len(magnet_details),
-                'source_url': target_url,
-                'domain': domain
+                "title": title,
+                "magnet_details": magnet_details,
+                "total_magnets": len(magnet_details),
+                "source_url": target_url,
+                "domain": domain,
             }
 
-            LOGGER.info(f"Successfully scraped: {title} - Found {len(magnet_details)} magnet links")
+            LOGGER.info(
+                f"Successfully scraped: {title} - Found {len(magnet_details)} magnet links"
+            )
             return result
 
         except httpx.HTTPStatusError as e:
@@ -399,8 +433,8 @@ class TamilBlastersScraper:
             timeout=30.0,
             follow_redirects=True,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            },
         )
         return self
 
@@ -415,8 +449,10 @@ class TamilBlastersScraper:
             parsed = urlparse(url)
             if parsed.netloc:
                 # Extract domain from provided URL
-                domain = parsed.netloc.replace('www.', '')
-                if any(base in domain for base in ['1tamilblasters', 'tamilblasters']):
+                domain = parsed.netloc.replace("www.", "")
+                if any(
+                    base in domain for base in ["1tamilblasters", "tamilblasters"]
+                ):
                     self.current_domain = domain
                     LOGGER.info(f"Using TamilBlasters domain from URL: {domain}")
                     return domain
@@ -435,14 +471,18 @@ class TamilBlastersScraper:
         magnet_patterns = [
             'a[href^="magnet:"]',
             'a[href*="magnet:"]',
-            'input[value^="magnet:"]'
+            'input[value^="magnet:"]',
         ]
 
         for pattern in magnet_patterns:
             elements = soup.select(pattern)
             for element in elements:
-                magnet = element.get('href') or element.get('value')
-                if magnet and magnet.startswith('magnet:') and magnet not in magnet_links_found:
+                magnet = element.get("href") or element.get("value")
+                if (
+                    magnet
+                    and magnet.startswith("magnet:")
+                    and magnet not in magnet_links_found
+                ):
                     magnet_links_found.append(magnet)
                     # Extract details from the magnet link itself
                     details = self._parse_magnet_details(magnet)
@@ -463,7 +503,7 @@ class TamilBlastersScraper:
     def _parse_magnet_details(self, magnet_link):
         """Parse individual magnet link details"""
         # Extract title from magnet link dn parameter
-        title_match = re.search(r'dn=([^&]+)', magnet_link)
+        title_match = re.search(r"dn=([^&]+)", magnet_link)
         if title_match:
             # URL decode the title
             title = urllib.parse.unquote_plus(title_match.group(1))
@@ -477,10 +517,10 @@ class TamilBlastersScraper:
         size = self._extract_size_from_title(title)
 
         return {
-            'title': title,
-            'quality': quality,
-            'size': size,
-            'magnet_link': magnet_link
+            "title": title,
+            "quality": quality,
+            "size": size,
+            "magnet_link": magnet_link,
         }
 
     def _clean_magnet_title(self, title):
@@ -489,13 +529,20 @@ class TamilBlastersScraper:
             return "Unknown Title"
 
         # Remove common prefixes for TamilBlasters
-        title = re.sub(r'^(www\.)?1TamilBlasters\.(how|net|com|org|in|me|tv|cc)\s*-\s*', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"^(www\.)?1TamilBlasters\.(how|net|com|org|in|me|tv|cc)\s*-\s*",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Remove file extensions
-        title = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\.(mkv|mp4|avi|mov|wmv|flv|webm)$", "", title, flags=re.IGNORECASE
+        )
 
         # Clean up spacing
-        title = re.sub(r'\s+', ' ', title.strip())
+        title = re.sub(r"\s+", " ", title.strip())
 
         return title or "Unknown Title"
 
@@ -506,16 +553,16 @@ class TamilBlastersScraper:
 
         # Quality patterns in order of preference
         quality_patterns = [
-            r'(\d+p)',  # 1080p, 720p, etc.
-            r'(4K|UHD)',
-            r'(HD)',
-            r'(BluRay|BR)',
-            r'(WEB-DL)',
-            r'(HDRip)',
-            r'(DVDRip)',
-            r'(CAM)',
-            r'(TS)',
-            r'(TC)'
+            r"(\d+p)",  # 1080p, 720p, etc.
+            r"(4K|UHD)",
+            r"(HD)",
+            r"(BluRay|BR)",
+            r"(WEB-DL)",
+            r"(HDRip)",
+            r"(DVDRip)",
+            r"(CAM)",
+            r"(TS)",
+            r"(TC)",
         ]
 
         for pattern in quality_patterns:
@@ -532,8 +579,8 @@ class TamilBlastersScraper:
 
         # Look for size patterns while avoiding bitrates
         size_patterns = [
-            r'(\d+(?:\.\d+)?)\s*(GB|TB)',  # GB and TB are almost always file sizes
-            r'([1-9]\d{2,})\s*(MB)',  # MB values >= 100 (avoid small MB that might be bitrates)
+            r"(\d+(?:\.\d+)?)\s*(GB|TB)",  # GB and TB are almost always file sizes
+            r"([1-9]\d{2,})\s*(MB)",  # MB values >= 100 (avoid small MB that might be bitrates)
         ]
 
         for pattern in size_patterns:
@@ -543,18 +590,23 @@ class TamilBlastersScraper:
                 size_unit = match.group(2).upper()
 
                 # Additional filtering to avoid bitrates
-                if size_unit == 'MB' and size_value < 50:
+                if size_unit == "MB" and size_value < 50:
                     continue
 
                 # Check context to avoid bitrates
                 match_pos = title.lower().find(match.group(0).lower())
                 if match_pos != -1:
                     context_start = max(0, match_pos - 15)
-                    context_end = min(len(title), match_pos + len(match.group(0)) + 15)
+                    context_end = min(
+                        len(title), match_pos + len(match.group(0)) + 15
+                    )
                     context = title[context_start:context_end].lower()
 
                     # Skip if context suggests it's a bitrate
-                    if any(indicator in context for indicator in ['kbps', 'mbps', 'bitrate', 'audio']):
+                    if any(
+                        indicator in context
+                        for indicator in ["kbps", "mbps", "bitrate", "audio"]
+                    ):
                         continue
 
                 return f"{match.group(1)} {size_unit}"
@@ -567,9 +619,9 @@ class TamilBlastersScraper:
             return "Unknown Title"
 
         # Remove extra whitespace and common prefixes/suffixes
-        title = re.sub(r'\s+', ' ', title.strip())
-        title = re.sub(r'^(Download\s*|Watch\s*)', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s*-\s*1TamilBlasters.*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\s+", " ", title.strip())
+        title = re.sub(r"^(Download\s*|Watch\s*)", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*-\s*1TamilBlasters.*$", "", title, flags=re.IGNORECASE)
 
         return title.strip() or "Unknown Title"
 
@@ -601,18 +653,18 @@ class TamilBlastersScraper:
             response.raise_for_status()
 
             # Parse HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, "html.parser")
 
             # Extract title - TamilBlasters uses different selectors
             title = None
             title_selectors = [
-                'h1.ipsType_pageTitle',
+                "h1.ipsType_pageTitle",
                 'h1[data-role="title"]',
-                '.ipsType_pageTitle',
-                'h1',
-                'title',
-                '.post-title',
-                '.entry-header h1'
+                ".ipsType_pageTitle",
+                "h1",
+                "title",
+                ".post-title",
+                ".entry-header h1",
             ]
 
             for selector in title_selectors:
@@ -627,14 +679,16 @@ class TamilBlastersScraper:
             magnet_details = self._extract_magnet_links_with_details(soup)
 
             result = {
-                'title': title,
-                'magnet_details': magnet_details,
-                'total_magnets': len(magnet_details),
-                'source_url': target_url,
-                'domain': domain
+                "title": title,
+                "magnet_details": magnet_details,
+                "total_magnets": len(magnet_details),
+                "source_url": target_url,
+                "domain": domain,
             }
 
-            LOGGER.info(f"Successfully scraped TamilBlasters: {title} - Found {len(magnet_details)} magnet links")
+            LOGGER.info(
+                f"Successfully scraped TamilBlasters: {title} - Found {len(magnet_details)} magnet links"
+            )
             return result
 
         except httpx.HTTPStatusError as e:
@@ -665,8 +719,8 @@ class MovierulzScraper:
             timeout=30.0,
             follow_redirects=True,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            },
         )
         return self
 
@@ -681,8 +735,8 @@ class MovierulzScraper:
             parsed = urlparse(url)
             if parsed.netloc:
                 # Extract domain from provided URL
-                domain = parsed.netloc.replace('www.', '')
-                if any(base in domain for base in ['5movierulz', 'movierulz']):
+                domain = parsed.netloc.replace("www.", "")
+                if any(base in domain for base in ["5movierulz", "movierulz"]):
                     self.current_domain = domain
                     LOGGER.info(f"Using Movierulz domain from URL: {domain}")
                     return domain
@@ -701,14 +755,18 @@ class MovierulzScraper:
         magnet_patterns = [
             'a[href^="magnet:"]',
             'a[href*="magnet:"]',
-            'input[value^="magnet:"]'
+            'input[value^="magnet:"]',
         ]
 
         for pattern in magnet_patterns:
             elements = soup.select(pattern)
             for element in elements:
-                magnet = element.get('href') or element.get('value')
-                if magnet and magnet.startswith('magnet:') and magnet not in magnet_links_found:
+                magnet = element.get("href") or element.get("value")
+                if (
+                    magnet
+                    and magnet.startswith("magnet:")
+                    and magnet not in magnet_links_found
+                ):
                     magnet_links_found.append(magnet)
                     # Extract details from the magnet link itself
                     details = self._parse_magnet_details(magnet)
@@ -729,7 +787,7 @@ class MovierulzScraper:
     def _parse_magnet_details(self, magnet_link):
         """Parse individual magnet link details"""
         # Extract title from magnet link dn parameter
-        title_match = re.search(r'dn=([^&]+)', magnet_link)
+        title_match = re.search(r"dn=([^&]+)", magnet_link)
         if title_match:
             # URL decode the title
             title = urllib.parse.unquote_plus(title_match.group(1))
@@ -743,10 +801,10 @@ class MovierulzScraper:
         size = self._extract_size_from_title(title)
 
         return {
-            'title': title,
-            'quality': quality,
-            'size': size,
-            'magnet_link': magnet_link
+            "title": title,
+            "quality": quality,
+            "size": size,
+            "magnet_link": magnet_link,
         }
 
     def _clean_magnet_title(self, title):
@@ -755,13 +813,20 @@ class MovierulzScraper:
             return "Unknown Title"
 
         # Remove common prefixes for Movierulz
-        title = re.sub(r'^(www\.)?5Movierulz\.(skin|voto|com|org|in|me|tv|cc)\s*-\s*', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"^(www\.)?5Movierulz\.(skin|voto|com|org|in|me|tv|cc)\s*-\s*",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Remove file extensions
-        title = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\.(mkv|mp4|avi|mov|wmv|flv|webm)$", "", title, flags=re.IGNORECASE
+        )
 
         # Clean up spacing
-        title = re.sub(r'\s+', ' ', title.strip())
+        title = re.sub(r"\s+", " ", title.strip())
 
         return title or "Unknown Title"
 
@@ -772,16 +837,16 @@ class MovierulzScraper:
 
         # Quality patterns in order of preference
         quality_patterns = [
-            r'(\d+p)',  # 1080p, 720p, etc.
-            r'(4K|UHD)',
-            r'(HD)',
-            r'(BluRay|BR)',
-            r'(WEB-DL)',
-            r'(HDRip)',
-            r'(DVDRip)',
-            r'(CAM)',
-            r'(TS)',
-            r'(TC)'
+            r"(\d+p)",  # 1080p, 720p, etc.
+            r"(4K|UHD)",
+            r"(HD)",
+            r"(BluRay|BR)",
+            r"(WEB-DL)",
+            r"(HDRip)",
+            r"(DVDRip)",
+            r"(CAM)",
+            r"(TS)",
+            r"(TC)",
         ]
 
         for pattern in quality_patterns:
@@ -798,8 +863,8 @@ class MovierulzScraper:
 
         # Look for size patterns while avoiding bitrates
         size_patterns = [
-            r'(\d+(?:\.\d+)?)\s*(GB|TB)',  # GB and TB are almost always file sizes
-            r'([1-9]\d{2,})\s*(MB)',  # MB values >= 100 (avoid small MB that might be bitrates)
+            r"(\d+(?:\.\d+)?)\s*(GB|TB)",  # GB and TB are almost always file sizes
+            r"([1-9]\d{2,})\s*(MB)",  # MB values >= 100 (avoid small MB that might be bitrates)
         ]
 
         for pattern in size_patterns:
@@ -809,18 +874,23 @@ class MovierulzScraper:
                 size_unit = match.group(2).upper()
 
                 # Additional filtering to avoid bitrates
-                if size_unit == 'MB' and size_value < 50:
+                if size_unit == "MB" and size_value < 50:
                     continue
 
                 # Check context to avoid bitrates
                 match_pos = title.lower().find(match.group(0).lower())
                 if match_pos != -1:
                     context_start = max(0, match_pos - 15)
-                    context_end = min(len(title), match_pos + len(match.group(0)) + 15)
+                    context_end = min(
+                        len(title), match_pos + len(match.group(0)) + 15
+                    )
                     context = title[context_start:context_end].lower()
 
                     # Skip if context suggests it's a bitrate
-                    if any(indicator in context for indicator in ['kbps', 'mbps', 'bitrate', 'audio']):
+                    if any(
+                        indicator in context
+                        for indicator in ["kbps", "mbps", "bitrate", "audio"]
+                    ):
                         continue
 
                 return f"{match.group(1)} {size_unit}"
@@ -833,9 +903,9 @@ class MovierulzScraper:
             return "Unknown Title"
 
         # Remove extra whitespace and common prefixes/suffixes
-        title = re.sub(r'\s+', ' ', title.strip())
-        title = re.sub(r'^(Download\s*|Watch\s*)', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s*-\s*5Movierulz.*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\s+", " ", title.strip())
+        title = re.sub(r"^(Download\s*|Watch\s*)", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*-\s*5Movierulz.*$", "", title, flags=re.IGNORECASE)
 
         return title.strip() or "Unknown Title"
 
@@ -867,18 +937,18 @@ class MovierulzScraper:
             response.raise_for_status()
 
             # Parse HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, "html.parser")
 
             # Extract title - Movierulz uses different selectors
             title = None
             title_selectors = [
-                'h1.entry-title',
-                'h1.post-title',
-                '.movie-title h1',
-                'h1',
-                'title',
-                '.post-title',
-                '.entry-header h1'
+                "h1.entry-title",
+                "h1.post-title",
+                ".movie-title h1",
+                "h1",
+                "title",
+                ".post-title",
+                ".entry-header h1",
             ]
 
             for selector in title_selectors:
@@ -893,14 +963,16 @@ class MovierulzScraper:
             magnet_details = self._extract_magnet_links_with_details(soup)
 
             result = {
-                'title': title,
-                'magnet_details': magnet_details,
-                'total_magnets': len(magnet_details),
-                'source_url': target_url,
-                'domain': domain
+                "title": title,
+                "magnet_details": magnet_details,
+                "total_magnets": len(magnet_details),
+                "source_url": target_url,
+                "domain": domain,
             }
 
-            LOGGER.info(f"Successfully scraped Movierulz: {title} - Found {len(magnet_details)} magnet links")
+            LOGGER.info(
+                f"Successfully scraped Movierulz: {title} - Found {len(magnet_details)} magnet links"
+            )
             return result
 
         except httpx.HTTPStatusError as e:
@@ -976,16 +1048,18 @@ async def scrape_movie_info(url):
     domain = parsed_url.netloc.lower()
 
     # Determine which scraper to use based on domain
-    if any(site in domain for site in ['1tamilmv', 'tamilmv']):
+    if any(site in domain for site in ["1tamilmv", "tamilmv"]):
         return await scrape_tamilmv_movie(url)
 
-    if any(site in domain for site in ['1tamilblasters', 'tamilblasters']):
+    if any(site in domain for site in ["1tamilblasters", "tamilblasters"]):
         return await scrape_tamilblasters_movie(url)
 
-    if any(site in domain for site in ['5movierulz', 'movierulz']):
+    if any(site in domain for site in ["5movierulz", "movierulz"]):
         return await scrape_movierulz_movie(url)
 
-    raise ValueError(f"Unsupported domain: {domain}. Currently supported: 1tamilmv, 1tamilblasters, 5movierulz")
+    raise ValueError(
+        f"Unsupported domain: {domain}. Currently supported: 1tamilmv, 1tamilblasters, 5movierulz"
+    )
 
 
 def format_movie_info(movie_info):
@@ -998,11 +1072,11 @@ def format_movie_info(movie_info):
     Returns:
         str: Formatted movie information
     """
-    title = escape(movie_info.get('title', 'Unknown Title'))
-    magnet_details = movie_info.get('magnet_details', [])
-    total_magnets = movie_info.get('total_magnets', 0)
-    source_url = movie_info.get('source_url', '')
-    domain = movie_info.get('domain', '')
+    title = escape(movie_info.get("title", "Unknown Title"))
+    magnet_details = movie_info.get("magnet_details", [])
+    total_magnets = movie_info.get("total_magnets", 0)
+    source_url = movie_info.get("source_url", "")
+    domain = movie_info.get("domain", "")
 
     formatted = f"🎬 <b>Title:</b> {title}\n"
 
@@ -1043,10 +1117,10 @@ def format_magnet_links(magnet_details, max_links=None):
 
     for i, detail in enumerate(magnet_details, 1):
         # Extract individual details
-        title = detail.get('title', 'Unknown Title')
-        quality = detail.get('quality', 'Unknown')
-        size = detail.get('size', 'Unknown')
-        magnet = detail.get('magnet_link', '')
+        title = detail.get("title", "Unknown Title")
+        quality = detail.get("quality", "Unknown")
+        size = detail.get("size", "Unknown")
+        magnet = detail.get("magnet_link", "")
 
         # Format each magnet link with individual details and expandable blockquote
         magnet_block = f"<b>{i}. {escape(title)}</b>\n"
@@ -1056,7 +1130,9 @@ def format_magnet_links(magnet_details, max_links=None):
         # Check if adding this magnet block would exceed the limit
         if len(current_message + magnet_block) > MESSAGE_LIMIT:
             # If current message has content beyond header, save it
-            if len(current_message.strip()) > len(f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>"):
+            if len(current_message.strip()) > len(
+                f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>"
+            ):
                 messages.append(current_message.rstrip())
 
             # Create message with just this magnet link
@@ -1065,13 +1141,17 @@ def format_magnet_links(magnet_details, max_links=None):
             # Check if even the single magnet message is too long
             if len(single_magnet_msg) > MESSAGE_LIMIT:
                 # For extremely long magnet links, split into multiple messages
-                magnet_messages = _split_long_magnet_link(i, title, quality, size, magnet, MESSAGE_LIMIT)
+                magnet_messages = _split_long_magnet_link(
+                    i, title, quality, size, magnet, MESSAGE_LIMIT
+                )
                 messages.extend(magnet_messages)
             else:
                 messages.append(single_magnet_msg.rstrip())
 
             # Start fresh for next links - no "continued" message
-            current_message = f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>\n\n"
+            current_message = (
+                f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>\n\n"
+            )
             continue
 
         # Add magnet block to current message
@@ -1086,8 +1166,9 @@ def format_magnet_links(magnet_details, max_links=None):
     # Add the last message if it has actual content beyond headers
     stripped_message = current_message.strip()
     if stripped_message and not (
-        stripped_message == "🧲 <b>Magnet Links (continued):</b>" or
-        stripped_message == f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>"
+        stripped_message == "🧲 <b>Magnet Links (continued):</b>"
+        or stripped_message
+        == f"🧲 <b>Magnet Links ({len(magnet_details)} total):</b>"
     ):
         messages.append(current_message.rstrip())
 
@@ -1113,28 +1194,42 @@ def _split_long_magnet_link(index, title, quality, size, magnet_link, message_li
 
     # Create header with metadata
     header = f"🧲 <b>Magnet Link {index}: {escape(title)}</b>\n"
-    header += f"🎯 <b>Quality:</b> {escape(quality)} | 📦 <b>Size:</b> {escape(size)}\n"
+    header += (
+        f"🎯 <b>Quality:</b> {escape(quality)} | 📦 <b>Size:</b> {escape(size)}\n"
+    )
 
     # Escape the magnet link for HTML
     escaped_magnet = escape(magnet_link)
 
     # Calculate available space for magnet link content
     # Reserve space for blockquote expandable tags and some buffer
-    blockquote_tags_overhead = len("<blockquote expandable><code></code>\n</blockquote>")
+    blockquote_tags_overhead = len(
+        "<blockquote expandable><code></code>\n</blockquote>"
+    )
     buffer_space = 50
-    available_space = message_limit - len(header) - blockquote_tags_overhead - buffer_space
+    available_space = (
+        message_limit - len(header) - blockquote_tags_overhead - buffer_space
+    )
 
     # If the magnet link fits in one message with blockquote expandable format
     if len(escaped_magnet) <= available_space:
-        simple_message = header + f"<blockquote expandable><code>{escaped_magnet}</code>\n</blockquote>"
+        simple_message = (
+            header
+            + f"<blockquote expandable><code>{escaped_magnet}</code>\n</blockquote>"
+        )
         messages.append(simple_message)
         return messages
 
     # For very long magnet links, split into multiple parts
     # First message with header and start of magnet link
-    first_part_space = available_space - 20  # Reserve space for continuation indicator
+    first_part_space = (
+        available_space - 20
+    )  # Reserve space for continuation indicator
     first_part = escaped_magnet[:first_part_space]
-    first_message = header + f"<blockquote expandable><code>{first_part}...</code>\n</blockquote>\n\n<i>📄 Continued in next message...</i>"
+    first_message = (
+        header
+        + f"<blockquote expandable><code>{first_part}...</code>\n</blockquote>\n\n<i>📄 Continued in next message...</i>"
+    )
     messages.append(first_message)
 
     # Remaining parts
@@ -1143,19 +1238,32 @@ def _split_long_magnet_link(index, title, quality, size, magnet_link, message_li
 
     while remaining_magnet:
         # Calculate space for continuation messages
-        continuation_header = f"🧲 <b>Magnet Link {index} (Part {part_number}):</b>\n"
-        continuation_space = message_limit - len(continuation_header) - blockquote_tags_overhead - buffer_space
+        continuation_header = (
+            f"🧲 <b>Magnet Link {index} (Part {part_number}):</b>\n"
+        )
+        continuation_space = (
+            message_limit
+            - len(continuation_header)
+            - blockquote_tags_overhead
+            - buffer_space
+        )
 
         if len(remaining_magnet) <= continuation_space:
             # Last part
-            continuation_message = continuation_header + f"<blockquote expandable><code>{remaining_magnet}</code>\n</blockquote>"
+            continuation_message = (
+                continuation_header
+                + f"<blockquote expandable><code>{remaining_magnet}</code>\n</blockquote>"
+            )
             messages.append(continuation_message)
             break
 
         # More parts needed
         continuation_space -= 20  # Reserve space for continuation indicator
         part_content = remaining_magnet[:continuation_space]
-        continuation_message = continuation_header + f"<blockquote expandable><code>{part_content}...</code>\n</blockquote>\n\n<i>📄 Continued in next message...</i>"
+        continuation_message = (
+            continuation_header
+            + f"<blockquote expandable><code>{part_content}...</code>\n</blockquote>\n\n<i>📄 Continued in next message...</i>"
+        )
         messages.append(continuation_message)
         remaining_magnet = remaining_magnet[continuation_space:]
         part_number += 1
@@ -1211,7 +1319,9 @@ async def show_detailed_help(message):
 async def check_working_domains(message):
     """Check and display main domains for TamilMV, TamilBlasters, and Movierulz"""
     try:
-        checking_msg = await send_message(message, "🔍 <b>Checking main domains...</b>")
+        checking_msg = await send_message(
+            message, "🔍 <b>Checking main domains...</b>"
+        )
 
         results = []
 
@@ -1223,11 +1333,17 @@ async def check_working_domains(message):
                     url = f"https://{main_domain}"
                     response = await scraper.session.get(url, timeout=10.0)
                     if response.status_code == 200:
-                        results.append(f"✅ <b>1TamilMV:</b> {escape(main_domain)} (accessible)")
+                        results.append(
+                            f"✅ <b>1TamilMV:</b> {escape(main_domain)} (accessible)"
+                        )
                     else:
-                        results.append(f"⚠️ <b>1TamilMV:</b> {escape(main_domain)} (HTTP {response.status_code})")
+                        results.append(
+                            f"⚠️ <b>1TamilMV:</b> {escape(main_domain)} (HTTP {response.status_code})"
+                        )
                 except Exception:
-                    results.append(f"❌ <b>1TamilMV:</b> {escape(main_domain)} (not accessible)")
+                    results.append(
+                        f"❌ <b>1TamilMV:</b> {escape(main_domain)} (not accessible)"
+                    )
         except Exception as e:
             results.append(f"❌ <b>1TamilMV:</b> Check failed - {escape(str(e))}")
 
@@ -1239,13 +1355,21 @@ async def check_working_domains(message):
                     url = f"https://{main_domain}"
                     response = await scraper.session.get(url, timeout=10.0)
                     if response.status_code == 200:
-                        results.append(f"✅ <b>1TamilBlasters:</b> {escape(main_domain)} (accessible)")
+                        results.append(
+                            f"✅ <b>1TamilBlasters:</b> {escape(main_domain)} (accessible)"
+                        )
                     else:
-                        results.append(f"⚠️ <b>1TamilBlasters:</b> {escape(main_domain)} (HTTP {response.status_code})")
+                        results.append(
+                            f"⚠️ <b>1TamilBlasters:</b> {escape(main_domain)} (HTTP {response.status_code})"
+                        )
                 except Exception:
-                    results.append(f"❌ <b>1TamilBlasters:</b> {escape(main_domain)} (not accessible)")
+                    results.append(
+                        f"❌ <b>1TamilBlasters:</b> {escape(main_domain)} (not accessible)"
+                    )
         except Exception as e:
-            results.append(f"❌ <b>1TamilBlasters:</b> Check failed - {escape(str(e))}")
+            results.append(
+                f"❌ <b>1TamilBlasters:</b> Check failed - {escape(str(e))}"
+            )
 
         # Check Movierulz main domain
         try:
@@ -1255,18 +1379,24 @@ async def check_working_domains(message):
                     url = f"https://{main_domain}"
                     response = await scraper.session.get(url, timeout=10.0)
                     if response.status_code == 200:
-                        results.append(f"✅ <b>5Movierulz:</b> {escape(main_domain)} (accessible)")
+                        results.append(
+                            f"✅ <b>5Movierulz:</b> {escape(main_domain)} (accessible)"
+                        )
                     else:
-                        results.append(f"⚠️ <b>5Movierulz:</b> {escape(main_domain)} (HTTP {response.status_code})")
+                        results.append(
+                            f"⚠️ <b>5Movierulz:</b> {escape(main_domain)} (HTTP {response.status_code})"
+                        )
                 except Exception:
-                    results.append(f"❌ <b>5Movierulz:</b> {escape(main_domain)} (not accessible)")
+                    results.append(
+                        f"❌ <b>5Movierulz:</b> {escape(main_domain)} (not accessible)"
+                    )
         except Exception as e:
             results.append(f"❌ <b>5Movierulz:</b> Check failed - {escape(str(e))}")
 
         result_text = (
-            "🌐 <b>Main Domains Status:</b>\n\n" +
-            "\n".join(results) +
-            "\n\n💡 <b>Tip:</b> You can use any working domain variation in your /scrap commands.\n"
+            "🌐 <b>Main Domains Status:</b>\n\n"
+            + "\n".join(results)
+            + "\n\n💡 <b>Tip:</b> You can use any working domain variation in your /scrap commands.\n"
             "The scraper will automatically extract and use the domain from your provided URL."
         )
 
@@ -1322,15 +1452,27 @@ async def scrap_command(_, message):
                     # Use the first URL found
                     potential_url = urls[0]
                     # Add https:// if it starts with www.
-                    if potential_url.startswith('www.'):
+                    if potential_url.startswith("www."):
                         potential_url = f"https://{potential_url}"
 
                     # Check if it's a supported domain
                     parsed_url = urlparse(potential_url)
-                    supported_domains = ["1tamilmv", "tamilmv", "1tamilblasters", "tamilblasters", "5movierulz", "movierulz"]
-                    if any(domain in parsed_url.netloc.lower() for domain in supported_domains):
+                    supported_domains = [
+                        "1tamilmv",
+                        "tamilmv",
+                        "1tamilblasters",
+                        "tamilblasters",
+                        "5movierulz",
+                        "movierulz",
+                    ]
+                    if any(
+                        domain in parsed_url.netloc.lower()
+                        for domain in supported_domains
+                    ):
                         argument = potential_url
-                        LOGGER.info(f"Extracted URL from replied message: {argument}")
+                        LOGGER.info(
+                            f"Extracted URL from replied message: {argument}"
+                        )
 
         # If still no argument, show help
         if not argument:
@@ -1381,7 +1523,14 @@ async def scrap_command(_, message):
 
         # Check if it's a supported URL
         parsed_url = urlparse(movie_url)
-        supported_domains = ["1tamilmv", "tamilmv", "1tamilblasters", "tamilblasters", "5movierulz", "movierulz"]
+        supported_domains = [
+            "1tamilmv",
+            "tamilmv",
+            "1tamilblasters",
+            "tamilblasters",
+            "5movierulz",
+            "movierulz",
+        ]
         if not any(
             domain in parsed_url.netloc.lower() for domain in supported_domains
         ):
@@ -1418,7 +1567,7 @@ async def scrap_command(_, message):
                 await send_message(message, result_message)
 
                 # If magnet links are found, send them in separate messages with individual details
-                magnet_details = movie_info.get('magnet_details', [])
+                magnet_details = movie_info.get("magnet_details", [])
                 if magnet_details:
                     magnet_messages = format_magnet_links(magnet_details)
 
@@ -1433,7 +1582,9 @@ async def scrap_command(_, message):
                 with contextlib.suppress(Exception):
                     await message.delete()
 
-                LOGGER.info("Auto-deleted command message after successful extraction - results kept visible")
+                LOGGER.info(
+                    "Auto-deleted command message after successful extraction - results kept visible"
+                )
 
             else:
                 error_reply = await send_message(
@@ -1471,5 +1622,3 @@ async def scrap_command(_, message):
             await message.delete()
 
         LOGGER.error(f"Scrap command error: {e!s}")
-
-

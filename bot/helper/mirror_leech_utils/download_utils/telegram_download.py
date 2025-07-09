@@ -329,6 +329,7 @@ class TelegramDownloadHelper:
                 if self._hyper_dl and (
                     not TgClient.are_helper_bots_available()
                     or not Config.LEECH_DUMP_CHAT
+                    or len(Config.LEECH_DUMP_CHAT) == 0
                 ):
                     self._hyper_dl = False
 

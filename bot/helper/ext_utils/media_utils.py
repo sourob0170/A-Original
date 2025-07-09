@@ -8368,18 +8368,16 @@ class FFMpeg:
         self._total_time = duration = (await get_media_info(f_path))[0]
         base_name, extension = ospath.splitext(file_)
 
-        # Check if equal splits is enabled by checking if parts is a reasonable number
-        # When equal splits is enabled, parts will typically be a small number (2-20)
-        # When using regular split size, parts can be very large for big files
-        # We also check if the listener has an equal_splits attribute that was set in proceed_split
+
+
+        # Check if equal splits is enabled - ONLY use the explicit setting from proceed_split
+        # Do NOT use heuristics as they can be wrong
         is_equal_splits = (
             hasattr(self._listener, "equal_splits_enabled")
             and self._listener.equal_splits_enabled
         )
 
-        # If the attribute isn't set, fall back to the heuristic
-        if not is_equal_splits:
-            is_equal_splits = parts <= 20 and parts > 1
+
 
         # For equal splits, calculate the exact duration for each part
         if is_equal_splits and duration > 0:
@@ -8425,42 +8423,22 @@ class FFMpeg:
                 ]
 
                 # Add format-specific optimizations for Telegram compatibility
+                # When using -c copy, we can only add container-level options, not encoding options
                 out_ext = os.path.splitext(out_path)[1].lower()
                 if out_ext == ".mp4":
                     cmd.extend(
                         [
                             "-movflags",
                             "+faststart",  # Streaming optimization
-                            "-pix_fmt",
-                            "yuv420p",  # Compatible pixel format
-                            "-profile:v",
-                            "main",  # Compatible H.264 profile
-                            "-level",
-                            "4.0",  # Compatible H.264 level
                         ]
                     )
                 elif out_ext == ".mkv":
                     cmd.extend(
                         [
-                            "-pix_fmt",
-                            "yuv420p",  # Compatible pixel format
                             "-disposition:v:0",
                             "default",  # Set video as default
                             "-disposition:a:0",
                             "default",  # Set audio as default
-                        ]
-                    )
-                elif out_ext == ".webm":
-                    cmd.extend(
-                        [
-                            "-pix_fmt",
-                            "yuv420p",  # Compatible pixel format
-                            "-deadline",
-                            "good",  # VP9 optimization
-                            "-cpu-used",
-                            "2",  # VP9 speed/quality balance
-                            "-row-mt",
-                            "1",  # VP9 multithreading
                         ]
                     )
                 elif out_ext == ".mov":
@@ -8468,17 +8446,9 @@ class FFMpeg:
                         [
                             "-movflags",
                             "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
-                            "-pix_fmt",
-                            "yuv420p",  # Compatible pixel format
-                            "-profile:v",
-                            "main",  # Compatible H.264 profile
-                            "-level",
-                            "4.0",  # Compatible H.264 level
                         ]
                     )
-                else:
-                    # Universal compatibility for other formats
-                    cmd.extend(["-pix_fmt", "yuv420p"])
+                # For other formats (.webm, etc.) and when using -c copy, no additional options needed
 
                 cmd.extend(
                     [
@@ -8523,7 +8493,8 @@ class FFMpeg:
 
             return True
         # Use traditional file size-based splitting for non-equal splits
-        LOGGER.info(f"Using traditional split with size: {split_size} bytes")
+
+
         # Get the appropriate Telegram limit based on premium status
         from bot.core.aeon_client import TgClient
 
@@ -8549,6 +8520,8 @@ class FFMpeg:
         i = 1
         while i <= parts or start_time < duration - 4:
             out_path = f_path.replace(file_, f"{base_name}.part{i:03}{extension}")
+
+
             cmd = [
                 "xtra",  # Using xtra instead of ffmpeg
                 "-hide_banner",
@@ -8577,58 +8550,32 @@ class FFMpeg:
             # Add format-specific optimizations for Telegram compatibility
             out_ext = os.path.splitext(out_path)[1].lower()
             if out_ext == ".mp4":
+                # When using -c copy, we can only add container-level options, not encoding options
                 cmd.extend(
                     [
                         "-movflags",
                         "+faststart",  # Streaming optimization
-                        "-pix_fmt",
-                        "yuv420p",  # Compatible pixel format
-                        "-profile:v",
-                        "main",  # Compatible H.264 profile
-                        "-level",
-                        "4.0",  # Compatible H.264 level
                     ]
                 )
             elif out_ext == ".mkv":
+                # When using -c copy, we can only add container-level options
                 cmd.extend(
                     [
-                        "-pix_fmt",
-                        "yuv420p",  # Compatible pixel format
                         "-disposition:v:0",
                         "default",  # Set video as default
                         "-disposition:a:0",
                         "default",  # Set audio as default
                     ]
                 )
-            elif out_ext == ".webm":
-                cmd.extend(
-                    [
-                        "-pix_fmt",
-                        "yuv420p",  # Compatible pixel format
-                        "-deadline",
-                        "good",  # VP9 optimization
-                        "-cpu-used",
-                        "2",  # VP9 speed/quality balance
-                        "-row-mt",
-                        "1",  # VP9 multithreading
-                    ]
-                )
             elif out_ext == ".mov":
+                # When using -c copy, we can only add container-level options
                 cmd.extend(
                     [
                         "-movflags",
                         "+faststart",  # Streaming optimization (MOV uses same structure as MP4)
-                        "-pix_fmt",
-                        "yuv420p",  # Compatible pixel format
-                        "-profile:v",
-                        "main",  # Compatible H.264 profile
-                        "-level",
-                        "4.0",  # Compatible H.264 level
                     ]
                 )
-            else:
-                # Universal compatibility for other formats
-                cmd.extend(["-pix_fmt", "yuv420p"])
+            # For other formats (.webm, etc.) and when using -c copy, no additional options needed
 
             cmd.extend(
                 [
@@ -8665,12 +8612,14 @@ class FFMpeg:
                     stderr = stderr.decode().strip()
                 except Exception:
                     stderr = "Unable to decode the error!"
+                LOGGER.error(f"FFmpeg split failed for part {i}, code: {code}, error: {stderr}")
                 with contextlib.suppress(Exception):
                     await remove(out_path)
                 if multi_streams:
                     multi_streams = False
                     continue
                 return False
+
             out_size = await aiopath.getsize(out_path)
             # Check against both max_split_size and Telegram's limit (based on premium status)
             from bot.core.aeon_client import TgClient
@@ -8713,6 +8662,8 @@ class FFMpeg:
             self._last_processed_bytes += out_size
             start_time += lpd - 3
             i += 1
+
+
 
         return True
 

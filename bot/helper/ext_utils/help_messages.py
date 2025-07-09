@@ -2570,7 +2570,6 @@ user_settings_text = {
     "USER_SESSION": "Send your pyrogram user session string for download from private telegram chat. Timeout: 60 sec",
     "USER_DUMP": "Send your channel or group id where you want to store your leeched files. Bot must have permission to send message in your chat. Timeout: 60 sec",
     "USER_COOKIES": "Send your cookies.txt file for YouTube and other yt-dlp downloads. This will be used instead of the owner's cookies file. Create it using browser extensions like 'Get cookies.txt' or 'EditThisCookie'. Timeout: 60 sec",
-
     # Gallery-dl Authentication Settings
     "GALLERY_DL_INSTAGRAM_USERNAME": "Send your Instagram username for accessing private accounts and stories. This will override the bot owner's Instagram credentials. Timeout: 60 sec",
     "GALLERY_DL_INSTAGRAM_PASSWORD": "Send your Instagram password for accessing private accounts and stories. This will override the bot owner's Instagram credentials. Timeout: 60 sec",
@@ -2593,7 +2592,6 @@ user_settings_text = {
     "GALLERY_DL_TUMBLR_TOKEN": "Send your Tumblr OAuth token for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
     "GALLERY_DL_TUMBLR_TOKEN_SECRET": "Send your Tumblr OAuth token secret for persistent authentication. This is generated automatically when using OAuth flow. This will override the bot owner's Tumblr credentials. Timeout: 60 sec",
     "GALLERY_DL_DISCORD_TOKEN": "Send your Discord bot token or user token for accessing server content and private channels. This will override the bot owner's Discord credentials. Timeout: 60 sec",
-
     # Gallery-dl General Settings
     "GALLERY_DL_QUALITY_SELECTION": "Toggle to enable/disable interactive quality selection for gallery-dl downloads. When enabled, you'll be prompted to choose quality before downloading.",
     "GALLERY_DL_ARCHIVE_ENABLED": "Toggle to enable/disable archive functionality for gallery-dl. When enabled, downloaded files are tracked to prevent re-downloading duplicates.",

@@ -3007,27 +3007,29 @@ async def auto_file_handler(client, message: Message):
             return
 
         # Check if message has required attributes
-        if not hasattr(message, 'from_user') or not message.from_user:
+        if not hasattr(message, "from_user") or not message.from_user:
             return
 
         # Check if message has user ID
-        if not hasattr(message.from_user, 'id') or not message.from_user.id:
+        if not hasattr(message.from_user, "id") or not message.from_user.id:
             return
 
         # Check if message is a service message or system message
-        if hasattr(message, 'service') and message.service:
+        if hasattr(message, "service") and message.service:
             return
 
         # Check if message has content (document, photo, video, etc.)
-        if not any([
-            hasattr(message, 'document') and message.document,
-            hasattr(message, 'photo') and message.photo,
-            hasattr(message, 'video') and message.video,
-            hasattr(message, 'audio') and message.audio,
-            hasattr(message, 'animation') and message.animation,
-            hasattr(message, 'voice') and message.voice,
-            hasattr(message, 'video_note') and message.video_note,
-        ]):
+        if not any(
+            [
+                hasattr(message, "document") and message.document,
+                hasattr(message, "photo") and message.photo,
+                hasattr(message, "video") and message.video,
+                hasattr(message, "audio") and message.audio,
+                hasattr(message, "animation") and message.animation,
+                hasattr(message, "voice") and message.voice,
+                hasattr(message, "video_note") and message.video_note,
+            ]
+        ):
             return
 
         # Check access permissions

@@ -263,8 +263,6 @@ class Config:
     # Discord
     GALLERY_DL_DISCORD_TOKEN: str = ""
 
-
-
     # Streamrip Settings
     STREAMRIP_ENABLED: bool = True
     STREAMRIP_CONCURRENT_DOWNLOADS: int = 4

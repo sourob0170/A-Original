@@ -1,9 +1,18 @@
 import contextlib
-import math
+import json
+import mimetypes
 import os
+import re
 import shlex
+import shutil
+import subprocess
+import time
+import traceback
+import xml.etree.ElementTree as ET
 from asyncio import gather, sleep
+from asyncio.subprocess import PIPE, create_subprocess_exec
 from collections import Counter
+from contextlib import suppress
 from copy import deepcopy
 from os import path as ospath
 from os import walk
@@ -28,6 +37,7 @@ from bot import (
 )
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
+from bot.helper.ext_utils.bot_utils import get_user_split_size
 from bot.helper.aeon_utils.command_gen import (
     analyze_media_for_merge,
     get_embed_thumb_cmd,
@@ -4046,7 +4056,9 @@ class TaskConfig:
 
         # USER_TRANSMISSION is owner setting only, not user-specific
         # It determines if owner's premium session should be used for uploads
-        self.user_transmission = Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        self.user_transmission = (
+            Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        )
 
         if self.user_dict.get("UPLOAD_PATHS", False):
             if self.up_dest in self.user_dict["UPLOAD_PATHS"]:
@@ -4349,45 +4361,50 @@ class TaskConfig:
                     if parsed_size and parsed_size > 0:
                         self.split_size = parsed_size
                     else:
-                        LOGGER.warning(f"Invalid split size format: {self.split_size}. Using default.")
+                        LOGGER.warning(
+                            f"Invalid split size format: {self.split_size}. Using default."
+                        )
                         self.split_size = None
 
-            # Get split size from command args, user settings, or bot config (in that order)
-            # This ensures custom split sizes set by user or owner get priority
+            # Old Aeon-MLTB logic: Only store custom split size if explicitly set by user
+            # The actual splitting decision will be made in proceed_split based on max_split_size
             if not self.split_size:
-                # User settings have second priority
+                # User settings have priority for custom split sizes
                 if self.user_dict.get("LEECH_SPLIT_SIZE"):
                     self.split_size = self.user_dict.get("LEECH_SPLIT_SIZE")
-                # Owner settings have third priority
+                # Owner settings have second priority
                 elif Config.LEECH_SPLIT_SIZE:
                     self.split_size = Config.LEECH_SPLIT_SIZE
-                # Default to max split size if no custom size is set
+                # Don't set a default split_size - let proceed_split handle the logic
                 else:
-                    self.split_size = self.max_split_size
+                    self.split_size = 0  # 0 means use max_split_size for splitting decisions
 
-            # Ensure split size never exceeds Telegram's limit (based on premium status)
-            # Add a safety margin to ensure we never exceed Telegram's limit
-            safety_margin = 50 * 1024 * 1024  # 50 MiB
+            # If a custom split size is set, ensure it doesn't exceed Telegram's limits
+            if self.split_size and self.split_size > 0:
+                # Add a safety margin to ensure we never exceed Telegram's limit
+                safety_margin = 50 * 1024 * 1024  # 50 MiB
 
-            # For non-premium accounts, use a more conservative limit
-            if not TgClient.IS_PREMIUM_USER:
-                # Use 2000 MiB (slightly less than 2 GiB) for non-premium accounts
-                telegram_limit = 2000 * 1024 * 1024
-            else:
-                # Use 4000 MiB (slightly less than 4 GiB) for premium accounts
-                telegram_limit = 4000 * 1024 * 1024
+                # For non-premium accounts, use a more conservative limit
+                if not TgClient.IS_PREMIUM_USER:
+                    # Use 2000 MiB (slightly less than 2 GiB) for non-premium accounts
+                    telegram_limit = 2000 * 1024 * 1024
+                else:
+                    # Use 4000 MiB (slightly less than 4 GiB) for premium accounts
+                    telegram_limit = 4000 * 1024 * 1024
 
-            safe_telegram_limit = telegram_limit - safety_margin
+                safe_telegram_limit = telegram_limit - safety_margin
 
-            self.split_size = min(self.split_size, safe_telegram_limit)
+                self.split_size = min(self.split_size, safe_telegram_limit)
 
-            # Ensure split size doesn't exceed maximum allowed
-            self.split_size = min(self.split_size, self.max_split_size)
+                # Ensure split size doesn't exceed maximum allowed
+                self.split_size = min(self.split_size, self.max_split_size)
 
-            # Final safety check: ensure split_size is never 0 or negative
-            if not self.split_size or self.split_size <= 0:
-                LOGGER.warning(f"Split size is invalid ({self.split_size}). Setting to max_split_size ({self.max_split_size})")
-                self.split_size = self.max_split_size
+                # Final safety check: ensure split_size is never negative
+                if self.split_size <= 0:
+                    LOGGER.warning(
+                        f"Custom split size is invalid ({self.split_size}). Disabling custom split size."
+                    )
+                    self.split_size = 0
 
             if not self.as_doc:
                 self.as_doc = (
@@ -9609,17 +9626,28 @@ class TaskConfig:
             return dl_path
 
     async def proceed_split(self, dl_path, gid):
-        """Splits files larger than the specified split size. (Original Aeon-MLTB logic)"""
+        """Splits files based on user settings and equal splits preferences."""
         self.files_to_proceed = {}
 
-        # Safety check: ensure split_size is valid
-        if not self.split_size or self.split_size <= 0:
-            return False
+        # Get user's split preferences first
 
+        user_dict = self.user_dict
+        equal_splits = user_dict.get("EQUAL_SPLITS", False) or (
+            Config.EQUAL_SPLITS and "EQUAL_SPLITS" not in user_dict
+        )
+
+        # Check for command override if args attribute exists
+        if hasattr(self, "args") and self.args:
+            if self.args.get("-es") == "t":
+                equal_splits = True
+            elif self.args.get("-es") == "f":
+                equal_splits = False
+
+        # Collect all files that need to be checked for splitting
+        files_to_check = {}
         if self.is_file:
             f_size = await get_path_size(dl_path)
-            if f_size > self.split_size:
-                self.files_to_proceed[dl_path] = [f_size, ospath.basename(dl_path)]
+            files_to_check[dl_path] = [f_size, ospath.basename(dl_path)]
         else:
             for dirpath, _, files in await sync_to_async(
                 walk,
@@ -9629,8 +9657,21 @@ class TaskConfig:
                 for file_ in files:
                     f_path = ospath.join(dirpath, file_)
                     f_size = await get_path_size(f_path)
-                    if f_size > self.split_size:
-                        self.files_to_proceed[f_path] = [f_size, file_]
+                    files_to_check[f_path] = [f_size, file_]
+
+        # Check each file to see if it needs splitting based on user preferences
+        for f_path, (f_size, file_) in files_to_check.items():
+            # Use get_user_split_size to determine if splitting is needed
+            split_size, skip_splitting = get_user_split_size(
+                self.user_id,
+                getattr(self, 'args', None),
+                f_size,
+                equal_splits=equal_splits
+            )
+
+            # If splitting is not skipped, add to files_to_proceed
+            if not skip_splitting:
+                self.files_to_proceed[f_path] = [f_size, file_]
         if self.files_to_proceed:
             ffmpeg = FFMpeg(self)
             async with task_dict_lock:
@@ -9644,48 +9685,35 @@ class TaskConfig:
                     self.subsize = f_size
                     self.subname = file_
 
-                # Original Aeon-MLTB logic: simple parts calculation
-                # Safety check to prevent division by zero
-                if self.split_size <= 0:
-                    continue
-                parts = -(-f_size // self.split_size)  # Ceiling division
-                split_size = self.split_size
-
-                # Support for equal splits (aimleechbot feature)
-                user_dict = self.user_dict
-                equal_splits = user_dict.get("EQUAL_SPLITS", False) or (
-                    Config.EQUAL_SPLITS and "EQUAL_SPLITS" not in user_dict
+                # Get the split size and parts calculation
+                split_size, _ = get_user_split_size(
+                    self.user_id,
+                    getattr(self, 'args', None),
+                    f_size,
+                    equal_splits=equal_splits
                 )
 
-                # Check for command override if args attribute exists
-                if hasattr(self, "args") and self.args:
-                    if self.args.get("-es") == "t":
-                        equal_splits = True
-                    elif self.args.get("-es") == "f":
-                        equal_splits = False
+                # Calculate parts needed
+                parts = -(-f_size // split_size)  # Ceiling division
 
-                # If equal splits is enabled, calculate equal split size
+                # Set flag for FFmpeg to know if equal splits is enabled
+                self.equal_splits_enabled = equal_splits
+
                 if equal_splits:
-                    # Set a flag for FFmpeg to know equal splits is enabled
-                    self.equal_splits_enabled = True
-                    # Calculate equal split size based on max split size
-                    if f_size <= self.max_split_size:
-                        # File is small enough, no need to split
-                        continue
-                    # Safety check for max_split_size
-                    if self.max_split_size <= 0:
-                        continue
-                    # Calculate equal parts based on max split size
-                    equal_parts = -(-f_size // self.max_split_size)  # Ceiling division
-                    if equal_parts <= 0:
-                        continue
-                    split_size = f_size // equal_parts
-                    parts = equal_parts
-                    LOGGER.info(f"Equal Splits: File will be split into {parts} equal parts of {split_size} bytes each")
+                    LOGGER.info(
+                        f"Equal Splits: File will be split into {parts} equal parts of {split_size / (1024 * 1024):.1f} MiB each"
+                    )
                 else:
-                    self.equal_splits_enabled = False
+                    LOGGER.info(
+                        f"Regular Split: File will be split into {parts} parts of {split_size / (1024 * 1024):.1f} MiB each"
+                    )
 
-                if not self.as_doc and (await get_document_type(f_path))[0]:
+                # For leech operations, always use simple file splitting regardless of file type
+                # FFmpeg split is complex and should only be used for specific video processing tasks
+                if self.is_leech:
+                    self.progress = False
+                    res = await split_file(f_path, split_size, self)
+                elif not self.as_doc and (await get_document_type(f_path))[0]:
                     self.progress = True
                     res = await ffmpeg.split(f_path, file_, parts, split_size)
                 else:
@@ -9693,7 +9721,7 @@ class TaskConfig:
                     res = await split_file(f_path, split_size, self)
                 if self.is_cancelled:
                     return False
-                if res or f_size >= self.max_split_size:
+                if res:
                     try:
                         await remove(f_path)
                     except Exception:
@@ -9951,8 +9979,6 @@ class TaskConfig:
                                 # Try to copy the file instead of replacing it
                                 try:
                                     if await aiopath.exists(temp_file):
-                                        import shutil
-
                                         shutil.copy2(temp_file, dl_path)
                                         os.remove(temp_file)
                                         LOGGER.info(
@@ -10083,8 +10109,6 @@ class TaskConfig:
                                 # Try to copy the file instead of replacing it
                                 try:
                                     if await aiopath.exists(temp_file):
-                                        import shutil
-
                                         shutil.copy2(temp_file, file_path)
                                         os.remove(temp_file)
                                         LOGGER.info(

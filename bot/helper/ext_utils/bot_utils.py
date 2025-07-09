@@ -412,7 +412,7 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
     """
     Calculate the split size based on user settings, command arguments, and file size.
     User settings take priority over owner bot settings.
-    Equal splits takes priority over leech split size.
+    Equal splits uses the configured leech split size as target but ensures equal parts.
 
     Args:
         user_id: User ID for retrieving user settings
@@ -434,35 +434,55 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
     # USER_TRANSMISSION is owner setting only, not user-specific
     # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
     max_split_size = (
-        TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
+        TgClient.MAX_SPLIT_SIZE
+        if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+        else 2097152000
     )
 
-    # If equal splits is enabled, always split the file into equal parts based on max split size
-    # Equal splits takes priority over leech split size
-    if equal_splits:
-        # For non-premium accounts, use a more conservative limit for equal splits
-        if not TgClient.IS_PREMIUM_USER:
-            # Use 1950 MiB (well below 2 GiB) for non-premium accounts with equal splits
-            safe_limit = 1950 * 1024 * 1024
-        else:
-            # Use 3950 MiB (well below 4 GiB) for premium accounts with equal splits
-            safe_limit = 3950 * 1024 * 1024
+    # Get the target split size from settings (respecting priority order)
+    target_split_size = 0
 
-        if file_size <= safe_limit:
-            # If file size is less than safe limit, no need to split
+    # Command args have highest priority (if args is provided)
+    if args is not None and args.get("-sp"):
+        split_arg = args.get("-sp")
+        if split_arg.isdigit():
+            target_split_size = int(split_arg)
+        else:
+            target_split_size = get_size_bytes(split_arg)
+    # User settings have second priority
+    elif user_dict.get("LEECH_SPLIT_SIZE"):
+        target_split_size = user_dict.get("LEECH_SPLIT_SIZE")
+    # Owner settings have third priority
+    elif Config.LEECH_SPLIT_SIZE and max_split_size != Config.LEECH_SPLIT_SIZE:
+        target_split_size = Config.LEECH_SPLIT_SIZE
+    # Default to max split size if no custom size is set
+    else:
+        target_split_size = max_split_size
+
+    # Ensure target split size doesn't exceed maximum allowed
+    target_split_size = min(target_split_size, max_split_size)
+
+    # If equal splits is enabled, calculate equal parts based on target split size
+    if equal_splits:
+        # For equal splits, always split if file is larger than target split size
+        if file_size <= target_split_size:
+            # File is smaller than or equal to target split size, no need to split
             return file_size, True
 
-        # Calculate number of parts needed based on file size and safe limit
-        # Use a slightly smaller limit for equal splits to ensure all parts are under Telegram's limit
-        parts = math.ceil(file_size / safe_limit)
+        # Calculate how many parts we need based on target split size
+        parts = math.ceil(file_size / target_split_size)
 
         # Calculate equal split size
         equal_split_size = math.ceil(file_size / parts)
 
+        # Ensure each part doesn't exceed max split size
+        while equal_split_size > max_split_size:
+            parts += 1
+            equal_split_size = math.ceil(file_size / parts)
+
         # Add extra safety check - if we're close to the limit, add one more part
-        if equal_split_size > (
-            safe_limit - 10 * 1024 * 1024
-        ):  # Within 10 MiB of the limit
+        safety_margin = 10 * 1024 * 1024  # 10 MiB
+        if equal_split_size > (max_split_size - safety_margin):
             parts += 1
             equal_split_size = math.ceil(file_size / parts)
 
@@ -470,13 +490,15 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
         from bot import LOGGER
 
         LOGGER.info(
-            f"Equal splits: File size: {file_size / (1024 * 1024 * 1024):.2f} GiB, Parts: {parts}, Split size: {equal_split_size / (1024 * 1024 * 1024):.2f} GiB"
+            f"Equal splits: Target size: {target_split_size / (1024 * 1024):.1f} MiB, "
+            f"File size: {file_size / (1024 * 1024):.2f} MiB, "
+            f"Parts: {parts}, Equal split size: {equal_split_size / (1024 * 1024):.1f} MiB"
         )
 
-        # Ensure the calculated equal split size is never greater than safe limit
-        equal_split_size = min(equal_split_size, safe_limit)
+        # Ensure the calculated equal split size is never greater than max split size
+        equal_split_size = min(equal_split_size, max_split_size)
 
-        # Never skip splitting if equal splits is on and file size is greater than safe limit
+        # Always split when equal splits is enabled and file > target size
         return equal_split_size, False
 
     # For regular splitting (not equal splits):
@@ -1331,7 +1353,16 @@ def is_flag_enabled(flag_name):
         )
 
     # Special case for gallery-dl flags
-    if clean_flag in ["-archive", "-no-archive", "-metadata", "-no-metadata", "-write-info-json", "-limit", "-username", "-password"]:
+    if clean_flag in [
+        "-archive",
+        "-no-archive",
+        "-metadata",
+        "-no-metadata",
+        "-write-info-json",
+        "-limit",
+        "-username",
+        "-password",
+    ]:
         return Config.GALLERY_DL_ENABLED
 
     # If the flag is not in the map, assume it's enabled

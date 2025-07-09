@@ -22,6 +22,7 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 gunicorn
+gallery-dl
 httpx
 jinja2
 kurigram
@@ -52,4 +53,3 @@ xattr
 yt-dlp[default,curl-cffi]
 git+https://github.com/shabbirmahmud/streamrip.git@dev
 git+https://github.com/DraftKinner/zotify.git@dev
-git+https://github.com/mikf/gallery-dl.git@master

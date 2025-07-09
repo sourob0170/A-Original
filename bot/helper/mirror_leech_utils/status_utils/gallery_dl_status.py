@@ -28,17 +28,17 @@ class GalleryDLStatus:
 
     def processed_bytes(self):
         """Get processed bytes"""
-        if hasattr(self._obj, 'downloaded_bytes'):
+        if hasattr(self._obj, "downloaded_bytes"):
             return get_readable_file_size(self._obj.downloaded_bytes)
-        if hasattr(self._obj, 'processed_bytes'):
+        if hasattr(self._obj, "processed_bytes"):
             return get_readable_file_size(self._obj.processed_bytes)
         return get_readable_file_size(0)
 
     def size(self):
         """Get total size"""
-        if hasattr(self._obj, 'size'):
+        if hasattr(self._obj, "size"):
             return get_readable_file_size(self._obj.size)
-        if hasattr(self._obj, 'total_size'):
+        if hasattr(self._obj, "total_size"):
             return get_readable_file_size(self._obj.total_size)
         return get_readable_file_size(0)
 
@@ -48,23 +48,27 @@ class GalleryDLStatus:
 
     def name(self):
         """Get download name"""
-        if hasattr(self.listener, 'name'):
+        if hasattr(self.listener, "name"):
             return self.listener.name
         return "Gallery-dl Download"
 
     def progress(self):
         """Get progress percentage"""
-        if hasattr(self._obj, 'progress'):
+        if hasattr(self._obj, "progress"):
             return f"{round(self._obj.progress, 2)}%"
         # Calculate progress from size and processed bytes
-        if hasattr(self._obj, 'size') and hasattr(self._obj, 'processed_bytes') and self._obj.size > 0:
+        if (
+            hasattr(self._obj, "size")
+            and hasattr(self._obj, "processed_bytes")
+            and self._obj.size > 0
+        ):
             progress = (self._obj.processed_bytes / self._obj.size) * 100
             return f"{round(progress, 2)}%"
         return "0%"
 
     def speed(self):
         """Get download speed"""
-        if hasattr(self._obj, 'speed'):
+        if hasattr(self._obj, "speed"):
             return f"{get_readable_file_size(self._obj.speed)}/s"
         return "0 B/s"
 

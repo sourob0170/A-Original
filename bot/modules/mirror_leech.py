@@ -1201,7 +1201,7 @@ class Mirror(TaskListener):
                 same_dir=self.same_dir,
                 bulk=self.bulk,
                 multi_tag=self.multi_tag,
-                options=self.options
+                options=self.options,
             )
 
             # Copy necessary attributes from Mirror to Gdl

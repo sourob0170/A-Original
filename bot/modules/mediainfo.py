@@ -49,6 +49,202 @@ from bot.helper.telegram_helper.message_utils import (
 )
 
 
+async def parse_mediainfo_output(mediainfo_output, file_size, filename):
+    """
+    Parse mediainfo binary output and convert it to HTML format similar to ffprobe output
+
+    Args:
+        mediainfo_output: Raw text output from mediainfo binary
+        file_size: File size in bytes
+        filename: Name of the file
+
+    Returns:
+        str: HTML formatted mediainfo content
+    """
+    tc = f"<h4>{filename}</h4><br><br><blockquote>General</blockquote><pre>"
+    tc += f"{'Complete name':<28}: {filename}\n"
+
+    # Parse mediainfo output line by line
+    lines = mediainfo_output.strip().split('\n')
+    current_section = "General"
+    section_data = {}
+
+    # Group lines by section
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check if this is a section header (no colon, starts with capital, known section)
+        if ':' not in line and line and line[0].isupper():
+            # Known section headers
+            if line in ["General", "Video", "Audio", "Text", "Menu", "Image", "Chapters"]:
+                current_section = line
+                if current_section not in section_data:
+                    section_data[current_section] = []
+                continue
+
+        # Parse key-value pairs
+        if ':' in line:
+            key, value = line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+
+            if current_section not in section_data:
+                section_data[current_section] = []
+            section_data[current_section].append((key, value))
+
+    # Track what we've already added to avoid duplicates
+    added_keys = set()
+
+    # Process General section
+    if "General" in section_data:
+        for key, value in section_data["General"]:
+            key_lower = key.lower()
+
+            # Skip complete name as we already added it
+            if key_lower == "complete name":
+                continue
+
+            # Map mediainfo keys to display format
+            if key_lower == "format":
+                tc += f"{'Format':<28}: {value}\n"
+                added_keys.add("format")
+            elif key_lower == "format/info":
+                tc += f"{'Format/Info':<28}: {value}\n"
+                added_keys.add("format/info")
+            elif key_lower == "file size":
+                # Skip file size from mediainfo, we'll add our calculated one
+                added_keys.add("file size")
+                continue
+            elif key_lower == "duration":
+                tc += f"{'Duration':<28}: {value}\n"
+                added_keys.add("duration")
+            elif key_lower == "overall bit rate":
+                tc += f"{'Overall bit rate':<28}: {value}\n"
+                added_keys.add("overall bit rate")
+            elif key_lower in ["encoded date", "encoding date"]:
+                tc += f"{'Encoded date':<28}: {value}\n"
+                added_keys.add("encoded date")
+            elif key_lower in ["writing application", "encoder"]:
+                tc += f"{'Writing application':<28}: {value}\n"
+                added_keys.add("writing application")
+            elif key_lower == "format version":
+                tc += f"{'Format version':<28}: {value}\n"
+                added_keys.add("format version")
+            else:
+                # Add other keys as-is, but clean up the display name
+                display_key = key.replace("_", " ").title()
+                tc += f"{display_key:<28}: {value}\n"
+
+    # Add file size if not already present
+    if file_size > 0 and "file size" not in added_keys:
+        size_mb = file_size / (1024 * 1024)
+        tc += f"{'File size':<28}: {size_mb:.2f} MiB ({file_size:,} bytes)\n"
+
+        if file_size > 1024 * 1024 * 1024:
+            size_gb = file_size / (1024 * 1024 * 1024)
+            tc += f"{'File size (GiB)':<28}: {size_gb:.3f} GiB\n"
+
+    tc += "</pre><br>"
+
+    # Process Video sections
+    video_count = 0
+    for section_name, data in section_data.items():
+        if section_name == "Video":
+            video_count += 1
+            tc += "<blockquote>Video</blockquote><pre>"
+            tc += f"{'ID':<28}: {video_count}\n"
+
+            for key, value in data:
+                display_key = key
+                if key.lower() == "format":
+                    tc += f"{'Format':<28}: {value}\n"
+                elif key.lower() == "format/info":
+                    tc += f"{'Format/Info':<28}: {value}\n"
+                elif key.lower() == "format profile":
+                    tc += f"{'Format profile':<28}: {value}\n"
+                elif key.lower() == "width":
+                    tc += f"{'Width':<28}: {value} pixels\n"
+                elif key.lower() == "height":
+                    tc += f"{'Height':<28}: {value} pixels\n"
+                elif key.lower() == "display aspect ratio":
+                    tc += f"{'Display aspect ratio':<28}: {value}\n"
+                elif key.lower() == "frame rate":
+                    tc += f"{'Frame rate':<28}: {value}\n"
+                elif key.lower() == "bit rate":
+                    tc += f"{'Bit rate':<28}: {value}\n"
+                elif key.lower() == "duration":
+                    tc += f"{'Duration':<28}: {value}\n"
+                elif key.lower() == "color space":
+                    tc += f"{'Color space':<28}: {value}\n"
+                elif key.lower() == "chroma subsampling":
+                    tc += f"{'Chroma subsampling':<28}: {value}\n"
+                elif key.lower() == "bit depth":
+                    tc += f"{'Bit depth':<28}: {value}\n"
+                elif key.lower() == "scan type":
+                    tc += f"{'Scan type':<28}: {value}\n"
+                else:
+                    tc += f"{display_key:<28}: {value}\n"
+            tc += "</pre><br>"
+
+    # Process Audio sections
+    audio_count = 0
+    for section_name, data in section_data.items():
+        if section_name == "Audio":
+            audio_count += 1
+            tc += "<blockquote>Audio</blockquote><pre>"
+            tc += f"{'ID':<28}: {audio_count}\n"
+
+            for key, value in data:
+                display_key = key
+                if key.lower() == "format":
+                    tc += f"{'Format':<28}: {value}\n"
+                elif key.lower() == "format/info":
+                    tc += f"{'Format/Info':<28}: {value}\n"
+                elif key.lower() == "format profile":
+                    tc += f"{'Format profile':<28}: {value}\n"
+                elif key.lower() == "sampling rate":
+                    tc += f"{'Sampling rate':<28}: {value}\n"
+                elif key.lower() == "channel(s)":
+                    tc += f"{'Channel(s)':<28}: {value}\n"
+                elif key.lower() == "channel layout":
+                    tc += f"{'Channel layout':<28}: {value}\n"
+                elif key.lower() == "bit rate":
+                    tc += f"{'Bit rate':<28}: {value}\n"
+                elif key.lower() == "duration":
+                    tc += f"{'Duration':<28}: {value}\n"
+                elif key.lower() == "bit depth":
+                    tc += f"{'Bit depth':<28}: {value}\n"
+                elif key.lower() == "compression mode":
+                    tc += f"{'Compression mode':<28}: {value}\n"
+                else:
+                    tc += f"{display_key:<28}: {value}\n"
+            tc += "</pre><br>"
+
+    # Process Text/Subtitle sections
+    subtitle_count = 0
+    for section_name, data in section_data.items():
+        if section_name == "Text":
+            subtitle_count += 1
+            tc += "<blockquote>Subtitle</blockquote><pre>"
+            tc += f"{'ID':<28}: {subtitle_count}\n"
+
+            for key, value in data:
+                display_key = key
+                if key.lower() == "format":
+                    tc += f"{'Format':<28}: {value}\n"
+                elif key.lower() == "language":
+                    tc += f"{'Language':<28}: {value}\n"
+                elif key.lower() == "title":
+                    tc += f"{'Title':<28}: {value}\n"
+                else:
+                    tc += f"{display_key:<28}: {value}\n"
+            tc += "</pre><br>"
+
+    return tc
+
+
 def parse_ffprobe_info(json_data, file_size, filename):
     tc = f"<h4>{filename}</h4><br><br><blockquote>General</blockquote><pre>"
     format_info = json_data.get("format", {})
@@ -863,7 +1059,7 @@ async def gen_mediainfo(
     temp_send = (
         None
         if silent
-        else await send_message(message, "Generating MediaInfo with ffprobe...")
+        else await send_message(message, "Generating MediaInfo with ffprobe (mediainfo fallback available)...")
     )
     des_path = None
     tc = ""
@@ -2545,9 +2741,33 @@ async def gen_mediainfo(
             if not await aiopath.exists(des_path):
                 LOGGER.error(f"File does not exist at path: {des_path}")
 
-                # Try with underscores instead of spaces
+                # Try multiple path sanitization approaches
+                fixed_paths = []
+
+                # Method 1: Replace spaces with underscores
                 if " " in des_path:
-                    fixed_path = des_path.replace(" ", "_")
+                    fixed_paths.append(des_path.replace(" ", "_"))
+
+                # Method 2: Quote the path for shell safety
+                import shlex
+                quoted_path = shlex.quote(des_path)
+                if quoted_path != des_path:
+                    fixed_paths.append(quoted_path.strip("'\""))
+
+                # Method 3: Use pathlib for normalization
+                from pathlib import Path
+                normalized_path = str(Path(des_path).resolve())
+                if normalized_path != des_path:
+                    fixed_paths.append(normalized_path)
+
+                # Method 4: Handle special characters by escaping
+                import re
+                escaped_path = re.sub(r'([()[\]{}])', r'\\\1', des_path)
+                if escaped_path != des_path:
+                    fixed_paths.append(escaped_path)
+
+                # Try each fixed path
+                for fixed_path in fixed_paths:
                     LOGGER.info(f"Trying with fixed path: {fixed_path}")
                     if await aiopath.exists(fixed_path):
                         # Use the fixed path instead
@@ -2567,8 +2787,9 @@ async def gen_mediainfo(
                                     LOGGER.error(f"JSON decode error: {e}")
                                     # Continue to fallback methods
                             # If we get here, the retry didn't work completely
+                        break  # Stop trying other paths if this one exists
 
-                # If we couldn't fix it or the fixed path doesn't exist
+                # If we couldn't fix it or none of the fixed paths exist
                 raise Exception(f"File not found: {des_path}")
 
             # Check if the file has zero size
@@ -2587,7 +2808,47 @@ async def gen_mediainfo(
                 f"ffprobe failed for {des_path}, attempting fallback analysis"
             )
 
-            # If it's a subtitle file and ffprobe failed, try a more basic approach
+            # Try mediainfo binary as fallback before giving up
+            LOGGER.info(f"Attempting mediainfo binary fallback for {des_path}")
+            try:
+                # Update status message if not in silent mode
+                if not silent and temp_send:
+                    await edit_message(temp_send, "ffprobe failed, trying mediainfo binary...")
+
+                # Try mediainfo binary
+                mediainfo_cmd = ["mediainfo", des_path]
+                mediainfo_stdout, mediainfo_stderr, mediainfo_return_code = await cmd_exec(mediainfo_cmd)
+
+                if mediainfo_return_code == 0 and mediainfo_stdout:
+                    LOGGER.info(f"mediainfo binary succeeded for {des_path}")
+                    # Parse mediainfo output
+                    tc = await parse_mediainfo_output(mediainfo_stdout, file_size, ospath.basename(des_path))
+
+                    # Add note about using mediainfo fallback
+                    tc += "<blockquote>Analysis Info</blockquote><pre>"
+                    tc += f"{'Analysis method':<28}: MediaInfo binary (ffprobe fallback)\n"
+                    # Clean up error message for display
+                    error_msg = stderr.strip() if stderr and stderr.strip() else 'ffprobe failed to analyze this file'
+                    tc += f"{'ffprobe status':<28}: {error_msg}\n"
+                    tc += "</pre><br>"
+
+                    # If in silent mode, create Telegraph page and return link ID
+                    if silent:
+                        return await create_telegraph_page_from_content(tc, silent=True)
+
+                    # Update status message if not in silent mode
+                    if not silent and temp_send:
+                        await edit_message(temp_send, "MediaInfo generated successfully using mediainfo binary!")
+
+                    return tc
+
+                LOGGER.warning(f"mediainfo binary also failed for {des_path}: {mediainfo_stderr}")
+
+            except Exception as mediainfo_error:
+                LOGGER.warning(f"mediainfo binary fallback failed: {mediainfo_error}")
+                # Continue to other fallback methods
+
+            # If it's a subtitle file and both ffprobe and mediainfo failed, try a more basic approach
             if file_ext in subtitle_exts:
                 # Create basic info for subtitle files
                 tc = f"<h4>{ospath.basename(des_path)}</h4><br><br><blockquote>General</blockquote><pre>"
@@ -2600,6 +2861,12 @@ async def gen_mediainfo(
                 tc += f"{'Format':<28}: {subtitle_format}\n"
                 tc += f"{'Subtitle format':<28}: {subtitle_format.lower()}\n"
                 tc += "</pre><br>"
+
+                # Add note about analysis methods tried
+                tc += "<blockquote>Analysis Info</blockquote><pre>"
+                tc += f"{'Analysis method':<28}: Basic file analysis (ffprobe and mediainfo failed)\n"
+                tc += "</pre><br>"
+
                 # If in silent mode, create Telegraph page and return link ID
                 if silent:
                     return await create_telegraph_page_from_content(tc, silent=True)
@@ -2632,12 +2899,13 @@ async def gen_mediainfo(
                     tc += f"{'File analysis':<28}: {stdout.strip()}\n"
                     tc += f"{'File size':<28}: {file_size / (1024 * 1024):.2f} MiB\n"
 
-                    # Add note about ffprobe failure
-                    tc += f"{'Note':<28}: ffprobe analysis failed. Limited information available.\n"
+                    # Add note about analysis methods tried
+                    tc += f"{'Note':<28}: ffprobe and mediainfo analysis failed. Limited information available.\n"
                     tc += "</pre><br>"
 
                     # Add a section with the error for debugging
-                    tc += "<blockquote>Debug Info</blockquote><pre>"
+                    tc += "<blockquote>Analysis Info</blockquote><pre>"
+                    tc += f"{'Analysis method':<28}: Basic file analysis (ffprobe and mediainfo failed)\n"
                     tc += f"{'ffprobe error':<28}: {stderr if stderr else 'No error message provided'}\n"
                     tc += "</pre><br>"
 
@@ -2653,10 +2921,27 @@ async def gen_mediainfo(
                 # Check if this is a "No such file or directory" error
                 if "No such file or directory" in str(e):
                     # This is likely a file path issue
-                    # Try with underscores instead of spaces
-                    fixed_path = des_path
+                    # Try multiple path sanitization approaches
+                    fixed_paths = []
+
+                    # Method 1: Replace spaces with underscores
                     if " " in des_path:
-                        fixed_path = des_path.replace(" ", "_")
+                        fixed_paths.append(des_path.replace(" ", "_"))
+
+                    # Method 2: Quote the path for shell safety
+                    import shlex
+                    quoted_path = shlex.quote(des_path)
+                    if quoted_path != des_path:
+                        fixed_paths.append(quoted_path.strip("'\""))
+
+                    # Method 3: Use pathlib for normalization
+                    from pathlib import Path
+                    normalized_path = str(Path(des_path).resolve())
+                    if normalized_path != des_path:
+                        fixed_paths.append(normalized_path)
+
+                    # Try each fixed path
+                    for fixed_path in fixed_paths:
                         LOGGER.info(f"Trying with fixed path: {fixed_path}")
                         if await aiopath.exists(fixed_path):
                             # Use the fixed path instead
@@ -2708,9 +2993,15 @@ async def gen_mediainfo(
             try:
                 data = json.loads(stdout)
                 tc = parse_ffprobe_info(data, file_size, ospath.basename(des_path))
+
+                # Add note about successful ffprobe analysis
+                tc += "<blockquote>Analysis Info</blockquote><pre>"
+                tc += f"{'Analysis method':<28}: ffprobe (primary method)\n"
+                tc += "</pre><br>"
+
             except json.JSONDecodeError as e:
                 LOGGER.error(f"JSON decode error: {e}")
-                raise Exception("Failed to parse ffprobe output")
+                raise Exception("Failed to parse ffprobe output") from e
         else:
             raise Exception("ffprobe returned empty output")
 
@@ -2825,7 +3116,11 @@ async def gen_mediainfo(
 
         # Update status message if not in silent mode
         if not silent and temp_send:
-            await edit_message(temp_send, "Generating MediaInfo report...")
+            # Determine which analysis method was used based on content
+            if "Analysis method" in tc and "mediainfo binary" in tc.lower():
+                await edit_message(temp_send, "Generating MediaInfo report (using mediainfo binary fallback)...")
+            else:
+                await edit_message(temp_send, "Generating MediaInfo report (using ffprobe)...")
 
         # Create Telegraph page with the results
         try:

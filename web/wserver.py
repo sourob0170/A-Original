@@ -1193,7 +1193,7 @@ async def files(request: Request):
             </body>
             </html>
             """,
-            status_code=400
+            status_code=400,
         )
 
     # Use the dedicated torrent selector template instead of redirecting
@@ -1203,7 +1203,7 @@ async def files(request: Request):
             "request": request,
             "gid": gid,
             "pin": pin or "",
-        }
+        },
     )
 
 

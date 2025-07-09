@@ -5,7 +5,7 @@ Supports OAuth, API keys, cookies, and session management
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from bot import LOGGER
 from bot.helper.ext_utils.aiofiles_compat import aiofiles, aiopath
@@ -13,6 +13,7 @@ from bot.helper.ext_utils.aiofiles_compat import aiofiles, aiopath
 # Import database with error handling
 try:
     from bot.helper.ext_utils.db_handler import database
+
     DATABASE_AVAILABLE = True
 except Exception:
     DATABASE_AVAILABLE = False
@@ -30,7 +31,7 @@ class GalleryDLAuthManager:
         self.cookies = {}
 
     async def setup_authentication(
-        self, platform: str, config: dict[str, Any], user_id: Optional[int] = None
+        self, platform: str, config: dict[str, Any], user_id: int | None = None
     ) -> dict[str, Any]:
         """Setup authentication for a specific platform"""
         try:
@@ -86,7 +87,9 @@ class GalleryDLAuthManager:
             LOGGER.error(f"Error setting up authentication for {platform}: {e}")
             return {}
 
-    async def _setup_user_cookies(self, auth_config: dict, user_id: int | None) -> None:
+    async def _setup_user_cookies(
+        self, auth_config: dict, user_id: int | None
+    ) -> None:
         """Setup user-specific cookies for gallery-dl (higher priority than global cookies)"""
         try:
             if not user_id:
@@ -121,7 +124,9 @@ class GalleryDLAuthManager:
                         first_db_cookie = db_cookies[0]
 
                         # Create temporary cookie file
-                        temp_cookie_path = f"temp_cookies/{user_id}_{first_db_cookie['number']}.txt"
+                        temp_cookie_path = (
+                            f"temp_cookies/{user_id}_{first_db_cookie['number']}.txt"
+                        )
 
                         # Ensure temp directory exists
                         temp_dir = os.path.dirname(temp_cookie_path)
@@ -136,9 +141,9 @@ class GalleryDLAuthManager:
                         return
 
                 except Exception as e:
-                    LOGGER.error(f"Error setting up user cookies from database for user {user_id}: {e}")
-
-
+                    LOGGER.error(
+                        f"Error setting up user cookies from database for user {user_id}: {e}"
+                    )
 
         except Exception as e:
             LOGGER.error(f"Error setting up user cookies for user {user_id}: {e}")
@@ -160,19 +165,20 @@ class GalleryDLAuthManager:
                 # Set global cookies file path for gallery-dl
                 auth_config["cookies"] = "cookies.txt"
 
-
         except Exception as e:
             LOGGER.error(f"Error setting up global cookies: {e}")
 
-    async def _get_user_auth_config(self, platform: str, user_id: Optional[int]) -> dict[str, Any]:
+    async def _get_user_auth_config(
+        self, platform: str, user_id: int | None
+    ) -> dict[str, Any]:
         """Get user-specific authentication configuration for platform"""
         try:
             if not user_id:
                 return {}
 
             # Import user data
-            from bot.helper.ext_utils.bot_utils import user_data
             from bot.core.config_manager import Config
+            from bot.helper.ext_utils.bot_utils import user_data
 
             user_dict = user_data.get(user_id, {})
             auth_config = {}
@@ -180,50 +186,73 @@ class GalleryDLAuthManager:
             # Platform-specific user settings mapping
             if platform == "reddit":
                 auth_config = {
-                    "client_id": user_dict.get("GALLERY_DL_REDDIT_CLIENT_ID") or getattr(Config, "GALLERY_DL_REDDIT_CLIENT_ID", ""),
-                    "client_secret": user_dict.get("GALLERY_DL_REDDIT_CLIENT_SECRET") or getattr(Config, "GALLERY_DL_REDDIT_CLIENT_SECRET", ""),
-                    "username": user_dict.get("GALLERY_DL_REDDIT_USERNAME") or getattr(Config, "GALLERY_DL_REDDIT_USERNAME", ""),
-                    "password": user_dict.get("GALLERY_DL_REDDIT_PASSWORD") or getattr(Config, "GALLERY_DL_REDDIT_PASSWORD", ""),
-                    "refresh_token": user_dict.get("GALLERY_DL_REDDIT_REFRESH_TOKEN") or getattr(Config, "GALLERY_DL_REDDIT_REFRESH_TOKEN", ""),
+                    "client_id": user_dict.get("GALLERY_DL_REDDIT_CLIENT_ID")
+                    or getattr(Config, "GALLERY_DL_REDDIT_CLIENT_ID", ""),
+                    "client_secret": user_dict.get("GALLERY_DL_REDDIT_CLIENT_SECRET")
+                    or getattr(Config, "GALLERY_DL_REDDIT_CLIENT_SECRET", ""),
+                    "username": user_dict.get("GALLERY_DL_REDDIT_USERNAME")
+                    or getattr(Config, "GALLERY_DL_REDDIT_USERNAME", ""),
+                    "password": user_dict.get("GALLERY_DL_REDDIT_PASSWORD")
+                    or getattr(Config, "GALLERY_DL_REDDIT_PASSWORD", ""),
+                    "refresh_token": user_dict.get("GALLERY_DL_REDDIT_REFRESH_TOKEN")
+                    or getattr(Config, "GALLERY_DL_REDDIT_REFRESH_TOKEN", ""),
                 }
             elif platform == "instagram":
                 auth_config = {
-                    "username": user_dict.get("GALLERY_DL_INSTAGRAM_USERNAME") or getattr(Config, "GALLERY_DL_INSTAGRAM_USERNAME", ""),
-                    "password": user_dict.get("GALLERY_DL_INSTAGRAM_PASSWORD") or getattr(Config, "GALLERY_DL_INSTAGRAM_PASSWORD", ""),
+                    "username": user_dict.get("GALLERY_DL_INSTAGRAM_USERNAME")
+                    or getattr(Config, "GALLERY_DL_INSTAGRAM_USERNAME", ""),
+                    "password": user_dict.get("GALLERY_DL_INSTAGRAM_PASSWORD")
+                    or getattr(Config, "GALLERY_DL_INSTAGRAM_PASSWORD", ""),
                 }
             elif platform == "twitter":
                 auth_config = {
-                    "username": user_dict.get("GALLERY_DL_TWITTER_USERNAME") or getattr(Config, "GALLERY_DL_TWITTER_USERNAME", ""),
-                    "password": user_dict.get("GALLERY_DL_TWITTER_PASSWORD") or getattr(Config, "GALLERY_DL_TWITTER_PASSWORD", ""),
+                    "username": user_dict.get("GALLERY_DL_TWITTER_USERNAME")
+                    or getattr(Config, "GALLERY_DL_TWITTER_USERNAME", ""),
+                    "password": user_dict.get("GALLERY_DL_TWITTER_PASSWORD")
+                    or getattr(Config, "GALLERY_DL_TWITTER_PASSWORD", ""),
                 }
             elif platform == "pixiv":
                 auth_config = {
-                    "username": user_dict.get("GALLERY_DL_PIXIV_USERNAME") or getattr(Config, "GALLERY_DL_PIXIV_USERNAME", ""),
-                    "password": user_dict.get("GALLERY_DL_PIXIV_PASSWORD") or getattr(Config, "GALLERY_DL_PIXIV_PASSWORD", ""),
-                    "refresh_token": user_dict.get("GALLERY_DL_PIXIV_REFRESH_TOKEN") or getattr(Config, "GALLERY_DL_PIXIV_REFRESH_TOKEN", ""),
+                    "username": user_dict.get("GALLERY_DL_PIXIV_USERNAME")
+                    or getattr(Config, "GALLERY_DL_PIXIV_USERNAME", ""),
+                    "password": user_dict.get("GALLERY_DL_PIXIV_PASSWORD")
+                    or getattr(Config, "GALLERY_DL_PIXIV_PASSWORD", ""),
+                    "refresh_token": user_dict.get("GALLERY_DL_PIXIV_REFRESH_TOKEN")
+                    or getattr(Config, "GALLERY_DL_PIXIV_REFRESH_TOKEN", ""),
                 }
             elif platform == "deviantart":
                 auth_config = {
-                    "client_id": user_dict.get("GALLERY_DL_DEVIANTART_CLIENT_ID") or getattr(Config, "GALLERY_DL_DEVIANTART_CLIENT_ID", ""),
-                    "client_secret": user_dict.get("GALLERY_DL_DEVIANTART_CLIENT_SECRET") or getattr(Config, "GALLERY_DL_DEVIANTART_CLIENT_SECRET", ""),
-                    "username": user_dict.get("GALLERY_DL_DEVIANTART_USERNAME") or getattr(Config, "GALLERY_DL_DEVIANTART_USERNAME", ""),
-                    "password": user_dict.get("GALLERY_DL_DEVIANTART_PASSWORD") or getattr(Config, "GALLERY_DL_DEVIANTART_PASSWORD", ""),
+                    "client_id": user_dict.get("GALLERY_DL_DEVIANTART_CLIENT_ID")
+                    or getattr(Config, "GALLERY_DL_DEVIANTART_CLIENT_ID", ""),
+                    "client_secret": user_dict.get(
+                        "GALLERY_DL_DEVIANTART_CLIENT_SECRET"
+                    )
+                    or getattr(Config, "GALLERY_DL_DEVIANTART_CLIENT_SECRET", ""),
+                    "username": user_dict.get("GALLERY_DL_DEVIANTART_USERNAME")
+                    or getattr(Config, "GALLERY_DL_DEVIANTART_USERNAME", ""),
+                    "password": user_dict.get("GALLERY_DL_DEVIANTART_PASSWORD")
+                    or getattr(Config, "GALLERY_DL_DEVIANTART_PASSWORD", ""),
                 }
             elif platform == "discord":
                 auth_config = {
-                    "token": user_dict.get("GALLERY_DL_DISCORD_TOKEN") or getattr(Config, "GALLERY_DL_DISCORD_TOKEN", ""),
+                    "token": user_dict.get("GALLERY_DL_DISCORD_TOKEN")
+                    or getattr(Config, "GALLERY_DL_DISCORD_TOKEN", ""),
                 }
 
             # Filter out empty values
             auth_config = {k: v for k, v in auth_config.items() if v}
 
             if auth_config:
-                LOGGER.info(f"Using user authentication settings for {platform} (user {user_id})")
+                LOGGER.info(
+                    f"Using user authentication settings for {platform} (user {user_id})"
+                )
 
             return auth_config
 
         except Exception as e:
-            LOGGER.error(f"Error getting user auth config for {platform} (user {user_id}): {e}")
+            LOGGER.error(
+                f"Error getting user auth config for {platform} (user {user_id}): {e}"
+            )
             return {}
 
     async def _setup_instagram_auth(self, config: dict[str, Any]) -> dict[str, Any]:

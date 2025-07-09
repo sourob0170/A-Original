@@ -997,27 +997,45 @@ Gallery-dl allows downloading media from 200+ platforms including:
 Contact the bot owner to enable Gallery-dl functionality."""
         else:
             # Gallery-dl is enabled, show settings menu
-            buttons.data_button("⚙️ General Settings", f"userset {user_id} gallerydl_general")
-            buttons.data_button("🔐 Authentication", f"userset {user_id} gallerydl_auth")
+            buttons.data_button(
+                "⚙️ General Settings", f"userset {user_id} gallerydl_general"
+            )
+            buttons.data_button(
+                "🔐 Authentication", f"userset {user_id} gallerydl_auth"
+            )
             buttons.data_button("Back", f"userset {user_id} back")
             buttons.data_button("Close", f"userset {user_id} close")
 
             # Get user's gallery-dl settings status
             user_general_settings = any(
-                key in user_dict for key in [
-                    "GALLERY_DL_QUALITY_SELECTION", "GALLERY_DL_ARCHIVE_ENABLED", "GALLERY_DL_METADATA_ENABLED"
+                key in user_dict
+                for key in [
+                    "GALLERY_DL_QUALITY_SELECTION",
+                    "GALLERY_DL_ARCHIVE_ENABLED",
+                    "GALLERY_DL_METADATA_ENABLED",
                 ]
             )
             user_auth_settings = any(
-                key in user_dict for key in [
-                    "GALLERY_DL_INSTAGRAM_USERNAME", "GALLERY_DL_TWITTER_USERNAME", "GALLERY_DL_REDDIT_CLIENT_ID",
-                    "GALLERY_DL_PIXIV_USERNAME", "GALLERY_DL_DEVIANTART_CLIENT_ID", "GALLERY_DL_TUMBLR_API_KEY",
-                    "GALLERY_DL_DISCORD_TOKEN"
+                key in user_dict
+                for key in [
+                    "GALLERY_DL_INSTAGRAM_USERNAME",
+                    "GALLERY_DL_TWITTER_USERNAME",
+                    "GALLERY_DL_REDDIT_CLIENT_ID",
+                    "GALLERY_DL_PIXIV_USERNAME",
+                    "GALLERY_DL_DEVIANTART_CLIENT_ID",
+                    "GALLERY_DL_TUMBLR_API_KEY",
+                    "GALLERY_DL_DISCORD_TOKEN",
                 ]
             )
 
-            general_status = "User configured" if user_general_settings else "Using owner settings"
-            auth_status = "User configured" if user_auth_settings else "Using owner settings"
+            general_status = (
+                "User configured"
+                if user_general_settings
+                else "Using owner settings"
+            )
+            auth_status = (
+                "User configured" if user_auth_settings else "Using owner settings"
+            )
 
             text = f"""<u><b>🖼️ Gallery-dl Settings for {name}</b></u>
 
@@ -1040,16 +1058,24 @@ Gallery-dl supports 200+ platforms including Instagram, Twitter, Reddit, Pixiv, 
         ]
 
         for setting in general_settings:
-            display_name = setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            display_name = (
+                setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            )
             buttons.data_button(display_name, f"userset {user_id} menu {setting}")
 
         buttons.data_button("Back", f"userset {user_id} gallerydl_main")
         buttons.data_button("Close", f"userset {user_id} close")
 
         # Get current values
-        quality_selection = user_dict.get("GALLERY_DL_QUALITY_SELECTION", Config.GALLERY_DL_QUALITY_SELECTION)
-        archive_enabled = user_dict.get("GALLERY_DL_ARCHIVE_ENABLED", Config.GALLERY_DL_ARCHIVE_ENABLED)
-        metadata_enabled = user_dict.get("GALLERY_DL_METADATA_ENABLED", Config.GALLERY_DL_METADATA_ENABLED)
+        quality_selection = user_dict.get(
+            "GALLERY_DL_QUALITY_SELECTION", Config.GALLERY_DL_QUALITY_SELECTION
+        )
+        archive_enabled = user_dict.get(
+            "GALLERY_DL_ARCHIVE_ENABLED", Config.GALLERY_DL_ARCHIVE_ENABLED
+        )
+        metadata_enabled = user_dict.get(
+            "GALLERY_DL_METADATA_ENABLED", Config.GALLERY_DL_METADATA_ENABLED
+        )
 
         quality_status = "✅ Enabled" if quality_selection else "❌ Disabled"
         archive_status = "✅ Enabled" if archive_enabled else "❌ Disabled"
@@ -1096,7 +1122,9 @@ Gallery-dl supports 200+ platforms including Instagram, Twitter, Reddit, Pixiv, 
         ]
 
         for setting in auth_settings:
-            display_name = setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            display_name = (
+                setting.replace("GALLERY_DL_", "").replace("_", " ").title()
+            )
             buttons.data_button(display_name, f"userset {user_id} menu {setting}")
 
         buttons.data_button("Back", f"userset {user_id} gallerydl_main")
@@ -1118,8 +1146,6 @@ Configure credentials for accessing private content and higher quality downloads
 
 <i>💡 Your settings will override the bot owner's settings.</i>
 <i>🔒 All credentials are stored securely and privately.</i>"""
-
-
 
     elif stype == "cookies_main":
         # User Cookies Management
@@ -1948,7 +1974,9 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
                 key.startswith("GALLERY_DL_") and key != "GALLERY_DL_ENABLED"
                 for key in user_dict
             )
-            gallery_dl_status = "User configured" if gallery_dl_settings else "Using owner settings"
+            gallery_dl_status = (
+                "User configured" if gallery_dl_settings else "Using owner settings"
+            )
             text_parts.append(f"-> Gallery-dl Settings: <b>{gallery_dl_status}</b>")
 
         # Show cookies status if either YT-DLP or Gallery-dl is enabled
@@ -2251,7 +2279,9 @@ async def set_option(_, message, option):
             # USER_TRANSMISSION is owner setting only, not user-specific
             # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
             max_split_size = (
-                TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
+                TgClient.MAX_SPLIT_SIZE
+                if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+                else 2097152000
             )
 
             # Ensure split size never exceeds Telegram's limit (based on premium status)
@@ -2278,7 +2308,9 @@ async def set_option(_, message, option):
             # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
             # USER_TRANSMISSION is owner setting only, not user-specific
             max_split_size = (
-                TgClient.MAX_SPLIT_SIZE if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER else 2097152000
+                TgClient.MAX_SPLIT_SIZE
+                if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
+                else 2097152000
             )
             value = max_split_size
     elif option == "EXCLUDED_EXTENSIONS":
@@ -2593,7 +2625,10 @@ async def edit_user_settings(client, query):
                 data[2] in ["gallerydl_main", "gallerydl_general", "gallerydl_auth"]
                 and not Config.GALLERY_DL_ENABLED
             )
-            or (data[2] == "cookies_main" and not (Config.YTDLP_ENABLED or Config.GALLERY_DL_ENABLED))
+            or (
+                data[2] == "cookies_main"
+                and not (Config.YTDLP_ENABLED or Config.GALLERY_DL_ENABLED)
+            )
         ):
             await update_user_settings(query, "main")
         else:

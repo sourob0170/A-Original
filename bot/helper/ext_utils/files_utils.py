@@ -1,12 +1,17 @@
 import gc
 import math
+import re
+import shlex
 from asyncio import create_subprocess_exec, sleep, wait_for
 from asyncio.subprocess import PIPE
+from glob import glob
 from os import path as ospath
 from os import readlink, walk
+from pathlib import Path
 from re import IGNORECASE, escape
 from re import search as re_search
 from re import split as re_split
+from urllib.parse import unquote
 
 from aioshutil import rmtree as aiormtree
 from magic import Magic
@@ -106,6 +111,51 @@ def is_archive(file):
 
 def is_archive_split(file):
     return bool(re_search(SPLIT_REGEX, file.lower(), IGNORECASE))
+
+async def sanitize_file_path(file_path):
+    """
+    Sanitize file path to handle special characters and spaces.
+    Returns a list of potential fixed paths to try.
+
+    Args:
+        file_path (str): Original file path
+
+    Returns:
+        list: List of sanitized file paths to try
+    """
+    if not file_path:
+        return []
+
+    fixed_paths = []
+
+    # Method 1: Replace spaces with underscores
+    if " " in file_path:
+        fixed_paths.append(file_path.replace(" ", "_"))
+
+    # Method 2: Quote the path for shell safety
+    quoted_path = shlex.quote(file_path)
+    if quoted_path != file_path:
+        fixed_paths.append(quoted_path.strip("'\""))
+
+    # Method 3: Use pathlib for normalization
+    try:
+        normalized_path = str(Path(file_path).resolve())
+        if normalized_path != file_path:
+            fixed_paths.append(normalized_path)
+    except Exception:
+        pass  # Skip if path normalization fails
+
+    # Method 4: Handle special characters by escaping
+    escaped_path = re.sub(r'([()[\]{}])', r'\\\1', file_path)
+    if escaped_path != file_path:
+        fixed_paths.append(escaped_path)
+
+    # Method 5: URL decode if path contains encoded characters
+    decoded_path = unquote(file_path)
+    if decoded_path != file_path:
+        fixed_paths.append(decoded_path)
+
+    return fixed_paths
 
 
 async def clean_target(path):
@@ -310,7 +360,12 @@ async def split_file(f_path, split_size, listener):
     if listener.is_cancelled:
         return False
 
-    # Get file size for logging
+    # Check if input file exists
+    if not await aiopath.exists(f_path):
+        LOGGER.error(f"Split input file does not exist: {f_path}")
+        return False
+
+    # Get file size for logging (Old Aeon-MLTB logic - simple and clean)
     try:
         file_size = await aiopath.getsize(f_path)
         file_size_gb = file_size / (1024 * 1024 * 1024)
@@ -321,53 +376,13 @@ async def split_file(f_path, split_size, listener):
         LOGGER.info(f"File size: {file_size_gb:.2f} GiB")
         LOGGER.info(f"Split size: {split_size / (1024 * 1024 * 1024):.2f} GiB")
         LOGGER.info(f"Expected parts: {parts}")
-
-        # Add a safety check - if split size is too close to Telegram's limit, reduce it further
-        # This is an additional safety measure beyond what's in get_user_split_size
-        from bot.core.aeon_client import TgClient
-
-        # For non-premium accounts, Telegram's limit is 2GB
-        telegram_limit = (
-            2000 * 1024 * 1024
-        )  # 2000 MiB (slightly less than 2 GiB for safety)
-
-        # If user is premium, use premium limit (4GB) but still with safety margin
-        if TgClient.IS_PREMIUM_USER:
-            telegram_limit = (
-                4000 * 1024 * 1024
-            )  # 4000 MiB (slightly less than 4 GiB for safety)
-
-        # Add a larger safety margin to ensure we're well under the limit
-        safety_margin = 50 * 1024 * 1024  # 50 MiB safety margin
-
-        # Ensure split size is always below Telegram's limit with safety margin
-        if split_size > (telegram_limit - safety_margin):
-            split_size = telegram_limit - safety_margin
-            LOGGER.info(
-                f"Adjusted split size to {split_size / (1024 * 1024 * 1024):.2f} GiB for extra safety"
-            )
     except Exception as e:
         LOGGER.error(f"Error calculating file size: {e}")
         # Continue with the split operation anyway
 
-    # Create the command
-    # Ensure split size is in bytes and is an integer
+    # Create the command (Old Aeon-MLTB logic - trust the split_size passed from proceed_split)
+    # The split_size has already been validated in proceed_split and get_user_split_size
     split_size_bytes = int(split_size)
-
-    # Use the MAX_SPLIT_SIZE from TgClient which is already set based on premium status
-    # This ensures consistency across all modules
-    telegram_limit = TgClient.MAX_SPLIT_SIZE
-
-    # Add a larger safety margin to ensure we're well under the limit
-    # Use 100 MiB safety margin for extra protection against any overhead
-    safety_margin = 100 * 1024 * 1024  # 100 MiB safety margin
-
-    # Final check to ensure split size is safe
-    if split_size_bytes > (telegram_limit - safety_margin):
-        split_size_bytes = telegram_limit - safety_margin
-        LOGGER.info(
-            f"Final adjustment: split size set to {split_size_bytes / (1024 * 1024 * 1024):.2f} GiB (with {safety_margin / (1024 * 1024):.0f} MiB safety margin)"
-        )
 
     cmd = [
         "split",
@@ -401,11 +416,9 @@ async def split_file(f_path, split_size, listener):
             LOGGER.error(f"Split error: {stderr}. File: {f_path}")
             return False
 
-        # Verify the split was successful by checking if at least one split file exists
-        import glob
-
+        # Verify the split was successful by checking if at least one split file exists (Old Aeon-MLTB logic)
         split_pattern = f"{out_path}*"
-        split_files = glob.glob(split_pattern)
+        split_files = glob(split_pattern)
 
         if not split_files:
             LOGGER.error(
@@ -413,47 +426,11 @@ async def split_file(f_path, split_size, listener):
             )
             return False
 
-        # Check the size of each split file to ensure none exceed Telegram's limit
-        oversized_files = []
-        telegram_limit = TgClient.MAX_SPLIT_SIZE
-        safety_margin = 100 * 1024 * 1024  # 100 MiB safety margin
-        safe_limit = telegram_limit - safety_margin
-
-        for split_file in split_files:
-            try:
-                split_file_size = await aiopath.getsize(split_file)
-                split_size_gb = split_file_size / (1024 * 1024 * 1024)
-
-                if split_file_size > safe_limit:
-                    LOGGER.error(
-                        f"Split file {split_file} is {split_size_gb:.2f} GiB, which exceeds "
-                        f"safe limit of {safe_limit / (1024 * 1024 * 1024):.2f} GiB!"
-                    )
-                    oversized_files.append(split_file)
-                else:
-                    LOGGER.debug(
-                        f"Split file {split_file}: {split_size_gb:.2f} GiB (within safe limit)"
-                    )
-            except Exception as e:
-                LOGGER.error(f"Error checking split file size: {e}")
-
-        # If we found oversized files, we need to re-split them with a smaller split size
-        if oversized_files:
-            LOGGER.warning(
-                f"Found {len(oversized_files)} oversized files that need to be re-split"
-            )
-
-            # Try to re-split with a smaller size if there are oversized files
-            # We don't return False here because we want to continue with the upload
-            # The upload will fail for these files, but other files might still work
-
-            # Log a clear warning for the user
-            LOGGER.warning(
-                "Some split files are still too large for Telegram. "
-                "Consider using a smaller split size in your command with the -s parameter."
-            )
-
+        # Simple validation - just log the split files created (Old Aeon-MLTB approach)
         LOGGER.info(f"Successfully split {f_path} into {len(split_files)} parts")
+
+
+
         return True
     except Exception as e:
         LOGGER.error(f"Error during file splitting: {e}")
