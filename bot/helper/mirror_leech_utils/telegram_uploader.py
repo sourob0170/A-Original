@@ -171,13 +171,6 @@ class TelegramUploader:
                 self._transmission_stopped = (
                     True  # Set flag even on error to prevent spam
                 )
-                self._transmission_stopped = (
-                    True  # Set flag to prevent further calls
-                )
-            except Exception:
-                self._transmission_stopped = (
-                    True  # Set flag even on error to prevent spam
-                )
             return  # Exit early when cancelled to prevent further progress monitoring
 
         # Skip progress monitoring if already cancelled
@@ -945,7 +938,6 @@ class TelegramUploader:
             ".DS_Store",
             "Thumbs.db",
             "desktop.ini",
-            "desktop.ini",
         }
 
         if filename in excluded_files:
@@ -953,31 +945,6 @@ class TelegramUploader:
 
         # Exclude by extension - non-media files
         excluded_extensions = {
-            ".db",
-            ".sqlite",
-            ".sqlite3",  # Database files
-            ".json",
-            ".xml",
-            ".txt",
-            ".log",  # Metadata/text files
-            ".nfo",
-            ".sfv",
-            ".md5",
-            ".sha1",
-            ".sha256",  # Info/checksum files
-            ".torrent",
-            ".magnet",  # Torrent files
-            ".ini",
-            ".cfg",
-            ".conf",  # Config files
-            ".tmp",
-            ".temp",
-            ".cache",  # Temporary files
-            ".part",
-            ".crdownload",  # Partial downloads
-            ".url",
-            ".lnk",
-            ".desktop",  # Shortcuts/links
             ".db",
             ".sqlite",
             ".sqlite3",  # Database files
@@ -1042,59 +1009,7 @@ class TelegramUploader:
             ".mp2",
             ".mpa",
             ".mpg2",
-            ".mp4",
-            ".mkv",
-            ".avi",
-            ".mov",
-            ".wmv",
-            ".flv",
-            ".webm",
-            ".m4v",
-            ".3gp",
-            ".3g2",
-            ".asf",
-            ".rm",
-            ".rmvb",
-            ".vob",
-            ".ts",
-            ".mts",
-            ".m2ts",
-            ".divx",
-            ".xvid",
-            ".ogv",
-            ".f4v",
-            ".mpg",
-            ".mpeg",
-            ".m1v",
-            ".m2v",
-            ".mpe",
-            ".mpv",
-            ".mp2",
-            ".mpa",
-            ".mpg2",
             # Audio
-            ".mp3",
-            ".flac",
-            ".wav",
-            ".aac",
-            ".ogg",
-            ".wma",
-            ".m4a",
-            ".opus",
-            ".ape",
-            ".ac3",
-            ".dts",
-            ".amr",
-            ".au",
-            ".ra",
-            ".aiff",
-            ".aif",
-            ".aifc",
-            ".caf",
-            ".sd2",
-            ".snd",
-            ".m1a",
-            ".m2a",
             ".mp3",
             ".flac",
             ".wav",
@@ -1138,39 +1053,12 @@ class TelegramUploader:
             ".heif",
             ".avif",
             ".jxl",
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".gif",
-            ".bmp",
-            ".tiff",
-            ".tif",
-            ".webp",
-            ".svg",
-            ".ico",
-            ".psd",
-            ".raw",
-            ".cr2",
-            ".nef",
-            ".arw",
-            ".dng",
-            ".heic",
-            ".heif",
-            ".avif",
-            ".jxl",
         }
 
         return file_ext in media_extensions
 
     async def _upload_file(self, cap_mono, file, o_path, force_document=False):
         # Generate MediaInfo only for media files
-        if (
-            hasattr(self._listener, "user_dict")
-            and self._listener.user_dict.get(
-                "MEDIAINFO_ENABLED", Config.MEDIAINFO_ENABLED
-            )
-            and self._should_generate_mediainfo(self._up_path)
-        ):
         if (
             hasattr(self._listener, "user_dict")
             and self._listener.user_dict.get(
@@ -1235,10 +1123,6 @@ class TelegramUploader:
 
                     if auto_thumb_enabled and (is_video or is_audio):
                         try:
-                            auto_thumb = (
-                                await AutoThumbnailHelper.get_auto_thumbnail(
-                                    file, self._listener.user_id
-                                )
                             auto_thumb = (
                                 await AutoThumbnailHelper.get_auto_thumbnail(
                                     file, self._listener.user_id
@@ -1863,15 +1747,7 @@ class TelegramUploader:
                         "Request timed out" in error_str
                         or "timeout" in error_str.lower()
                     ):
-                    if (
-                        "Request timed out" in error_str
-                        or "timeout" in error_str.lower()
-                    ):
                         if attempt < retries - 1:
-                            backoff_time = (2**attempt) * 2  # 2, 4, 8 seconds
-                            LOGGER.info(
-                                f"Timeout detected, waiting {backoff_time}s before retry..."
-                            )
                             backoff_time = (2**attempt) * 2  # 2, 4, 8 seconds
                             LOGGER.info(
                                 f"Timeout detected, waiting {backoff_time}s before retry..."
@@ -2023,13 +1899,11 @@ class TelegramUploader:
                         TgClient.user.stop_transmission()
                         self._transmission_stopped = True
                     except Exception:
-                    except Exception:
                         self._transmission_stopped = True
                 elif self._listener.client:
                     try:
                         self._listener.client.stop_transmission()
                         self._transmission_stopped = True
-                    except Exception:
                     except Exception:
                         self._transmission_stopped = True
 
