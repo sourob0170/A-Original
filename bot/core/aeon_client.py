@@ -31,7 +31,7 @@ class TgClient:
             bot_token=Config.BOT_TOKEN,
             workdir="/usr/src/app",
             parse_mode=enums.ParseMode.HTML,
-            max_concurrent_transmissions=50,
+            max_concurrent_transmissions=100,
             no_updates=False,  # Ensure updates are enabled
         )
         try:
@@ -68,7 +68,7 @@ class TgClient:
                     session_string=Config.USER_SESSION_STRING,
                     parse_mode=enums.ParseMode.HTML,
                     no_updates=True,
-                    max_concurrent_transmissions=30,
+                    max_concurrent_transmissions=100,
                 )
                 await cls.user.start()
                 cls.IS_PREMIUM_USER = cls.user.me.is_premium
@@ -107,7 +107,7 @@ class TgClient:
                 bot_token=b_token,
                 parse_mode=enums.ParseMode.HTML,
                 no_updates=True,
-                max_concurrent_transmissions=10,
+                max_concurrent_transmissions=20,
             )
             await hbot.start()
             LOGGER.info(f"Helper Bot [@{hbot.me.username}] Started!")
@@ -120,7 +120,7 @@ class TgClient:
     async def start_helper_bots(cls):
         if not Config.HELPER_TOKENS:
             LOGGER.warning(
-                "❌ No HELPER_TOKENS found, hyper download will not be available"
+                "No HELPER_TOKENS found, hyper download will not be available"
             )
             return
         async with cls._hlock:

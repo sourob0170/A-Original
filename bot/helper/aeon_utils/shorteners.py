@@ -30,7 +30,7 @@ async def short(long_url):
         elapsed = time() - start_time
         if elapsed < min_time:
             await sleep(min_time - elapsed)
-            return f"⚠️ Shortener bypassed - completed too quickly ({elapsed:.1f}s < {min_time}s)"
+            return "⚠️ Shortener bypassed."
         return long_url
 
     shortened_url = long_url
@@ -72,6 +72,6 @@ async def short(long_url):
         await sleep(remaining_time)
 
         # Return bypass message if completed too quickly
-        return f"⚠️ Shortener bypassed - completed too quickly ({elapsed:.1f}s < {min_time}s)"
+        return "⚠️ Shortener bypassed."
 
     return shortened_url
