@@ -307,6 +307,12 @@ async def load_configurations():
     starts the Gunicorn web server, extracts JDownloader config if present,
     loads shorteners, and sets up service accounts if accounts.zip exists.
     """
+
+    process = await create_subprocess_shell(
+        "uv pip install -U truelink",
+    )
+    await process.wait()
+
     if not await aiopath.exists(".netrc"):
         async with aiopen(".netrc", "w"):
             pass
