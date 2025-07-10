@@ -6,7 +6,7 @@ from re import match as re_match
 from aiofiles.os import path as aiopath
 from truelink import TrueLinkResolver
 from truelink.exceptions import TrueLinkException
-from truelink.types import LinkResult
+from truelink.types import LinkResult, FolderResult
 
 from bot import DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
 from bot.core.aeon_client import TgClient
@@ -419,7 +419,7 @@ class Mirror(TaskListener):
                     session,
                 ),
             )
-        elif isinstance(self.link, dict):
+        elif isinstance(self.link, FolderResult):
             create_task(add_direct_download(self, path))
         elif self.is_jd:
             create_task(add_jd_download(self, path))
