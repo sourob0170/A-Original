@@ -4,10 +4,9 @@ from base64 import b64encode
 from re import match as re_match
 
 from aiofiles.os import path as aiopath
-
 from truelink import TrueLinkResolver
 from truelink.exceptions import TrueLinkException
-from truelink.types import FileItem, FolderResult, LinkResult
+from truelink.types import LinkResult
 
 from bot import DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
 from bot.core.aeon_client import TgClient
@@ -16,9 +15,7 @@ from bot.helper.ext_utils.bot_utils import (
     COMMAND_USAGE,
     arg_parser,
     get_content_type,
-    sync_to_async,
 )
-from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 from bot.helper.ext_utils.links_utils import (
     is_gdrive_id,
     is_gdrive_link,
@@ -33,9 +30,6 @@ from bot.helper.mirror_leech_utils.download_utils.aria2_download import (
 )
 from bot.helper.mirror_leech_utils.download_utils.direct_downloader import (
     add_direct_download,
-)
-from bot.helper.mirror_leech_utils.download_utils.direct_link_generator import (
-    direct_link_generator,
 )
 from bot.helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
 from bot.helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
