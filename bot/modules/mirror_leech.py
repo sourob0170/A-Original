@@ -404,7 +404,8 @@ class Mirror(TaskListener):
                             else:
                                 self.link = result
                             if result.headers:
-                                headers = result.headers
+                                headers_dict = result.headers
+                                header = "|".join(f"{k}:{v}" for k, v in headers_dict.items())
                 except (TrueLinkException, Exception) as e:
                     x = await send_message(self.message, e)
                     await self.remove_from_same_dir()
