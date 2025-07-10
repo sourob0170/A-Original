@@ -160,6 +160,7 @@ LOGGER = getLogger(__name__)
 # Enable global orjson optimization for maximum JSON performance across entire bot
 try:
     from bot.helper.ext_utils.orjson_optimizer import auto_enable_global_orjson
+
     auto_enable_global_orjson()
 except ImportError:
     # orjson optimizer not available, continue with standard json
