@@ -29,6 +29,7 @@ pytz
 pytdbot[tdjson]
 requests
 speedtest-cli
+truelink
 telegraph
 tenacity
 uvicorn

@@ -5,6 +5,10 @@ from re import match as re_match
 
 from aiofiles.os import path as aiopath
 
+from truelink import TrueLinkResolver
+from truelink.exceptions import TrueLinkException
+from truelink.types import FileItem, FolderResult, LinkResult
+
 from bot import DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
 from bot.core.aeon_client import TgClient
 from bot.helper.aeon_utils.access_check import error_check
@@ -390,33 +394,28 @@ class Mirror(TaskListener):
             and not is_gdrive_id(self.link)
         ):
             content_type = await get_content_type(self.link)
+            if content_type and "x-bittorrent" in content_type:
+                self.is_qbit = True
             if content_type is None or re_match(
                 r"text/html|text/plain",
                 content_type,
             ):
+                resolver = TrueLinkResolver()
                 try:
-                    self.link = await sync_to_async(direct_link_generator, self.link)
-                    if isinstance(self.link, tuple):
-                        self.link, headers = self.link
-                    elif isinstance(self.link, str):
-                        LOGGER.info(f"Generated link: {self.link}")
-                except DirectDownloadLinkException as e:
-                    e = str(e)
-                    if "This link requires a password!" not in e:
-                        LOGGER.info(e)
-                    if e.startswith("ERROR:"):
-                        x = await send_message(self.message, e)
-                        await self.remove_from_same_dir()
-                        await delete_links(self.message)
-                        return await auto_delete_message(x, time=300)
-                except Exception as e:
+                    if resolver.is_supported(self.link):
+                        result = await resolver.resolve(self.link)
+                        if result:
+                            if isinstance(result, LinkResult):
+                                self.url = result.url
+                            else:
+                                self.url = result
+                            if result.headers:
+                                headers = result.headers
+                except (TrueLinkException, Exception) as e:
                     x = await send_message(self.message, e)
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
-            content_type = await get_content_type(self.link)
-            if content_type and "x-bittorrent" in content_type:
-                self.is_qbit = True
 
         if file_ is not None:
             create_task(
