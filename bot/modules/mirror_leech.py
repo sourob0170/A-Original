@@ -6,7 +6,7 @@ from re import match as re_match
 from aiofiles.os import path as aiopath
 from truelink import TrueLinkResolver
 from truelink.exceptions import TrueLinkException
-from truelink.types import LinkResult, FolderResult
+from truelink.types import FolderResult, LinkResult
 
 from bot import DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
 from bot.core.aeon_client import TgClient
