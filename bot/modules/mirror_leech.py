@@ -399,8 +399,10 @@ class Mirror(TaskListener):
                     if resolver.is_supported(self.link):
                         result = await resolver.resolve(self.link)
                         if result:
+                            LOGGER.info(result)
                             if isinstance(result, LinkResult):
                                 self.url = result.url
+                                LOGGER.info(self.url)
                             else:
                                 self.url = result
                             if result.headers:
