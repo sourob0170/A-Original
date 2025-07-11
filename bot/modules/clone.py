@@ -135,15 +135,6 @@ class Clone(TaskListener):
         return None
 
     async def _proceed_to_clone(self, sync):
-        if is_share_link(self.link):
-            try:
-                self.link = await sync_to_async(direct_link_generator, self.link)
-                LOGGER.info(f"Generated link: {self.link}")
-            except DirectDownloadLinkException as e:
-                LOGGER.error(str(e))
-                if str(e).startswith("ERROR:"):
-                    await send_message(self.message, str(e))
-                    return
         if is_gdrive_link(self.link) or is_gdrive_id(self.link):
             self.name, mime_type, self.size, files, _ = await sync_to_async(
                 GoogleDriveCount().count,
