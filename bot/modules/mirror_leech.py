@@ -414,7 +414,9 @@ class Mirror(TaskListener):
                     return await auto_delete_message(x, time=300)
                 except Exception as e:
                     LOGGER.error(f"Unexpected exception in resolver: {e}")
-                    x = await send_message(self.message, "An unexpected error occurred.")
+                    x = await send_message(
+                        self.message, "An unexpected error occurred."
+                    )
                     await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
