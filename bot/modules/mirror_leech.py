@@ -404,9 +404,8 @@ class Mirror(TaskListener):
                             else:
                                 self.link = result
                             if result.headers:
-                                headers_dict = result.headers
                                 headers = [
-                                    f"{k}: {v}" for k, v in headers_dict.items()
+                                    f"{k}: {v}" for k, v in result.headers.items()
                                 ]
                 except (TrueLinkException, Exception) as e:
                     x = await send_message(self.message, e)
