@@ -408,14 +408,14 @@ class Mirror(TaskListener):
                                     f"{k}: {v}" for k, v in result.headers.items()
                                 ]
                 except TrueLinkException as e:
-                     x = await send_message(self.message, e)
-                     await self.remove_from_same_dir()
+                    x = await send_message(self.message, e)
+                    await self.remove_from_same_dir()
+                    await delete_links(self.message)
+                    return await auto_delete_message(x, time=300)
                 except Exception as e:
-                     # Log unexpected exceptions for debugging
-                     import logging
-                     logging.exception("Unexpected exception in resolver")
-                     x = await send_message(self.message, "An unexpected error occurred.")
-                     await self.remove_from_same_dir()
+                    LOGGER.error(f"Unexpected exception in resolver: {e}")
+                    x = await send_message(self.message, "An unexpected error occurred.")
+                    await self.remove_from_same_dir()
                     await delete_links(self.message)
                     return await auto_delete_message(x, time=300)
 
