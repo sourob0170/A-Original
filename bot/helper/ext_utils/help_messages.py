@@ -2504,9 +2504,6 @@ FILE_TO_LINK_HELP_DICT = {
 }
 
 
-
-
-
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -2720,7 +2717,6 @@ Timeout: 60 sec""",
     "MEDIAFIRE_PASSWORD": "Send your MediaFire account password for authentication.\n\nExample: mySecurePassword123 - your MediaFire account password\nExample: (leave empty to use owner's credentials)\n\nWith your own credentials, uploads will go to your MediaFire account.\n\nTimeout: 60 sec",
     "MEDIAFIRE_APP_ID": "Send your MediaFire application ID for API access. Get your App ID from MediaFire Developers.\n\nExample: 12345 - your MediaFire application ID\nExample: (leave empty to use owner's App ID)\n\nApp ID is required for MediaFire API access.\n\nTimeout: 60 sec",
     "MEDIAFIRE_API_KEY": "Send your MediaFire API key for enhanced features (optional). Get your API key from MediaFire Developers.\n\nExample: abc123def456 - your MediaFire API key\nExample: (leave empty for basic features)\n\nAPI key provides enhanced features and higher rate limits.\n\nTimeout: 60 sec",
-
 }
 
 # Media tools help text dictionary with detailed examples and consistent formatting

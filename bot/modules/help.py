@@ -220,7 +220,6 @@ async def arg_usage(_, query):
         button = buttons.build_menu(2)
         await edit_message(message, TOOL_HELP_DICT[data[2]], button)
 
-
     try:
         await query.answer()
     except Exception:

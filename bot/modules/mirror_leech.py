@@ -377,7 +377,6 @@ class Mirror(TaskListener):
                 user_id = self.message.from_user.id
                 default_server, _ = get_ddl_setting(user_id, "DDL_SERVER", "gofile")
 
-
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
@@ -1045,7 +1044,9 @@ class Mirror(TaskListener):
                 content_type,
             ):
                 try:
-                    self.link = await sync_to_async(direct_link_generator, self.link, self.user_id)
+                    self.link = await sync_to_async(
+                        direct_link_generator, self.link, self.user_id
+                    )
                     if isinstance(self.link, tuple):
                         self.link, headers = self.link
                     elif isinstance(self.link, str):
@@ -1192,8 +1193,6 @@ class Mirror(TaskListener):
         except Exception as e:
             LOGGER.error(f"Error in streamrip download handling: {e}")
             await self.on_download_error(f"❌ Streamrip download error: {e}")
-
-
 
 
 async def mirror(client, message):

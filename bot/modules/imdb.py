@@ -358,7 +358,15 @@ def get_poster(query, bulk=False, id=False, file=None):
 
     # Try to get additional information using the most effective info sets
     # Based on comprehensive analysis: these info sets provide the most valuable data
-    info_sets_to_try = ['technical', 'keywords', 'release info', 'quotes', 'trivia', 'taglines', 'connections']
+    info_sets_to_try = [
+        "technical",
+        "keywords",
+        "release info",
+        "quotes",
+        "trivia",
+        "taglines",
+        "connections",
+    ]
 
     for info_set in info_sets_to_try:
         try:
@@ -437,13 +445,30 @@ def get_poster(query, bulk=False, id=False, file=None):
         keywords = movie.get("keywords", [])
         if keywords and isinstance(keywords, list):
             # Common genre keywords that might be in the keywords list
-            genre_keywords = ['action', 'comedy', 'drama', 'horror', 'thriller', 'romance',
-                            'sci-fi', 'fantasy', 'adventure', 'crime', 'mystery', 'animation',
-                            'documentary', 'biography', 'history', 'war', 'western', 'musical']
+            genre_keywords = [
+                "action",
+                "comedy",
+                "drama",
+                "horror",
+                "thriller",
+                "romance",
+                "sci-fi",
+                "fantasy",
+                "adventure",
+                "crime",
+                "mystery",
+                "animation",
+                "documentary",
+                "biography",
+                "history",
+                "war",
+                "western",
+                "musical",
+            ]
             found_genres = []
             for keyword in keywords[:10]:  # Check first 10 keywords
                 if isinstance(keyword, str):
-                    keyword_lower = keyword.lower().replace('-', ' ')
+                    keyword_lower = keyword.lower().replace("-", " ")
                     for genre in genre_keywords:
                         if genre in keyword_lower:
                             found_genres.append(genre.title())
@@ -456,63 +481,85 @@ def get_poster(query, bulk=False, id=False, file=None):
         "title": movie.get("title", "N/A"),
         "year": movie.get("year", "N/A"),
         "kind": movie.get("kind", "N/A"),
-        "rating": f"{movie.get('rating', 'N/A')} / 10" if movie.get('rating') else "N/A / 10",
+        "rating": f"{movie.get('rating', 'N/A')} / 10"
+        if movie.get("rating")
+        else "N/A / 10",
         "votes": movie.get("votes"),
         "plot": plot,
-        "synopsis": list_to_str(movie.get("synopsis")) if movie.get("synopsis") else "N/A",
-
+        "synopsis": list_to_str(movie.get("synopsis"))
+        if movie.get("synopsis")
+        else "N/A",
         # Media & Visual
         "poster": movie.get("full-size cover url"),
         "poster_small": movie.get("cover url"),
         "trailer": movie.get("videos"),
-
         # Technical Information
         "runtime": runtime,
         "tech_info": movie.get("tech"),
-
         # Content Classification
         "genres": list_to_hash(genres, emoji=True) if genres else "N/A",
-        "keywords": list_to_str(movie.get("keywords")[:10]) if movie.get("keywords") else "N/A",  # Limit to first 10
-        "certificates": list_to_str(movie.get("certificates")) if movie.get("certificates") else "N/A",
-
+        "keywords": list_to_str(movie.get("keywords")[:10])
+        if movie.get("keywords")
+        else "N/A",  # Limit to first 10
+        "certificates": list_to_str(movie.get("certificates"))
+        if movie.get("certificates")
+        else "N/A",
         # Geographic & Release
         "countries": list_to_hash(countries, True) if countries else "N/A",
         "country_codes": movie.get("country codes"),
-        "languages": list_to_hash(movie.get("languages")) if movie.get("languages") else "N/A",
-        "release_dates": list_to_str(movie.get("release dates")[:5]) if movie.get("release dates") else "N/A",  # Limit to first 5
+        "languages": list_to_hash(movie.get("languages"))
+        if movie.get("languages")
+        else "N/A",
+        "release_dates": list_to_str(movie.get("release dates")[:5])
+        if movie.get("release dates")
+        else "N/A",  # Limit to first 5
         "release_date": date,
         "original_air_date": movie.get("original air date"),
         "aka": list_to_str(movie.get("akas")),
-
         # Cast & Crew
         "cast": list_to_str(movie.get("cast")) if movie.get("cast") else "N/A",
-        "director": list_to_str(movie.get("director")) if movie.get("director") else "N/A",
+        "director": list_to_str(movie.get("director"))
+        if movie.get("director")
+        else "N/A",
         "writer": list_to_str(movie.get("writer")) if movie.get("writer") else "N/A",
-        "producer": list_to_str(movie.get("producer")) if movie.get("producer") else "N/A",
-        "composer": list_to_str(movie.get("composer")) if movie.get("composer") else "N/A",
-        "cinematographer": list_to_str(movie.get("cinematographer")) if movie.get("cinematographer") else "N/A",
-        "music_team": list_to_str(movie.get("music department")) if movie.get("music department") else "N/A",
-
+        "producer": list_to_str(movie.get("producer"))
+        if movie.get("producer")
+        else "N/A",
+        "composer": list_to_str(movie.get("composer"))
+        if movie.get("composer")
+        else "N/A",
+        "cinematographer": list_to_str(movie.get("cinematographer"))
+        if movie.get("cinematographer")
+        else "N/A",
+        "music_team": list_to_str(movie.get("music department"))
+        if movie.get("music department")
+        else "N/A",
         # Business Information
         "box_office": movie.get("box office"),
-        "distributors": list_to_str(movie.get("distributors")) if movie.get("distributors") else "N/A",
-
+        "distributors": list_to_str(movie.get("distributors"))
+        if movie.get("distributors")
+        else "N/A",
         # Additional Content (NEW)
-        "trivia": list_to_str(movie.get("trivia")[:3]) if movie.get("trivia") else "N/A",  # Limit to first 3
-        "quotes": list_to_str(movie.get("quotes")[:3]) if movie.get("quotes") else "N/A",  # Limit to first 3
-        "taglines": list_to_str(movie.get("taglines")[:3]) if movie.get("taglines") else "N/A",  # Limit to first 3
-        "goofs": list_to_str(movie.get("goofs")[:3]) if movie.get("goofs") else "N/A",  # Limit to first 3
+        "trivia": list_to_str(movie.get("trivia")[:3])
+        if movie.get("trivia")
+        else "N/A",  # Limit to first 3
+        "quotes": list_to_str(movie.get("quotes")[:3])
+        if movie.get("quotes")
+        else "N/A",  # Limit to first 3
+        "taglines": list_to_str(movie.get("taglines")[:3])
+        if movie.get("taglines")
+        else "N/A",  # Limit to first 3
+        "goofs": list_to_str(movie.get("goofs")[:3])
+        if movie.get("goofs")
+        else "N/A",  # Limit to first 3
         "connections": movie.get("connections"),
-
         # TV Series Specific
         "seasons": movie.get("number of seasons"),
-
         # URLs & IDs
         "imdb_id": f"tt{movie_id}",
         "url": url,
         "url_cast": url_cast,
         "url_releaseinfo": url_releaseinfo,
-
         # Legacy fields for compatibility
         "localized_title": movie.get("localized title"),
     }

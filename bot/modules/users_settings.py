@@ -64,14 +64,20 @@ def get_ddl_setting(user_id, setting_name, default_value=None):
             owner_value = getattr(Config, setting_name, default_value)
             return owner_value, "Owner"
         except (AttributeError, KeyError, TypeError, ValueError) as e:
-            LOGGER.warning(f"Config setting {setting_name} access failed: {e}, using default: {default_value}")
+            LOGGER.warning(
+                f"Config setting {setting_name} access failed: {e}, using default: {default_value}"
+            )
             return default_value, "Default"
         except Exception as e:
-            LOGGER.error(f"Unexpected error accessing Config.{setting_name}: {e}, using default: {default_value}")
+            LOGGER.error(
+                f"Unexpected error accessing Config.{setting_name}: {e}, using default: {default_value}"
+            )
             return default_value, "Default"
 
     except Exception as e:
-        LOGGER.error(f"Critical error in get_ddl_setting for {setting_name}: {e}, using default: {default_value}")
+        LOGGER.error(
+            f"Critical error in get_ddl_setting for {setting_name}: {e}, using default: {default_value}"
+        )
         return default_value, "Default"
 
 
@@ -1427,15 +1433,19 @@ Configure credentials for accessing private content and higher quality downloads
             )
 
             # Gofile settings
-            gofile_api_key, gofile_api_source = get_ddl_setting_local("GOFILE_API_KEY", "")
+            gofile_api_key, gofile_api_source = get_ddl_setting_local(
+                "GOFILE_API_KEY", ""
+            )
             gofile_folder, gofile_folder_source = get_ddl_setting_local(
                 "GOFILE_FOLDER_NAME", ""
             )
             gofile_public, gofile_public_source = get_ddl_setting_local(
                 "GOFILE_PUBLIC_LINKS", Config.GOFILE_PUBLIC_LINKS
             )
-            gofile_password_protection, gofile_password_source = get_ddl_setting_local(
-                "GOFILE_PASSWORD_PROTECTION", Config.GOFILE_PASSWORD_PROTECTION
+            gofile_password_protection, gofile_password_source = (
+                get_ddl_setting_local(
+                    "GOFILE_PASSWORD_PROTECTION", Config.GOFILE_PASSWORD_PROTECTION
+                )
             )
             gofile_default_password, gofile_default_password_source = (
                 get_ddl_setting_local("GOFILE_DEFAULT_PASSWORD", "")
@@ -1445,11 +1455,11 @@ Configure credentials for accessing private content and higher quality downloads
             )
 
             # Streamtape settings
-            streamtape_api_username, streamtape_username_source = get_ddl_setting_local(
-                "STREAMTAPE_API_USERNAME", ""
+            streamtape_api_username, streamtape_username_source = (
+                get_ddl_setting_local("STREAMTAPE_API_USERNAME", "")
             )
-            streamtape_api_password, streamtape_password_source = get_ddl_setting_local(
-                "STREAMTAPE_API_PASSWORD", ""
+            streamtape_api_password, streamtape_password_source = (
+                get_ddl_setting_local("STREAMTAPE_API_PASSWORD", "")
             )
             streamtape_folder, streamtape_folder_source = get_ddl_setting_local(
                 "STREAMTAPE_FOLDER_NAME", ""
@@ -1473,7 +1483,9 @@ Configure credentials for accessing private content and higher quality downloads
                 if (streamtape_api_username and streamtape_api_password)
                 else "❌ Credentials Required"
             )
-            devuploads_status = "✅ Ready" if devuploads_api_key else "❌ API Key Required"
+            devuploads_status = (
+                "✅ Ready" if devuploads_api_key else "❌ API Key Required"
+            )
 
             # Display values
             gofile_api_display = "Set" if gofile_api_key else "Not Set"
@@ -1483,21 +1495,39 @@ Configure credentials for accessing private content and higher quality downloads
                 f"{gofile_expiry} days" if gofile_expiry else "No expiry"
             )
 
-            streamtape_username_display = "Set" if streamtape_api_username else "Not Set"
-            streamtape_password_display = "Set" if streamtape_api_password else "Not Set"
+            streamtape_username_display = (
+                "Set" if streamtape_api_username else "Not Set"
+            )
+            streamtape_password_display = (
+                "Set" if streamtape_api_password else "Not Set"
+            )
             streamtape_folder_display = streamtape_folder or "None (Root folder)"
 
             devuploads_api_display = "Set" if devuploads_api_key else "Not Set"
             devuploads_folder_display = devuploads_folder or "None (Root folder)"
-            devuploads_public_display = "✅ Public" if devuploads_public else "🔒 Private"
+            devuploads_public_display = (
+                "✅ Public" if devuploads_public else "🔒 Private"
+            )
 
             # MediaFire settings
-            mediafire_email, mediafire_email_source = get_ddl_setting_local("MEDIAFIRE_EMAIL", "")
-            mediafire_password, mediafire_password_source = get_ddl_setting_local("MEDIAFIRE_PASSWORD", "")
-            mediafire_app_id, mediafire_app_id_source = get_ddl_setting_local("MEDIAFIRE_APP_ID", "")
-            mediafire_api_key, mediafire_api_key_source = get_ddl_setting_local("MEDIAFIRE_API_KEY", "")
+            mediafire_email, mediafire_email_source = get_ddl_setting_local(
+                "MEDIAFIRE_EMAIL", ""
+            )
+            mediafire_password, mediafire_password_source = get_ddl_setting_local(
+                "MEDIAFIRE_PASSWORD", ""
+            )
+            mediafire_app_id, mediafire_app_id_source = get_ddl_setting_local(
+                "MEDIAFIRE_APP_ID", ""
+            )
+            mediafire_api_key, mediafire_api_key_source = get_ddl_setting_local(
+                "MEDIAFIRE_API_KEY", ""
+            )
 
-            mediafire_status = "✅ Enabled" if (mediafire_email and mediafire_password and mediafire_app_id) else "❌ Disabled"
+            mediafire_status = (
+                "✅ Enabled"
+                if (mediafire_email and mediafire_password and mediafire_app_id)
+                else "❌ Disabled"
+            )
             mediafire_email_display = "Set" if mediafire_email else "Not Set"
             mediafire_password_display = "Set" if mediafire_password else "Not Set"
             mediafire_app_id_display = "Set" if mediafire_app_id else "Not Set"
@@ -1657,7 +1687,9 @@ Link Expiry: <code>{gofile_expiry_display}</code> ({gofile_expiry_source})
         buttons.data_button(
             "API Username", f"userset {user_id} menu STREAMTAPE_API_USERNAME"
         )
-        buttons.data_button("API Password", f"userset {user_id} menu STREAMTAPE_API_PASSWORD")
+        buttons.data_button(
+            "API Password", f"userset {user_id} menu STREAMTAPE_API_PASSWORD"
+        )
         buttons.data_button(
             "Folder Name", f"userset {user_id} menu STREAMTAPE_FOLDER_NAME"
         )
@@ -1750,7 +1782,9 @@ Folder Name: <code>{streamtape_folder_display}</code> ({streamtape_folder_source
         # Display values
         devuploads_api_display = "Set" if devuploads_api_key else "Not Set"
         devuploads_folder_display = devuploads_folder or "None (Root folder)"
-        devuploads_public_display = "✅ Public" if devuploads_public else "🔒 Private"
+        devuploads_public_display = (
+            "✅ Public" if devuploads_public else "🔒 Private"
+        )
 
         text = f"""<u><b>🚀 DevUploads Settings for {name}</b></u>
 
@@ -1797,17 +1831,29 @@ Public Files: <b>{devuploads_public_display}</b> ({devuploads_public_source})
             return owner_value, "Owner"
 
         # Get MediaFire settings
-        mediafire_email, mediafire_email_source = get_mediafire_setting("MEDIAFIRE_EMAIL", "")
-        mediafire_password, mediafire_password_source = get_mediafire_setting("MEDIAFIRE_PASSWORD", "")
-        mediafire_app_id, mediafire_app_id_source = get_mediafire_setting("MEDIAFIRE_APP_ID", "")
-        mediafire_api_key, mediafire_api_key_source = get_mediafire_setting("MEDIAFIRE_API_KEY", "")
+        mediafire_email, mediafire_email_source = get_mediafire_setting(
+            "MEDIAFIRE_EMAIL", ""
+        )
+        mediafire_password, mediafire_password_source = get_mediafire_setting(
+            "MEDIAFIRE_PASSWORD", ""
+        )
+        mediafire_app_id, mediafire_app_id_source = get_mediafire_setting(
+            "MEDIAFIRE_APP_ID", ""
+        )
+        mediafire_api_key, mediafire_api_key_source = get_mediafire_setting(
+            "MEDIAFIRE_API_KEY", ""
+        )
 
         # Display values
         mediafire_email_display = "Set" if mediafire_email else "Not Set"
         mediafire_password_display = "Set" if mediafire_password else "Not Set"
         mediafire_app_id_display = "Set" if mediafire_app_id else "Not Set"
         mediafire_api_key_display = "Set" if mediafire_api_key else "Not Set"
-        mediafire_status = "✅ Enabled" if (mediafire_email and mediafire_password and mediafire_app_id) else "❌ Disabled"
+        mediafire_status = (
+            "✅ Enabled"
+            if (mediafire_email and mediafire_password and mediafire_app_id)
+            else "❌ Disabled"
+        )
 
         text = f"""<u><b>🔥 MediaFire Settings for {name}</b></u>
 
@@ -1835,10 +1881,6 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
 
 <i>Get your credentials from <a href="https://www.mediafire.com/developers/">MediaFire Developers</a></i>
 <i>Email, Password, and App ID are required. API Key is optional for enhanced features.</i>"""
-
-
-
-
 
     else:
         # Show service buttons based on individual service availability
@@ -2135,7 +2177,9 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
         if Config.DDL_ENABLED:
             # Check if user has DDL settings
             user_ddl_settings = any(
-                key.startswith(("GOFILE_", "STREAMTAPE_", "DEVUPLOADS_", "MEDIAFIRE_", "DDL_"))
+                key.startswith(
+                    ("GOFILE_", "STREAMTAPE_", "DEVUPLOADS_", "MEDIAFIRE_", "DDL_")
+                )
                 for key in user_dict
             )
             if user_ddl_settings:
@@ -2567,7 +2611,12 @@ async def set_option(_, message, option):
                 auto_delete_message(error_msg, time=300)
             )  # Auto-delete after 5 minutes
             return
-    elif option in ["GOFILE_API_KEY", "STREAMTAPE_API_PASSWORD", "STREAMTAPE_API_USERNAME", "DEVUPLOADS_API_KEY"]:
+    elif option in [
+        "GOFILE_API_KEY",
+        "STREAMTAPE_API_PASSWORD",
+        "STREAMTAPE_API_USERNAME",
+        "DEVUPLOADS_API_KEY",
+    ]:
         # Special handling for DDL credentials - store in regular user settings
         # This ensures compatibility with the display functions
         update_user_ldata(user_id, option, value)
@@ -2852,7 +2901,15 @@ async def edit_user_settings(client, query):
                 and not Config.YOUTUBE_UPLOAD_ENABLED
             )
             or (
-                data[2] in ["ddl", "ddl_general", "ddl_gofile", "ddl_streamtape", "ddl_devuploads", "ddl_mediafire"]
+                data[2]
+                in [
+                    "ddl",
+                    "ddl_general",
+                    "ddl_gofile",
+                    "ddl_streamtape",
+                    "ddl_devuploads",
+                    "ddl_mediafire",
+                ]
                 and not Config.DDL_ENABLED
             )
             or (

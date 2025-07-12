@@ -19,10 +19,10 @@ from tenacity import (
 from bot import LOGGER, user_data
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.files_utils import get_mime_type_sync
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.gofile import Gofile
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.streamtape import Streamtape
 from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.devuploads import DevUploads
+from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.gofile import Gofile
 from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.mediafire import MediaFire
+from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.streamtape import Streamtape
 
 
 class ProgressFileReader(BufferedReader):
@@ -55,8 +55,6 @@ class DDLUploader:
         self.__asyncSession = None
         self.__user_id = self.__listener.message.from_user.id
 
-
-
     async def __user_settings(self):
         """Load DDL settings with user priority over owner settings"""
         user_dict = user_data.get(self.__user_id, {})
@@ -69,7 +67,9 @@ class DDLUploader:
             return getattr(Config, owner_attr, default_value)
 
         # Get DDL server preference
-        self.__default_server = get_ddl_setting("DDL_SERVER", "DDL_DEFAULT_SERVER", "gofile")
+        self.__default_server = get_ddl_setting(
+            "DDL_SERVER", "DDL_DEFAULT_SERVER", "gofile"
+        )
 
         # Build DDL servers configuration
         self.__ddl_servers = {}
@@ -91,7 +91,9 @@ class DDLUploader:
         )  # Enabled if both API username and password are provided
         # Combine API username and password for compatibility with existing code
         streamtape_credentials = (
-            f"{streamtape_api_username}:{streamtape_api_password}" if streamtape_enabled else ""
+            f"{streamtape_api_username}:{streamtape_api_password}"
+            if streamtape_enabled
+            else ""
         )
         self.__ddl_servers["streamtape"] = (
             streamtape_enabled,
@@ -102,23 +104,29 @@ class DDLUploader:
         devuploads_api_key = get_ddl_setting(
             "DEVUPLOADS_API_KEY", "DEVUPLOADS_API_KEY", ""
         )
-        devuploads_enabled = bool(devuploads_api_key)  # Enabled if API key is provided
+        devuploads_enabled = bool(
+            devuploads_api_key
+        )  # Enabled if API key is provided
         self.__ddl_servers["devuploads"] = (devuploads_enabled, devuploads_api_key)
 
         # MediaFire configuration
         mediafire_email = get_ddl_setting("MEDIAFIRE_EMAIL", "MEDIAFIRE_EMAIL", "")
-        mediafire_password = get_ddl_setting("MEDIAFIRE_PASSWORD", "MEDIAFIRE_PASSWORD", "")
-        mediafire_app_id = get_ddl_setting("MEDIAFIRE_APP_ID", "MEDIAFIRE_APP_ID", "")
+        mediafire_password = get_ddl_setting(
+            "MEDIAFIRE_PASSWORD", "MEDIAFIRE_PASSWORD", ""
+        )
+        mediafire_app_id = get_ddl_setting(
+            "MEDIAFIRE_APP_ID", "MEDIAFIRE_APP_ID", ""
+        )
         mediafire_enabled = bool(
             mediafire_email and mediafire_password and mediafire_app_id
         )  # Enabled if all required credentials are provided
         # Combine credentials for compatibility with existing code
         mediafire_credentials = (
-            f"{mediafire_email}:{mediafire_password}:{mediafire_app_id}" if mediafire_enabled else ""
+            f"{mediafire_email}:{mediafire_password}:{mediafire_app_id}"
+            if mediafire_enabled
+            else ""
         )
         self.__ddl_servers["mediafire"] = (mediafire_enabled, mediafire_credentials)
-
-
 
     def __progress_callback(self, current):
         chunk_size = current - self.last_uploaded
@@ -138,7 +146,9 @@ class DDLUploader:
             # Set timeout for upload (30 minutes total, 5 minutes for connection)
             timeout = ClientTimeout(total=1800, connect=300)
             async with ClientSession(timeout=timeout) as self.__asyncSession:
-                async with self.__asyncSession.post(url, data=data, headers=headers) as resp:
+                async with self.__asyncSession.post(
+                    url, data=data, headers=headers
+                ) as resp:
                     response_text = await resp.text()
                     LOGGER.info(f"DDL Upload Response Status: {resp.status}")
 
@@ -168,11 +178,11 @@ class DDLUploader:
         all_links = {}
 
         # Check if specific server is requested
-        up_dest = getattr(self.__listener, 'up_dest', 'ddl')
+        up_dest = getattr(self.__listener, "up_dest", "ddl")
         target_server = None
 
-        if up_dest.startswith('ddl:'):
-            target_server = up_dest.split(':', 1)[1]
+        if up_dest.startswith("ddl:"):
+            target_server = up_dest.split(":", 1)[1]
             LOGGER.info(f"DDL: Uploading to specific server: {target_server}")
         else:
             target_server = self.__default_server
@@ -221,7 +231,6 @@ class DDLUploader:
                     )
                     raise Exception(error_msg)
 
-
                 nlink = await streamtape_client.upload(file_path)
                 if nlink:
                     all_links["StreamTape"] = nlink
@@ -248,26 +257,28 @@ class DDLUploader:
             error_msg = str(e)
             # Log detailed error for debugging
             LOGGER.error(f"❌ {target_server.title()} upload failed: {error_msg}")
-            raise Exception(f"❌ {target_server.title()} upload failed: {error_msg}") from e
+            raise Exception(
+                f"❌ {target_server.title()} upload failed: {error_msg}"
+            ) from e
 
         # Check if upload was successful
         if not all_links:
-            raise Exception(f"❌ {target_server.title()} upload failed: No download link generated")
-
+            raise Exception(
+                f"❌ {target_server.title()} upload failed: No download link generated"
+            )
 
         # Log successful uploads
         if len(all_links) > 1:
-            LOGGER.info(f"✅ Successfully uploaded to {len(all_links)} DDL servers: {', '.join(all_links.keys())}")
+            LOGGER.info(
+                f"✅ Successfully uploaded to {len(all_links)} DDL servers: {', '.join(all_links.keys())}"
+            )
 
         return all_links
 
     async def upload(self, file_name, size):
         # If file_name is empty, use the path directly (new behavior)
         # Otherwise, construct path from base path + file_name (legacy behavior)
-        if file_name:
-            item_path = f"{self.__path}/{file_name}"
-        else:
-            item_path = self.__path
+        item_path = f"{self.__path}/{file_name}" if file_name else self.__path
 
         LOGGER.info(f"Uploading: {item_path} via DDL")
         await self.__user_settings()

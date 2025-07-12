@@ -264,7 +264,6 @@ DEFAULT_VALUES = {
     "MEDIAFIRE_PASSWORD": "",
     "MEDIAFIRE_APP_ID": "",
     "MEDIAFIRE_API_KEY": "",
-
     # Google Drive Upload Settings
     "GDRIVE_UPLOAD_ENABLED": True,
     # MEGA Settings
@@ -4419,7 +4418,6 @@ The following MEGA security features are <b>not supported</b> by MEGA SDK v4.8.0
         buttons.data_button("🚀 DevUploads Settings", "botset ddl_devuploads")
         buttons.data_button("🔥 MediaFire Settings", "botset ddl_mediafire")
 
-
         if state == "view":
             buttons.data_button("✏️ Edit", "botset edit ddl")
         else:
@@ -4440,13 +4438,18 @@ The following MEGA security features are <b>not supported</b> by MEGA SDK v4.8.0
             if (Config.STREAMTAPE_API_USERNAME and Config.STREAMTAPE_API_PASSWORD)
             else "❌ Not Set"
         )
-        devuploads_api_status = "✅ Set" if Config.DEVUPLOADS_API_KEY else "❌ Not Set"
+        devuploads_api_status = (
+            "✅ Set" if Config.DEVUPLOADS_API_KEY else "❌ Not Set"
+        )
         mediafire_api_status = (
             "✅ Set"
-            if (Config.MEDIAFIRE_EMAIL and Config.MEDIAFIRE_PASSWORD and Config.MEDIAFIRE_APP_ID)
+            if (
+                Config.MEDIAFIRE_EMAIL
+                and Config.MEDIAFIRE_PASSWORD
+                and Config.MEDIAFIRE_APP_ID
+            )
             else "❌ Not Set"
         )
-
 
         msg = f"""<b>📤 DDL (Direct Download Link) Settings</b> | State: {state}
 
@@ -4617,8 +4620,12 @@ Get your API key from <a href="https://gofile.io/myProfile">Gofile Profile</a>""
         buttons.data_button("❌ Close", "botset close", "footer")
 
         # Get current Streamtape settings
-        streamtape_api_username = "✅ Set" if Config.STREAMTAPE_API_USERNAME else "❌ Not Set"
-        streamtape_api_password = "✅ Set" if Config.STREAMTAPE_API_PASSWORD else "❌ Not Set"
+        streamtape_api_username = (
+            "✅ Set" if Config.STREAMTAPE_API_USERNAME else "❌ Not Set"
+        )
+        streamtape_api_password = (
+            "✅ Set" if Config.STREAMTAPE_API_PASSWORD else "❌ Not Set"
+        )
         streamtape_folder = Config.STREAMTAPE_FOLDER_NAME or "None (Root folder)"
 
         msg = f"""<b>🎬 Streamtape Server Settings</b> | State: {state}
@@ -4677,7 +4684,9 @@ Get your API credentials from <a href="https://streamtape.com/accpanel">Streamta
         # Get current DevUploads settings
         devuploads_api_key = "✅ Set" if Config.DEVUPLOADS_API_KEY else "❌ Not Set"
         devuploads_folder = Config.DEVUPLOADS_FOLDER_NAME or "None (Root folder)"
-        devuploads_public = "✅ Public" if Config.DEVUPLOADS_PUBLIC_FILES else "🔒 Private"
+        devuploads_public = (
+            "✅ Public" if Config.DEVUPLOADS_PUBLIC_FILES else "🔒 Private"
+        )
 
         msg = f"""<b>🚀 DevUploads Settings</b> | State: {state}
 
@@ -4702,8 +4711,6 @@ Get your API credentials from <a href="https://streamtape.com/accpanel">Streamta
 
 <b>Note:</b>
 Get your API key from <a href="https://devuploads.com/api">DevUploads API</a>"""
-
-
 
     elif key == "ddl_mediafire":
         # MediaFire Settings
@@ -10351,7 +10358,6 @@ async def edit_bot_settings(client, query):
         "ddl_streamtape",
         "ddl_devuploads",
         "ddl_mediafire",
-
     ]:
         await query.answer()
         # Get the current state before making changes
@@ -13356,8 +13362,6 @@ async def edit_bot_settings(client, query):
         globals()["state"] = current_state
         await update_buttons(message, "ddl_mediafire")
 
-
-
     elif data[1] == "default_taskmonitor":
         await query.answer("Resetting all task monitoring settings to default...")
         # Reset all task monitoring settings to default
@@ -13568,7 +13572,6 @@ async def edit_bot_settings(client, query):
         "ddl_streamtape",
         "ddl_devuploads",
         "ddl_mediafire",
-
     ]:
         await query.answer()
         # Set the global state to edit mode
@@ -13636,7 +13639,6 @@ async def edit_bot_settings(client, query):
         "ddl_streamtape",
         "ddl_devuploads",
         "ddl_mediafire",
-
     ]:
         await query.answer()
         # Set the global state to view mode
@@ -17540,7 +17542,8 @@ No database-only files found."""
         }:
             return_menu = "operations"
         elif (
-            key.startswith(("GOFILE_", "STREAMTAPE_", "DEVUPLOADS_", "MEDIAFIRE_")) or key == "DDL_DEFAULT_SERVER"
+            key.startswith(("GOFILE_", "STREAMTAPE_", "DEVUPLOADS_", "MEDIAFIRE_"))
+            or key == "DDL_DEFAULT_SERVER"
         ):
             # For DDL settings, determine which submenu to return to
             if key == "DDL_DEFAULT_SERVER":

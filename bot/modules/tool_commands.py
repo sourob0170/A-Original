@@ -171,7 +171,6 @@ async def download_file_from_message(message: Message) -> str | None:
                 # If download fails with photo iteration error, try alternative approach
                 if "not iterable" in str(e) and reply_msg.photo:
                     # For kurigram photo objects, try downloading using file_id
-                    from pyrogram import Client
                     downloaded_path = await TgClient.bot.download_media(
                         reply_msg.photo.file_id, file_name=file_path
                     )

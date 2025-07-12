@@ -23,33 +23,36 @@ class Streamtape:
     async def get_account_info(self):
         """Get account information - useful for debugging/validation"""
         try:
-            async with ClientSession() as session, session.get(
-                f"{self.base_url}/account/info?login={self.__api_username}&key={self.__api_password}"
-            ) as response:
+            async with (
+                ClientSession() as session,
+                session.get(
+                    f"{self.base_url}/account/info?login={self.__api_username}&key={self.__api_password}"
+                ) as response,
+            ):
                 if response.status == 200:
                     data = await response.json()
                     if data.get("status") == 200:
                         return data["result"]
+                    error_msg = data.get("msg", "Unknown error")
+                    if "login failed" in error_msg.lower():
+                        LOGGER.error(
+                            f"Streamtape: Invalid login credentials - {error_msg}"
+                        )
+                    elif "invalid" in error_msg.lower():
+                        LOGGER.error(f"Streamtape: Invalid API key - {error_msg}")
                     else:
-                        error_msg = data.get('msg', 'Unknown error')
-                        if "login failed" in error_msg.lower():
-                            LOGGER.error(f"Streamtape: Invalid login credentials - {error_msg}")
-                        elif "invalid" in error_msg.lower():
-                            LOGGER.error(f"Streamtape: Invalid API key - {error_msg}")
-                        else:
-                            LOGGER.error(f"Streamtape account info error: {error_msg}")
-                        return None
-                else:
-                    LOGGER.error(f"Streamtape account info HTTP error: {response.status}")
+                        LOGGER.error(f"Streamtape account info error: {error_msg}")
                     return None
+                LOGGER.error(
+                    f"Streamtape account info HTTP error: {response.status}"
+                )
+                return None
         except Exception as e:
             LOGGER.error(f"Streamtape account info exception: {e}")
             return None
 
     async def __getUploadURL(self, folder=None, sha256=None, httponly=False):
-        _url = (
-            f"{self.base_url}/file/ul?login={self.__api_username}&key={self.__api_password}"
-        )
+        _url = f"{self.base_url}/file/ul?login={self.__api_username}&key={self.__api_password}"
         if folder is not None:
             _url += f"&folder={folder}"
         if sha256 is not None:
@@ -64,7 +67,9 @@ class Streamtape:
                     if data.get("status") == 200:
                         result = data.get("result")
                         if not result or "url" not in result:
-                            raise Exception("Invalid API response: missing upload URL")
+                            raise Exception(
+                                "Invalid API response: missing upload URL"
+                            )
                         return result
                     error_msg = data.get("msg", "Unknown API error")
                     raise Exception(f"Streamtape API error: {error_msg}")
@@ -77,7 +82,9 @@ class Streamtape:
     ):
         """Upload file to Streamtape with user settings integration"""
         if Path(file_path).suffix.lower() not in ALLOWED_EXTS:
-            LOGGER.warning(f"Streamtape: Skipping '{file_path}' due to disallowed extension")
+            LOGGER.warning(
+                f"Streamtape: Skipping '{file_path}' due to disallowed extension"
+            )
             return f"Skipping '{file_path}' due to disallowed extension."
 
         file_name = Path(file_path).name
@@ -117,7 +124,6 @@ class Streamtape:
         if upload_info is None:
             LOGGER.error("Streamtape: Failed to get upload URL")
             return None
-
 
         if self.dluploader.is_cancelled:
             return None
@@ -238,7 +244,11 @@ class Streamtape:
         if folder is not None:
             url += f"&folder={folder}"
         async with ClientSession() as session, session.get(url) as response:
-            if response.status == 200 and (data := await response.json()) and data["status"] == 200:
+            if (
+                response.status == 200
+                and (data := await response.json())
+                and data["status"] == 200
+            ):
                 return data["result"]
         return None
 

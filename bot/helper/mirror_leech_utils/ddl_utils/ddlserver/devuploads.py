@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import asyncio
-import json
 import re
 from pathlib import Path
 from urllib.parse import urlencode
 
-from aiohttp import ClientSession, ClientTimeout, FormData
+from aiohttp import ClientSession, ClientTimeout
 
 from bot import LOGGER, user_data
 from bot.core.config_manager import Config
@@ -33,9 +31,9 @@ class DevUploads:
                 raise Exception("Invalid DevUploads API key")
 
             # Check storage limits and premium status
-            storage_left = account_info.get('storage_left', 0)
+            storage_left = account_info.get("storage_left", 0)
             storage_left_mb = storage_left / (1024 * 1024) if storage_left else 0
-            premium_expire = account_info.get('premium_expire', '')
+            premium_expire = account_info.get("premium_expire", "")
 
             LOGGER.info(
                 f"DevUploads: Account validated - {account_info.get('email', 'Unknown')}"
@@ -46,8 +44,11 @@ class DevUploads:
             # Check premium status
             if premium_expire:
                 from datetime import datetime
+
                 try:
-                    expire_date = datetime.strptime(premium_expire, '%Y-%m-%d %H:%M:%S')
+                    expire_date = datetime.strptime(
+                        premium_expire, "%Y-%m-%d %H:%M:%S"
+                    )
                     current_date = datetime.now()
                     if expire_date <= current_date:
                         expired_for = current_date - expire_date
@@ -57,14 +58,19 @@ class DevUploads:
                             f"Solutions: 1) Renew premium subscription, 2) Use different API key, "
                             f"3) Use alternative DDL servers (Gofile, Streamtape, etc.)"
                         )
-                    else:
-                        LOGGER.info(f"DevUploads: Premium account active until {premium_expire}")
+                    LOGGER.info(
+                        f"DevUploads: Premium account active until {premium_expire}"
+                    )
                 except ValueError:
-                    LOGGER.warning(f"DevUploads: Could not parse premium expiry date: {premium_expire}")
+                    LOGGER.warning(
+                        f"DevUploads: Could not parse premium expiry date: {premium_expire}"
+                    )
 
             # Check if account has sufficient storage
             if storage_left_mb < 1:  # Less than 1 MB available
-                raise Exception(f"Insufficient storage space. Available: {storage_left_mb:.2f} MB")
+                raise Exception(
+                    f"Insufficient storage space. Available: {storage_left_mb:.2f} MB"
+                )
             LOGGER.info(f"DevUploads: Starting upload for path: {file_path}")
 
             if await self._is_file(file_path):
@@ -85,8 +91,7 @@ class DevUploads:
 
                 LOGGER.info(f"DevUploads: File upload successful: {download_link}")
                 return download_link
-            else:
-                raise Exception("DevUploads only supports single file uploads")
+            raise Exception("DevUploads only supports single file uploads")
 
         except Exception as e:
             LOGGER.error(f"DevUploads upload error: {e}")
@@ -133,12 +138,15 @@ class DevUploads:
                             if upload_url and sess_id:
                                 self.upload_server = upload_url
                                 self.session_id = sess_id
-                                LOGGER.info(f"DevUploads: Got upload server: {upload_url}")
+                                LOGGER.info(
+                                    f"DevUploads: Got upload server: {upload_url}"
+                                )
                                 LOGGER.info(f"DevUploads: Got session ID: {sess_id}")
                                 return upload_url
-                            else:
-                                LOGGER.error(f"DevUploads: Missing upload_url or sess_id in response: {result}")
-                                return None
+                            LOGGER.error(
+                                f"DevUploads: Missing upload_url or sess_id in response: {result}"
+                            )
+                            return None
                     return None
         except Exception as e:
             LOGGER.error(f"DevUploads: Failed to get upload server: {e}")

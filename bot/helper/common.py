@@ -10174,18 +10174,24 @@ class TaskConfig:
         # Determine folder name for output filename
         # Priority: 1) -m flag value, 2) extracted folder name, 3) directory name
         merge_folder_name = None
-        if hasattr(self, 'folder_name') and self.folder_name:
+        if hasattr(self, "folder_name") and self.folder_name:
             # Use -m flag value (highest priority)
             merge_folder_name = self.folder_name.strip("/")
-            LOGGER.info(f"Using -m flag folder name for merge output: {merge_folder_name}")
-        elif hasattr(self, 'name') and self.name and not self.name.isdigit():
+            LOGGER.info(
+                f"Using -m flag folder name for merge output: {merge_folder_name}"
+            )
+        elif hasattr(self, "name") and self.name and not self.name.isdigit():
             # Use extracted folder name if it's not just a task ID
             merge_folder_name = self.name
-            LOGGER.info(f"Using extracted folder name for merge output: {merge_folder_name}")
+            LOGGER.info(
+                f"Using extracted folder name for merge output: {merge_folder_name}"
+            )
         else:
             # Use directory name as fallback
             merge_folder_name = ospath.basename(dl_path)
-            LOGGER.info(f"Using directory name for merge output: {merge_folder_name}")
+            LOGGER.info(
+                f"Using directory name for merge output: {merge_folder_name}"
+            )
 
         LOGGER.info(
             f"Merge analysis recommended approach: {analysis['recommended_approach']}"
@@ -10198,22 +10204,29 @@ class TaskConfig:
 
         # Check if there are enough files to merge
         # Skip merging if there's only one file of each type
-        total_video_files = len(analysis['video_files'])
-        total_audio_files = len(analysis['audio_files'])
-        total_subtitle_files = len(analysis['subtitle_files'])
-        total_image_files = len(analysis['image_files'])
-        total_document_files = len(analysis['document_files'])
+        total_video_files = len(analysis["video_files"])
+        total_audio_files = len(analysis["audio_files"])
+        total_subtitle_files = len(analysis["subtitle_files"])
+        total_image_files = len(analysis["image_files"])
+        total_document_files = len(analysis["document_files"])
 
         # For single file scenarios, skip merging unless it's a mixed media scenario
-        if (total_video_files <= 1 and total_audio_files <= 1 and
-            total_subtitle_files <= 1 and total_image_files <= 1 and
-            total_document_files <= 1):
-
+        if (
+            total_video_files <= 1
+            and total_audio_files <= 1
+            and total_subtitle_files <= 1
+            and total_image_files <= 1
+            and total_document_files <= 1
+        ):
             # Check if it's a mixed media scenario (video + audio/subtitle)
-            has_mixed_media = (total_video_files == 1 and (total_audio_files == 1 or total_subtitle_files == 1))
+            has_mixed_media = total_video_files == 1 and (
+                total_audio_files == 1 or total_subtitle_files == 1
+            )
 
             if not has_mixed_media:
-                LOGGER.info("Merge not applied: only single files found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only single files found, nothing to merge"
+                )
                 return dl_path
 
         # Check for merge flags
@@ -10233,7 +10246,9 @@ class TaskConfig:
                 LOGGER.info("Merge not applied: no video files found")
                 return dl_path
             if len(analysis["video_files"]) <= 1:
-                LOGGER.info("Merge not applied: only one video file found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only one video file found, nothing to merge"
+                )
                 return dl_path
             # Only use video files
             analysis["audio_files"] = []
@@ -10264,7 +10279,9 @@ class TaskConfig:
                 LOGGER.info("Merge not applied: no audio files found")
                 return dl_path
             if len(analysis["audio_files"]) <= 1:
-                LOGGER.info("Merge not applied: only one audio file found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only one audio file found, nothing to merge"
+                )
                 return dl_path
             # Only use audio files
             analysis["video_files"] = []
@@ -10295,7 +10312,9 @@ class TaskConfig:
                 LOGGER.info("Merge not applied: no subtitle files found")
                 return dl_path
             if len(analysis["subtitle_files"]) <= 1:
-                LOGGER.info("Merge not applied: only one subtitle file found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only one subtitle file found, nothing to merge"
+                )
                 return dl_path
             # Only use subtitle files
             analysis["video_files"] = []
@@ -10326,7 +10345,9 @@ class TaskConfig:
                 LOGGER.info("Merge not applied: no image files found")
                 return dl_path
             if len(analysis["image_files"]) <= 1:
-                LOGGER.info("Merge not applied: only one image file found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only one image file found, nothing to merge"
+                )
                 return dl_path
             # Only use image files
             analysis["video_files"] = []
@@ -10347,7 +10368,9 @@ class TaskConfig:
                 LOGGER.info("Merge not applied: no PDF files found")
                 return dl_path
             if len(pdf_files) <= 1:
-                LOGGER.info("Merge not applied: only one PDF file found, nothing to merge")
+                LOGGER.info(
+                    "Merge not applied: only one PDF file found, nothing to merge"
+                )
                 return dl_path
             # Only use PDF files
             analysis["video_files"] = []
@@ -10619,7 +10642,10 @@ class TaskConfig:
                         )
                     elif self.merge_subtitle and analysis["subtitle_files"]:
                         cmd, output_file = await get_merge_filter_complex_cmd(
-                            analysis["subtitle_files"], "subtitle", "srt", merge_folder_name
+                            analysis["subtitle_files"],
+                            "subtitle",
+                            "srt",
+                            merge_folder_name,
                         )
                     else:
                         cmd, output_file = None, None
@@ -10657,7 +10683,10 @@ class TaskConfig:
                         )
                     elif self.merge_subtitle and analysis["subtitle_files"]:
                         cmd, output_file = await get_merge_concat_demuxer_cmd(
-                            analysis["subtitle_files"], "srt", "subtitle", merge_folder_name
+                            analysis["subtitle_files"],
+                            "srt",
+                            "subtitle",
+                            merge_folder_name,
                         )
                     else:
                         cmd, output_file = None, None
@@ -10705,7 +10734,10 @@ class TaskConfig:
                         )
                     elif analysis["subtitle_files"]:
                         cmd, output_file = await get_merge_concat_demuxer_cmd(
-                            analysis["subtitle_files"], "srt", "subtitle", merge_folder_name
+                            analysis["subtitle_files"],
+                            "srt",
+                            "subtitle",
+                            merge_folder_name,
                         )
                     else:
                         cmd, output_file = None, None
@@ -10838,7 +10870,10 @@ class TaskConfig:
                         )
                     elif analysis["subtitle_files"]:
                         cmd, output_file = await get_merge_filter_complex_cmd(
-                            analysis["subtitle_files"], "subtitle", "srt", merge_folder_name
+                            analysis["subtitle_files"],
+                            "subtitle",
+                            "srt",
+                            merge_folder_name,
                         )
                     else:
                         cmd, output_file = None, None
@@ -12096,7 +12131,9 @@ class TaskConfig:
         # Skip add processing if there's only one supported file in the directory
         if not self.is_file:
             supported_files = []
-            for dirpath, _, files in await sync_to_async(walk, dl_path, topdown=False):
+            for dirpath, _, files in await sync_to_async(
+                walk, dl_path, topdown=False
+            ):
                 for file_ in files:
                     file_path = ospath.join(dirpath, file_)
                     file_ext = ospath.splitext(file_path)[1].lower()
@@ -12107,15 +12144,42 @@ class TaskConfig:
 
                     # Check if it's a media file that can be processed
                     if file_ext in [
-                        ".mkv", ".mp4", ".avi", ".mov", ".webm", ".m4v", ".ts", ".3gp",
-                        ".flv", ".wmv", ".mpeg", ".hevc", ".m2ts", ".vob", ".divx", ".mpg",
-                        ".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac", ".ac3",
-                        ".wma", ".aiff", ".alac", ".dts", ".amr"
+                        ".mkv",
+                        ".mp4",
+                        ".avi",
+                        ".mov",
+                        ".webm",
+                        ".m4v",
+                        ".ts",
+                        ".3gp",
+                        ".flv",
+                        ".wmv",
+                        ".mpeg",
+                        ".hevc",
+                        ".m2ts",
+                        ".vob",
+                        ".divx",
+                        ".mpg",
+                        ".mp3",
+                        ".m4a",
+                        ".flac",
+                        ".wav",
+                        ".ogg",
+                        ".opus",
+                        ".aac",
+                        ".ac3",
+                        ".wma",
+                        ".aiff",
+                        ".alac",
+                        ".dts",
+                        ".amr",
                     ]:
                         supported_files.append(file_path)
 
             if len(supported_files) <= 1 and not using_multi_input:
-                LOGGER.info("Add not applied: only one or no supported media files found, nothing to add")
+                LOGGER.info(
+                    "Add not applied: only one or no supported media files found, nothing to add"
+                )
                 return dl_path
 
         # Initialize variables
@@ -13412,9 +13476,6 @@ def is_mediafire_destination(destination):
     )
 
 
-
-
-
 def validate_ddl_config(user_id=None):
     """Validate DDL configuration for upload.
 
@@ -13461,12 +13522,12 @@ def validate_ddl_config(user_id=None):
 
     # Check MediaFire
     mediafire_email = get_ddl_setting("MEDIAFIRE_EMAIL", "MEDIAFIRE_EMAIL", "")
-    mediafire_password = get_ddl_setting("MEDIAFIRE_PASSWORD", "MEDIAFIRE_PASSWORD", "")
+    mediafire_password = get_ddl_setting(
+        "MEDIAFIRE_PASSWORD", "MEDIAFIRE_PASSWORD", ""
+    )
     mediafire_app_id = get_ddl_setting("MEDIAFIRE_APP_ID", "MEDIAFIRE_APP_ID", "")
     if mediafire_email and mediafire_password and mediafire_app_id:
         has_configured_server = True
-
-
 
     if not has_configured_server:
         return (

@@ -85,5 +85,3 @@ class BotCommands:
     NSFWTestCommand = f"nsfwtest{i}"
     # Scraping Commands
     ScrapCommand = f"scrap{i}"
-
-

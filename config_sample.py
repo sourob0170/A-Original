@@ -138,7 +138,9 @@ MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
 
 # DDL (Direct Download Link) Upload Settings
 DDL_ENABLED = True  # Enable/disable DDL upload feature
-DDL_DEFAULT_SERVER = "gofile"  # Default DDL server: gofile, streamtape, devuploads, mediafire
+DDL_DEFAULT_SERVER = (
+    "gofile"  # Default DDL server: gofile, streamtape, devuploads, mediafire
+)
 
 # Gofile Settings (Enabled automatically when API key is provided)
 GOFILE_API_KEY = ""  # Default Gofile API key (can be overridden per user)

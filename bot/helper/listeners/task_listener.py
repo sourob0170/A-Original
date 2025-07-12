@@ -1050,7 +1050,9 @@ class TaskListener(TaskConfig):
             await add_mega_upload(self, up_path)
         elif self.up_dest == "ddl" or self.up_dest.startswith("ddl:"):
             # DDL upload using DDL engine
-            from bot.helper.common import validate_ddl_config, get_ddl_server_from_destination
+            from bot.helper.common import (
+                validate_ddl_config,
+            )
             from bot.helper.mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
             from bot.helper.mirror_leech_utils.status_utils.ddl_status import (
                 DDLStatus,
@@ -1061,8 +1063,6 @@ class TaskListener(TaskConfig):
             if not is_valid:
                 await self.on_upload_error(error_msg)
                 return
-
-
 
             # Ensure we have a proper task name for DDL upload
             upload_name = self.name or "Unknown Task"
@@ -1086,7 +1086,9 @@ class TaskListener(TaskConfig):
                 task_dict[self.mid] = DDLStatus(ddl, size, self.message, gid, None)
             await gather(
                 update_status_message(self.message.chat.id),
-                ddl.upload("", size),  # Pass empty string since path is already set in constructor
+                ddl.upload(
+                    "", size
+                ),  # Pass empty string since path is already set in constructor
             )
             del ddl
         elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
@@ -1419,7 +1421,8 @@ class TaskListener(TaskConfig):
                     )
                     button = buttons.build_menu(1)
             elif isinstance(link, dict) and any(
-                key in ["GoFile", "StreamTape", "DevUploads", "MediaFire"] for key in link
+                key in ["GoFile", "StreamTape", "DevUploads", "MediaFire"]
+                for key in link
             ):
                 # DDL upload result
                 msg += "\n\n<b>Type: </b>DDL Upload"
@@ -1843,7 +1846,7 @@ class TaskListener(TaskConfig):
                 return
 
             # Filter out hidden files and system files
-            content_files = [f for f in dir_contents if not f.startswith('.')]
+            content_files = [f for f in dir_contents if not f.startswith(".")]
 
             if len(content_files) == 1:
                 # Single item extracted - use its name
@@ -1853,32 +1856,40 @@ class TaskListener(TaskConfig):
                 if await aiopath.isdir(single_item_path):
                     # Single folder extracted - use folder name
                     self.name = single_item
-                    LOGGER.info(f"Updated task name after extraction (single folder): {self.name}")
-                else:
-                    # Single file extracted - use base name without extension for archives
-                    if is_archive(self.name):
-                        try:
-                            self.name = get_base_name(self.name)
-                            LOGGER.info(f"Updated task name after extraction (archive base): {self.name}")
-                        except Exception:
-                            self.name = single_item
-                            LOGGER.info(f"Updated task name after extraction (single file): {self.name}")
-                    else:
-                        self.name = single_item
-                        LOGGER.info(f"Updated task name after extraction (single file): {self.name}")
-            else:
-                # Multiple items extracted - try to find a common meaningful name
-                if is_archive(self.name):
+                    LOGGER.info(
+                        f"Updated task name after extraction (single folder): {self.name}"
+                    )
+                # Single file extracted - use base name without extension for archives
+                elif is_archive(self.name):
                     try:
-                        # Use the base name of the original archive
                         self.name = get_base_name(self.name)
-                        LOGGER.info(f"Updated task name after extraction (archive base): {self.name}")
+                        LOGGER.info(
+                            f"Updated task name after extraction (archive base): {self.name}"
+                        )
                     except Exception:
-                        # Fallback: try to extract meaningful name from first file
-                        self._extract_meaningful_name_from_files(content_files)
+                        self.name = single_item
+                        LOGGER.info(
+                            f"Updated task name after extraction (single file): {self.name}"
+                        )
                 else:
-                    # Try to extract meaningful name from files
+                    self.name = single_item
+                    LOGGER.info(
+                        f"Updated task name after extraction (single file): {self.name}"
+                    )
+            # Multiple items extracted - try to find a common meaningful name
+            elif is_archive(self.name):
+                try:
+                    # Use the base name of the original archive
+                    self.name = get_base_name(self.name)
+                    LOGGER.info(
+                        f"Updated task name after extraction (archive base): {self.name}"
+                    )
+                except Exception:
+                    # Fallback: try to extract meaningful name from first file
                     self._extract_meaningful_name_from_files(content_files)
+            else:
+                # Try to extract meaningful name from files
+                self._extract_meaningful_name_from_files(content_files)
 
         except Exception as e:
             LOGGER.warning(f"Failed to update name after extraction: {e}")
@@ -1888,39 +1899,66 @@ class TaskListener(TaskConfig):
         """Extract a meaningful name from a list of files"""
         try:
             # Look for video files first (common case for TV shows/movies)
-            video_files = [f for f in files if f.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'))]
+            video_files = [
+                f
+                for f in files
+                if f.lower().endswith(
+                    (".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm")
+                )
+            ]
 
             if video_files:
                 # Use the first video file to extract series/movie name
                 first_video = video_files[0]
 
                 # Try to extract series name (everything before season/episode info)
-                if any(pattern in first_video.upper() for pattern in ['S01E', 'S1E', 'SEASON', 'EPISODE']):
+                if any(
+                    pattern in first_video.upper()
+                    for pattern in ["S01E", "S1E", "SEASON", "EPISODE"]
+                ):
                     # This looks like a TV series
-                    parts = first_video.replace('.', ' ').split()
+                    parts = first_video.replace(".", " ").split()
                     series_parts = []
 
                     for part in parts:
                         # Stop at season/episode indicators
-                        if any(indicator in part.upper() for indicator in ['S01', 'S1', 'S02', 'S2', 'SEASON', 'EPISODE', 'E01', 'E1']):
+                        if any(
+                            indicator in part.upper()
+                            for indicator in [
+                                "S01",
+                                "S1",
+                                "S02",
+                                "S2",
+                                "SEASON",
+                                "EPISODE",
+                                "E01",
+                                "E1",
+                            ]
+                        ):
                             break
                         series_parts.append(part)
 
                     if series_parts:
-                        self.name = '.'.join(series_parts)
-                        LOGGER.info(f"Updated task name after extraction (series): {self.name}")
+                        self.name = ".".join(series_parts)
+                        LOGGER.info(
+                            f"Updated task name after extraction (series): {self.name}"
+                        )
                         return
 
                 # Fallback: use the filename without extension
                 name_without_ext = ospath.splitext(first_video)[0]
                 self.name = name_without_ext
-                LOGGER.info(f"Updated task name after extraction (video file): {self.name}")
+                LOGGER.info(
+                    f"Updated task name after extraction (video file): {self.name}"
+                )
             else:
                 # No video files, use the first file's name without extension
                 first_file = files[0]
                 name_without_ext = ospath.splitext(first_file)[0]
                 self.name = name_without_ext
-                LOGGER.info(f"Updated task name after extraction (first file): {self.name}")
+                LOGGER.info(
+                    f"Updated task name after extraction (first file): {self.name}"
+                )
 
         except Exception as e:
             LOGGER.warning(f"Failed to extract meaningful name from files: {e}")

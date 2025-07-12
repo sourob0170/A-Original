@@ -565,7 +565,9 @@ class Config:
 
     # DDL (Direct Download Link) Upload Settings
     DDL_ENABLED: bool = True  # Enable/disable DDL upload feature
-    DDL_DEFAULT_SERVER: str = "gofile"  # Default DDL server: gofile, streamtape, devuploads, mediafire
+    DDL_DEFAULT_SERVER: str = (
+        "gofile"  # Default DDL server: gofile, streamtape, devuploads, mediafire
+    )
 
     # Gofile Settings
     GOFILE_API_KEY: str = ""  # Default Gofile API key (can be overridden per user)
@@ -578,22 +580,32 @@ class Config:
     GOFILE_LINK_EXPIRY_DAYS: int = 0  # Link expiry in days (0 = no expiry)
 
     # Streamtape Settings
-    STREAMTAPE_API_USERNAME: str = ""  # Streamtape API/FTP Username (from account panel)
-    STREAMTAPE_API_PASSWORD: str = ""  # Streamtape API/FTP Password (from account panel)
+    STREAMTAPE_API_USERNAME: str = (
+        ""  # Streamtape API/FTP Username (from account panel)
+    )
+    STREAMTAPE_API_PASSWORD: str = (
+        ""  # Streamtape API/FTP Password (from account panel)
+    )
     STREAMTAPE_FOLDER_NAME: str = ""  # Default folder name for uploads
 
     # DevUploads Settings
     DEVUPLOADS_API_KEY: str = ""  # Default DevUploads API key
     DEVUPLOADS_FOLDER_NAME: str = ""  # Default folder name for uploads
-    DEVUPLOADS_PUBLIC_FILES: bool = True  # Default public/private setting for uploads
+    DEVUPLOADS_PUBLIC_FILES: bool = (
+        True  # Default public/private setting for uploads
+    )
 
     # MediaFire API Settings
     MEDIAFIRE_API_KEY: str = ""  # MediaFire API key for authenticated access
-    MEDIAFIRE_EMAIL: str = ""  # MediaFire account email for session-based authentication
-    MEDIAFIRE_PASSWORD: str = ""  # MediaFire account password for session-based authentication
-    MEDIAFIRE_APP_ID: str = ""  # MediaFire application ID (optional, for higher rate limits)
-
-
+    MEDIAFIRE_EMAIL: str = (
+        ""  # MediaFire account email for session-based authentication
+    )
+    MEDIAFIRE_PASSWORD: str = (
+        ""  # MediaFire account password for session-based authentication
+    )
+    MEDIAFIRE_APP_ID: str = (
+        ""  # MediaFire application ID (optional, for higher rate limits)
+    )
 
     STREAMTAPE_ALLOWED_EXTENSIONS: ClassVar[list[str]] = [
         ".avi",

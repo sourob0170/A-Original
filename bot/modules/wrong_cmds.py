@@ -184,7 +184,6 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # Tool commands
         "tool",
         "t",
-
     ]
 
     # Find the base command (without any suffix)
