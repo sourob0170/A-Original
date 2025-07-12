@@ -1,6 +1,7 @@
 # ruff: noqa: RUF006
 from asyncio import create_task, gather, sleep
 from html import escape
+from os import path as ospath
 from pathlib import Path
 
 from aioshutil import move
@@ -688,7 +689,8 @@ class TaskListener(TaskConfig):
             if self.is_cancelled:
                 return
             self.is_file = await aiopath.isfile(up_path)
-            self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
+            # After extraction, try to get a meaningful name from the extracted content
+            await self._update_name_after_extraction(up_path, up_dir)
             self.size = await get_path_size(up_dir)
             self.clear()
             await remove_excluded_files(up_dir, self.excluded_extensions)
@@ -1048,7 +1050,7 @@ class TaskListener(TaskConfig):
             await add_mega_upload(self, up_path)
         elif self.up_dest == "ddl" or self.up_dest.startswith("ddl:"):
             # DDL upload using DDL engine
-            from bot.helper.common import validate_ddl_config
+            from bot.helper.common import validate_ddl_config, get_ddl_server_from_destination
             from bot.helper.mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
             from bot.helper.mirror_leech_utils.status_utils.ddl_status import (
                 DDLStatus,
@@ -1060,14 +1062,31 @@ class TaskListener(TaskConfig):
                 await self.on_upload_error(error_msg)
                 return
 
-            LOGGER.info(f"DDL Upload Name: {self.name}")
+
+
+            # Ensure we have a proper task name for DDL upload
+            upload_name = self.name or "Unknown Task"
+            if not upload_name.strip() or upload_name == "Unknown Task":
+                # Try to extract name from the upload path
+                if up_path:
+                    upload_name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
+                    if not upload_name.strip():
+                        upload_name = ospath.basename(up_path) or "Unknown Task"
+                else:
+                    upload_name = "Unknown Task"
+
+            # Update the listener's name to ensure it's used in completion message
+            self.name = upload_name
+
+            LOGGER.info(f"DDL Upload Name: {upload_name}")
+            LOGGER.info(f"DDL Upload Path: {up_path}")
             size = await get_path_size(up_path)
-            ddl = DDLUploader(self, self.name, up_dir)
+            ddl = DDLUploader(self, upload_name, up_path)
             async with task_dict_lock:
                 task_dict[self.mid] = DDLStatus(ddl, size, self.message, gid, None)
             await gather(
                 update_status_message(self.message.chat.id),
-                ddl.upload(self.name, size),
+                ddl.upload("", size),  # Pass empty string since path is already set in constructor
             )
             del ddl
         elif is_gdrive_id(self.up_dest) or self.up_dest == "gd":
@@ -1400,7 +1419,7 @@ class TaskListener(TaskConfig):
                     )
                     button = buttons.build_menu(1)
             elif isinstance(link, dict) and any(
-                key in ["GoFile", "StreamTape"] for key in link
+                key in ["GoFile", "StreamTape", "DevUploads", "MediaFire"] for key in link
             ):
                 # DDL upload result
                 msg += "\n\n<b>Type: </b>DDL Upload"
@@ -1430,6 +1449,10 @@ class TaskListener(TaskConfig):
                             buttons.url_button("📁 Gofile Link", server_link)
                         elif server_name == "StreamTape":
                             buttons.url_button("🎬 StreamTape Link", server_link)
+                        elif server_name == "DevUploads":
+                            buttons.url_button("🚀 DevUploads Link", server_link)
+                        elif server_name == "MediaFire":
+                            buttons.url_button("🔥 MediaFire Link", server_link)
                         else:
                             buttons.url_button(f"🔗 {server_name}", server_link)
 
@@ -1806,3 +1829,99 @@ class TaskListener(TaskConfig):
             await clean_download(self.up_dir)
         if self.thumb and await aiopath.exists(self.thumb):
             await remove(self.thumb)
+
+    async def _update_name_after_extraction(self, up_path, up_dir):
+        """Update task name after extraction to reflect actual content name"""
+        try:
+            from bot.helper.ext_utils.files_utils import get_base_name, is_archive
+
+            # List contents of the extraction directory
+            dir_contents = await listdir(up_path)
+
+            if not dir_contents:
+                # Empty directory, keep current name
+                return
+
+            # Filter out hidden files and system files
+            content_files = [f for f in dir_contents if not f.startswith('.')]
+
+            if len(content_files) == 1:
+                # Single item extracted - use its name
+                single_item = content_files[0]
+                single_item_path = ospath.join(up_path, single_item)
+
+                if await aiopath.isdir(single_item_path):
+                    # Single folder extracted - use folder name
+                    self.name = single_item
+                    LOGGER.info(f"Updated task name after extraction (single folder): {self.name}")
+                else:
+                    # Single file extracted - use base name without extension for archives
+                    if is_archive(self.name):
+                        try:
+                            self.name = get_base_name(self.name)
+                            LOGGER.info(f"Updated task name after extraction (archive base): {self.name}")
+                        except Exception:
+                            self.name = single_item
+                            LOGGER.info(f"Updated task name after extraction (single file): {self.name}")
+                    else:
+                        self.name = single_item
+                        LOGGER.info(f"Updated task name after extraction (single file): {self.name}")
+            else:
+                # Multiple items extracted - try to find a common meaningful name
+                if is_archive(self.name):
+                    try:
+                        # Use the base name of the original archive
+                        self.name = get_base_name(self.name)
+                        LOGGER.info(f"Updated task name after extraction (archive base): {self.name}")
+                    except Exception:
+                        # Fallback: try to extract meaningful name from first file
+                        self._extract_meaningful_name_from_files(content_files)
+                else:
+                    # Try to extract meaningful name from files
+                    self._extract_meaningful_name_from_files(content_files)
+
+        except Exception as e:
+            LOGGER.warning(f"Failed to update name after extraction: {e}")
+            # Keep the original name if extraction fails
+
+    def _extract_meaningful_name_from_files(self, files):
+        """Extract a meaningful name from a list of files"""
+        try:
+            # Look for video files first (common case for TV shows/movies)
+            video_files = [f for f in files if f.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'))]
+
+            if video_files:
+                # Use the first video file to extract series/movie name
+                first_video = video_files[0]
+
+                # Try to extract series name (everything before season/episode info)
+                if any(pattern in first_video.upper() for pattern in ['S01E', 'S1E', 'SEASON', 'EPISODE']):
+                    # This looks like a TV series
+                    parts = first_video.replace('.', ' ').split()
+                    series_parts = []
+
+                    for part in parts:
+                        # Stop at season/episode indicators
+                        if any(indicator in part.upper() for indicator in ['S01', 'S1', 'S02', 'S2', 'SEASON', 'EPISODE', 'E01', 'E1']):
+                            break
+                        series_parts.append(part)
+
+                    if series_parts:
+                        self.name = '.'.join(series_parts)
+                        LOGGER.info(f"Updated task name after extraction (series): {self.name}")
+                        return
+
+                # Fallback: use the filename without extension
+                name_without_ext = ospath.splitext(first_video)[0]
+                self.name = name_without_ext
+                LOGGER.info(f"Updated task name after extraction (video file): {self.name}")
+            else:
+                # No video files, use the first file's name without extension
+                first_file = files[0]
+                name_without_ext = ospath.splitext(first_file)[0]
+                self.name = name_without_ext
+                LOGGER.info(f"Updated task name after extraction (first file): {self.name}")
+
+        except Exception as e:
+            LOGGER.warning(f"Failed to extract meaningful name from files: {e}")
+            # Keep the original name

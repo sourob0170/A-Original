@@ -141,7 +141,7 @@
 | Variable              | Type   | Description |
 |-----------------------|--------|-------------|
 | `DDL_ENABLED`         | `bool` | Enable/disable DDL upload feature. Default: `True`. |
-| `DDL_DEFAULT_SERVER`  | `str`  | Default DDL server to use. Options: `gofile`, `streamtape`. Default: `gofile`. |
+| `DDL_DEFAULT_SERVER`  | `str`  | Default DDL server to use. Options: `gofile`, `streamtape`, `devuploads`, `mediafire`. Default: `gofile`. |
 
 ### Gofile Settings
 | Variable                    | Type   | Description |
@@ -158,16 +158,33 @@
 | Variable                    | Type   | Description |
 |-----------------------------|--------|-------------|
 | `STREAMTAPE_ENABLED`        | `bool` | Enable/disable Streamtape uploads. Default: `True`. |
-| `STREAMTAPE_LOGIN`          | `str`  | Default Streamtape login username. Get from [Streamtape](https://streamtape.com/). |
-| `STREAMTAPE_API_KEY`        | `str`  | Default Streamtape API key. Get from [Streamtape](https://streamtape.com/). |
+| `STREAMTAPE_API_USERNAME`   | `str`  | Streamtape API/FTP Username from account panel. Get from [Streamtape Account Panel](https://streamtape.com/accpanel). |
+| `STREAMTAPE_API_PASSWORD`   | `str`  | Streamtape API/FTP Password from account panel. Get from [Streamtape Account Panel](https://streamtape.com/accpanel). |
 | `STREAMTAPE_FOLDER_NAME`    | `str`  | Default folder name for uploads. |
 
-**Note:** DDL uploads support both Gofile and Streamtape services. Users can configure their own API keys in user settings. Streamtape only supports video files with specific extensions.
+### DevUploads Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `DEVUPLOADS_API_KEY`        | `str`  | Default DevUploads API key. Get from [DevUploads](https://devuploads.com/). |
+| `DEVUPLOADS_FOLDER_NAME`    | `str`  | Default folder name for uploads. |
+| `DEVUPLOADS_PUBLIC_FILES`   | `bool` | Default public/private setting for uploads. Default: `True`. |
+
+### MediaFire Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `MEDIAFIRE_EMAIL`           | `str`  | MediaFire account email for authentication. |
+| `MEDIAFIRE_PASSWORD`        | `str`  | MediaFire account password for authentication. |
+| `MEDIAFIRE_APP_ID`          | `str`  | MediaFire application ID (required for API access). Get from [MediaFire Developers](https://www.mediafire.com/developers/). |
+| `MEDIAFIRE_API_KEY`         | `str`  | MediaFire API key (optional, for enhanced features). Get from [MediaFire Developers](https://www.mediafire.com/developers/). |
+
+**Note:** DDL uploads support Gofile, Streamtape, DevUploads, and MediaFire services. Users can configure their own API keys in user settings. Streamtape only supports video files with specific extensions. MediaFire supports all file types up to ~50GB.
 
 **Usage:**
 - Use `-up ddl` to upload to the default DDL server
 - Use `-up ddl:gofile` to upload specifically to Gofile
 - Use `-up ddl:streamtape` to upload specifically to Streamtape
+- Use `-up ddl:devuploads` to upload specifically to DevUploads
+- Use `-up ddl:mediafire` to upload specifically to MediaFire
 
 ## 14. Streamrip Integration
 

@@ -533,6 +533,8 @@ def add_handlers():
         # Add MEGA search handlers to command_filters
         command_filters.update(mega_search_handlers)
 
+
+
     # Add encoding/decoding handlers if enabled
     if Config.ENCODING_ENABLED:
         encoding_handlers = {
@@ -634,6 +636,8 @@ def add_handlers():
 
         # MEGA search now uses Telegraph (no pagination callbacks needed)
         public_regex_filters["^mgq"] = mega_folder_callback
+
+
 
     # Add Gallery-dl callback handlers if enabled
     if Config.GALLERY_DL_ENABLED:

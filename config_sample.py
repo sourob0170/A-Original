@@ -138,7 +138,7 @@ MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
 
 # DDL (Direct Download Link) Upload Settings
 DDL_ENABLED = True  # Enable/disable DDL upload feature
-DDL_DEFAULT_SERVER = "gofile"  # Default DDL server: gofile, streamtape
+DDL_DEFAULT_SERVER = "gofile"  # Default DDL server: gofile, streamtape, devuploads, mediafire
 
 # Gofile Settings (Enabled automatically when API key is provided)
 GOFILE_API_KEY = ""  # Default Gofile API key (can be overridden per user)
@@ -148,10 +148,21 @@ GOFILE_PASSWORD_PROTECTION = False  # Enable password protection
 GOFILE_DEFAULT_PASSWORD = ""  # Default password for protected uploads
 GOFILE_LINK_EXPIRY_DAYS = 0  # Link expiry in days (0 = no expiry)
 
-# Streamtape Settings (Enabled automatically when login and API key are provided)
-STREAMTAPE_LOGIN = ""  # Default Streamtape login
-STREAMTAPE_API_KEY = ""  # Default Streamtape API key
+# Streamtape Settings (Enabled automatically when API username and password are provided)
+STREAMTAPE_API_USERNAME = ""  # Streamtape API/FTP Username (from account panel)
+STREAMTAPE_API_PASSWORD = ""  # Streamtape API/FTP Password (from account panel)
 STREAMTAPE_FOLDER_NAME = ""  # Default folder name for uploads
+
+# DevUploads Settings (Enabled automatically when API key is provided)
+DEVUPLOADS_API_KEY = ""  # Default DevUploads API key (can be overridden per user)
+DEVUPLOADS_FOLDER_NAME = ""  # Default folder name for uploads (empty = root folder)
+DEVUPLOADS_PUBLIC_FILES = True  # Default public/private setting for uploads (True = public, False = private)
+
+# MediaFire Settings (Enabled automatically when email, password, and app_id are provided)
+MEDIAFIRE_EMAIL = ""  # MediaFire account email for authentication
+MEDIAFIRE_PASSWORD = ""  # MediaFire account password for authentication
+MEDIAFIRE_APP_ID = ""  # MediaFire application ID (required for API access)
+MEDIAFIRE_API_KEY = ""  # MediaFire API key (optional, for enhanced features)
 
 # File-to-Link Settings
 FILE_TO_LINK_ENABLED = True  # Enable/disable file-to-link functionality

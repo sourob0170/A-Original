@@ -121,8 +121,8 @@ class GalleryDLStatus:
         """Get task object for cancel compatibility"""
         return self
 
-    def cancel_task(self):
+    async def cancel_task(self):
         """Cancel the download task"""
         if hasattr(self.listener, "gallery_dl_helper"):
-            self.listener.gallery_dl_helper.cancel_task()
+            await self.listener.gallery_dl_helper.cancel_task()
         self.listener.is_cancelled = True

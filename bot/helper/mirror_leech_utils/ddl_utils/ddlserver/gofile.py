@@ -25,9 +25,14 @@ class Gofile:
             return False
 
         try:
+            headers = {
+                "Authorization": f"Bearer {token}"
+            }
+
             async with ClientSession() as session:
                 async with session.get(
-                    f"https://api.gofile.io/accounts/getid?token={token}"
+                    "https://api.gofile.io/accounts/getid",
+                    headers=headers
                 ) as resp:
                     if resp.status != 200:
                         LOGGER.error(
@@ -42,7 +47,8 @@ class Gofile:
 
                     acc_id = res["data"]["id"]
                     async with session.get(
-                        f"https://api.gofile.io/accounts/{acc_id}?token={token}"
+                        f"https://api.gofile.io/accounts/{acc_id}",
+                        headers=headers
                     ) as resp:
                         if resp.status != 200:
                             LOGGER.error(
@@ -91,6 +97,21 @@ class Gofile:
 
         return data
 
+    def __extract_folder_id(self, folder_data):
+        """Extract folder ID from API response, handling different key names"""
+        if not isinstance(folder_data, dict):
+            raise Exception(f"Gofile: Invalid folder data format: {type(folder_data)}")
+
+        # Based on API documentation, the response should contain an 'id' field
+        # But we'll also check for legacy 'folderId' for backward compatibility
+        for key in ["id", "folderId"]:
+            if key in folder_data:
+                return folder_data[key]
+
+        # If no known key found, log available keys and raise error
+        available_keys = list(folder_data.keys())
+        raise Exception(f"Gofile: No folder ID found in response. Available keys: {available_keys}")
+
     async def __getServer(self):
         try:
             timeout = ClientTimeout(total=30, connect=10)
@@ -105,14 +126,22 @@ class Gofile:
             raise Exception(f"Failed to get Gofile servers: {e!s}")
 
     async def __getAccount(self, check_account=False):
-        if self.token is None:
-            raise Exception("Invalid Gofile API Key, Recheck your account !!")
+        if self.token is None or self.token.strip() == "":
+            raise Exception(
+                "❌ Gofile API key is not configured.\n"
+                "📝 Please set GOFILE_API_KEY in your configuration."
+            )
 
         try:
+            headers = {
+                "Authorization": f"Bearer {self.token}"
+            }
+
             async with ClientSession() as session:
                 # Get account ID
                 async with session.get(
-                    f"{self.api_url}accounts/getid?token={self.token}"
+                    f"{self.api_url}accounts/getid",
+                    headers=headers
                 ) as resp:
                     if resp.status != 200:
                         raise Exception(
@@ -135,7 +164,8 @@ class Gofile:
 
                     # Get account details
                     async with session.get(
-                        f"{self.api_url}accounts/{acc_id}?token={self.token}"
+                        f"{self.api_url}accounts/{acc_id}",
+                        headers=headers
                     ) as resp:
                         if resp.status != 200:
                             raise Exception(
@@ -161,19 +191,28 @@ class Gofile:
         folder_data = await self.create_folder(
             (await self.__getAccount())["rootFolder"], ospath.basename(path)
         )
+
+        # Log the actual response structure for debugging
+        LOGGER.info(f"Gofile: create_folder response: {folder_data}")
+
+        # Extract folder ID using helper method
+        folder_id = self.__extract_folder_id(folder_data)
+
         await self.__setOptions(
-            contentId=folder_data["folderId"], option="public", value="true"
+            contentId=folder_id, option="public", value="true"
         )
 
-        folderId = folderId or folder_data["folderId"]
+        folderId = folderId or folder_id
         folder_ids = {".": folderId}
         for root, _, files in await sync_to_async(walk, path):
             rel_path = ospath.relpath(root, path)
             parentFolderId = folder_ids.get(ospath.dirname(rel_path), folderId)
             folder_name = ospath.basename(rel_path)
-            currFolderId = (await self.create_folder(parentFolderId, folder_name))[
-                "folderId"
-            ]
+            subfolder_data = await self.create_folder(parentFolderId, folder_name)
+
+            # Extract subfolder ID using helper method
+            currFolderId = self.__extract_folder_id(subfolder_data)
+
             await self.__setOptions(
                 contentId=currFolderId, option="public", value="true"
             )
@@ -183,7 +222,14 @@ class Gofile:
                 file_path = ospath.join(root, file)
                 await self.upload_file(file_path, currFolderId)
 
-        return folder_data["code"]
+        # Return the code for the main folder
+        if "code" in folder_data:
+            return folder_data["code"]
+        elif "id" in folder_data:
+            # If no code, return the id as fallback
+            return folder_data["id"]
+        else:
+            raise Exception(f"Gofile: No code or id found in folder response for URL generation")
 
     async def upload_file(
         self,
@@ -222,7 +268,8 @@ class Gofile:
                 folder_data = await self.create_folder(
                     (await self.__getAccount())["rootFolder"], folder_name
                 )
-                folderId = folder_data["folderId"]
+                # Extract folder ID using helper method
+                folderId = self.__extract_folder_id(folder_data)
 
         if not description:
             description = ""  # Could be extended to use user settings
@@ -253,9 +300,8 @@ class Gofile:
         except Exception as e:
             LOGGER.error(f"Gofile: Failed to get server - {e!s}")
             raise Exception(f"Failed to get Gofile server: {e!s}")
+        # Prepare form data for file upload (no token in form data anymore)
         req_dict = {}
-        if token := self.token or "":
-            req_dict["token"] = token
         if folderId:
             req_dict["folderId"] = folderId
         if description:
@@ -282,12 +328,18 @@ class Gofile:
         )
         LOGGER.info(f"Gofile: File path: {new_path}")
 
+        # Prepare headers with Bearer authentication
+        upload_headers = {}
+        if self.token:
+            upload_headers["Authorization"] = f"Bearer {self.token}"
+
         self.dluploader.last_uploaded = 0
         upload_file = await self.dluploader.upload_aiohttp(
             f"https://{server}.gofile.io/contents/uploadfile",
             new_path,
             "file",
             req_dict,
+            headers=upload_headers,
         )
 
         if upload_file is None:
@@ -315,9 +367,28 @@ class Gofile:
 
     async def upload(self, file_path):
         try:
+            # Check if API token is provided
+            if not self.token or self.token.strip() == "":
+                raise Exception(
+                    "❌ Gofile API key is not configured.\n"
+                    "📝 To fix this:\n"
+                    "1. Get your API key from https://gofile.io (Account Settings)\n"
+                    "2. Set it in config.py: GOFILE_API_KEY = 'your_key_here'\n"
+                    "3. Or set environment variable: export GOFILE_API_KEY='your_key_here'\n"
+                    "4. Restart the bot\n"
+                    "💡 Alternative: Use other DDL servers (StreamTape, DevUploads, MediaFire)"
+                )
+
             LOGGER.info("Gofile: Validating API token")
             if not await self.is_goapi(self.token):
-                raise Exception("Invalid Gofile API Key, Recheck your account !!")
+                raise Exception(
+                    "❌ Invalid Gofile API key.\n"
+                    "📝 Please check:\n"
+                    "1. API key is correct (copy from https://gofile.io account settings)\n"
+                    "2. Account is active and not suspended\n"
+                    "3. API key has proper permissions\n"
+                    "💡 Alternative: Use other DDL servers if Gofile is not working"
+                )
 
             LOGGER.info(f"Gofile: Starting upload for path: {file_path}")
 
@@ -365,18 +436,29 @@ class Gofile:
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
 
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "parentFolderId": parentFolderId,
+            "folderName": folderName,
+        }
+
         async with (
             ClientSession() as session,
             session.post(
                 url=f"{self.api_url}contents/createFolder",
-                data={
-                    "token": self.token,
-                    "parentFolderId": parentFolderId,
-                    "folderName": folderName,
-                },
+                headers=headers,
+                json=payload,
             ) as resp,
         ):
-            return await self.__resp_handler(await resp.json())
+            raw_response = await resp.json()
+            LOGGER.info(f"Gofile: create_folder raw response: {raw_response}")
+            result = await self.__resp_handler(raw_response)
+            LOGGER.info(f"Gofile: create_folder processed result: {result}")
+            return result
 
     async def __setOptions(self, contentId, option, value):
         if self.token is None:
@@ -391,15 +473,23 @@ class Gofile:
             "password",
         ]:
             raise Exception(f"Invalid GoFile Option Specified : {option}")
+
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "attribute": option,
+            "attributeValue": value,
+        }
+
         async with (
             ClientSession() as session,
             session.put(
                 url=f"{self.api_url}contents/{contentId}/update",
-                data={
-                    "token": self.token,
-                    "attribute": option,
-                    "attributeValue": value,
-                },
+                headers=headers,
+                json=payload,
             ) as resp,
         ):
             return await self.__resp_handler(await resp.json())
@@ -408,10 +498,15 @@ class Gofile:
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
 
+        headers = {
+            "Authorization": f"Bearer {self.token}"
+        }
+
         async with (
             ClientSession() as session,
             session.get(
-                url=f"{self.api_url}contents/{contentId}&token={self.token}&cache=true"
+                url=f"{self.api_url}contents/{contentId}?cache=true",
+                headers=headers,
             ) as resp,
         ):
             return await self.__resp_handler(await resp.json())
@@ -420,15 +515,22 @@ class Gofile:
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
 
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "contentsId": contentsId,
+            "folderId": folderIdDest,
+        }
+
         async with (
             ClientSession() as session,
             session.post(
                 url=f"{self.api_url}contents/copy",
-                data={
-                    "token": self.token,
-                    "contentsId": contentsId,
-                    "folderId": folderIdDest,
-                },
+                headers=headers,
+                json=payload,
             ) as resp,
         ):
             return await self.__resp_handler(await resp.json())

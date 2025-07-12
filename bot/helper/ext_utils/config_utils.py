@@ -1405,9 +1405,16 @@ async def reset_ddl_configs(database):
         "GOFILE_PASSWORD_PROTECTION": False,
         "GOFILE_DEFAULT_PASSWORD": "",
         "GOFILE_LINK_EXPIRY_DAYS": 0,
-        "STREAMTAPE_LOGIN": "",
-        "STREAMTAPE_API_KEY": "",
+        "STREAMTAPE_API_USERNAME": "",
+        "STREAMTAPE_API_PASSWORD": "",
         "STREAMTAPE_FOLDER_NAME": "",
+        "DEVUPLOADS_API_KEY": "",
+        "DEVUPLOADS_FOLDER_NAME": "",
+        "DEVUPLOADS_PUBLIC_FILES": True,
+        "MEDIAFIRE_EMAIL": "",
+        "MEDIAFIRE_PASSWORD": "",
+        "MEDIAFIRE_APP_ID": "",
+        "MEDIAFIRE_API_KEY": "",
     }
 
     # Update Config object
@@ -1432,9 +1439,16 @@ async def reset_ddl_configs(database):
             "GOFILE_PASSWORD_PROTECTION",
             "GOFILE_DEFAULT_PASSWORD",
             "GOFILE_LINK_EXPIRY_DAYS",
-            "STREAMTAPE_LOGIN",
-            "STREAMTAPE_API_KEY",
+            "STREAMTAPE_API_USERNAME",
+            "STREAMTAPE_API_PASSWORD",
             "STREAMTAPE_FOLDER_NAME",
+            "DEVUPLOADS_API_KEY",
+            "DEVUPLOADS_FOLDER_NAME",
+            "DEVUPLOADS_PUBLIC_FILES",
+            "MEDIAFIRE_EMAIL",
+            "MEDIAFIRE_PASSWORD",
+            "MEDIAFIRE_APP_ID",
+            "MEDIAFIRE_API_KEY",
         ]
 
         # Reset each DDL-related key

@@ -2827,7 +2827,7 @@ async def get_media_type_internal(file_path):
     return None
 
 
-async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=None):
+async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=None, folder_name=None):
     """Generate FFmpeg command for merging files using concat demuxer.
 
     Args:
@@ -2835,6 +2835,7 @@ async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=No
         output_format: Output file format (default: mkv)
                       If "none", will use the format of the first input file
         media_type: Type of media ('video', 'audio', 'subtitle', 'image') for specialized handling
+        folder_name: Optional folder name to use for output filename (from -m flag or extracted folder name)
 
     Returns:
         tuple: FFmpeg command and output file path
@@ -2978,14 +2979,22 @@ async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=No
 
     # Determine output path based on first file and media type
     base_dir = os.path.dirname(files[0])
-    if media_type == "video":
-        output_file = os.path.join(base_dir, f"merged_video.{output_format}")
-    elif media_type == "audio":
-        output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
-    elif media_type == "subtitle":
-        output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+
+    # Use folder name if provided, otherwise use generic names
+    if folder_name:
+        # Clean folder name for filename use
+        clean_folder_name = folder_name.strip("/").replace("/", "_")
+        output_file = os.path.join(base_dir, f"{clean_folder_name}.{output_format}")
     else:
-        output_file = os.path.join(base_dir, f"merged.{output_format}")
+        # Fallback to generic names
+        if media_type == "video":
+            output_file = os.path.join(base_dir, f"merged_video.{output_format}")
+        elif media_type == "audio":
+            output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
+        elif media_type == "subtitle":
+            output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+        else:
+            output_file = os.path.join(base_dir, f"merged.{output_format}")
 
     # Basic command for concat demuxer
     cmd = [
@@ -3303,7 +3312,7 @@ async def get_merge_concat_demuxer_cmd(files, output_format="mkv", media_type=No
     return cmd, output_file
 
 
-async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
+async def get_merge_filter_complex_cmd(files, media_type, output_format=None, folder_name=None):
     """Generate FFmpeg command for merging files using filter_complex.
 
     Args:
@@ -3311,6 +3320,7 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
         media_type: Type of media ('video', 'audio', 'subtitle')
         output_format: Output file format (default: based on media_type)
                       If "none", will use the format of the first input file
+        folder_name: Optional folder name to use for output filename (from -m flag or extracted folder name)
 
     Returns:
         tuple: FFmpeg command and output file path
@@ -3444,14 +3454,22 @@ async def get_merge_filter_complex_cmd(files, media_type, output_format=None):
 
     # Determine output path based on first file and media type
     base_dir = os.path.dirname(files[0])
-    if media_type == "video":
-        output_file = os.path.join(base_dir, f"merged_video.{output_format}")
-    elif media_type == "audio":
-        output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
-    elif media_type == "subtitle":
-        output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+
+    # Use folder name if provided, otherwise use generic names
+    if folder_name:
+        # Clean folder name for filename use
+        clean_folder_name = folder_name.strip("/").replace("/", "_")
+        output_file = os.path.join(base_dir, f"{clean_folder_name}.{output_format}")
     else:
-        output_file = os.path.join(base_dir, f"merged.{output_format}")
+        # Fallback to generic names
+        if media_type == "video":
+            output_file = os.path.join(base_dir, f"merged_video.{output_format}")
+        elif media_type == "audio":
+            output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
+        elif media_type == "subtitle":
+            output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+        else:
+            output_file = os.path.join(base_dir, f"merged.{output_format}")
 
     # Build input arguments
     input_args = []
@@ -4135,6 +4153,7 @@ async def get_merge_mixed_cmd(
     audio_files,
     subtitle_files,
     output_format="mkv",
+    folder_name=None,
     # codec_groups parameter removed - will be added back when implemented
 ):
     import os
@@ -4218,14 +4237,20 @@ async def get_merge_mixed_cmd(
     base_dir = os.path.dirname(base_files[0])
 
     # Determine appropriate output file name based on media types
-    if video_files:
-        output_file = os.path.join(base_dir, f"merged_video.{output_format}")
-    elif audio_files:
-        output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
-    elif subtitle_files:
-        output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+    if folder_name:
+        # Clean folder name for filename use
+        clean_folder_name = folder_name.strip("/").replace("/", "_")
+        output_file = os.path.join(base_dir, f"{clean_folder_name}.{output_format}")
     else:
-        output_file = os.path.join(base_dir, f"merged.{output_format}")
+        # Fallback to generic names
+        if video_files:
+            output_file = os.path.join(base_dir, f"merged_video.{output_format}")
+        elif audio_files:
+            output_file = os.path.join(base_dir, f"merged_audio.{output_format}")
+        elif subtitle_files:
+            output_file = os.path.join(base_dir, f"merged_subtitle.{output_format}")
+        else:
+            output_file = os.path.join(base_dir, f"merged.{output_format}")
 
     # For mixed media types, we have several approaches:
     # 1. If we have multiple video files, merge them first, then add audio and subtitles

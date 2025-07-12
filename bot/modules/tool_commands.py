@@ -65,13 +65,8 @@ def get_file_size(reply_msg) -> int:
     if reply_msg.animation:
         return reply_msg.animation.file_size or 0
     if reply_msg.photo:
-        # Photo sizes are in a list, get the largest one
-        if reply_msg.photo:
-            return (
-                max(photo.file_size for photo in reply_msg.photo)
-                if reply_msg.photo
-                else 0
-            )
+        # In kurigram/pyrogram, photo is a single Photo object, not a list
+        return reply_msg.photo.file_size or 0
     return 0
 
 
@@ -170,7 +165,18 @@ async def download_file_from_message(message: Message) -> str | None:
             await delete_message(status_msg)
         else:
             # Use bot client for smaller files
-            downloaded_path = await reply_msg.download(file_name=file_path)
+            try:
+                downloaded_path = await reply_msg.download(file_name=file_path)
+            except Exception as e:
+                # If download fails with photo iteration error, try alternative approach
+                if "not iterable" in str(e) and reply_msg.photo:
+                    # For kurigram photo objects, try downloading using file_id
+                    from pyrogram import Client
+                    downloaded_path = await TgClient.bot.download_media(
+                        reply_msg.photo.file_id, file_name=file_path
+                    )
+                else:
+                    raise e
 
         # Verify the file was downloaded successfully
         if downloaded_path and os.path.exists(downloaded_path):

@@ -5,54 +5,50 @@ from aiofiles.os import path as aiopath
 from aiofiles.os import scandir
 from aiohttp import ClientSession
 
-from bot import user_data
+from bot import LOGGER, user_data
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.telegraph_helper import telegraph
 
-ALLOWED_EXTS = [
-    ".avi",
-    ".mkv",
-    ".mpg",
-    ".mpeg",
-    ".vob",
-    ".wmv",
-    ".flv",
-    ".mp4",
-    ".mov",
-    ".m4v",
-    ".m2v",
-    ".divx",
-    ".3gp",
-    ".webm",
-    ".ogv",
-    ".ogg",
-    ".ts",
-    ".ogm",
-]
+# Use extensions from config to maintain consistency
+ALLOWED_EXTS = Config.STREAMTAPE_ALLOWED_EXTENSIONS
 
 
 class Streamtape:
-    def __init__(self, dluploader, login, key):
-        self.__userLogin = login
-        self.__passKey = key
+    def __init__(self, dluploader, api_username, api_password):
+        self.__api_username = api_username
+        self.__api_password = api_password
         self.dluploader = dluploader
         self.base_url = "https://api.streamtape.com"
 
-    async def __getAccInfo(self):
-        async with (
-            ClientSession() as session,
-            session.get(
-                f"{self.base_url}/account/info?login={self.__userLogin}&key={self.__passKey}"
-            ) as response,
-        ):
-            if response.status == 200:
-                if (data := await response.json()) and data["status"] == 200:
-                    return data["result"]
-        return None
+    async def get_account_info(self):
+        """Get account information - useful for debugging/validation"""
+        try:
+            async with ClientSession() as session, session.get(
+                f"{self.base_url}/account/info?login={self.__api_username}&key={self.__api_password}"
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == 200:
+                        return data["result"]
+                    else:
+                        error_msg = data.get('msg', 'Unknown error')
+                        if "login failed" in error_msg.lower():
+                            LOGGER.error(f"Streamtape: Invalid login credentials - {error_msg}")
+                        elif "invalid" in error_msg.lower():
+                            LOGGER.error(f"Streamtape: Invalid API key - {error_msg}")
+                        else:
+                            LOGGER.error(f"Streamtape account info error: {error_msg}")
+                        return None
+                else:
+                    LOGGER.error(f"Streamtape account info HTTP error: {response.status}")
+                    return None
+        except Exception as e:
+            LOGGER.error(f"Streamtape account info exception: {e}")
+            return None
 
     async def __getUploadURL(self, folder=None, sha256=None, httponly=False):
         _url = (
-            f"{self.base_url}/file/ul?login={self.__userLogin}&key={self.__passKey}"
+            f"{self.base_url}/file/ul?login={self.__api_username}&key={self.__api_password}"
         )
         if folder is not None:
             _url += f"&folder={folder}"
@@ -60,17 +56,28 @@ class Streamtape:
             _url += f"&sha256={sha256}"
         if httponly:
             _url += "&httponly=true"
-        async with ClientSession() as session, session.get(_url) as response:
-            if response.status == 200:
-                if (data := await response.json()) and data["status"] == 200:
-                    return data["result"]
-        return None
+
+        try:
+            async with ClientSession() as session, session.get(_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == 200:
+                        result = data.get("result")
+                        if not result or "url" not in result:
+                            raise Exception("Invalid API response: missing upload URL")
+                        return result
+                    error_msg = data.get("msg", "Unknown API error")
+                    raise Exception(f"Streamtape API error: {error_msg}")
+                raise Exception(f"HTTP {response.status}: Failed to get upload URL")
+        except Exception as e:
+            raise Exception(f"Failed to get upload URL: {e}") from e
 
     async def upload_file(
         self, file_path, folder_id=None, sha256=None, httponly=False
     ):
         """Upload file to Streamtape with user settings integration"""
         if Path(file_path).suffix.lower() not in ALLOWED_EXTS:
+            LOGGER.warning(f"Streamtape: Skipping '{file_path}' due to disallowed extension")
             return f"Skipping '{file_path}' due to disallowed extension."
 
         file_name = Path(file_path).name
@@ -108,7 +115,10 @@ class Streamtape:
             folder=folder_id, sha256=sha256, httponly=httponly
         )
         if upload_info is None:
+            LOGGER.error("Streamtape: Failed to get upload URL")
             return None
+
+
         if self.dluploader.is_cancelled:
             return None
         self.dluploader.last_uploaded = 0
@@ -116,9 +126,26 @@ class Streamtape:
             upload_info["url"], file_path, file_name, {}
         )
         if uploaded:
-            file_id = (await self.list_folder(folder=folder_id))["files"][0][
-                "linkid"
-            ]
+            # Get the most recently uploaded file by finding the file with matching name
+            # or the newest file if name matching fails
+            folder_contents = await self.list_folder(folder=folder_id)
+            if not folder_contents or not folder_contents.get("files"):
+                return None
+
+            # Try to find file by name first (more reliable)
+            target_file = None
+            for file_info in folder_contents["files"]:
+                if file_info.get("name") == file_name:
+                    target_file = file_info
+                    break
+
+            # Fallback: get the most recent file (last in list)
+            if not target_file:
+                target_file = folder_contents["files"][-1]
+
+            file_id = target_file["linkid"]
+
+            # Rename file to ensure correct name
             await self.rename(file_id, file_name)
             return f"https://streamtape.to/v/{file_id}"
         return None
@@ -136,7 +163,7 @@ class Streamtape:
                 i += 1
             name = f"{i} {name}"
 
-        url = f"{self.base_url}/file/createfolder?login={self.__userLogin}&key={self.__passKey}&name={name}"
+        url = f"{self.base_url}/file/createfolder?login={self.__api_username}&key={self.__api_password}&name={name}"
         if parent is not None:
             url += f"&pid={parent}"
         async with ClientSession() as session, session.get(url) as response:
@@ -147,12 +174,45 @@ class Streamtape:
         return None
 
     async def rename(self, file_id, name):
-        url = f"{self.base_url}/file/rename?login={self.__userLogin}&key={self.__passKey}&file={file_id}&name={name}"
-        async with ClientSession() as session, session.get(url) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("status") == 200:
-                    return data.get("result")
+        url = f"{self.base_url}/file/rename?login={self.__api_username}&key={self.__api_password}&file={file_id}&name={name}"
+        try:
+            async with ClientSession() as session, session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == 200:
+                        return data.get("result")
+                    error_msg = data.get("msg", "Unknown error")
+                    raise Exception(f"Rename failed: {error_msg}")
+                raise Exception(f"HTTP {response.status}: Failed to rename file")
+        except Exception as e:
+            # Log error but don't fail upload for rename issues
+            LOGGER.warning(f"Failed to rename file {file_id}: {e}")
+        return None
+
+    async def get_file_info(self, file_id):
+        """Get file information (if endpoint exists)"""
+        url = f"{self.base_url}/file/info?login={self.__api_username}&key={self.__api_password}&file={file_id}"
+        try:
+            async with ClientSession() as session, session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == 200:
+                        return data.get("result")
+        except Exception:
+            pass  # Endpoint might not exist
+        return None
+
+    async def delete_file(self, file_id):
+        """Delete file (if endpoint exists)"""
+        url = f"{self.base_url}/file/delete?login={self.__api_username}&key={self.__api_password}&file={file_id}"
+        try:
+            async with ClientSession() as session, session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == 200:
+                        return data.get("result")
+        except Exception:
+            pass  # Endpoint might not exist
         return None
 
     async def list_telegraph(self, folder_id, nested=False):
@@ -174,13 +234,12 @@ class Streamtape:
         return f"https://te.legra.ph/{path}"
 
     async def list_folder(self, folder=None):
-        url = f"{self.base_url}/file/listfolder?login={self.__userLogin}&key={self.__passKey}"
+        url = f"{self.base_url}/file/listfolder?login={self.__api_username}&key={self.__api_password}"
         if folder is not None:
             url += f"&folder={folder}"
         async with ClientSession() as session, session.get(url) as response:
-            if response.status == 200:
-                if (data := await response.json()) and data["status"] == 200:
-                    return data["result"]
+            if response.status == 200 and (data := await response.json()) and data["status"] == 200:
+                return data["result"]
         return None
 
     async def upload_folder(self, folder_path, parent_folder_id=None):

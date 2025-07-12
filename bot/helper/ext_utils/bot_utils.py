@@ -142,6 +142,7 @@ def create_help_buttons():
     _build_command_usage(FILE_TO_LINK_HELP_DICT, "f2l")
 
 
+
 def bt_selection_buttons(id_):
     # Convert id_ to string before slicing
     id_str = str(id_)

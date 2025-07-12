@@ -152,6 +152,7 @@ async def arg_usage(_, query):
             buttons.data_button("❌ Close", "help close")
             button = buttons.build_menu(2)
             await edit_message(message, TOOL_HELP_DICT["main"], button)
+
     elif data[1] == "mirror":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back m")
@@ -218,6 +219,7 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, TOOL_HELP_DICT[data[2]], button)
+
 
     try:
         await query.answer()

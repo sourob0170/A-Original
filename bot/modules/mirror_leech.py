@@ -25,7 +25,6 @@ from bot.helper.ext_utils.links_utils import (
     is_telegram_link,
     is_url,
 )
-from bot.helper.gallery_dl_utils.url_parser import is_gallery_dl_url
 from bot.helper.listeners.task_listener import TaskListener
 from bot.helper.mirror_leech_utils.download_utils.aria2_download import (
     add_aria2_download,
@@ -97,6 +96,9 @@ class Mirror(TaskListener):
         self.is_nzb = is_nzb
 
     async def new_event(self):
+        # Ensure user_dict is never None to prevent AttributeError
+        self._ensure_user_dict()
+
         # Check if message text exists before trying to split it
         if (
             not self.message
@@ -368,6 +370,14 @@ class Mirror(TaskListener):
                         "❌ DDL upload is disabled by the administrator.",
                     )
                     return None
+
+                # Check DDL server configuration
+                from bot.modules.users_settings import get_ddl_setting
+
+                user_id = self.message.from_user.id
+                default_server, _ = get_ddl_setting(user_id, "DDL_SERVER", "gofile")
+
+
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
         self.compress = args["-z"]
@@ -943,9 +953,6 @@ class Mirror(TaskListener):
                 and not (
                     Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link)
                 )
-                and not (
-                    Config.GALLERY_DL_ENABLED and await is_gallery_dl_url(self.link)
-                )
             )
         ):
             x = await send_message(
@@ -1038,7 +1045,7 @@ class Mirror(TaskListener):
                 content_type,
             ):
                 try:
-                    self.link = await sync_to_async(direct_link_generator, self.link)
+                    self.link = await sync_to_async(direct_link_generator, self.link, self.user_id)
                     if isinstance(self.link, tuple):
                         self.link, headers = self.link
                     elif isinstance(self.link, str):
@@ -1130,9 +1137,7 @@ class Mirror(TaskListener):
         elif Config.STREAMRIP_ENABLED and await is_streamrip_url(self.link):
             # Handle streamrip downloads with quality selection
             await self._handle_streamrip_download()
-        elif Config.GALLERY_DL_ENABLED and await is_gallery_dl_url(self.link):
-            # Handle gallery-dl downloads with quality selection
-            await self._handle_gallery_dl_download()
+
         elif Config.ZOTIFY_ENABLED and await is_zotify_url(self.link):
             # Handle zotify downloads
             create_task(add_zotify_download(self, self.link))
@@ -1188,35 +1193,7 @@ class Mirror(TaskListener):
             LOGGER.error(f"Error in streamrip download handling: {e}")
             await self.on_download_error(f"❌ Streamrip download error: {e}")
 
-    async def _handle_gallery_dl_download(self):
-        """Handle gallery-dl downloads with quality selection"""
-        from bot.modules.gallery_dl import Gdl
 
-        try:
-            # Create gallery-dl instance and start download
-            gdl_instance = Gdl(
-                client=None,  # Will be set by the handler
-                message=self.message,
-                is_leech=self.is_leech,
-                same_dir=self.same_dir,
-                bulk=self.bulk,
-                multi_tag=self.multi_tag,
-                options=self.options,
-            )
-
-            # Copy necessary attributes from Mirror to Gdl
-            gdl_instance.link = self.link
-            gdl_instance.name = self.name
-            gdl_instance.dir = self.dir
-            gdl_instance.user_id = self.user_id
-            gdl_instance.message = self.message
-
-            # Start the gallery-dl download
-            await gdl_instance.new_event()
-
-        except Exception as e:
-            LOGGER.error(f"Error in gallery-dl download handling: {e}")
-            await self.on_download_error(f"❌ Gallery-dl download error: {e}")
 
 
 async def mirror(client, message):

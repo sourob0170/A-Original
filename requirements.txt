@@ -6,7 +6,7 @@ apscheduler
 aioaria2
 aioqbt
 beautifulsoup4
-cinemagoer
+git+https://github.com/cinemagoer/cinemagoer
 cloudscraper
 cryptography>=41.0.0
 codext>=1.15.6

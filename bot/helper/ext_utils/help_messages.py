@@ -294,9 +294,11 @@ To upload to cloud storage (Mirror only):
 -up rc (Upload to Rclone)
 -up yt (Upload to YouTube)
 -up mg (Upload to MEGA.nz)
--up ddl (Upload to DDL servers - Gofile, Streamtape)
+-up ddl (Upload to DDL servers - Gofile, Streamtape, DevUploads, MediaFire)
 -up ddl:gofile (Upload specifically to Gofile)
 -up ddl:streamtape (Upload specifically to Streamtape)
+-up ddl:devuploads (Upload specifically to DevUploads)
+-up ddl:mediafire (Upload specifically to MediaFire)
 
 In case you want to specify whether using token.pickle or service accounts you can add tp:gdrive_id (using token.pickle) or sa:gdrive_id (using service accounts) or mtp:gdrive_id (using token.pickle uploaded from usetting).
 DEFAULT_UPLOAD doesn't affect on leech cmds.
@@ -2501,6 +2503,10 @@ FILE_TO_LINK_HELP_DICT = {
     "Troubleshooting": file_to_link_troubleshooting,
 }
 
+
+
+
+
 RSS_HELP_MESSAGE = """
 Use this format to add feed url:
 Title1 link (required)
@@ -2699,14 +2705,22 @@ Timeout: 60 sec""",
     "YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION": "Set default description for YouTube uploads.\n\nExample: Uploaded via AimLeechBot - simple description\nExample: Check out this amazing content! - custom description\nExample: (leave empty for no default description)\n\nTimeout: 60 sec",
     "YOUTUBE_UPLOAD_DEFAULT_TITLE": "Set default title template for YouTube uploads. Supports variables: {filename}, {date}, {time}, {size}.\n\nExample: {filename} - {date} - adds date to filename\nExample: My Channel - {filename} - adds channel prefix\nExample: (leave empty to use cleaned filename)\n\nVariables:\n{filename} - cleaned filename without extension\n{date} - current date (YYYY-MM-DD)\n{time} - current time (HH:MM:SS)\n{size} - file size (e.g., 1.2 GB)\n\nTimeout: 60 sec",
     # DDL Settings
-    "DDL_SERVER": "Set your preferred DDL server for uploads. Available options: gofile, streamtape.\n\nExample: gofile - use Gofile server for uploads\nExample: streamtape - use Streamtape server for uploads\n\nThis will be used when you specify -up ddl without a specific server.\n\nTimeout: 60 sec",
+    "DDL_SERVER": "Set your preferred DDL server for uploads. Available options: gofile, streamtape, devuploads, mediafire.\n\nExample: gofile - use Gofile server for uploads\nExample: streamtape - use Streamtape server for uploads\nExample: devuploads - use DevUploads server for uploads\nExample: mediafire - use MediaFire server for uploads\n\nThis will be used when you specify -up ddl without a specific server.\n\nTimeout: 60 sec",
     "GOFILE_API_KEY": "Send your Gofile API key for personalized uploads. Get your API key from your Gofile profile.\n\nExample: abc123def456 - your personal API key\nExample: (leave empty to use owner's API key)\n\nWith your own API key, uploads will go to your Gofile account.\n\nTimeout: 60 sec",
+    "DEVUPLOADS_API_KEY": "Send your DevUploads API key for personalized uploads. Get your API key from your DevUploads account.\n\nExample: abc123def456 - your personal API key\nExample: (leave empty to use owner's API key)\n\nWith your own API key, uploads will go to your DevUploads account.\n\nTimeout: 60 sec",
+    "DEVUPLOADS_FOLDER_NAME": "Set custom folder name for DevUploads uploads. Leave empty to use root folder.\n\nExample: MyFiles - creates folder named 'MyFiles'\nExample: Movies/2024 - creates nested folder structure\nExample: (leave empty for root folder)\n\nTimeout: 60 sec",
+    "DEVUPLOADS_PUBLIC_FILES": "Set whether uploaded files should be public or private.\n\nExample: true - files are publicly accessible\nExample: false - files are private (require login)\n\nPublic files can be accessed by anyone with the link.\nPrivate files require DevUploads account login to access.\n\nTimeout: 60 sec",
     "GOFILE_FOLDER_NAME": "Set the folder name for your Gofile uploads. Leave empty to use the filename as folder name.\n\nExample: MyBot - create a folder named 'MyBot'\nExample: Downloads/Videos - create nested folders\nExample: (leave empty to use filename)\n\nTimeout: 60 sec",
     "GOFILE_DEFAULT_PASSWORD": "Set a default password for your Gofile uploads when password protection is enabled.\n\nExample: mySecurePassword123 - set a default password\nExample: (leave empty for no default password)\n\nThis password will be used when GOFILE_PASSWORD_PROTECTION is enabled.\n\nTimeout: 60 sec",
     "GOFILE_LINK_EXPIRY_DAYS": "Set the number of days after which your Gofile links should expire. Set to 0 for no expiry.\n\nExample: 30 - links expire after 30 days\nExample: 7 - links expire after 1 week\nExample: 0 - links never expire\n\nTimeout: 60 sec",
-    "STREAMTAPE_LOGIN": "Send your Streamtape login username for personalized uploads.\n\nExample: myusername - your Streamtape username\nExample: (leave empty to use owner's credentials)\n\nWith your own credentials, uploads will go to your Streamtape account.\n\nTimeout: 60 sec",
-    "STREAMTAPE_API_KEY": "Send your Streamtape API key for personalized uploads. Get your API key from your Streamtape account panel.\n\nExample: abc123def456 - your personal API key\nExample: (leave empty to use owner's API key)\n\nWith your own API key, uploads will go to your Streamtape account.\n\nTimeout: 60 sec",
+    "STREAMTAPE_API_USERNAME": "Send your Streamtape API/FTP Username for personalized uploads.\n\nExample: 878a8499dce2cea654d6 - your API/FTP Username from account panel\nExample: (leave empty to use owner's credentials)\n\nGet this from: https://streamtape.com/accpanel\nLook for 'API/FTP Username' field.\n\nTimeout: 60 sec",
+    "STREAMTAPE_API_PASSWORD": "Send your Streamtape API/FTP Password for personalized uploads.\n\nExample: your_generated_password - your API/FTP Password from account panel\nExample: (leave empty to use owner's credentials)\n\nGet this from: https://streamtape.com/accpanel\nUse the 'API/FTP Credentials' form to generate/view your password.\n\nTimeout: 60 sec",
     "STREAMTAPE_FOLDER_NAME": "Set the folder name for your Streamtape uploads. Leave empty to upload to root folder.\n\nExample: MyBot - create a folder named 'MyBot'\nExample: Videos - upload to Videos folder\nExample: (leave empty for root folder)\n\nTimeout: 60 sec",
+    "MEDIAFIRE_EMAIL": "Send your MediaFire account email for authentication.\n\nExample: myemail@example.com - your MediaFire account email\nExample: (leave empty to use owner's credentials)\n\nWith your own credentials, uploads will go to your MediaFire account.\n\nTimeout: 60 sec",
+    "MEDIAFIRE_PASSWORD": "Send your MediaFire account password for authentication.\n\nExample: mySecurePassword123 - your MediaFire account password\nExample: (leave empty to use owner's credentials)\n\nWith your own credentials, uploads will go to your MediaFire account.\n\nTimeout: 60 sec",
+    "MEDIAFIRE_APP_ID": "Send your MediaFire application ID for API access. Get your App ID from MediaFire Developers.\n\nExample: 12345 - your MediaFire application ID\nExample: (leave empty to use owner's App ID)\n\nApp ID is required for MediaFire API access.\n\nTimeout: 60 sec",
+    "MEDIAFIRE_API_KEY": "Send your MediaFire API key for enhanced features (optional). Get your API key from MediaFire Developers.\n\nExample: abc123def456 - your MediaFire API key\nExample: (leave empty for basic features)\n\nAPI key provides enhanced features and higher rate limits.\n\nTimeout: 60 sec",
+
 }
 
 # Media tools help text dictionary with detailed examples and consistent formatting
@@ -3093,6 +3107,7 @@ search_commands = f"""
 /{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
 /{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.
 /{BotCommands.ScrapCommand} [url|help|domains]: Scrape movie info (title, qualities, sizes, magnet links) from 1tamilmv websites.
+
 """
 
 # File Management page

@@ -54,3 +54,14 @@ class DDLStatus:
 
     def eng(self):
         return self.__obj.engine
+
+    def task(self):
+        return self
+
+    async def cancel_task(self):
+        """Cancel the DDL upload task"""
+        if self.listener:
+            self.listener.is_cancelled = True
+            await self.listener.on_upload_error("DDL upload cancelled by user!")
+        if hasattr(self.__obj, 'is_cancelled'):
+            self.__obj.is_cancelled = True

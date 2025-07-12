@@ -146,7 +146,7 @@ class Clone(TaskListener):
     async def _proceed_to_clone(self, sync):
         if is_share_link(self.link):
             try:
-                self.link = await sync_to_async(direct_link_generator, self.link)
+                self.link = await sync_to_async(direct_link_generator, self.link, self.user_id)
                 LOGGER.info(f"Generated link: {self.link}")
             except DirectDownloadLinkException as e:
                 LOGGER.error(str(e))

@@ -1469,8 +1469,8 @@ async def get_media_info(msg, query=None):
         return "document", title, performer, duration, file_size, file_id, relevance
 
     if hasattr(msg, "photo") and msg.photo:
-        # Photo - get the highest resolution
-        photo = msg.photo[-1] if isinstance(msg.photo, list) else msg.photo
+        # Photo - in Pyrogram, msg.photo is a single Photo object, not a list
+        photo = msg.photo
         caption = getattr(msg, "caption", "") or ""
         title = caption or "Photo"
         performer = ""
@@ -2446,10 +2446,10 @@ async def chosen_inline_result_handler(_, chosen_inline_result):
                 file_size = message.document.file_size or 0
                 file_id = message.document.file_id
             elif hasattr(message, "photo") and message.photo:
-                # For photos, use the largest size
+                # For photos, in Pyrogram msg.photo is a single Photo object
                 if message.photo:
-                    file_size = message.photo[-1].file_size or 0
-                    file_id = message.photo[-1].file_id
+                    file_size = message.photo.file_size or 0
+                    file_id = message.photo.file_id
 
             # Store media information in cache for retrieval via start command
             media_info = {
@@ -2536,10 +2536,10 @@ async def chosen_inline_result_handler(_, chosen_inline_result):
             elif (
                 hasattr(message, "photo")
                 and message.photo
-                and message.photo[-1].file_size
+                and message.photo.file_size
             ):
                 message_text += (
-                    f"Size: {get_readable_file_size(message.photo[-1].file_size)}\n"
+                    f"Size: {get_readable_file_size(message.photo.file_size)}\n"
                 )
 
             message_text += f"Type: {media_type.capitalize()}\n\n"
