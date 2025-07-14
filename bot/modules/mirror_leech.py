@@ -401,6 +401,8 @@ class Mirror(TaskListener):
                         if result:
                             if isinstance(result, LinkResult):
                                 self.link = result.url
+                                if not self.name:
+                                    self.name = result.filename
                             else:
                                 self.link = result
                             if result.headers:
