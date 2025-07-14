@@ -125,7 +125,7 @@ if UPSTREAM_REPO:
     update = srun(
         [
             f"git init -q \
-                     && git config --global user.email aimmirrorbd@gmail.com \
+                     && git config --global user.email aimhigh.unearned998@passinbox.com \
                      && git config --global user.name aim \
                      && git add . \
                      && git commit -sm update -q \

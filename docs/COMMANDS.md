@@ -6,12 +6,14 @@ mirror - or /m Mirror
 jdmirror - or /jm Mirror using jdownloader
 nzbmirror - or /nm Mirror using sabnzbd
 ytdl - or /y Mirror yt-dlp supported links
+gdlmirror - or /gm Mirror using gallery-dl
 streamripmirror - or /srmirror or /srm Mirror music from streaming platforms
 zotifymirror - or /zmirror or /zm Mirror music from Spotify
 leech - or /l Upload to telegram
 jdleech - or /jl Leech using jdownloader
 nzbleech - or /nl Leech using sabnzbd
 ytdlleech - or /yl Leech yt-dlp supported links
+gdlleech - or /gl Leech using gallery-dl
 streamripleech - or /srleech or /srl Leech music from streaming platforms
 zotifyleech - or /zleech or /zl Leech music from Spotify
 clone - Copy file/folder to Drive
@@ -47,6 +49,7 @@ rss - RSS menu
 fontstyles - or /fonts View available font styles for leech
 check_deletions - or /cd Check deletions
 imdb - Search for movies or TV series info
+whisper - Transcribe audio using Whisper AI
 login - Login to the bot using password for permanent access
 mediasearch - or /mds Search for media files
 mediatools - or /mt Media tools settings for watermark and other features
@@ -59,4 +62,12 @@ paste - Paste text to katb.in website
 virustotal - Scan files or URLs for viruses using VirusTotal
 streamripsearch - or /srsearch or /srs Search music across platforms
 zotifysearch - or /zsearch or /zs Search music on Spotify
+megasearch - or /mgs Search files on MEGA
+encode - or /enc Encode files
+decode - or /dec Decode files
+quickinfo - or /qi Get quick information about files
+tool - or /t Access various tools
+nsfwstats - Get NSFW detection statistics
+nsfwtest - Test NSFW detection on content
+scrap - Scraping functionality
 ```

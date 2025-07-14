@@ -2297,211 +2297,7 @@ QUICKINFO_HELP_DICT = {
     "Examples": quickinfo_examples,
 }
 
-# File-to-Link help content
-file_to_link_main = """<b>📁 File-to-Link Converter</b>
-
-Convert any media file to permanent download and streaming links with superfast access.
-
-<b>🚀 Usage:</b>
-• Reply to any media file with <code>/f2l</code> or <code>/file2link</code>
-• <i>Note: Auto-processing is disabled. You must use the command manually.</i>
-
-<b>📋 Supported Formats:</b>
-• <b>Videos:</b> MP4, AVI, MKV, MOV, WebM, FLV, WMV, M4V, TS, 3GP
-• <b>Audio:</b> MP3, M4A, FLAC, WAV, OGG, OPUS, AAC, WMA
-• <b>Documents:</b> PDF, DOCX, TXT, ZIP, RAR, 7Z, etc.
-• <b>Images:</b> JPG, PNG, GIF, WebP, TIFF, BMP
-
-<b>✨ Features:</b>
-• 💥 Superfast download links
-• 🎬 Direct streaming for videos/audio
-• 🔒 Secure hash-based access
-• 💎 Permanent links (won't expire)
-• 📊 Real-time system monitoring
-• 🌐 Custom domain support
-• 🚫 Ad-free experience
-• 🔐 Password protection (optional)
-• 📍 User DC detection for optimal performance
-
-<b>🎯 How it works:</b>
-1. Reply to any media file with <code>/f2l</code>
-2. Bot processes and forwards file to storage
-3. Generates secure download and stream links
-4. Links are cached for instant future access
-5. Enjoy permanent, fast access to your files!
-
-<b>⚡ Performance:</b>
-• Load balancing across multiple bot clients
-• Intelligent caching system
-• Rate limiting for fair usage
-• Real-time system monitoring"""
-
-file_to_link_config = """<b>🔧 File-to-Link Configuration</b>
-
-Configure File-to-Link settings for optimal performance and security.
-
-<b>📋 Basic Settings:</b>
-
-<b>FILE_TO_LINK_ENABLED</b>
-• <code>True</code> - Enable File-to-Link functionality
-• <code>False</code> - Disable File-to-Link functionality
-• Default: <code>True</code>
-
-<b>BASE_URL</b>
-• Custom domain for links (e.g., "https://mydomain.com/")
-• Leave empty for auto-detection (Heroku deployments)
-• Auto-configured from HEROKU_APP_NAME if available
-• Must start with http:// or https://
-• Should end with "/" for proper URL generation
-
-<b>🔒 Security Settings:</b>
-
-<b>STREAM_SECURITY_HASH</b>
-• <code>True</code> - Enable hash-based security (recommended)
-• <code>False</code> - Disable hash security (less secure)
-• Default: <code>True</code>
-
-<b>STREAM_PASSWORD_PROTECTION</b>
-• <code>True</code> - Enable password protection for links
-• <code>False</code> - No password protection
-• Default: <code>False</code>
-
-<b>STREAM_DEFAULT_PASSWORD</b>
-• Default password for protected links
-• Minimum 6 characters recommended
-• Leave empty if password protection disabled
-
-<b>BANNED_STREAM_CHANNELS</b>
-• Comma-separated list of banned channel IDs
-• Example: <code>"-1001234567890,-1001234567891"</code>
-• Files from these channels won't be processed"""
-
-file_to_link_performance = """<b>⚡ Performance & Optimization</b>
-
-Configure performance settings for optimal File-to-Link operation.
-
-<b>🚀 Caching Settings:</b>
-
-<b>STREAM_CACHE_ENABLED</b>
-• <code>True</code> - Enable caching for better performance
-• <code>False</code> - Disable caching (slower but uses less memory)
-• Default: <code>True</code>
-
-
-
-<b>📊 Load Balancing:</b>
-
-<b>STREAM_LOAD_BALANCING</b>
-• <code>True</code> - Enable multi-client load balancing
-• <code>False</code> - Use single client only
-• Default: <code>True</code>
-
-<b>HELPER_TOKENS</b>
-• Bot tokens for helper bots (space-separated)
-• Example: <code>"token1 token2 token3"</code>
-• Used for load balancing and better performance
-• Unlimited helper bots supported
-
-<b>🎯 Storage Settings:</b>
-
-<b>LEECH_DUMP_CHAT</b>
-• Chat IDs where files are stored (list format)
-• Supports prefixed formats:
-  - <code>["b:-1001234567890"]</code> - Bot upload
-  - <code>["u:@channel"]</code> - User upload
-  - <code>["h:@group|123456"]</code> - Hybrid upload
-• Example: <code>["-1001234567890", "b:@mychannel"]</code>
-• Required for File-to-Link functionality
-
-<b>🌟 Interface Settings:</b>
-
-<b>STREAM_NO_ADS</b>
-• <code>True</code> - Ad-free experience
-• <code>False</code> - Allow ads
-• Default: <code>True</code>
-
-<b>PERMANENT_LINKS</b>
-• <code>True</code> - Links never expire
-• <code>False</code> - Links may expire
-• Default: <code>True</code>"""
-
-file_to_link_troubleshooting = """<b>🔧 Troubleshooting & Tips</b>
-
-Common issues and solutions for File-to-Link functionality.
-
-<b>❌ Common Errors:</b>
-
-<b>"Dump chat not configured"</b>
-• Solution: Set LEECH_DUMP_CHAT with valid chat IDs
-• Format: <code>["-1001234567890"]</code> or <code>["b:@channel"]</code>
-• Ensure bot has admin rights in dump chat
-
-<b>"Rate limit exceeded"</b>
-• Solution: Wait before trying again
-• Rate limiting prevents abuse
-• Contact admin if persistent
-
-<b>"No supported file found"</b>
-• Solution: Ensure you're replying to a media file
-• Supported: videos, audio, documents, images
-• File must be accessible to the bot
-
-<b>"Failed to generate links"</b>
-• Solution: Check streaming configuration
-• Verify FILE_TO_LINK_ENABLED is True
-• Ensure main web server is running
-• Ensure BASE_URL is configured (auto-detected for Heroku)
-
-<b>⚡ Performance Tips:</b>
-
-<b>For Better Speed:</b>
-• Enable STREAM_CACHE_ENABLED
-• Configure HELPER_TOKENS for load balancing
-• Ensure main web server is optimized
-
-<b>For Better Security:</b>
-• Enable STREAM_SECURITY_HASH
-• Use STREAM_PASSWORD_PROTECTION
-• Configure BANNED_STREAM_CHANNELS
-• Use private dump chats
-
-<b>For Reliability:</b>
-• Use multiple dump chats in LEECH_DUMP_CHAT
-• Enable PERMANENT_LINKS
-• Regular monitoring with /streamstats
-• Keep helper bots active
-
-<b>📊 Monitoring:</b>
-• Use <code>/streamstats</code> for system statistics
-• Monitor cache usage and performance
-• Check load balancing status
-• Verify configuration validation
-
-<b>🔄 Maintenance:</b>
-• Restart bot if issues persist
-• Clear cache periodically (automatic)
-• Update helper bot tokens if needed
-• Monitor dump chat storage space
-
-<b>🤖 Auto-Detection (Heroku):</b>
-• BASE_URL auto-configured from HEROKU_APP_NAME
-• Requires HEROKU_API_KEY for API access
-• Automatically sets https://yourapp.herokuapp.com/
-• Manual configuration overrides auto-detection
-• Check logs for auto-detection status
-
-<b>🔗 Web Server Integration:</b>
-• Streaming is automatically integrated with main web server
-• Single port usage - perfect for Heroku deployment
-• Unified web interface with existing features
-• No additional configuration needed"""
-
-FILE_TO_LINK_HELP_DICT = {
-    "main": file_to_link_main,
-    "Configuration": file_to_link_config,
-    "Performance": file_to_link_performance,
-    "Troubleshooting": file_to_link_troubleshooting,
-}
+# File-to-Link help content removed - streaming functionality disabled
 
 
 RSS_HELP_MESSAGE = """
@@ -3115,9 +2911,9 @@ file_commands = f"""
 /{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
 /{BotCommands.SoxCommand[0]} or /{BotCommands.SoxCommand[1]}: Generate audio spectrum from audio files.
 /{BotCommands.PasteCommand}: Paste text/code to a pastebin service.
-/{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}: Convert media files to permanent download and streaming links with category management.
+# File2Link command removed - streaming functionality disabled
 /{BotCommands.ToolCommand[0]} or /{BotCommands.ToolCommand[1]}: Media conversion and processing tools (gif, sticker, emoji, voice, vnote, image processing, text tools). Also supports direct GitHub repo download with URL.
-/{BotCommands.IndexCommand}: Reindex all media files by comparing dump chat with database (Owner & Sudo only).
+# IndexCommand removed - media indexing functionality disabled
 """
 
 # Security & Authentication page
@@ -3157,8 +2953,7 @@ special_commands = f"""
 /{BotCommands.EncodeCommand[0]} or /{BotCommands.EncodeCommand[1]} [query]: Encode text using various encoding methods (Base64, Binary, Cryptography, etc.).
 /{BotCommands.DecodeCommand[0]} or /{BotCommands.DecodeCommand[1]} [query]: Decode text using various decoding methods.
 /{BotCommands.QuickInfoCommand[0]} or /{BotCommands.QuickInfoCommand[1]} [chat]: Get chat/user information with interactive buttons.
-/{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}: Convert media files to permanent download and streaming links.
-/{BotCommands.StreamStatsCommand[0]} or /{BotCommands.StreamStatsCommand[1]}: View File-to-Link system statistics and performance.
+# File2Link and StreamStats commands removed - streaming functionality disabled
 /{BotCommands.WhisperCommand}: Send private whisper messages in group chats (reply to user or use -to flag for multiple targets).
 """
 
@@ -3173,7 +2968,7 @@ system_commands = f"""
 /{BotCommands.AExecCommand}: Execute async functions.
 /{BotCommands.ClearLocalsCommand}: Clear locals in exec functions.
 /{BotCommands.BroadcastCommand[0]} or /{BotCommands.BroadcastCommand[1]}: Broadcast a message to bot users.
-/{BotCommands.IndexCommand}: Reindex all media files by comparing dump chat with database.
+# IndexCommand removed - media indexing functionality disabled
 """
 
 # Help page
@@ -3195,5 +2990,5 @@ help_string = {
     "special": special_commands,
     "system": system_commands,
     "help": help_commands,
-    "f2l": "<b>📁 File-to-Link Help</b>\n\nUse the buttons below to explore File-to-Link features and configuration options.",
+    # "f2l" help removed - File-to-Link functionality disabled
 }

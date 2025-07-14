@@ -326,7 +326,182 @@
 | `STREAMRIP_MISC_CHECK_FOR_UPDATES` | `bool` | Check for streamrip updates. Default: `True`. |
 | `STREAMRIP_MISC_VERSION`    | `str`  | Streamrip version. Default: `2.0.6`. |
 
-## 14. Media Tools
+## 15. Zotify Integration
+
+### Basic Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_ENABLED`            | `bool` | Enable/disable Zotify Spotify downloading functionality. Default: `True`. |
+| `ZOTIFY_CREDENTIALS_PATH`   | `str`  | Path to Spotify credentials file. Default: `./zotify_credentials.json`. |
+| `ZOTIFY_LIMIT`              | `float` | Download limit in GB. Default: `0` (unlimited). |
+
+### Library Paths
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_ALBUM_LIBRARY`      | `str`  | Directory for album downloads. Default: `Music/Zotify Albums`. |
+| `ZOTIFY_PODCAST_LIBRARY`    | `str`  | Directory for podcast downloads. Default: `Music/Zotify Podcasts`. |
+| `ZOTIFY_PLAYLIST_LIBRARY`   | `str`  | Directory for playlist downloads. Default: `Music/Zotify Playlists`. |
+
+### Output Templates
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_OUTPUT_ALBUM`       | `str`  | Album track naming template. Default: `{album_artist}/{album}/{track_number}. {artists} - {title}`. |
+| `ZOTIFY_OUTPUT_PLAYLIST_TRACK` | `str` | Playlist track naming template. Default: `{playlist}/{artists} - {title}`. |
+| `ZOTIFY_OUTPUT_PLAYLIST_EPISODE` | `str` | Playlist episode naming template. Default: `{playlist}/{episode_number} - {title}`. |
+| `ZOTIFY_OUTPUT_PODCAST`     | `str`  | Podcast episode naming template. Default: `{podcast}/{episode_number} - {title}`. |
+| `ZOTIFY_OUTPUT_SINGLE`      | `str`  | Single track naming template. Default: `{artists} - {title}`. |
+
+### Quality and Format Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_DOWNLOAD_QUALITY`   | `str`  | Download quality: `auto`, `normal`, `high`, `very_high`. Default: `normal`. |
+| `ZOTIFY_AUDIO_FORMAT`       | `str`  | Output audio format: `vorbis`, `mp3`, `flac`, `aac`, `fdk_aac`, `opus`, `wav`, `wavpack`. Default: `mp3`. |
+| `ZOTIFY_ARTWORK_SIZE`       | `str`  | Album artwork size: `small`, `medium`, `large`. Default: `medium`. |
+| `ZOTIFY_TRANSCODE_BITRATE`  | `int`  | Transcoding bitrate in kbps (-1 to use download rate). Default: `-1`. |
+
+### Download Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_DOWNLOAD_REAL_TIME` | `bool` | Download at the same rate as track playback. Default: `False`. |
+| `ZOTIFY_REPLACE_EXISTING`   | `bool` | Replace existing files when downloading. Default: `False`. |
+| `ZOTIFY_SKIP_DUPLICATES`    | `bool` | Skip downloading duplicate tracks. Default: `True`. |
+| `ZOTIFY_SKIP_PREVIOUS`      | `bool` | Skip tracks that were previously downloaded. Default: `True`. |
+
+### Metadata and Files
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_SAVE_METADATA`      | `bool` | Save metadata tags to downloaded files. Default: `True`. |
+| `ZOTIFY_SAVE_GENRE`         | `bool` | Include genre information in metadata. Default: `False`. |
+| `ZOTIFY_ALL_ARTISTS`        | `bool` | Include all artists in metadata. Default: `True`. |
+| `ZOTIFY_LYRICS_FILE`        | `bool` | Save lyrics as separate .lrc files. Default: `False`. |
+| `ZOTIFY_LYRICS_ONLY`        | `bool` | Download only lyrics without audio. Default: `False`. |
+| `ZOTIFY_SAVE_SUBTITLES`     | `bool` | Save subtitles for podcast episodes. Default: `False`. |
+| `ZOTIFY_CREATE_PLAYLIST_FILE` | `bool` | Create .m3u playlist files for playlists. Default: `True`. |
+
+### FFmpeg Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_FFMPEG_PATH`        | `str`  | FFmpeg binary path or name. |
+| `ZOTIFY_FFMPEG_ARGS`        | `str`  | Additional FFmpeg arguments for transcoding. |
+
+### Language and Locale
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_LANGUAGE`           | `str`  | Language code for metadata and interface. Default: `en`. |
+
+### Print/Logging Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_PRINT_PROGRESS`     | `bool` | Show download progress in logs. Default: `True`. |
+| `ZOTIFY_PRINT_DOWNLOADS`    | `bool` | Print download start messages. Default: `False`. |
+| `ZOTIFY_PRINT_ERRORS`       | `bool` | Print error messages. Default: `True`. |
+| `ZOTIFY_PRINT_WARNINGS`     | `bool` | Print warning messages. Default: `True`. |
+| `ZOTIFY_PRINT_SKIPS`        | `bool` | Print skip messages for existing files. Default: `False`. |
+
+### Match Functionality
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_MATCH_EXISTING`     | `bool` | Match existing files for skip functionality. Default: `False`. |
+
+### Supported Formats
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `ZOTIFY_SUPPORTED_AUDIO_FORMATS` | `list` | List of supported audio formats: `["vorbis", "mp3", "flac", "aac", "fdk_aac", "opus", "wav", "wavpack"]`. |
+| `ZOTIFY_SUPPORTED_QUALITIES` | `list` | List of supported qualities: `["auto", "normal", "high", "very_high"]`. |
+| `ZOTIFY_SUPPORTED_ARTWORK_SIZES` | `list` | List of supported artwork sizes: `["small", "medium", "large"]`. |
+
+## 16. Gallery-dl Integration
+
+### Basic Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_ENABLED`        | `bool` | Enable/disable gallery-dl feature for 200+ platforms. Default: `True`. |
+| `GALLERY_DL_OPTIONS`        | `dict` | Gallery-dl configuration options as dictionary. |
+| `GALLERY_DL_QUALITY_SELECTION` | `bool` | Enable interactive quality selection. Default: `True`. |
+| `GALLERY_DL_ARCHIVE_ENABLED` | `bool` | Enable archive to avoid re-downloading. Default: `True`. |
+| `GALLERY_DL_METADATA_ENABLED` | `bool` | Save metadata files (JSON, YAML, TXT). Default: `True`. |
+| `GALLERY_DL_MAX_DOWNLOADS`  | `int`  | Maximum files per download (0 = unlimited). Default: `50`. |
+| `GALLERY_DL_RATE_LIMIT`     | `str`  | Rate limit (requests per second). Default: `1/s`. |
+| `GALLERY_DL_LIMIT`          | `float` | Download limit in GB. Default: `0` (unlimited). |
+
+### Gallery-dl Authentication Settings
+
+#### Instagram
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_INSTAGRAM_USERNAME` | `str` | Instagram username for private accounts and stories. |
+| `GALLERY_DL_INSTAGRAM_PASSWORD` | `str` | Instagram password for authentication. |
+
+#### Twitter/X
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_TWITTER_USERNAME` | `str` | Twitter username for private accounts and higher quality. |
+| `GALLERY_DL_TWITTER_PASSWORD` | `str` | Twitter password for authentication. |
+
+#### Reddit
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_REDDIT_CLIENT_ID` | `str` | Reddit app client ID for private subreddits. |
+| `GALLERY_DL_REDDIT_CLIENT_SECRET` | `str` | Reddit app client secret for enhanced access. |
+| `GALLERY_DL_REDDIT_USERNAME` | `str` | Reddit username for authentication. |
+| `GALLERY_DL_REDDIT_PASSWORD` | `str` | Reddit password for authentication. |
+| `GALLERY_DL_REDDIT_REFRESH_TOKEN` | `str` | Reddit refresh token for API access. |
+
+#### Pixiv
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_PIXIV_USERNAME` | `str` | Pixiv username for following artists and premium content. |
+| `GALLERY_DL_PIXIV_PASSWORD` | `str` | Pixiv password for authentication. |
+| `GALLERY_DL_PIXIV_REFRESH_TOKEN` | `str` | Pixiv refresh token for API access. |
+
+#### DeviantArt
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_DEVIANTART_CLIENT_ID` | `str` | DeviantArt app client ID for premium content. |
+| `GALLERY_DL_DEVIANTART_CLIENT_SECRET` | `str` | DeviantArt app client secret for Eclipse features. |
+| `GALLERY_DL_DEVIANTART_USERNAME` | `str` | DeviantArt username for authentication. |
+| `GALLERY_DL_DEVIANTART_PASSWORD` | `str` | DeviantArt password for authentication. |
+
+#### Tumblr
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_TUMBLR_API_KEY` | `str` | Tumblr API key for enhanced access. |
+| `GALLERY_DL_TUMBLR_API_SECRET` | `str` | Tumblr API secret for API features. |
+| `GALLERY_DL_TUMBLR_TOKEN`   | `str` | Tumblr access token for authentication. |
+| `GALLERY_DL_TUMBLR_TOKEN_SECRET` | `str` | Tumblr access token secret for authentication. |
+
+#### Discord
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GALLERY_DL_DISCORD_TOKEN`  | `str` | Discord bot token for server content access. |
+
+## 18. YouTube Upload Settings
+
+### Basic Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `YOUTUBE_UPLOAD_ENABLED`    | `bool` | Enable/disable YouTube upload feature. Default: `True`. |
+| `YOUTUBE_UPLOAD_DEFAULT_PRIVACY` | `str` | Default privacy setting: `public`, `unlisted`, `private`. Default: `unlisted`. |
+| `YOUTUBE_UPLOAD_DEFAULT_CATEGORY` | `str` | Default category ID (22 = People & Blogs). Default: `22`. |
+| `YOUTUBE_UPLOAD_DEFAULT_TAGS` | `str` | Default tags for uploaded videos, separated by comma. |
+| `YOUTUBE_UPLOAD_DEFAULT_DESCRIPTION` | `str` | Default description for uploaded videos. Default: `Uploaded by AIM`. |
+| `YOUTUBE_UPLOAD_DEFAULT_TITLE` | `str` | Default title template (empty = use filename). |
+
+### Advanced YouTube API Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `YOUTUBE_UPLOAD_DEFAULT_LANGUAGE` | `str` | Default language for video metadata (ISO 639-1 code). Default: `en`. |
+| `YOUTUBE_UPLOAD_DEFAULT_LICENSE` | `str` | License: `youtube` (standard) or `creativeCommon`. Default: `youtube`. |
+| `YOUTUBE_UPLOAD_EMBEDDABLE` | `bool` | Allow video to be embedded on other websites. Default: `True`. |
+| `YOUTUBE_UPLOAD_PUBLIC_STATS_VIEWABLE` | `bool` | Allow public to see video statistics. Default: `True`. |
+| `YOUTUBE_UPLOAD_MADE_FOR_KIDS` | `bool` | Mark videos as made for kids (COPPA compliance). Default: `False`. |
+| `YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS` | `bool` | Notify subscribers when video is uploaded. Default: `True`. |
+| `YOUTUBE_UPLOAD_LOCATION_DESCRIPTION` | `str` | Location description for videos. |
+| `YOUTUBE_UPLOAD_RECORDING_DATE` | `str` | Recording date (YYYY-MM-DD format, empty = upload date). |
+| `YOUTUBE_UPLOAD_AUTO_LEVELS` | `bool` | Auto-enhance video levels. Default: `False`. |
+| `YOUTUBE_UPLOAD_STABILIZE`  | `bool` | Auto-stabilize shaky videos. Default: `False`. |
+
+## 19. Media Tools
 
 ### Basic Settings
 | Variable                | Type   | Description |
@@ -613,6 +788,38 @@
 | `ADD_ATTACHMENT_ENABLED` | `bool` | Enable attachment adding. Default: `False`. |
 | `ADD_ATTACHMENT_INDEX`  | `int`  | Attachment index to add. Default: `None`. |
 | `ADD_ATTACHMENT_MIMETYPE` | `str` | MIME type for attachment. Default: `none`. |
+| `ADD_SUBTITLE_HARDSUB_ENABLED` | `bool` | Enable hardcoded subtitles when adding. Default: `False`. |
+
+### Swap Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `SWAP_ENABLED`          | `bool` | Enable swap functionality. Default: `False`. |
+| `SWAP_PRIORITY`         | `int`  | Swap task priority. Default: `6`. |
+| `SWAP_REMOVE_ORIGINAL`  | `bool` | Remove original files after swapping. Default: `False`. |
+
+### Audio Swap Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `SWAP_AUDIO_ENABLED`    | `bool` | Enable audio track swapping. Default: `False`. |
+| `SWAP_AUDIO_USE_LANGUAGE` | `bool` | Use language for audio track selection. Default: `True`. |
+| `SWAP_AUDIO_LANGUAGE_ORDER` | `str` | Language order for audio track selection. Default: `eng,hin`. |
+| `SWAP_AUDIO_INDEX_ORDER` | `str` | Index order for audio track selection. Default: `0,1`. |
+
+### Video Swap Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `SWAP_VIDEO_ENABLED`    | `bool` | Enable video track swapping. Default: `False`. |
+| `SWAP_VIDEO_USE_LANGUAGE` | `bool` | Use language for video track selection. Default: `True`. |
+| `SWAP_VIDEO_LANGUAGE_ORDER` | `str` | Language order for video track selection. Default: `eng,hin`. |
+| `SWAP_VIDEO_INDEX_ORDER` | `str` | Index order for video track selection. Default: `0,1`. |
+
+### Subtitle Swap Settings
+| Variable                | Type   | Description |
+|-------------------------|--------|-------------|
+| `SWAP_SUBTITLE_ENABLED` | `bool` | Enable subtitle track swapping. Default: `False`. |
+| `SWAP_SUBTITLE_USE_LANGUAGE` | `bool` | Use language for subtitle track selection. Default: `True`. |
+| `SWAP_SUBTITLE_LANGUAGE_ORDER` | `str` | Language order for subtitle track selection. Default: `eng,hin`. |
+| `SWAP_SUBTITLE_INDEX_ORDER` | `str` | Index order for subtitle track selection. Default: `0,1`. |
 
 ### Convert Settings
 | Variable                | Type   | Description |
@@ -844,24 +1051,24 @@
 ### Task Monitoring
 | Variable               | Type   | Description |
 |------------------------|--------|-------------|
-| `TASK_MONITOR_ENABLED` | `bool` | Enable task monitoring system. Default: `True`. |
-| `TASK_MONITOR_INTERVAL` | `int` | Monitoring interval in seconds. Default: `60`. |
-| `TASK_MONITOR_CONSECUTIVE_CHECKS` | `int` | Consecutive checks before action. Default: `20`. |
+| `TASK_MONITOR_ENABLED` | `bool` | Enable task monitoring system. Default: `False`. |
+| `TASK_MONITOR_INTERVAL` | `int` | Monitoring interval in seconds. Default: `120`. |
+| `TASK_MONITOR_CONSECUTIVE_CHECKS` | `int` | Consecutive checks before action. Default: `10`. |
 | `TASK_MONITOR_SPEED_THRESHOLD` | `int` | Speed threshold in KB/s. Default: `50`. |
 | `TASK_MONITOR_ELAPSED_THRESHOLD` | `int` | Elapsed time threshold in seconds. Default: `3600`. |
 | `TASK_MONITOR_ETA_THRESHOLD` | `int` | ETA threshold in seconds. Default: `86400`. |
-| `TASK_MONITOR_WAIT_TIME` | `int` | Wait time in seconds. Default: `600`. |
+| `TASK_MONITOR_WAIT_TIME` | `int` | Wait time in seconds. Default: `900`. |
 | `TASK_MONITOR_COMPLETION_THRESHOLD` | `int` | Completion threshold in seconds. Default: `86400`. |
-| `TASK_MONITOR_CPU_HIGH` | `int` | High CPU usage percentage. Default: `90`. |
-| `TASK_MONITOR_CPU_LOW` | `int` | Low CPU usage percentage. Default: `60`. |
-| `TASK_MONITOR_MEMORY_HIGH` | `int` | High memory usage percentage. Default: `75`. |
-| `TASK_MONITOR_MEMORY_LOW` | `int` | Low memory usage percentage. Default: `60`. |
+| `TASK_MONITOR_CPU_HIGH` | `int` | High CPU usage percentage. Default: `85`. |
+| `TASK_MONITOR_CPU_LOW` | `int` | Low CPU usage percentage. Default: `50`. |
+| `TASK_MONITOR_MEMORY_HIGH` | `int` | High memory usage percentage. Default: `70`. |
+| `TASK_MONITOR_MEMORY_LOW` | `int` | Low memory usage percentage. Default: `50`. |
 
 ### Auto Restart Settings
 | Variable               | Type   | Description |
 |------------------------|--------|-------------|
 | `AUTO_RESTART_ENABLED` | `bool` | Enable automatic restart functionality. Default: `False`. |
-| `AUTO_RESTART_INTERVAL` | `int` | Auto restart interval in hours. Default: `24`. |
+| `AUTO_RESTART_INTERVAL` | `int` | Auto restart interval in hours. Default: `48`. |
 
 ## 19. Feature Toggles
 
@@ -909,27 +1116,13 @@
 | Variable               | Type   | Description |
 |------------------------|--------|-------------|
 | `CORRECT_CMD_SUFFIX`   | `str`  | Comma-separated list of allowed command suffixes. |
-| `WRONG_CMD_WARNINGS_ENABLED` | `bool` | Enable/disable warnings for wrong command suffixes. Default: `True`. |
+| `WRONG_CMD_WARNINGS_ENABLED` | `bool` | Enable/disable warnings for wrong command suffixes. Default: `False`. |
 
 ## 21. Extra fields from Aeon
 
 | Variable               | Type   | Description |
 |------------------------|--------|-------------|
-| `METADATA_KEY`         | `str`  | Key used to tag or fetch metadata. |
 | `WATERMARK_KEY`        | `str`  | Key used for watermarking files or content. |
-| `METADATA_ALL`         | `str`  | Global metadata for all fields. |
-| `METADATA_TITLE`       | `str`  | Global title metadata. |
-| `METADATA_AUTHOR`      | `str`  | Global author metadata. |
-| `METADATA_COMMENT`     | `str`  | Global comment metadata. |
-| `METADATA_VIDEO_TITLE` | `str`  | Video track title metadata. |
-| `METADATA_VIDEO_AUTHOR` | `str` | Video track author metadata. |
-| `METADATA_VIDEO_COMMENT` | `str` | Video track comment metadata. |
-| `METADATA_AUDIO_TITLE` | `str`  | Audio track title metadata. |
-| `METADATA_AUDIO_AUTHOR` | `str` | Audio track author metadata. |
-| `METADATA_AUDIO_COMMENT` | `str` | Audio track comment metadata. |
-| `METADATA_SUBTITLE_TITLE` | `str` | Subtitle track title metadata. |
-| `METADATA_SUBTITLE_AUTHOR` | `str` | Subtitle track author metadata. |
-| `METADATA_SUBTITLE_COMMENT` | `str` | Subtitle track comment metadata. |
 | `SET_COMMANDS`         | `bool` | Whether to register bot commands on startup. Default: `True`. |
 | `TOKEN_TIMEOUT`        | `int`  | Timeout in seconds for token/session expiry. Default: `0`. |
 | `PAID_CHANNEL_ID`      | `int`  | Telegram channel ID where user need to join for no token. Default: `0`. |
@@ -948,3 +1141,425 @@
 | `OWNER_THUMB`          | `str`  | Default thumbnail URL for owner. Default: `https://graph.org/file/80b7fb095063a18f9e232.jpg`. |
 | `PIL_MEMORY_LIMIT`     | `int`  | PIL memory limit in MB. Default: `2048`. |
 | `MEDIA_SEARCH_CHATS`   | `list` | List of chat IDs for media search functionality. |
+| `MEDIA_STORE`          | `bool` | Enable media storage functionality. Default: `False`. |
+| `SHORTENER_MIN_TIME`   | `int`  | Minimum time in seconds for shortener to process. Default: `10`. |
+| `QUICKINFO_ENABLED`    | `bool` | Enable/disable QuickInfo feature. Default: `False`. |
+
+| `GC_ENABLED`           | `bool` | Enable/disable garbage collection completely. Default: `True`. |
+| `GC_INTERVAL`          | `int`  | Minimum interval between GC operations in seconds. Default: `60`. |
+| `GC_THRESHOLD_MB`      | `int`  | Memory threshold in MB to trigger GC. Default: `150`. |
+| `GC_AGGRESSIVE_MODE`   | `bool` | Enable aggressive GC mode. Default: `False`. |
+| `TERABOX_PROXY`        | `str`  | Terabox proxy URL for bypassing restrictions. Default: `https://wdzone-terabox-api.vercel.app/`. |
+| `UNIVERSAL_FILENAME`   | `str`  | Universal filename template for both mirror and leech files. |
+| `EQUAL_SPLITS`         | `bool` | Create equal-sized parts when splitting files. Default: `False`. |
+| `STREAMTAPE_ALLOWED_EXTENSIONS` | `list` | Allowed video extensions for Streamtape uploads. |
+
+## 23. Debrid Services Integration
+
+### Debrid-Link Authentication Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `DEBRID_LINK_API`           | `str`  | Legacy API key or OAuth2 access_token for Debrid-Link. |
+| `DEBRID_LINK_ACCESS_TOKEN`  | `str`  | OAuth2 access_token (recommended) for Debrid-Link. |
+| `DEBRID_LINK_REFRESH_TOKEN` | `str`  | OAuth2 refresh_token for token renewal. |
+| `DEBRID_LINK_CLIENT_ID`     | `str`  | OAuth2 client_id from Debrid-Link app. |
+| `DEBRID_LINK_CLIENT_SECRET` | `str`  | OAuth2 client_secret (keep secure). |
+| `DEBRID_LINK_TOKEN_EXPIRES` | `int`  | Token expiration timestamp. Default: `0`. |
+
+### TorBox API Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TORBOX_API_KEY`            | `str`  | TorBox API key for premium downloads. |
+
+## 24. Media Tools - Advanced Processing
+
+### Compression Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `COMPRESSION_ENABLED`       | `bool` | Enable compression functionality. Default: `False`. |
+| `COMPRESSION_PRIORITY`      | `int`  | Compression task priority. Default: `4`. |
+| `COMPRESSION_DELETE_ORIGINAL` | `bool` | Delete original files after compression. Default: `True`. |
+
+### Video Compression Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `COMPRESSION_VIDEO_ENABLED` | `bool` | Enable video compression. Default: `False`. |
+| `COMPRESSION_VIDEO_CODEC`   | `str`  | Video codec for compression. Default: `libx264`. |
+| `COMPRESSION_VIDEO_PRESET`  | `str`  | Video encoding preset. Default: `medium`. |
+| `COMPRESSION_VIDEO_CRF`     | `int`  | Constant Rate Factor for video quality. Default: `23`. |
+| `COMPRESSION_VIDEO_BITRATE` | `str`  | Video bitrate for compression. Default: `none`. |
+| `COMPRESSION_VIDEO_RESOLUTION` | `str` | Target resolution for video compression. Default: `none`. |
+| `COMPRESSION_VIDEO_FPS`     | `str`  | Target frame rate for video compression. Default: `none`. |
+
+### Audio Compression Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `COMPRESSION_AUDIO_ENABLED` | `bool` | Enable audio compression. Default: `False`. |
+| `COMPRESSION_AUDIO_CODEC`   | `str`  | Audio codec for compression. Default: `aac`. |
+| `COMPRESSION_AUDIO_BITRATE` | `str`  | Audio bitrate for compression. Default: `128k`. |
+| `COMPRESSION_AUDIO_QUALITY` | `str`  | Audio quality setting. Default: `none`. |
+| `COMPRESSION_AUDIO_CHANNELS` | `str` | Audio channel configuration. Default: `none`. |
+| `COMPRESSION_AUDIO_SAMPLE_RATE` | `str` | Audio sample rate. Default: `none`. |
+
+### Image Compression Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `COMPRESSION_IMAGE_ENABLED` | `bool` | Enable image compression. Default: `False`. |
+| `COMPRESSION_IMAGE_QUALITY` | `int`  | Image compression quality (1-100). Default: `85`. |
+| `COMPRESSION_IMAGE_FORMAT`  | `str`  | Output format for image compression. Default: `none`. |
+| `COMPRESSION_IMAGE_RESIZE`  | `str`  | Resize dimensions for images. Default: `none`. |
+
+### Archive Compression Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `COMPRESSION_ARCHIVE_ENABLED` | `bool` | Enable archive compression. Default: `False`. |
+| `COMPRESSION_ARCHIVE_LEVEL` | `int`  | Compression level (0-9). Default: `6`. |
+| `COMPRESSION_ARCHIVE_PASSWORD` | `str` | Password for archive protection. Default: `none`. |
+| `COMPRESSION_ARCHIVE_ALGORITHM` | `str` | Archive algorithm (e.g., 7z, zip). Default: `none`. |
+
+## 25. Trim Settings
+
+### Basic Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_ENABLED`              | `bool` | Enable trim functionality. Default: `False`. |
+| `TRIM_PRIORITY`             | `int`  | Trim task priority. Default: `5`. |
+| `TRIM_START_TIME`           | `str`  | Start time for trimming. Default: `00:00:00`. |
+| `TRIM_END_TIME`             | `str`  | End time for trimming. Default: `""`. |
+| `TRIM_DELETE_ORIGINAL`      | `bool` | Delete original files after trimming. Default: `False`. |
+
+### Video Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_VIDEO_ENABLED`        | `bool` | Enable video trimming. Default: `False`. |
+| `TRIM_VIDEO_CODEC`          | `str`  | Video codec for trimming. Default: `none`. |
+| `TRIM_VIDEO_PRESET`         | `str`  | Video encoding preset. Default: `none`. |
+| `TRIM_VIDEO_FORMAT`         | `str`  | Output format for video trimming. Default: `none`. |
+| `TRIM_VIDEO_QUALITY`        | `str`  | Video quality setting. Default: `none`. |
+| `TRIM_VIDEO_BITRATE`        | `str`  | Video bitrate for trimming. Default: `none`. |
+| `TRIM_VIDEO_RESOLUTION`     | `str`  | Video resolution for trimming. Default: `none`. |
+| `TRIM_VIDEO_FPS`            | `str`  | Video frame rate for trimming. Default: `none`. |
+
+### Audio Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_AUDIO_ENABLED`        | `bool` | Enable audio trimming. Default: `False`. |
+| `TRIM_AUDIO_CODEC`          | `str`  | Audio codec for trimming. Default: `none`. |
+| `TRIM_AUDIO_BITRATE`        | `str`  | Audio bitrate for trimming. Default: `none`. |
+| `TRIM_AUDIO_QUALITY`        | `str`  | Audio quality setting. Default: `none`. |
+| `TRIM_AUDIO_CHANNELS`       | `str`  | Audio channel configuration. Default: `none`. |
+| `TRIM_AUDIO_SAMPLE_RATE`    | `str`  | Audio sample rate. Default: `none`. |
+
+### Image Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_IMAGE_ENABLED`        | `bool` | Enable image trimming. Default: `False`. |
+| `TRIM_IMAGE_QUALITY`        | `int`  | Image quality for trimming. Default: `90`. |
+| `TRIM_IMAGE_FORMAT`         | `str`  | Output format for image trimming. Default: `none`. |
+
+### Document Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_DOCUMENT_ENABLED`     | `bool` | Enable document trimming. Default: `False`. |
+| `TRIM_DOCUMENT_QUALITY`     | `int`  | Document quality for trimming. Default: `90`. |
+| `TRIM_DOCUMENT_FORMAT`      | `str`  | Output format for document trimming. Default: `none`. |
+
+### Subtitle Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_SUBTITLE_ENABLED`     | `bool` | Enable subtitle trimming. Default: `False`. |
+| `TRIM_SUBTITLE_ENCODING`    | `str`  | Subtitle encoding for trimming. Default: `none`. |
+| `TRIM_SUBTITLE_FORMAT`      | `str`  | Output format for subtitle trimming. Default: `none`. |
+
+### Archive Trim Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `TRIM_ARCHIVE_ENABLED`      | `bool` | Enable archive trimming. Default: `False`. |
+| `TRIM_ARCHIVE_FORMAT`       | `str`  | Output format for archive trimming. Default: `none`. |
+
+## 26. Extract Settings
+
+### Basic Extract Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `EXTRACT_ENABLED`           | `bool` | Enable extract functionality. Default: `False`. |
+| `EXTRACT_PRIORITY`          | `int`  | Extract task priority. Default: `6`. |
+| `EXTRACT_DELETE_ORIGINAL`   | `bool` | Delete original files after extraction. Default: `True`. |
+| `EXTRACT_MAINTAIN_QUALITY`  | `bool` | Maintain quality during extraction. Default: `True`. |
+
+### Video Extract Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `EXTRACT_VIDEO_ENABLED`     | `bool` | Enable video extraction. Default: `False`. |
+| `EXTRACT_VIDEO_CODEC`       | `str`  | Video codec for extraction. Default: `none`. |
+| `EXTRACT_VIDEO_FORMAT`      | `str`  | Output format for video extraction. Default: `none`. |
+| `EXTRACT_VIDEO_INDEX`       | `int`  | Video track index to extract. Default: `None`. |
+| `EXTRACT_VIDEO_QUALITY`     | `str`  | Quality setting for video extraction. Default: `none`. |
+| `EXTRACT_VIDEO_PRESET`      | `str`  | Preset for video encoding. Default: `none`. |
+| `EXTRACT_VIDEO_BITRATE`     | `str`  | Bitrate for video encoding. Default: `none`. |
+| `EXTRACT_VIDEO_RESOLUTION`  | `str`  | Resolution for video extraction. Default: `none`. |
+| `EXTRACT_VIDEO_FPS`         | `str`  | Frame rate for video extraction. Default: `none`. |
+
+### Audio Extract Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `EXTRACT_AUDIO_ENABLED`     | `bool` | Enable audio extraction. Default: `False`. |
+| `EXTRACT_AUDIO_CODEC`       | `str`  | Audio codec for extraction. Default: `none`. |
+| `EXTRACT_AUDIO_FORMAT`      | `str`  | Output format for audio extraction. Default: `none`. |
+| `EXTRACT_AUDIO_INDEX`       | `int`  | Audio track index to extract. Default: `None`. |
+| `EXTRACT_AUDIO_BITRATE`     | `str`  | Audio bitrate for extraction. Default: `none`. |
+| `EXTRACT_AUDIO_CHANNELS`    | `str`  | Audio channel configuration. Default: `none`. |
+| `EXTRACT_AUDIO_SAMPLING`    | `str`  | Audio sampling rate. Default: `none`. |
+
+### Subtitle Extract Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `EXTRACT_SUBTITLE_ENABLED`  | `bool` | Enable subtitle extraction. Default: `False`. |
+| `EXTRACT_SUBTITLE_INDEX`    | `int`  | Subtitle track index to extract. Default: `None`. |
+| `EXTRACT_SUBTITLE_FORMAT`   | `str`  | Output format for subtitle extraction. Default: `none`. |
+| `EXTRACT_SUBTITLE_ENCODING` | `str`  | Subtitle encoding. Default: `none`. |
+
+### Attachment Extract Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `EXTRACT_ATTACHMENT_ENABLED` | `bool` | Enable attachment extraction. Default: `False`. |
+| `EXTRACT_ATTACHMENT_INDEX`  | `int`  | Attachment index to extract. Default: `None`. |
+| `EXTRACT_ATTACHMENT_FORMAT` | `str`  | Output format for attachment extraction. Default: `none`. |
+
+## 27. Remove Settings
+
+### Basic Remove Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `REMOVE_ENABLED`            | `bool` | Enable remove functionality. Default: `False`. |
+| `REMOVE_PRIORITY`           | `int`  | Remove task priority. Default: `8`. |
+| `REMOVE_DELETE_ORIGINAL`    | `bool` | Delete original files after removal. Default: `True`. |
+| `REMOVE_METADATA`           | `bool` | Remove metadata during processing. Default: `False`. |
+| `REMOVE_MAINTAIN_QUALITY`   | `bool` | Maintain quality during removal. Default: `True`. |
+
+### Video Remove Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `REMOVE_VIDEO_ENABLED`      | `bool` | Enable video track removal. Default: `False`. |
+| `REMOVE_VIDEO_CODEC`        | `str`  | Video codec for removal processing. Default: `none`. |
+| `REMOVE_VIDEO_FORMAT`       | `str`  | Output format after video removal. Default: `none`. |
+| `REMOVE_VIDEO_INDEX`        | `int`  | Video track index to remove. Default: `None`. |
+| `REMOVE_VIDEO_QUALITY`      | `str`  | Video quality setting. Default: `none`. |
+| `REMOVE_VIDEO_PRESET`       | `str`  | Video encoding preset. Default: `none`. |
+| `REMOVE_VIDEO_BITRATE`      | `str`  | Video bitrate setting. Default: `none`. |
+| `REMOVE_VIDEO_RESOLUTION`   | `str`  | Video resolution setting. Default: `none`. |
+| `REMOVE_VIDEO_FPS`          | `str`  | Video frame rate setting. Default: `none`. |
+
+### Audio Remove Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `REMOVE_AUDIO_ENABLED`      | `bool` | Enable audio track removal. Default: `False`. |
+| `REMOVE_AUDIO_CODEC`        | `str`  | Audio codec for removal processing. Default: `none`. |
+| `REMOVE_AUDIO_FORMAT`       | `str`  | Output format after audio removal. Default: `none`. |
+| `REMOVE_AUDIO_INDEX`        | `int`  | Audio track index to remove. Default: `None`. |
+| `REMOVE_AUDIO_BITRATE`      | `str`  | Audio bitrate setting. Default: `none`. |
+| `REMOVE_AUDIO_CHANNELS`     | `str`  | Audio channel configuration. Default: `none`. |
+| `REMOVE_AUDIO_SAMPLING`     | `str`  | Audio sampling rate setting. Default: `none`. |
+
+### Subtitle Remove Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `REMOVE_SUBTITLE_ENABLED`   | `bool` | Enable subtitle track removal. Default: `False`. |
+| `REMOVE_SUBTITLE_INDEX`     | `int`  | Subtitle track index to remove. Default: `None`. |
+| `REMOVE_SUBTITLE_FORMAT`    | `str`  | Output format after subtitle removal. Default: `none`. |
+| `REMOVE_SUBTITLE_ENCODING`  | `str`  | Subtitle encoding setting. Default: `none`. |
+
+### Attachment Remove Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `REMOVE_ATTACHMENT_ENABLED` | `bool` | Enable attachment removal. Default: `False`. |
+| `REMOVE_ATTACHMENT_FORMAT`  | `str`  | Output format after attachment removal. Default: `none`. |
+| `REMOVE_ATTACHMENT_INDEX`   | `int`  | Attachment index to remove. Default: `None`. |
+| `REMOVE_ATTACHMENT_FILTER`  | `str`  | Filter for attachment removal. Default: `none`. |
+
+
+
+## 29. Swap Settings
+
+### Basic Swap Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `SWAP_ENABLED`              | `bool` | Enable swap functionality. Default: `False`. |
+| `SWAP_PRIORITY`             | `int`  | Swap task priority. Default: `6`. |
+| `SWAP_REMOVE_ORIGINAL`      | `bool` | Remove original files after swapping. Default: `False`. |
+
+### Audio Swap Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `SWAP_AUDIO_ENABLED`        | `bool` | Enable audio track swapping. Default: `False`. |
+| `SWAP_AUDIO_USE_LANGUAGE`   | `bool` | Use language for audio track selection. Default: `True`. |
+| `SWAP_AUDIO_LANGUAGE_ORDER` | `str`  | Language order for audio track selection. Default: `eng,hin`. |
+| `SWAP_AUDIO_INDEX_ORDER`    | `str`  | Index order for audio track selection. Default: `0,1`. |
+
+### Video Swap Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `SWAP_VIDEO_ENABLED`        | `bool` | Enable video track swapping. Default: `False`. |
+| `SWAP_VIDEO_USE_LANGUAGE`   | `bool` | Use language for video track selection. Default: `True`. |
+| `SWAP_VIDEO_LANGUAGE_ORDER` | `str`  | Language order for video track selection. Default: `eng,hin`. |
+| `SWAP_VIDEO_INDEX_ORDER`    | `str`  | Index order for video track selection. Default: `0,1`. |
+
+### Subtitle Swap Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `SWAP_SUBTITLE_ENABLED`     | `bool` | Enable subtitle track swapping. Default: `False`. |
+| `SWAP_SUBTITLE_USE_LANGUAGE` | `bool` | Use language for subtitle track selection. Default: `True`. |
+| `SWAP_SUBTITLE_LANGUAGE_ORDER` | `str` | Language order for subtitle track selection. Default: `eng,hin`. |
+| `SWAP_SUBTITLE_INDEX_ORDER` | `str`  | Index order for subtitle track selection. Default: `0,1`. |
+
+## 30. Convert Settings
+
+### Basic Convert Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `CONVERT_ENABLED`           | `bool` | Enable convert functionality. Default: `False`. |
+| `CONVERT_PRIORITY`          | `int`  | Convert task priority. Default: `3`. |
+| `CONVERT_DELETE_ORIGINAL`   | `bool` | Delete original files after conversion. Default: `True`. |
+
+### Video Convert Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `CONVERT_VIDEO_ENABLED`     | `bool` | Enable video conversion. Default: `False`. |
+| `CONVERT_VIDEO_CODEC`       | `str`  | Video codec for conversion. Default: `libx264`. |
+| `CONVERT_VIDEO_FORMAT`      | `str`  | Output format for video conversion. Default: `mp4`. |
+| `CONVERT_VIDEO_PRESET`      | `str`  | Video encoding preset. Default: `medium`. |
+| `CONVERT_VIDEO_CRF`         | `int`  | Constant Rate Factor for video quality. Default: `23`. |
+| `CONVERT_VIDEO_BITRATE`     | `str`  | Video bitrate for conversion. Default: `none`. |
+| `CONVERT_VIDEO_RESOLUTION`  | `str`  | Video resolution for conversion. Default: `none`. |
+| `CONVERT_VIDEO_FPS`         | `str`  | Video frame rate for conversion. Default: `none`. |
+
+### Audio Convert Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `CONVERT_AUDIO_ENABLED`     | `bool` | Enable audio conversion. Default: `False`. |
+| `CONVERT_AUDIO_CODEC`       | `str`  | Audio codec for conversion. Default: `aac`. |
+| `CONVERT_AUDIO_FORMAT`      | `str`  | Output format for audio conversion. Default: `mp3`. |
+| `CONVERT_AUDIO_BITRATE`     | `str`  | Audio bitrate for conversion. Default: `128k`. |
+| `CONVERT_AUDIO_QUALITY`     | `str`  | Audio quality setting. Default: `none`. |
+| `CONVERT_AUDIO_CHANNELS`    | `str`  | Audio channel configuration. Default: `none`. |
+| `CONVERT_AUDIO_SAMPLE_RATE` | `str`  | Audio sample rate for conversion. Default: `none`. |
+
+### Image Convert Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `CONVERT_IMAGE_ENABLED`     | `bool` | Enable image conversion. Default: `False`. |
+| `CONVERT_IMAGE_FORMAT`      | `str`  | Output format for image conversion. Default: `jpg`. |
+| `CONVERT_IMAGE_QUALITY`     | `int`  | Image quality for conversion (1-100). Default: `90`. |
+| `CONVERT_IMAGE_RESIZE`      | `str`  | Resize dimensions for images. Default: `none`. |
+
+### Document Convert Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `CONVERT_DOCUMENT_ENABLED`  | `bool` | Enable document conversion. Default: `False`. |
+| `CONVERT_DOCUMENT_FORMAT`   | `str`  | Output format for document conversion. Default: `pdf`. |
+| `CONVERT_DOCUMENT_QUALITY`  | `int`  | Document quality for conversion. Default: `90`. |
+
+## 31. System Performance Settings
+
+### Garbage Collection Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `GC_ENABLED`                | `bool` | Enable/disable garbage collection completely. Default: `True`. |
+| `GC_INTERVAL`               | `int`  | Minimum interval between GC operations in seconds. Default: `60`. |
+| `GC_THRESHOLD_MB`           | `int`  | Memory threshold in MB to trigger GC. Default: `150`. |
+| `GC_AGGRESSIVE_MODE`        | `bool` | Enable aggressive GC mode. Default: `False`. |
+
+
+
+### Bulk Operation Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `BULK_ENABLED`              | `bool` | Enable/disable bulk operations (-b flag). Default: `True`. |
+
+## 32. AI and Extra Modules
+
+### AI Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `AI_ENABLED`                | `bool` | Enable/disable AI functionality. Default: `True`. |
+| `DEFAULT_AI_PROVIDER`       | `str`  | Default AI provider (mistral, deepseek). Default: `mistral`. |
+| `MISTRAL_API_URL`           | `str`  | Mistral AI API URL. |
+| `DEEPSEEK_API_URL`          | `str`  | DeepSeek AI API URL. |
+
+### Extra Module Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `IMDB_ENABLED`              | `bool` | Enable/disable IMDB functionality. Default: `True`. |
+| `TRUECALLER_ENABLED`        | `bool` | Enable/disable Truecaller functionality. Default: `True`. |
+| `ENCODING_ENABLED`          | `bool` | Enable/disable encoding functionality. Default: `True`. |
+| `DECODING_ENABLED`          | `bool` | Enable/disable decoding functionality. Default: `True`. |
+
+### VirusTotal Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `VT_API_KEY`                | `str`  | VirusTotal API key for file scanning. |
+| `VT_API_TIMEOUT`            | `int`  | VirusTotal API timeout in seconds. Default: `500`. |
+| `VT_ENABLED`                | `bool` | Enable/disable VirusTotal functionality. Default: `False`. |
+| `VT_MAX_FILE_SIZE`          | `int`  | Maximum file size for VirusTotal scanning in bytes. Default: `33554432` (32MB). |
+
+## 33. Enhanced NSFW Detection
+
+### Basic NSFW Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_DETECTION_ENABLED`    | `bool` | Master toggle for NSFW detection. Default: `True`. |
+| `NSFW_DETECTION_SENSITIVITY` | `str` | Detection sensitivity: `strict`, `moderate`, `permissive`. Default: `moderate`. |
+| `NSFW_CONFIDENCE_THRESHOLD` | `float` | Minimum confidence for NSFW detection (0.0-1.0). Default: `0.7`. |
+| `NSFW_CACHE_DURATION`       | `int`  | Cache detection results duration in seconds. Default: `3600`. |
+| `NSFW_MAX_FILE_SIZE`        | `int`  | Maximum file size for NSFW analysis in bytes. Default: `52428800` (50MB). |
+
+### NSFW Detection Methods
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_KEYWORD_DETECTION`    | `bool` | Enable enhanced keyword detection. Default: `True`. |
+| `NSFW_VISUAL_DETECTION`     | `bool` | Enable AI-powered visual analysis. Default: `False`. |
+| `NSFW_AUDIO_DETECTION`      | `bool` | Enable audio content analysis. Default: `False`. |
+| `NSFW_FUZZY_MATCHING`       | `bool` | Enable fuzzy keyword matching. Default: `False`. |
+| `NSFW_LEETSPEAK_DETECTION`  | `bool` | Enable leetspeak detection. Default: `True`. |
+| `NSFW_MULTI_LANGUAGE`       | `bool` | Enable multi-language keyword support. Default: `False`. |
+| `NSFW_CONTEXT_CHECKING`     | `bool` | Enable context-aware detection. Default: `True`. |
+
+### NSFW Media Analysis
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_VIDEO_ANALYSIS`       | `bool` | Enable video frame analysis. Default: `True`. |
+| `NSFW_VIDEO_FRAME_COUNT`    | `int`  | Number of frames to extract for analysis. Default: `5`. |
+| `NSFW_FRAME_QUALITY`        | `int`  | Frame extraction quality (1-5). Default: `2`. |
+| `NSFW_AUDIO_ANALYSIS`       | `bool` | Enable audio content analysis. Default: `True`. |
+| `NSFW_SUBTITLE_ANALYSIS`    | `bool` | Enable subtitle text analysis. Default: `True`. |
+
+### NSFW Visual Analysis API Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_GOOGLE_VISION_API_KEY` | `str` | Google Cloud Vision API key for visual analysis. |
+| `NSFW_AWS_ACCESS_KEY`       | `str`  | AWS Rekognition access key for visual analysis. |
+| `NSFW_AWS_SECRET_KEY`       | `str`  | AWS Rekognition secret key for visual analysis. |
+| `NSFW_AWS_REGION`           | `str`  | AWS region for Rekognition. Default: `us-east-1`. |
+| `NSFW_AZURE_ENDPOINT`       | `str`  | Azure Content Moderator endpoint URL. |
+| `NSFW_AZURE_KEY`            | `str`  | Azure Content Moderator API key. |
+| `NSFW_OPENAI_API_KEY`       | `str`  | OpenAI API key for vision analysis. |
+
+### NSFW Text Analysis API Settings
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_PERSPECTIVE_API_KEY`  | `str`  | Google Perspective API key for text analysis. |
+| `NSFW_OPENAI_MODERATION`    | `bool` | Use OpenAI moderation API for text analysis. Default: `False`. |
+
+### NSFW Behavior and Logging
+| Variable                    | Type   | Description |
+|-----------------------------|--------|-------------|
+| `NSFW_LOG_DETECTIONS`       | `bool` | Log NSFW detections for analysis. Default: `True`. |
+| `NSFW_STORE_METADATA`       | `bool` | Store detection metadata in database. Default: `True`. |
+| `NSFW_AUTO_DELETE`          | `bool` | Auto-delete detected NSFW content. Default: `False`. |
+| `NSFW_NOTIFY_ADMINS`        | `bool` | Notify admins of NSFW detections. Default: `True`. |
+
+
+
+
+
+

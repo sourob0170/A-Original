@@ -59,7 +59,7 @@ from bot.modules import (
     hydra_search,
     imdb_callback,
     imdb_search,
-    index_command,
+    # index_command removed - media indexing functionality disabled
     jd_leech,
     jd_mirror,
     leech,
@@ -407,35 +407,9 @@ def add_handlers():
         ),
     }
 
-    # Add File-to-Link handlers if enabled
-    if Config.FILE_TO_LINK_ENABLED:
-        from bot.modules.file_to_link import (
-            file_to_link_command,
-            stream_stats_command,
-        )
+    # File-to-Link functionality removed - streaming disabled
 
-        file_to_link_handlers = {
-            "file_to_link": (
-                file_to_link_command,
-                BotCommands.File2LinkCommand,
-                CustomFilters.authorized,
-            ),
-            "stream_stats": (
-                stream_stats_command,
-                BotCommands.StreamStatsCommand,
-                CustomFilters.authorized,
-            ),
-        }
-
-        # Add File-to-Link handlers to command_filters
-        command_filters.update(file_to_link_handlers)
-
-    # Add index command handler (always available for admins)
-    command_filters["index"] = (
-        index_command,
-        BotCommands.IndexCommand,
-        CustomFilters.sudo,
-    )
+    # Index command handler removed - media indexing functionality disabled
 
     # Add Enhanced NSFW Detection handlers if enabled
     if Config.NSFW_DETECTION_ENABLED:
@@ -532,6 +506,8 @@ def add_handlers():
 
         # Add MEGA search handlers to command_filters
         command_filters.update(mega_search_handlers)
+
+
 
     # Add encoding/decoding handlers if enabled
     if Config.ENCODING_ENABLED:
@@ -634,6 +610,8 @@ def add_handlers():
 
         # MEGA search now uses Telegraph (no pagination callbacks needed)
         public_regex_filters["^mgq"] = mega_folder_callback
+
+
 
     # Add Gallery-dl callback handlers if enabled
     if Config.GALLERY_DL_ENABLED:
@@ -790,11 +768,7 @@ def add_handlers():
         "mgs",
         "quickinfo",
         "qi",
-        "file2link",
-        "f2l",
-        "streamstats",
-        "sstats",
-        "index",
+        # file2link, f2l, streamstats, sstats, index removed - functionality disabled
         "tool",
         "t",
     ]

@@ -26,7 +26,7 @@ from .encoding import (
 )
 from .exec import aioexecute, clear, execute
 from .file_selector import confirm_selection, select
-from .file_to_link import file_to_link_command, stream_stats_command
+# file_to_link module removed - streaming functionality disabled
 from .font_styles import font_styles_cmd
 from .force_start import remove_from_queue
 from .gallery_dl import gdl_leech, gdl_mirror
@@ -42,7 +42,7 @@ from .gen_session import (
 )
 from .help import arg_usage, bot_help
 from .imdb import imdb_callback, imdb_search
-from .index_command import index_command
+# index_command removed - media indexing functionality disabled
 from .media_search import (
     inline_media_search,
     media_cancel_callback,
@@ -131,8 +131,7 @@ __all__ = [
     "encoding_callback",
     "encoding_help_command",
     "execute",
-    # File-to-Link functions
-    "file_to_link_command",
+    # File-to-Link functions removed - streaming disabled
     "font_styles_cmd",
     "force_delete_all_messages",
     "gdl_leech",
@@ -157,8 +156,7 @@ __all__ = [
     "hydra_search",
     "imdb_callback",
     "imdb_search",
-    # Index command
-    "index_command",
+    # index_command removed - media indexing functionality disabled
     "initiate_search_tools",
     "inline_media_search",
     "jd_leech",
@@ -196,7 +194,7 @@ __all__ = [
     "speedtest",
     "start",
     "status_pages",
-    "stream_stats_command",
+    # "stream_stats_command" removed - streaming disabled
     "task_status",
     "tool_command",
     "torrent_search",

@@ -22,7 +22,15 @@ from bot.helper.ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
 from bot.helper.ext_utils.links_utils import is_share_link
 from bot.helper.ext_utils.status_utils import speed_string_to_bytes
 
+# Import logging
+from logging import getLogger
+
+LOGGER = getLogger(__name__)
+
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+
+# Mega-Debrid supported sites - will be fetched dynamically from API
+mega_debrid_supported_sites = []
 
 debrid_link_supported_sites = [
     "1024tera.com",
@@ -443,6 +451,38 @@ def direct_link_generator(link, user_id=None):
         x in domain for x in debrid_link_supported_sites
     ):
         return debrid_link(link)
+    # Mega-Debrid support for premium downloads (including torrents)
+    if Config.MEGA_DEBRID_API_TOKEN or (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD):
+        # Check if it's a torrent/magnet link
+        if link.startswith("magnet:") or link.endswith(".torrent"):
+            return mega_debrid(link)
+        # Check if domain is supported (will fetch supported sites dynamically)
+        elif domain and _is_mega_debrid_supported(domain):
+            return mega_debrid(link)
+    # AllDebrid support for premium downloads (including torrents and magnets)
+    if Config.ALLDEBRID_API_KEY and (
+        link.startswith("magnet:")
+        or link.endswith(".torrent")
+        or (domain and _is_alldebrid_supported(domain))
+    ):
+        return alldebrid(link)
+    # Real-Debrid support for premium downloads (including torrents and magnets)
+    if (Config.REAL_DEBRID_API_KEY or Config.REAL_DEBRID_ACCESS_TOKEN) and (
+        link.startswith("magnet:")
+        or link.endswith(".torrent")
+        or (domain and _is_real_debrid_supported(domain))
+    ):
+        return real_debrid(link)
+    # TorBox support for premium downloads
+    if Config.TORBOX_API_KEY and (
+        link.startswith("magnet:")
+        or link.endswith(".torrent")
+        or link.endswith(".nzb")
+        or any(
+            x in domain for x in debrid_link_supported_sites
+        )  # TorBox supports same sites as debrid-link
+    ):
+        return torbox(link)
     if "buzzheavier.com" in domain:
         return buzzheavier(link)
     if "devuploads" in domain:
@@ -649,36 +689,3046 @@ def get_captcha_token(session, params):
 
 
 def debrid_link(url):
-    cget = create_scraper().request
-    resp = cget(
-        "POST",
-        f"https://debrid-link.com/api/v2/downloader/add?access_token={Config.DEBRID_LINK_API}",
-        data={"url": url},
-    ).json()
-    if resp["success"] != True:
-        raise DirectDownloadLinkException(
-            f"ERROR: {resp['error']} & ERROR ID: {resp['error_id']}"
+    """
+    Enhanced Debrid-Link downloader with OAuth2 support and fallback mechanisms.
+    Supports both API key and OAuth2 token authentication methods.
+    """
+    try:
+        # Primary method: Try OAuth2 Bearer token authentication (API v2 recommended)
+        return _debrid_link_oauth2(url)
+    except DirectDownloadLinkException as oauth_error:
+        # Fallback method: Try legacy API key authentication
+        try:
+            return _debrid_link_api_key(url)
+        except DirectDownloadLinkException as api_error:
+            # If both methods fail, raise the most informative error
+            if "badToken" in str(oauth_error) and Config.DEBRID_LINK_API:
+                # OAuth token expired, suggest refresh
+                raise DirectDownloadLinkException(
+                    f"ERROR: Debrid-Link OAuth token expired. Please refresh your access token. "
+                    f"OAuth error: {oauth_error}, API fallback error: {api_error}"
+                )
+            elif Config.DEBRID_LINK_API:
+                # API key method failed
+                raise DirectDownloadLinkException(
+                    f"ERROR: Debrid-Link API authentication failed. "
+                    f"OAuth error: {oauth_error}, API error: {api_error}"
+                )
+            else:
+                # No credentials configured
+                raise DirectDownloadLinkException(
+                    "ERROR: No Debrid-Link credentials configured. "
+                    "Please set DEBRID_LINK_API (API key) or configure OAuth2 tokens."
+                )
+
+
+def _debrid_link_oauth2(url):
+    """
+    Primary method: Use OAuth2 Bearer token authentication (API v2 recommended).
+    Automatically handles token refresh if needed.
+    Follows official Debrid-Link API v2 specification.
+    """
+    # Get valid access token (with automatic refresh if needed)
+    try:
+        access_token = _get_valid_debrid_token()
+    except DirectDownloadLinkException as e:
+        raise DirectDownloadLinkException(f"OAuth2 token error: {str(e)}")
+
+    session = create_scraper()
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "User-Agent": user_agent,
+    }
+
+    try:
+        # API v2 specification: POST /downloader/add with JSON body
+        # Request body should be sent in JSON format as per API guide
+        resp = session.post(
+            "https://debrid-link.com/api/v2/downloader/add",
+            headers=headers,
+            json={"url": url},  # JSON body as per API v2 specification
+            timeout=30,
         )
-    if isinstance(resp["value"], dict):
-        return resp["value"]["downloadUrl"]
-    elif isinstance(resp["value"], list):
+
+        # Handle HTTP status codes as per API guide
+        # Success: 200 range, Error: 400/500 range
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error", f"HTTP_{resp.status_code}")
+            except:
+                error_code = f"HTTP_{resp.status_code}"
+            raise DirectDownloadLinkException(f"OAuth2 API error: {error_code}")
+
+        result = resp.json()
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Debrid-Link API timeout")
+        raise DirectDownloadLinkException(f"ERROR: OAuth2 request failed - {str(e)}")
+
+    # Process API response according to v2 specification
+    return _process_debrid_response(result, url)
+
+
+def _debrid_link_api_key(url):
+    """
+    Fallback method: Use legacy API key authentication.
+    Uses access_token as query parameter (legacy method that was working).
+    """
+    if not Config.DEBRID_LINK_API:
+        raise DirectDownloadLinkException("No API key available")
+
+    session = create_scraper()
+
+    try:
+        # Legacy method: access_token as query parameter (revert to original working method)
+        resp = session.post(
+            f"https://debrid-link.com/api/v2/downloader/add?access_token={Config.DEBRID_LINK_API}",
+            data={
+                "url": url
+            },  # Form data for legacy compatibility (original working method)
+            headers={"User-Agent": user_agent},
+            timeout=30,
+        )
+
+        # Handle HTTP errors
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error", f"HTTP_{resp.status_code}")
+            except:
+                error_code = f"HTTP_{resp.status_code}"
+            raise DirectDownloadLinkException(f"API key error: {error_code}")
+
+        result = resp.json()
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Debrid-Link API timeout")
+        raise DirectDownloadLinkException(
+            f"ERROR: API key request failed - {str(e)}"
+        )
+
+    # Process API response
+    return _process_debrid_response(result, url)
+
+
+def _process_debrid_response(resp, original_url):
+    """
+    Process Debrid-Link API response according to API v2 specification.
+    Handles both single file and multi-file responses.
+    """
+    # Check API success status
+    if not resp.get("success", False):
+        error_code = resp.get("error", "unknown_error")
+
+        # Handle specific error codes according to API documentation
+        error_messages = {
+            "badToken": "Invalid or expired token. Please refresh your access token.",
+            "notDebrid": "Unable to generate link, the host may be down.",
+            "hostNotValid": "The file hoster is not supported.",
+            "fileNotFound": "File not found on the host.",
+            "fileNotAvailable": "File temporarily unavailable on host.",
+            "badFileUrl": "Invalid link format.",
+            "badFilePassword": "Invalid or missing password for protected link.",
+            "notFreeHost": "This host is not available for free members.",
+            "maintenanceHost": "The file hoster is under maintenance.",
+            "noServerHost": "No server available for this host.",
+            "maxLink": "Daily link limit reached.",
+            "maxLinkHost": "Daily link limit for this host reached.",
+            "maxData": "Daily data limit reached.",
+            "maxDataHost": "Daily data limit for this host reached.",
+            "floodDetected": "API rate limit reached. Please wait 1 hour.",
+            "serverNotAllowed": "Server/VPN not allowed. Contact support.",
+            "freeServerOverload": "No server available for free users.",
+        }
+
+        error_msg = error_messages.get(error_code, f"Unknown error: {error_code}")
+        raise DirectDownloadLinkException(f"ERROR: {error_msg}")
+
+    # Process successful response
+    value = resp.get("value")
+    if not value:
+        raise DirectDownloadLinkException(
+            "ERROR: Empty response from Debrid-Link API"
+        )
+
+    # Handle single file response (dict)
+    if isinstance(value, dict):
+        download_url = value.get("downloadUrl")
+        if not download_url:
+            raise DirectDownloadLinkException("ERROR: No download URL in response")
+        return download_url
+
+    # Handle multi-file response (list)
+    elif isinstance(value, list):
+        if not value:
+            raise DirectDownloadLinkException("ERROR: Empty file list in response")
+
         details = {
             "contents": [],
-            "title": unquote(url.rstrip("/").split("/")[-1]),
+            "title": unquote(original_url.rstrip("/").split("/")[-1]),
             "total_size": 0,
         }
-        for dl in resp["value"]:
+
+        for dl in value:
+            # Skip expired links
             if dl.get("expired", False):
                 continue
+
+            # Validate required fields
+            if not dl.get("name") or not dl.get("downloadUrl"):
+                continue
+
             item = {
                 "path": details["title"],
                 "filename": dl["name"],
                 "url": dl["downloadUrl"],
             }
-            if "size" in dl:
+
+            # Add file size if available
+            if "size" in dl and isinstance(dl["size"], (int, float)):
                 details["total_size"] += dl["size"]
+
             details["contents"].append(item)
+
+        # Check if we have any valid files
+        if not details["contents"]:
+            raise DirectDownloadLinkException("ERROR: No valid download links found")
+
         return details
+
+    else:
+        raise DirectDownloadLinkException(
+            f"ERROR: Unexpected response format: {type(value)}"
+        )
+
+
+def _refresh_debrid_token():
+    """
+    Refresh Debrid-Link OAuth2 access token using refresh token.
+    Updates Config with new tokens automatically.
+    """
+    if not Config.DEBRID_LINK_REFRESH_TOKEN or not Config.DEBRID_LINK_CLIENT_ID:
+        raise DirectDownloadLinkException("No refresh token or client ID available")
+
+    session = create_scraper()
+
+    try:
+        # Prepare refresh token request
+        data = {
+            "client_id": Config.DEBRID_LINK_CLIENT_ID,
+            "refresh_token": Config.DEBRID_LINK_REFRESH_TOKEN,
+            "grant_type": "refresh_token",
+        }
+
+        # Add client secret if available (for server-side apps)
+        if Config.DEBRID_LINK_CLIENT_SECRET:
+            data["client_secret"] = Config.DEBRID_LINK_CLIENT_SECRET
+
+        # Request new access token
+        resp = session.post(
+            "https://debrid-link.com/api/oauth/token",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": user_agent,
+            },
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(f"Token refresh failed: {error_msg}")
+
+        result = resp.json()
+
+        # Update Config with new tokens
+        new_access_token = result.get("access_token")
+        expires_in = result.get("expires_in", 86400)  # Default 24 hours
+
+        if new_access_token:
+            Config.DEBRID_LINK_ACCESS_TOKEN = new_access_token
+            Config.DEBRID_LINK_API = new_access_token  # Update legacy field too
+
+            # Calculate expiration timestamp
+            from time import time
+
+            Config.DEBRID_LINK_TOKEN_EXPIRES = (
+                int(time()) + expires_in - 300
+            )  # 5 min buffer
+
+            # Update refresh token if provided
+            new_refresh_token = result.get("refresh_token")
+            if new_refresh_token:
+                Config.DEBRID_LINK_REFRESH_TOKEN = new_refresh_token
+
+            return new_access_token
+        else:
+            raise DirectDownloadLinkException("No access token in refresh response")
+
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Token refresh timeout")
+        raise DirectDownloadLinkException(f"Token refresh error: {str(e)}")
+
+
+def _is_debrid_token_expired():
+    """
+    Check if Debrid-Link OAuth2 token is expired or about to expire.
+    Returns True if token needs refresh.
+    """
+    if not Config.DEBRID_LINK_TOKEN_EXPIRES:
+        return False  # No expiration set, assume valid
+
+    from time import time
+
+    current_time = int(time())
+
+    # Consider token expired if it expires within 5 minutes
+    return current_time >= (Config.DEBRID_LINK_TOKEN_EXPIRES - 300)
+
+
+def _get_valid_debrid_token():
+    """
+    Get a valid Debrid-Link access token, refreshing if necessary.
+    Returns the access token or raises exception if unavailable.
+    """
+    # Check if we have an access token
+    access_token = (
+        getattr(Config, "DEBRID_LINK_ACCESS_TOKEN", "") or Config.DEBRID_LINK_API
+    )
+
+    if not access_token:
+        raise DirectDownloadLinkException("No Debrid-Link access token configured")
+
+    # Check if token is expired and refresh if needed
+    if _is_debrid_token_expired() and Config.DEBRID_LINK_REFRESH_TOKEN:
+        try:
+            access_token = _refresh_debrid_token()
+        except DirectDownloadLinkException:
+            # If refresh fails, try using existing token anyway
+            pass
+
+    return access_token
+
+
+def get_debrid_oauth_device_code(client_id, scope="get.post.downloader get.account"):
+    """
+    Helper function to get device code for OAuth2 device flow.
+    Used for setting up Debrid-Link authentication on limited input devices.
+
+    Args:
+        client_id: Your Debrid-Link app client ID
+        scope: OAuth2 scope (default includes downloader and account access)
+
+    Returns:
+        dict: Contains device_code, user_code, verification_url, expires_in, interval
+    """
+    session = create_scraper()
+
+    try:
+        data = {"client_id": client_id, "scope": scope}
+
+        resp = session.post(
+            "https://debrid-link.com/api/oauth/device/code",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": user_agent,
+            },
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(
+                f"Device code request failed: {error_msg}"
+            )
+
+        return resp.json()
+
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Device code request timeout")
+        raise DirectDownloadLinkException(f"Device code request error: {str(e)}")
+
+
+def poll_debrid_oauth_token(client_id, device_code, interval=3):
+    """
+    Helper function to poll for OAuth2 tokens using device code.
+    Call this repeatedly until you get tokens or an error.
+
+    Args:
+        client_id: Your Debrid-Link app client ID
+        device_code: Device code from get_debrid_oauth_device_code()
+        interval: Polling interval in seconds (from device code response)
+
+    Returns:
+        dict: Contains access_token, refresh_token, expires_in, type
+
+    Raises:
+        DirectDownloadLinkException: If authorization is still pending or failed
+    """
+    session = create_scraper()
+
+    try:
+        data = {
+            "client_id": client_id,
+            "code": device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        }
+
+        resp = session.post(
+            "https://debrid-link.com/api/oauth/token",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": user_agent,
+            },
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_code = error_data.get("error", f"HTTP {resp.status_code}")
+
+            if error_code == "authorization_pending":
+                raise DirectDownloadLinkException("authorization_pending")
+            else:
+                raise DirectDownloadLinkException(
+                    f"Token polling failed: {error_code}"
+                )
+
+        return resp.json()
+
+    except Exception as e:
+        if "authorization_pending" in str(e):
+            raise e  # Re-raise authorization pending
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Token polling timeout")
+        raise DirectDownloadLinkException(f"Token polling error: {str(e)}")
+
+
+def setup_debrid_oauth_device_flow(client_id):
+    """
+    Complete OAuth2 device flow setup for Debrid-Link.
+    This is a helper function for initial authentication setup.
+
+    Args:
+        client_id: Your Debrid-Link app client ID
+
+    Returns:
+        dict: Contains access_token, refresh_token, expires_in for Config setup
+    """
+    try:
+        # Step 1: Get device code
+        LOGGER.info("Getting Debrid-Link device code...")
+        device_data = get_debrid_oauth_device_code(client_id)
+
+        device_code = device_data["device_code"]
+        user_code = device_data["user_code"]
+        verification_url = device_data["verification_url"]
+        expires_in = device_data["expires_in"]
+        interval = device_data["interval"]
+
+        LOGGER.info(f"Please visit: {verification_url}")
+        LOGGER.info(f"Enter this code: {user_code}")
+        LOGGER.info(
+            f"You have {expires_in // 60} minutes to complete authorization."
+        )
+        LOGGER.info(f"Polling for authorization every {interval} seconds...")
+
+        # Step 2: Poll for tokens
+        import time
+
+        start_time = time.time()
+
+        while time.time() - start_time < expires_in:
+            try:
+                token_data = poll_debrid_oauth_token(
+                    client_id, device_code, interval
+                )
+                LOGGER.info("Debrid-Link authorization successful!")
+                return token_data
+
+            except DirectDownloadLinkException as e:
+                if "authorization_pending" in str(e):
+                    time.sleep(interval)
+                    continue
+                else:
+                    raise e
+
+        raise DirectDownloadLinkException(
+            "Authorization timeout - device code expired"
+        )
+
+    except Exception as e:
+        raise DirectDownloadLinkException(f"OAuth setup failed: {str(e)}")
+
+
+def mega_debrid(url):
+    """
+    Mega-Debrid API integration for premium downloads.
+    Supports both direct links and torrents/magnets.
+    Based on official API documentation from mega-debrid.eu
+
+    Args:
+        url: URL to download from supported hosts or torrent/magnet link
+
+    Returns:
+        Direct download link or details dictionary for torrents
+
+    Raises:
+        DirectDownloadLinkException: If API request fails or no credentials
+    """
+    if not (Config.MEGA_DEBRID_API_TOKEN or (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD)):
+        raise DirectDownloadLinkException(
+            "ERROR: Mega-Debrid credentials not configured. Please set MEGA_DEBRID_API_TOKEN or MEGA_DEBRID_LOGIN/MEGA_DEBRID_PASSWORD in your config."
+        )
+
+    session = create_scraper()
+
+    try:
+        # Get or refresh API token
+        token = _get_mega_debrid_token(session)
+
+        # Check if it's a torrent/magnet link
+        if url.startswith("magnet:") or url.endswith(".torrent"):
+            return _mega_debrid_upload_torrent(session, token, url)
+        else:
+            # Regular debrid link
+            return _mega_debrid_get_link(session, token, url)
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException(
+                "ERROR: Mega-Debrid API timeout - request timed out"
+            )
+        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid request failed - {str(e)}")
+
+
+def _get_mega_debrid_token(session):
+    """
+    Get or refresh Mega-Debrid API token.
+    Uses existing token if available, otherwise authenticates with login/password.
+    Based on API docs: https://www.mega-debrid.eu/api.php?action=connectUser&login=[user_login]&password=[user_password]
+
+    Args:
+        session: HTTP session
+
+    Returns:
+        str: Valid API token
+
+    Raises:
+        DirectDownloadLinkException: If authentication fails
+    """
+    # If we have a token, try to use it first
+    if Config.MEGA_DEBRID_API_TOKEN:
+        return Config.MEGA_DEBRID_API_TOKEN
+
+    # Otherwise, authenticate with login/password
+    if not (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD):
+        raise DirectDownloadLinkException(
+            "ERROR: No Mega-Debrid token or login credentials available"
+        )
+
+    try:
+        # Connect user to get token - using exact API format from docs
+        auth_url = "https://www.mega-debrid.eu/api.php"
+        auth_params = {
+            "action": "connectUser",
+            "login": Config.MEGA_DEBRID_LOGIN,
+            "password": Config.MEGA_DEBRID_PASSWORD
+        }
+
+        resp = session.get(auth_url, params=auth_params, timeout=30)
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: Mega-Debrid authentication failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        # Check response_code as per API docs
+        if result.get("response_code") != "ok":
+            error_msg = result.get("response_text", "Unknown authentication error")
+            # Check for non-premium account (vip_end indicates premium status)
+            if "vip_end" in result and result.get("response_code") == "vip_end":
+                raise DirectDownloadLinkException(
+                    "ERROR: Mega-Debrid account is not premium. Only premium members can use the API."
+                )
+            raise DirectDownloadLinkException(f"ERROR: Mega-Debrid authentication failed - {error_msg}")
+
+        # Get token from response
+        token = result.get("token")
+        if not token:
+            raise DirectDownloadLinkException("ERROR: No token received from Mega-Debrid")
+
+        # Cache the token for future use (valid until next connection attempt per docs)
+        Config.MEGA_DEBRID_API_TOKEN = token
+
+        return token
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Mega-Debrid authentication timeout")
+        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid authentication failed - {str(e)}")
+
+
+def _mega_debrid_get_link(session, token, url, password=""):
+    """
+    Get debrid link from Mega-Debrid API.
+    Based on API docs: https://www.mega-debrid.eu/api.php?action=getLink&token=[token]
+    POST fields: 'link' : link to debrid, 'password' : if the link has a password (md5 encoded)
+
+    Args:
+        session: HTTP session
+        token: Valid API token
+        url: URL to debrid
+        password: Optional password for protected links (will be MD5 encoded)
+
+    Returns:
+        str: Direct download link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Get debrid link using POST request as per API docs
+        api_url = "https://www.mega-debrid.eu/api.php"
+        params = {
+            "action": "getLink",
+            "token": token
+        }
+
+        # POST data with the link and optional password (md5 encoded as per docs)
+        data = {"link": url}
+        if password:
+            import hashlib
+            data["password"] = hashlib.md5(password.encode()).hexdigest()
+
+        resp = session.post(api_url, params=params, data=data, timeout=30)
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: Mega-Debrid API request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        # Check response_code as per API docs
+        if result.get("response_code") != "ok":
+            error_msg = result.get("response_text", "Unknown error")
+
+            # Handle specific error cases
+            if "Token error" in error_msg:
+                # Token expired, try to refresh if we have login credentials
+                if Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD:
+                    # Clear cached token and retry
+                    Config.MEGA_DEBRID_API_TOKEN = ""
+                    new_token = _get_mega_debrid_token(session)
+                    return _mega_debrid_get_link(session, new_token, url, password)
+                else:
+                    raise DirectDownloadLinkException(
+                        "ERROR: Mega-Debrid token expired. Please update MEGA_DEBRID_API_TOKEN or set login credentials."
+                    )
+
+            raise DirectDownloadLinkException(f"ERROR: Mega-Debrid - {error_msg}")
+
+        # Get debrid link from response
+        debrid_link = result.get("debridLink")
+        if not debrid_link:
+            raise DirectDownloadLinkException("ERROR: No debrid link received from Mega-Debrid")
+
+        return debrid_link
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Mega-Debrid API timeout")
+        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid API request failed - {str(e)}")
+
+
+def _mega_debrid_upload_torrent(session, token, url):
+    """
+    Upload torrent to Mega-Debrid API.
+    Based on API docs: https://www.mega-debrid.eu/api.php?action=uploadTorrent&token=[token]
+    POST 'file' : Upload file directly OR POST 'magnet' : Magnet URL of the torrent
+
+    Args:
+        session: HTTP session
+        token: Valid API token
+        url: Magnet link or torrent file URL
+
+    Returns:
+        dict: Torrent details or direct link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        api_url = "https://www.mega-debrid.eu/api.php"
+        params = {
+            "action": "uploadTorrent",
+            "token": token
+        }
+
+        if url.startswith("magnet:"):
+            # For magnet links
+            data = {"magnet": url}
+            files = None
+        else:
+            # For torrent file URLs, download and upload the file
+            try:
+                torrent_resp = session.get(url, timeout=30)
+                if torrent_resp.status_code == 200:
+                    files = {
+                        "file": (
+                            "torrent.torrent",
+                            torrent_resp.content,
+                            "application/x-bittorrent",
+                        )
+                    }
+                    data = {}
+                else:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: Could not download torrent file from {url}"
+                    )
+            except Exception as e:
+                raise DirectDownloadLinkException(
+                    f"ERROR: Failed to fetch torrent file: {str(e)}"
+                )
+
+        resp = session.post(api_url, params=params, data=data, files=files, timeout=30)
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: Mega-Debrid torrent upload failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        # Check response_code as per API docs
+        if result.get("response_code") != "ok":
+            error_msg = result.get("response_text", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: Mega-Debrid torrent upload - {error_msg}")
+
+        # Get torrent info from response: { name, size, hash }
+        torrent_info = result.get("newTorrent", {})
+        if not torrent_info:
+            raise DirectDownloadLinkException("ERROR: No torrent info received from Mega-Debrid")
+
+        # Return torrent details - user can check status later with getTorrent API
+        return {
+            "title": torrent_info.get("name", "Mega-Debrid Torrent"),
+            "hash": torrent_info.get("hash", ""),
+            "size": torrent_info.get("size", 0),
+            "message": f"Torrent uploaded to Mega-Debrid successfully. Hash: {torrent_info.get('hash', 'N/A')}"
+        }
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Mega-Debrid torrent upload timeout")
+        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid torrent upload failed - {str(e)}")
+
+
+def _is_mega_debrid_supported(domain):
+    """
+    Check if a domain is supported by Mega-Debrid by fetching the hosters list.
+    Based on API docs: https://www.mega-debrid.eu/api.php?action=getHostersList
+
+    Args:
+        domain: Domain to check
+
+    Returns:
+        bool: True if domain is supported
+    """
+    global mega_debrid_supported_sites
+
+    # If we already have the list cached and it's not empty, use it
+    if mega_debrid_supported_sites:
+        return any(domain in site for site in mega_debrid_supported_sites)
+
+    # Otherwise, fetch the hosters list from API
+    try:
+        session = create_scraper()
+        api_url = "https://www.mega-debrid.eu/api.php"
+        params = {"action": "getHostersList"}
+
+        resp = session.get(api_url, params=params, timeout=15)
+
+        if resp.status_code >= 400:
+            # If API call fails, return False (don't try mega-debrid)
+            return False
+
+        result = resp.json()
+
+        if result.get("response_code") != "ok":
+            return False
+
+        # Extract domains from hosters list
+        hosters = result.get("hosters", [])
+        supported_domains = []
+
+        for hoster in hosters:
+            # Each hoster has: {name, status, img, domains (array), regexps (array)}
+            if hoster.get("status") == "up":  # Only include active hosters
+                domains = hoster.get("domains", [])
+                supported_domains.extend(domains)
+
+        # Cache the supported sites
+        mega_debrid_supported_sites = supported_domains
+
+        # Check if our domain is supported
+        return any(domain in site for site in supported_domains)
+
+    except Exception:
+        # If anything fails, return False (don't try mega-debrid)
+        return False
+
+
+# AllDebrid supported sites - will be fetched dynamically from API
+alldebrid_supported_sites = []
+
+# Real-Debrid supported sites - will be fetched dynamically from API
+real_debrid_supported_sites = []
+
+
+def alldebrid(url):
+    """
+    AllDebrid API integration for premium downloads.
+    Supports direct links, torrents/magnets, redirectors, and streaming links.
+    Based on official API documentation from alldebrid.com
+
+    Args:
+        url: URL to download from supported hosts or torrent/magnet link
+
+    Returns:
+        Direct download link or details dictionary for torrents
+
+    Raises:
+        DirectDownloadLinkException: If API request fails or no credentials
+    """
+    if not Config.ALLDEBRID_API_KEY:
+        raise DirectDownloadLinkException(
+            "ERROR: AllDebrid API key not configured. Please set ALLDEBRID_API_KEY in your config."
+        )
+
+    session = create_scraper()
+
+    try:
+        # Check if it's a torrent/magnet link
+        if url.startswith("magnet:") or url.endswith(".torrent"):
+            return _alldebrid_upload_magnet(session, url)
+
+        # Check if it's a redirector link (common redirector domains)
+        domain = urlparse(url).hostname
+        redirector_domains = [
+            "adf.ly", "bit.ly", "tinyurl.com", "short.link", "dl-protect",
+            "linkvertise.com", "ouo.io", "sh.st", "adfly.com"
+        ]
+
+        if domain and any(redirector_domain in domain for redirector_domain in redirector_domains):
+            try:
+                # Try to extract links from redirector first
+                extracted_links = _alldebrid_handle_redirector(session, url)
+                if extracted_links:
+                    # Use the first extracted link for unlocking
+                    return _alldebrid_unlock_link(session, extracted_links[0])
+            except DirectDownloadLinkException:
+                # If redirector fails, try direct unlock
+                pass
+
+        # Regular debrid link unlock
+        return _alldebrid_unlock_link(session, url)
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException(
+                "ERROR: AllDebrid API timeout - request timed out"
+            )
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid request failed - {str(e)}")
+
+
+def _alldebrid_unlock_link(session, url, password=""):
+    """
+    Unlock a link using AllDebrid API.
+    Based on API docs: POST /v4/link/unlock
+
+    Args:
+        session: HTTP session
+        url: URL to unlock
+        password: Optional password for protected links
+
+    Returns:
+        str: Direct download link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Prepare headers with Bearer token authentication
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        # Prepare POST data
+        data = {"link": url}
+        if password:
+            data["password"] = password
+
+        # Unlock link using POST request as per API docs
+        resp = session.post(
+            "https://api.alldebrid.com/v4/link/unlock",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid API request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        # Check API success status
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes according to API documentation
+            error_messages = {
+                "AUTH_MISSING_APIKEY": "API key was not sent",
+                "AUTH_BAD_APIKEY": "Invalid API key",
+                "AUTH_BLOCKED": "API key is geo-blocked or IP-blocked",
+                "AUTH_USER_BANNED": "Account is banned",
+                "LINK_HOST_NOT_SUPPORTED": "This host or link is not supported",
+                "LINK_DOWN": "Link is not available on the file hoster website",
+                "LINK_HOST_UNAVAILABLE": "Host under maintenance or not available",
+                "LINK_TOO_MANY_DOWNLOADS": "Too many concurrent downloads",
+                "LINK_HOST_FULL": "All servers are full for this host, please retry later",
+                "LINK_HOST_LIMIT_REACHED": "Download limit reached for this host",
+                "LINK_PASS_PROTECTED": "Link is password protected",
+                "LINK_ERROR": "Generic unlocking error",
+                "LINK_NOT_SUPPORTED": "The link is not supported for this host",
+                "LINK_TEMPORARY_UNAVAILABLE": "Link is temporarily unavailable on hoster website",
+                "MUST_BE_PREMIUM": "You must be premium to process this link",
+                "FREE_TRIAL_LIMIT_REACHED": "Free trial limit reached (7 days // 25GB downloaded or host uneligible for free trial)",
+                "NO_SERVER": "Server are not allowed to use this feature. Visit https://alldebrid.com/vpn if you're using a VPN",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid - {detailed_error}")
+
+        # Get data from successful response
+        data = result.get("data", {})
+        if not data:
+            raise DirectDownloadLinkException("ERROR: Empty response from AllDebrid API")
+
+        # Check if it's a delayed link
+        if "delayed" in data:
+            delayed_id = data["delayed"]
+            return _alldebrid_handle_delayed_link(session, delayed_id)
+
+        # Check if it's a streaming link with multiple qualities
+        streams = data.get("streams", [])
+        if streams:
+            # For streaming links, return the best quality or let user choose
+            # For now, return the first stream (usually best quality)
+            stream_id = streams[0].get("id")
+            generation_id = data.get("id")
+
+            if stream_id and generation_id:
+                return _alldebrid_get_streaming_link(session, generation_id, stream_id)
+
+        # Get direct download link
+        download_url = data.get("link")
+        if not download_url:
+            raise DirectDownloadLinkException("ERROR: No download URL in AllDebrid response")
+
+        return download_url
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid API timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid API request failed - {str(e)}")
+
+
+def _alldebrid_upload_magnet(session, url):
+    """
+    Upload magnet/torrent to AllDebrid API.
+    Based on API docs: POST /v4/magnet/upload and POST /v4/magnet/upload/file
+
+    Args:
+        session: HTTP session
+        url: Magnet link or torrent file URL
+
+    Returns:
+        dict: Magnet details or direct link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Prepare headers with Bearer token authentication
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        if url.startswith("magnet:"):
+            # For magnet links - API expects magnets[] as array parameter
+            data = {"magnets[]": [url]}  # Fixed: Pass as array
+            files = None
+        else:
+            # For torrent file URLs, download and upload the file
+            try:
+                torrent_resp = session.get(url, timeout=30)
+                if torrent_resp.status_code == 200:
+                    files = {
+                        "files[0]": (
+                            "torrent.torrent",
+                            torrent_resp.content,
+                            "application/x-bittorrent",
+                        )
+                    }
+                    data = {}
+                else:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: Could not download torrent file from {url}"
+                    )
+            except Exception as e:
+                raise DirectDownloadLinkException(
+                    f"ERROR: Failed to fetch torrent file: {str(e)}"
+                )
+
+        # Upload magnet/torrent
+        if url.startswith("magnet:"):
+            resp = session.post(
+                "https://api.alldebrid.com/v4/magnet/upload",
+                headers=headers,
+                data=data,
+                timeout=30,
+            )
+        else:
+            resp = session.post(
+                "https://api.alldebrid.com/v4/magnet/upload/file",
+                headers=headers,
+                data=data,
+                files=files,
+                timeout=30,
+            )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid magnet upload failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        # Check API success status
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes
+            error_messages = {
+                "MAGNET_NO_URI": "No magnet provided",
+                "MAGNET_INVALID_URI": "Magnet is not valid",
+                "MAGNET_MUST_BE_PREMIUM": "You must be premium to use this feature",
+                "MAGNET_NO_SERVER": "Server are not allowed to use this feature. Visit https://alldebrid.com/vpn if you're using a VPN",
+                "MAGNET_TOO_MANY_ACTIVE": "Already have maximum allowed active magnets (30)",
+                "MAGNET_INVALID_FILE": "File is not a valid torrent",
+                "MAGNET_FILE_UPLOAD_FAILED": "File upload failed",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet upload - {detailed_error}")
+
+        # Get magnet info from response
+        data = result.get("data", {})
+        if url.startswith("magnet:"):
+            magnets = data.get("magnets", [])
+            if not magnets:
+                raise DirectDownloadLinkException("ERROR: No magnet info received from AllDebrid")
+            magnet_info = magnets[0]
+        else:
+            files = data.get("files", [])
+            if not files:
+                raise DirectDownloadLinkException("ERROR: No file info received from AllDebrid")
+            magnet_info = files[0]
+
+        # Check for errors in magnet info
+        if "error" in magnet_info:
+            error_info = magnet_info["error"]
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet - {error_message}")
+
+        # Return magnet details - user can check status later with magnet/status API
+        return {
+            "title": magnet_info.get("name", "AllDebrid Magnet"),
+            "hash": magnet_info.get("hash", ""),
+            "size": magnet_info.get("size", 0),
+            "id": magnet_info.get("id", ""),
+            "ready": magnet_info.get("ready", False),
+            "message": f"Magnet uploaded to AllDebrid successfully. ID: {magnet_info.get('id', 'N/A')}"
+        }
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid magnet upload timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet upload failed - {str(e)}")
+
+
+def _alldebrid_handle_delayed_link(session, delayed_id):
+    """
+    Handle delayed links from AllDebrid API.
+    Based on API docs: POST /v4/link/delayed
+
+    Args:
+        session: HTTP session
+        delayed_id: Delayed link ID
+
+    Returns:
+        str: Direct download link when ready
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        # Poll for delayed link status (max 5 minutes)
+        max_attempts = 60  # 5 minutes with 5-second intervals
+        attempt = 0
+
+        while attempt < max_attempts:
+            data = {"id": delayed_id}
+
+            resp = session.post(
+                "https://api.alldebrid.com/v4/link/delayed",
+                headers=headers,
+                data=data,
+                timeout=30,
+            )
+
+            if resp.status_code >= 400:
+                raise DirectDownloadLinkException(
+                    f"ERROR: AllDebrid delayed link check failed - HTTP {resp.status_code}"
+                )
+
+            result = resp.json()
+
+            if result.get("status") != "success":
+                error_info = result.get("error", {})
+                error_message = error_info.get("message", "Unknown error")
+                raise DirectDownloadLinkException(f"ERROR: AllDebrid delayed link - {error_message}")
+
+            data = result.get("data", {})
+            status = data.get("status")
+            time_left = data.get("time_left", 0)
+
+            if status == 2:  # Download link is available
+                download_url = data.get("link")
+                if download_url:
+                    return download_url
+                else:
+                    raise DirectDownloadLinkException("ERROR: No download URL in delayed response")
+            elif status == 3:  # Error, could not generate download link
+                raise DirectDownloadLinkException("ERROR: AllDebrid could not generate download link")
+            elif status == 1:  # Still processing
+                LOGGER.info(f"AllDebrid delayed link still processing. Time left: {time_left}s")
+                sleep(5)  # Wait 5 seconds before next check
+                attempt += 1
+            else:
+                raise DirectDownloadLinkException(f"ERROR: Unknown delayed link status: {status}")
+
+        raise DirectDownloadLinkException("ERROR: AllDebrid delayed link timeout - took too long to process")
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid delayed link timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid delayed link failed - {str(e)}")
+
+
+def _is_alldebrid_supported(domain):
+    """
+    Check if a domain is supported by AllDebrid by fetching the hosts list.
+    Uses both public /v4/hosts and authenticated /v4.1/user/hosts for comprehensive coverage.
+    Based on API docs: GET /v4/hosts and GET /v4.1/user/hosts
+
+    Args:
+        domain: Domain to check
+
+    Returns:
+        bool: True if domain is supported
+    """
+    global alldebrid_supported_sites
+
+    # If we already have the list cached and it's not empty, use it
+    if alldebrid_supported_sites:
+        return any(domain in site for site in alldebrid_supported_sites)
+
+    # Otherwise, fetch the hosts list from API
+    try:
+        session = create_scraper()
+        supported_domains = []
+
+        # First, try the public hosts endpoint (includes streams and redirectors)
+        try:
+            resp = session.get("https://api.alldebrid.com/v4/hosts", timeout=15)
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get("status") == "success":
+                    data = result.get("data", {})
+
+                    # Extract domains from hosts
+                    hosts = data.get("hosts", {})
+                    for _, host_info in hosts.items():
+                        if host_info.get("status", True):
+                            domains = host_info.get("domains", [])
+                            supported_domains.extend(domains)
+
+                    # Also check streams and redirectors
+                    streams = data.get("streams", {})
+                    for _, stream_info in streams.items():
+                        domains = stream_info.get("domains", [])
+                        supported_domains.extend(domains)
+
+                    redirectors = data.get("redirectors", {})
+                    for _, redirector_info in redirectors.items():
+                        domains = redirector_info.get("domains", [])
+                        supported_domains.extend(domains)
+        except Exception:
+            pass  # Continue with user hosts if public endpoint fails
+
+        # If we have API key, also check user-specific hosts (v4.1 for better performance)
+        if Config.ALLDEBRID_API_KEY:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+                    "User-Agent": user_agent,
+                }
+                resp = session.get("https://api.alldebrid.com/v4.1/user/hosts", headers=headers, timeout=15)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    if result.get("status") == "success":
+                        data = result.get("data", {})
+                        hosts = data.get("hosts", {})
+                        for _, host_info in hosts.items():
+                            if host_info.get("status", True):
+                                domains = host_info.get("domains", [])
+                                supported_domains.extend(domains)
+            except Exception:
+                pass  # User hosts is optional
+
+        # Remove duplicates and cache
+        alldebrid_supported_sites = list(set(supported_domains))
+
+        # Check if our domain is supported
+        return any(domain in site for site in alldebrid_supported_sites)
+
+    except Exception:
+        # If everything fails, return False (don't try alldebrid)
+        return False
+
+
+def _alldebrid_handle_redirector(session, url):
+    """
+    Handle redirector links using AllDebrid API.
+    Based on API docs: POST /v4/link/redirector
+
+    Args:
+        session: HTTP session
+        url: Redirector URL to extract links from
+
+    Returns:
+        list: List of extracted links
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        data = {"link": url}
+
+        resp = session.post(
+            "https://api.alldebrid.com/v4/link/redirector",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid redirector request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes
+            error_messages = {
+                "REDIRECTOR_NOT_SUPPORTED": "Redirector not supported",
+                "REDIRECTOR_ERROR": "Could not extract links",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid redirector - {detailed_error}")
+
+        # Get extracted links
+        data = result.get("data", {})
+        links = data.get("links", [])
+
+        if not links:
+            raise DirectDownloadLinkException("ERROR: No links extracted from redirector")
+
+        return links
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid redirector timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid redirector failed - {str(e)}")
+
+
+def _alldebrid_get_link_info(session, url, password=""):
+    """
+    Get link information using AllDebrid API.
+    Based on API docs: POST /v4/link/infos
+
+    Args:
+        session: HTTP session
+        url: URL to get information about
+        password: Optional password for protected links
+
+    Returns:
+        dict: Link information
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        data = {"link[]": [url]}  # API expects array format
+        if password:
+            data["password"] = password
+
+        resp = session.post(
+            "https://api.alldebrid.com/v4/link/infos",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid link info request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_message = error_info.get("message", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid link info - {error_message}")
+
+        # Get link info
+        data = result.get("data", {})
+        infos = data.get("infos", [])
+
+        if not infos:
+            raise DirectDownloadLinkException("ERROR: No link information received")
+
+        link_info = infos[0]
+
+        # Check for errors in link info
+        if "error" in link_info:
+            error_info = link_info["error"]
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes
+            error_messages = {
+                "LINK_IS_MISSING": "No link was sent",
+                "LINK_HOST_NOT_SUPPORTED": "This host or link is not supported",
+                "LINK_DOWN": "This link is not available on the file hoster website",
+                "LINK_PASS_PROTECTED": "Link is password protected",
+                "LINK_TEMPORARY_UNAVAILABLE": "Link is temporarily unavailable on hoster website",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid link info - {detailed_error}")
+
+        return link_info
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid link info timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid link info failed - {str(e)}")
+
+
+def _alldebrid_get_streaming_link(session, generation_id, stream_id):
+    """
+    Get streaming link using AllDebrid API.
+    Based on API docs: POST /v4/link/streaming
+
+    Args:
+        session: HTTP session
+        generation_id: Generation ID from unlock response
+        stream_id: Stream ID for the desired quality
+
+    Returns:
+        str: Direct streaming link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        data = {
+            "id": generation_id,
+            "stream": stream_id,
+        }
+
+        resp = session.post(
+            "https://api.alldebrid.com/v4/link/streaming",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid streaming request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes
+            error_messages = {
+                "STREAM_INVALID_GEN_ID": "Invalid generation ID",
+                "STREAM_INVALID_STREAM_ID": "Invalid stream ID",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid streaming - {detailed_error}")
+
+        # Get streaming data
+        data = result.get("data", {})
+
+        # Check if it's a delayed link
+        if "delayed" in data:
+            delayed_id = data["delayed"]
+            return _alldebrid_handle_delayed_link(session, delayed_id)
+
+        # Get direct streaming link
+        streaming_url = data.get("link")
+        if not streaming_url:
+            raise DirectDownloadLinkException("ERROR: No streaming URL in AllDebrid response")
+
+        return streaming_url
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid streaming timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid streaming failed - {str(e)}")
+
+
+def _alldebrid_check_magnet_status(session, magnet_id):
+    """
+    Check magnet status using AllDebrid API v4.1.
+    Based on API docs: POST /v4.1/magnet/status
+
+    Args:
+        session: HTTP session
+        magnet_id: Magnet ID to check
+
+    Returns:
+        dict: Magnet status information
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        data = {"id": magnet_id}
+
+        resp = session.post(
+            "https://api.alldebrid.com/v4.1/magnet/status",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid magnet status request failed - HTTP {resp.status_code}"
+            )
+
+        result = resp.json()
+
+        if result.get("status") != "success":
+            error_info = result.get("error", {})
+            error_code = error_info.get("code", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+
+            # Handle specific error codes
+            error_messages = {
+                "MAGNET_INVALID_ID": "Magnet ID is invalid",
+            }
+
+            detailed_error = error_messages.get(error_code, error_message)
+            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet status - {detailed_error}")
+
+        # Get magnet status data
+        data = result.get("data", {})
+        magnets = data.get("magnets", [])
+
+        if not magnets:
+            raise DirectDownloadLinkException("ERROR: No magnet status information received")
+
+        return magnets[0]  # Return first magnet info
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: AllDebrid magnet status timeout")
+        raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet status failed - {str(e)}")
+
+
+def real_debrid(url):
+    """
+    Real-Debrid API integration for premium downloads.
+    Supports direct links, torrents/magnets, and 100+ file hosts.
+    Based on official API documentation from real-debrid.com
+
+    Args:
+        url: URL to download from supported hosts or torrent/magnet link
+
+    Returns:
+        Direct download link or details dictionary for torrents
+
+    Raises:
+        DirectDownloadLinkException: If API request fails or no credentials
+    """
+    if not (Config.REAL_DEBRID_API_KEY or Config.REAL_DEBRID_ACCESS_TOKEN):
+        raise DirectDownloadLinkException(
+            "ERROR: Real-Debrid credentials not configured. Please set REAL_DEBRID_API_KEY or REAL_DEBRID_ACCESS_TOKEN in your config."
+        )
+
+    session = create_scraper()
+
+    try:
+        # Check if it's a torrent/magnet link
+        if url.startswith("magnet:") or url.endswith(".torrent"):
+            return _real_debrid_add_torrent(session, url)
+        else:
+            # Check if it might be a folder link first
+            try:
+                folder_result = _real_debrid_unrestrict_folder(session, url)
+                if folder_result:
+                    return folder_result
+            except DirectDownloadLinkException:
+                # If folder unrestrict fails, try regular link unrestrict
+                pass
+
+            # Regular debrid link
+            return _real_debrid_unrestrict_link(session, url)
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException(
+                "ERROR: Real-Debrid API timeout - request timed out"
+            )
+        raise DirectDownloadLinkException(f"ERROR: Real-Debrid request failed - {str(e)}")
+
+
+def _real_debrid_unrestrict_link(session, url, password=""):
+    """
+    Unrestrict a link using Real-Debrid API.
+    Based on API docs: POST /unrestrict/link
+    Supports both Bearer token and auth_token query parameter authentication.
+
+    Args:
+        session: HTTP session
+        url: URL to unrestrict
+        password: Optional password for protected links
+
+    Returns:
+        str: Direct download link
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Get valid access token
+        access_token = _get_valid_real_debrid_token()
+
+        # Prepare POST data
+        data = {"link": url}
+        if password:
+            data["password"] = password
+
+        # Try Bearer token authentication first (recommended)
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": user_agent,
+        }
+
+        # Unrestrict link using POST request as per API docs
+        resp = session.post(
+            "https://api.real-debrid.com/rest/1.0/unrestrict/link",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        # If Bearer token fails, try auth_token query parameter as fallback
+        if resp.status_code == 401 or resp.status_code == 403:
+            headers_fallback = {"User-Agent": user_agent}
+            resp = session.post(
+                f"https://api.real-debrid.com/rest/1.0/unrestrict/link?auth_token={access_token}",
+                headers=headers_fallback,
+                data=data,
+                timeout=30,
+            )
+
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error_code", resp.status_code)
+                error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            except:
+                error_code = resp.status_code
+                error_msg = f"HTTP {resp.status_code}"
+
+            # Handle specific error codes based on API documentation
+            error_messages = {
+                -1: "Internal error",
+                1: "Missing parameter",
+                2: "Bad parameter value",
+                3: "Unknown method",
+                4: "Method not allowed",
+                5: "Slow down - rate limit exceeded",
+                6: "Resource unreachable",
+                7: "Resource not found",
+                8: "Bad token - invalid or expired",
+                9: "Permission denied",
+                10: "Two-Factor authentication needed",
+                11: "Two-Factor authentication pending",
+                12: "Invalid login",
+                13: "Invalid password",
+                14: "Account locked",
+                15: "Account not activated",
+                16: "Unsupported hoster",
+                17: "Hoster in maintenance",
+                18: "Hoster limit reached",
+                19: "Hoster temporarily unavailable",
+                20: "Hoster not available for free users",
+                21: "Too many active downloads",
+                22: "IP Address not allowed",
+                23: "Traffic exhausted",
+                24: "File unavailable",
+                25: "Service unavailable",
+                26: "Upload too big",
+                27: "Upload error",
+                28: "File not allowed",
+                29: "Torrent too big",
+                30: "Torrent file invalid",
+                31: "Action already done",
+                32: "Image resolution error",
+                33: "Torrent already active",
+                34: "Too many requests",
+                35: "Infringing file",
+                36: "Fair Usage Limit",
+                37: "Disabled endpoint"
+            }
+
+            specific_msg = error_messages.get(error_code, error_msg)
+            raise DirectDownloadLinkException(f"ERROR: Real-Debrid - {specific_msg}")
+
+        result = resp.json()
+
+        # Get download link from response
+        download_url = result.get("download")
+        if not download_url:
+            raise DirectDownloadLinkException("ERROR: No download URL received from Real-Debrid")
+
+        return download_url
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Real-Debrid API timeout")
+        raise DirectDownloadLinkException(f"ERROR: Real-Debrid API request failed - {str(e)}")
+
+
+def _real_debrid_add_torrent(session, url):
+    """
+    Add torrent to Real-Debrid API.
+    Based on API docs: PUT /torrents/addTorrent (for files) or POST /torrents/addMagnet (for magnets)
+
+    Args:
+        session: HTTP session
+        url: Magnet link or torrent file URL
+
+    Returns:
+        dict: Torrent details
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Get valid access token
+        access_token = _get_valid_real_debrid_token()
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": user_agent,
+        }
+
+        if url.startswith("magnet:"):
+            # For magnet links - POST /torrents/addMagnet
+            data = {"magnet": url}
+            resp = session.post(
+                "https://api.real-debrid.com/rest/1.0/torrents/addMagnet",
+                headers=headers,
+                data=data,
+                timeout=30,
+            )
+        else:
+            # For torrent file URLs - PUT /torrents/addTorrent
+            try:
+                torrent_resp = session.get(url, timeout=30)
+                if torrent_resp.status_code == 200:
+                    files = {
+                        "torrent": (
+                            "torrent.torrent",
+                            torrent_resp.content,
+                            "application/x-bittorrent",
+                        )
+                    }
+                    resp = session.put(
+                        "https://api.real-debrid.com/rest/1.0/torrents/addTorrent",
+                        headers=headers,
+                        files=files,
+                        timeout=30,
+                    )
+                else:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: Could not download torrent file from {url}"
+                    )
+            except Exception as e:
+                raise DirectDownloadLinkException(
+                    f"ERROR: Failed to fetch torrent file: {str(e)}"
+                )
+
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error_code", resp.status_code)
+                error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            except:
+                error_code = resp.status_code
+                error_msg = f"HTTP {resp.status_code}"
+
+            # Handle specific error codes based on API documentation
+            error_messages = {
+                -1: "Internal error",
+                1: "Missing parameter",
+                2: "Bad parameter value",
+                3: "Unknown method",
+                4: "Method not allowed",
+                5: "Slow down - rate limit exceeded",
+                6: "Resource unreachable",
+                7: "Resource not found",
+                8: "Bad token - invalid or expired",
+                9: "Permission denied",
+                10: "Two-Factor authentication needed",
+                11: "Two-Factor authentication pending",
+                12: "Invalid login",
+                13: "Invalid password",
+                14: "Account locked",
+                15: "Account not activated",
+                16: "Unsupported hoster",
+                17: "Hoster in maintenance",
+                18: "Hoster limit reached",
+                19: "Hoster temporarily unavailable",
+                20: "Hoster not available for free users",
+                21: "Too many active downloads",
+                22: "IP Address not allowed",
+                23: "Traffic exhausted",
+                24: "File unavailable",
+                25: "Service unavailable",
+                26: "Upload too big",
+                27: "Upload error",
+                28: "File not allowed",
+                29: "Torrent too big",
+                30: "Torrent file invalid",
+                31: "Action already done",
+                32: "Image resolution error",
+                33: "Torrent already active",
+                34: "Too many requests",
+                35: "Infringing file",
+                36: "Fair Usage Limit",
+                37: "Disabled endpoint"
+            }
+
+            specific_msg = error_messages.get(error_code, error_msg)
+            raise DirectDownloadLinkException(f"ERROR: Real-Debrid torrent - {specific_msg}")
+
+        result = resp.json()
+
+        # Get torrent info from response
+        torrent_id = result.get("id")
+        if not torrent_id:
+            raise DirectDownloadLinkException("ERROR: No torrent ID received from Real-Debrid")
+
+        # Return torrent details - user can check status later
+        return {
+            "title": result.get("filename", "Real-Debrid Torrent"),
+            "id": torrent_id,
+            "uri": result.get("uri", ""),
+            "message": f"Torrent added to Real-Debrid successfully. ID: {torrent_id}"
+        }
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Real-Debrid torrent upload timeout")
+        raise DirectDownloadLinkException(f"ERROR: Real-Debrid torrent upload failed - {str(e)}")
+
+
+def _get_valid_real_debrid_token():
+    """
+    Get a valid Real-Debrid access token, refreshing if necessary.
+    Returns the access token or raises exception if unavailable.
+    """
+    # Check if we have an access token
+    access_token = (
+        getattr(Config, "REAL_DEBRID_ACCESS_TOKEN", "") or Config.REAL_DEBRID_API_KEY
+    )
+
+    if not access_token:
+        raise DirectDownloadLinkException("No Real-Debrid access token configured")
+
+    # Check if token is expired and refresh if needed
+    if _is_real_debrid_token_expired() and Config.REAL_DEBRID_REFRESH_TOKEN:
+        try:
+            access_token = _refresh_real_debrid_token()
+        except DirectDownloadLinkException:
+            # If refresh fails, try using existing token anyway
+            pass
+
+    return access_token
+
+
+def _is_real_debrid_token_expired():
+    """
+    Check if Real-Debrid OAuth2 token is expired or about to expire.
+    Returns True if token needs refresh.
+    """
+    if not Config.REAL_DEBRID_TOKEN_EXPIRES:
+        return False  # No expiration set, assume valid
+
+    from time import time
+
+    current_time = int(time())
+
+    # Consider token expired if it expires within 5 minutes
+    return current_time >= (Config.REAL_DEBRID_TOKEN_EXPIRES - 300)
+
+
+def _refresh_real_debrid_token():
+    """
+    Refresh Real-Debrid OAuth2 access token using refresh token.
+    Updates Config with new tokens automatically.
+    Based on API docs: POST /oauth/v2/token with grant_type=refresh_token
+    """
+    if not Config.REAL_DEBRID_REFRESH_TOKEN or not Config.REAL_DEBRID_CLIENT_ID:
+        raise DirectDownloadLinkException("No refresh token or client ID available")
+
+    session = create_scraper()
+
+    try:
+        # Prepare refresh token request - CORRECTED: use 'code' parameter with refresh_token value
+        data = {
+            "client_id": Config.REAL_DEBRID_CLIENT_ID,
+            "code": Config.REAL_DEBRID_REFRESH_TOKEN,  # FIXED: use 'code' not 'refresh_token'
+            "grant_type": "refresh_token",  # FIXED: use 'refresh_token' not device grant type
+        }
+
+        # Add client secret if available (for server-side apps)
+        if Config.REAL_DEBRID_CLIENT_SECRET:
+            data["client_secret"] = Config.REAL_DEBRID_CLIENT_SECRET
+
+        # Request new access token
+        resp = session.post(
+            "https://api.real-debrid.com/oauth/v2/token",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": user_agent,
+            },
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(f"Token refresh failed: {error_msg}")
+
+        result = resp.json()
+
+        # Update Config with new tokens
+        new_access_token = result.get("access_token")
+        expires_in = result.get("expires_in", 86400)  # Default 24 hours
+
+        if new_access_token:
+            Config.REAL_DEBRID_ACCESS_TOKEN = new_access_token
+            Config.REAL_DEBRID_API_KEY = new_access_token  # Update legacy field too
+
+            # Calculate expiration timestamp
+            from time import time
+
+            Config.REAL_DEBRID_TOKEN_EXPIRES = (
+                int(time()) + expires_in - 300
+            )  # 5 min buffer
+
+            # Update refresh token if provided
+            new_refresh_token = result.get("refresh_token")
+            if new_refresh_token:
+                Config.REAL_DEBRID_REFRESH_TOKEN = new_refresh_token
+
+            return new_access_token
+        else:
+            raise DirectDownloadLinkException("No access token in refresh response")
+
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Token refresh timeout")
+        raise DirectDownloadLinkException(f"Token refresh error: {str(e)}")
+
+
+def _is_real_debrid_supported(domain):
+    """
+    Check if a domain is supported by Real-Debrid by fetching the hosts list.
+    Based on API docs: GET /hosts
+
+    Args:
+        domain: Domain to check
+
+    Returns:
+        bool: True if domain is supported
+    """
+    global real_debrid_supported_sites
+
+    # If we already have the list cached and it's not empty, use it
+    if real_debrid_supported_sites:
+        return any(domain in site for site in real_debrid_supported_sites)
+
+    # Otherwise, fetch the hosts list from API
+    try:
+        session = create_scraper()
+
+        # Try to get access token for authenticated request (better rate limits)
+        try:
+            access_token = _get_valid_real_debrid_token()
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "User-Agent": user_agent,
+            }
+        except:
+            # Fallback to unauthenticated request
+            headers = {"User-Agent": user_agent}
+
+        resp = session.get(
+            "https://api.real-debrid.com/rest/1.0/hosts",
+            headers=headers,
+            timeout=15
+        )
+
+        if resp.status_code >= 400:
+            # If API call fails, return False (don't try real-debrid)
+            return False
+
+        hosts = resp.json()
+
+        # Extract domains from hosts list
+        supported_domains = []
+        for host in hosts:
+            # Each host has: {id, name, image, image_big, domains (array)}
+            domains = host.get("domains", [])
+            supported_domains.extend(domains)
+
+        # Cache the supported sites
+        real_debrid_supported_sites = supported_domains
+
+        # Check if our domain is supported
+        return any(domain in site for site in supported_domains)
+
+    except Exception:
+        # If anything fails, return False (don't try real-debrid)
+        return False
+
+
+def get_real_debrid_oauth_device_code(client_id="X245A4XAIBGVM", new_credentials=False):
+    """
+    Helper function to get device code for OAuth2 device flow.
+    Used for setting up Real-Debrid authentication on limited input devices.
+    Supports both regular device flow and opensource app flow with new credentials.
+
+    Args:
+        client_id: Your Real-Debrid app client ID (default: opensource client ID)
+        new_credentials: If True, requests new user-bound credentials for opensource apps
+
+    Returns:
+        dict: Contains device_code, user_code, verification_url, expires_in, interval
+    """
+    session = create_scraper()
+
+    try:
+        params = {"client_id": client_id}
+
+        # For opensource apps, add new_credentials=yes parameter
+        if new_credentials:
+            params["new_credentials"] = "yes"
+
+        resp = session.get(
+            "https://api.real-debrid.com/oauth/v2/device/code",
+            params=params,
+            headers={"User-Agent": user_agent},
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(
+                f"Device code request failed: {error_msg}"
+            )
+
+        return resp.json()
+
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Device code request timeout")
+        raise DirectDownloadLinkException(f"Device code request error: {str(e)}")
+
+
+def get_real_debrid_oauth_credentials(client_id, device_code):
+    """
+    Helper function to get user-bound credentials for opensource apps.
+    Based on API docs: GET /oauth/v2/device/credentials
+    Used in the opensource app workflow after device authorization.
+
+    Args:
+        client_id: Your Real-Debrid app client ID
+        device_code: Device code from get_real_debrid_oauth_device_code()
+
+    Returns:
+        dict: Contains client_id and client_secret bound to the user
+
+    Raises:
+        DirectDownloadLinkException: If credentials request fails or is pending
+    """
+    session = create_scraper()
+
+    try:
+        params = {
+            "client_id": client_id,
+            "code": device_code,
+        }
+
+        resp = session.get(
+            "https://api.real-debrid.com/oauth/v2/device/credentials",
+            params=params,
+            headers={"User-Agent": user_agent},
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_code = error_data.get("error", f"HTTP {resp.status_code}")
+
+            if "authorization_pending" in error_code or "slow_down" in error_code:
+                raise DirectDownloadLinkException("authorization_pending")
+            else:
+                raise DirectDownloadLinkException(
+                    f"Credentials request failed: {error_code}"
+                )
+
+        return resp.json()
+
+    except Exception as e:
+        if "authorization_pending" in str(e):
+            raise e  # Re-raise authorization pending
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Credentials request timeout")
+        raise DirectDownloadLinkException(f"Credentials request error: {str(e)}")
+
+
+def poll_real_debrid_oauth_token(client_id, device_code, client_secret=""):
+    """
+    Helper function to poll for OAuth2 tokens using device code.
+    Call this repeatedly until you get tokens or an error.
+
+    Args:
+        client_id: Your Real-Debrid app client ID
+        device_code: Device code from get_real_debrid_oauth_device_code()
+        client_secret: Client secret (optional, not needed for opensource apps)
+
+    Returns:
+        dict: Contains access_token, refresh_token, expires_in, token_type
+
+    Raises:
+        DirectDownloadLinkException: If authorization is still pending or failed
+    """
+    session = create_scraper()
+
+    try:
+        data = {
+            "client_id": client_id,
+            "code": device_code,
+            "grant_type": "http://oauth.net/grant_type/device/1.0",
+        }
+
+        if client_secret:
+            data["client_secret"] = client_secret
+
+        resp = session.post(
+            "https://api.real-debrid.com/oauth/v2/token",
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": user_agent,
+            },
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_code = error_data.get("error", f"HTTP {resp.status_code}")
+
+            if "authorization_pending" in error_code or "slow_down" in error_code:
+                raise DirectDownloadLinkException("authorization_pending")
+            else:
+                raise DirectDownloadLinkException(
+                    f"Token polling failed: {error_code}"
+                )
+
+        return resp.json()
+
+    except Exception as e:
+        if "authorization_pending" in str(e):
+            raise e  # Re-raise authorization pending
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("Token polling timeout")
+        raise DirectDownloadLinkException(f"Token polling error: {str(e)}")
+
+
+def setup_real_debrid_oauth_device_flow(client_id="X245A4XAIBGVM", client_secret="", opensource_app=True):
+    """
+    Complete OAuth2 device flow setup for Real-Debrid.
+    This is a helper function for initial authentication setup.
+    Supports both regular apps and opensource apps with user-bound credentials.
+
+    Args:
+        client_id: Your Real-Debrid app client ID (default: opensource client ID)
+        client_secret: Client secret (optional, not needed for opensource apps)
+        opensource_app: If True, uses opensource app workflow with new credentials
+
+    Returns:
+        dict: Contains access_token, refresh_token, expires_in, and optionally client_id/client_secret for Config setup
+    """
+    try:
+        # Step 1: Get device code (with new_credentials for opensource apps)
+        LOGGER.info("Getting Real-Debrid device code...")
+        device_data = get_real_debrid_oauth_device_code(client_id, new_credentials=opensource_app)
+
+        device_code = device_data["device_code"]
+        user_code = device_data["user_code"]
+        verification_url = device_data["verification_url"]
+        expires_in = device_data["expires_in"]
+        interval = device_data["interval"]
+
+        LOGGER.info(f"Please visit: {verification_url}")
+        LOGGER.info(f"Enter this code: {user_code}")
+        LOGGER.info(
+            f"You have {expires_in // 60} minutes to complete authorization."
+        )
+        LOGGER.info(f"Polling for authorization every {interval} seconds...")
+
+        # Step 2: For opensource apps, get user-bound credentials first
+        user_credentials = None
+        if opensource_app:
+            LOGGER.info("Waiting for user authorization to get credentials...")
+            import time
+            start_time = time.time()
+
+            while time.time() - start_time < expires_in:
+                try:
+                    user_credentials = get_real_debrid_oauth_credentials(client_id, device_code)
+                    LOGGER.info("User-bound credentials obtained!")
+                    # Update client_id and client_secret with user-bound values
+                    client_id = user_credentials["client_id"]
+                    client_secret = user_credentials["client_secret"]
+                    break
+                except DirectDownloadLinkException as e:
+                    if "authorization_pending" in str(e):
+                        time.sleep(interval)
+                        continue
+                    else:
+                        raise e
+
+            if not user_credentials:
+                raise DirectDownloadLinkException("Failed to get user-bound credentials")
+
+        # Step 3: Poll for tokens using the (possibly updated) credentials
+        LOGGER.info("Polling for access tokens...")
+        import time
+        start_time = time.time()
+
+        while time.time() - start_time < expires_in:
+            try:
+                token_data = poll_real_debrid_oauth_token(
+                    client_id, device_code, client_secret
+                )
+                LOGGER.info("Real-Debrid authorization successful!")
+
+                # Add user-bound credentials to response for opensource apps
+                if opensource_app and user_credentials:
+                    token_data["user_client_id"] = client_id
+                    token_data["user_client_secret"] = client_secret
+
+                return token_data
+
+            except DirectDownloadLinkException as e:
+                if "authorization_pending" in str(e):
+                    time.sleep(interval)
+                    continue
+                else:
+                    raise e
+
+        raise DirectDownloadLinkException(
+            "Authorization timeout - device code expired"
+        )
+
+    except Exception as e:
+        raise DirectDownloadLinkException(f"OAuth setup failed: {str(e)}")
+
+
+def _real_debrid_check_link(session, url, password=""):
+    """
+    Check a link before unrestricting using Real-Debrid API.
+    Based on API docs: POST /unrestrict/check
+    This is optional but recommended to verify link availability.
+
+    Args:
+        session: HTTP session
+        url: URL to check
+        password: Optional password for protected links
+
+    Returns:
+        dict: Link information (host, filename, filesize, etc.)
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Get valid access token
+        access_token = _get_valid_real_debrid_token()
+
+        # Prepare POST data
+        data = {"link": url}
+        if password:
+            data["password"] = password
+
+        # Try Bearer token authentication first
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": user_agent,
+        }
+
+        # Check link using POST request as per API docs
+        resp = session.post(
+            "https://api.real-debrid.com/rest/1.0/unrestrict/check",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        # If Bearer token fails, try auth_token query parameter as fallback
+        if resp.status_code == 401 or resp.status_code == 403:
+            headers_fallback = {"User-Agent": user_agent}
+            resp = session.post(
+                f"https://api.real-debrid.com/rest/1.0/unrestrict/check?auth_token={access_token}",
+                headers=headers_fallback,
+                data=data,
+                timeout=30,
+            )
+
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error_code", resp.status_code)
+                error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            except:
+                error_code = resp.status_code
+                error_msg = f"HTTP {resp.status_code}"
+
+            # Handle specific error codes based on API documentation
+            error_messages = {
+                -1: "Internal error",
+                1: "Missing parameter",
+                2: "Bad parameter value",
+                3: "Unknown method",
+                4: "Method not allowed",
+                5: "Slow down - rate limit exceeded",
+                6: "Resource unreachable",
+                7: "Resource not found",
+                8: "Bad token - invalid or expired",
+                9: "Permission denied",
+                16: "Unsupported hoster",
+                17: "Hoster in maintenance",
+                18: "Hoster limit reached",
+                19: "Hoster temporarily unavailable",
+                20: "Hoster not available for free users",
+                24: "File unavailable",
+                25: "Service unavailable",
+                34: "Too many requests",
+                37: "Disabled endpoint"
+            }
+
+            specific_msg = error_messages.get(error_code, error_msg)
+            raise DirectDownloadLinkException(f"ERROR: Real-Debrid check - {specific_msg}")
+
+        result = resp.json()
+        return result
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Real-Debrid check timeout")
+        raise DirectDownloadLinkException(f"ERROR: Real-Debrid check failed - {str(e)}")
+
+
+def _real_debrid_unrestrict_folder(session, url, password=""):
+    """
+    Unrestrict a folder link using Real-Debrid API.
+    Based on API docs: POST /unrestrict/folder
+    Returns multiple download links for folder contents.
+
+    Args:
+        session: HTTP session
+        url: Folder URL to unrestrict
+        password: Optional password for protected folders
+
+    Returns:
+        dict: Folder details with multiple download links
+
+    Raises:
+        DirectDownloadLinkException: If API request fails
+    """
+    try:
+        # Get valid access token
+        access_token = _get_valid_real_debrid_token()
+
+        # Prepare POST data
+        data = {"link": url}
+        if password:
+            data["password"] = password
+
+        # Try Bearer token authentication first
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": user_agent,
+        }
+
+        # Unrestrict folder using POST request as per API docs
+        resp = session.post(
+            "https://api.real-debrid.com/rest/1.0/unrestrict/folder",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        # If Bearer token fails, try auth_token query parameter as fallback
+        if resp.status_code == 401 or resp.status_code == 403:
+            headers_fallback = {"User-Agent": user_agent}
+            resp = session.post(
+                f"https://api.real-debrid.com/rest/1.0/unrestrict/folder?auth_token={access_token}",
+                headers=headers_fallback,
+                data=data,
+                timeout=30,
+            )
+
+        if resp.status_code >= 400:
+            try:
+                error_data = resp.json()
+                error_code = error_data.get("error_code", resp.status_code)
+                error_msg = error_data.get("error", f"HTTP {resp.status_code}")
+            except:
+                error_code = resp.status_code
+                error_msg = f"HTTP {resp.status_code}"
+
+            # Handle specific error codes based on API documentation
+            error_messages = {
+                -1: "Internal error",
+                1: "Missing parameter",
+                2: "Bad parameter value",
+                3: "Unknown method",
+                4: "Method not allowed",
+                5: "Slow down - rate limit exceeded",
+                6: "Resource unreachable",
+                7: "Resource not found",
+                8: "Bad token - invalid or expired",
+                9: "Permission denied",
+                16: "Unsupported hoster",
+                17: "Hoster in maintenance",
+                18: "Hoster limit reached",
+                19: "Hoster temporarily unavailable",
+                20: "Hoster not available for free users",
+                23: "Traffic exhausted",
+                24: "File unavailable",
+                25: "Service unavailable",
+                34: "Too many requests",
+                37: "Disabled endpoint"
+            }
+
+            specific_msg = error_messages.get(error_code, error_msg)
+            raise DirectDownloadLinkException(f"ERROR: Real-Debrid folder - {specific_msg}")
+
+        result = resp.json()
+
+        # Process folder response - should contain array of files
+        if not isinstance(result, list) or not result:
+            raise DirectDownloadLinkException("ERROR: No files found in folder or invalid folder link")
+
+        # Build folder details response
+        details = {
+            "contents": [],
+            "title": unquote(url.rstrip("/").split("/")[-1]),
+            "total_size": 0,
+        }
+
+        for file_info in result:
+            # Each file should have: download, filename, filesize
+            download_url = file_info.get("download")
+            filename = file_info.get("filename")
+            filesize = file_info.get("filesize", 0)
+
+            if download_url and filename:
+                item = {
+                    "path": details["title"],
+                    "filename": filename,
+                    "url": download_url,
+                }
+
+                # Add file size if available
+                if isinstance(filesize, (int, float)) and filesize > 0:
+                    details["total_size"] += filesize
+
+                details["contents"].append(item)
+
+        # Check if we have any valid files
+        if not details["contents"]:
+            raise DirectDownloadLinkException("ERROR: No valid download links found in folder")
+
+        return details
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException("ERROR: Real-Debrid folder timeout")
+        raise DirectDownloadLinkException(f"ERROR: Real-Debrid folder failed - {str(e)}")
+
+
+def torbox(url):
+    """
+    TorBox API integration for premium downloads.
+    Supports torrents, usenet downloads, and web downloads.
+
+    Args:
+        url: URL to download (magnet links, torrent files, usenet links, web links)
+
+    Returns:
+        Direct download link or details dictionary for multi-file downloads
+
+    Raises:
+        DirectDownloadLinkException: If API request fails or no credentials
+    """
+    if not Config.TORBOX_API_KEY:
+        raise DirectDownloadLinkException(
+            "ERROR: TorBox API key not configured. Please set TORBOX_API_KEY in your config."
+        )
+
+    session = create_scraper()
+    # Prepare headers for Bearer token authentication (for form-data requests)
+    # Note: Don't set Content-Type when using files parameter - requests will set it automatically
+    headers = {
+        "Authorization": f"Bearer {Config.TORBOX_API_KEY}",
+        "User-Agent": user_agent,
+    }
+
+    try:
+        # Determine the type of download based on URL
+        download_type = _detect_torbox_download_type(url)
+
+        if download_type == "torrent":
+            return _torbox_create_torrent(session, headers, url)
+        elif download_type == "usenet":
+            return _torbox_create_usenet(session, headers, url)
+        elif download_type == "webdl":
+            return _torbox_create_webdl(session, headers, url)
+        else:
+            raise DirectDownloadLinkException(
+                f"ERROR: Unsupported URL type for TorBox: {url}"
+            )
+
+    except DirectDownloadLinkException:
+        raise  # Re-raise our custom exceptions
+    except Exception as e:
+        if "timeout" in str(e).lower():
+            raise DirectDownloadLinkException(
+                "ERROR: TorBox API timeout - request timed out"
+            )
+        raise DirectDownloadLinkException(f"ERROR: TorBox request failed - {str(e)}")
+
+
+def _detect_torbox_download_type(url):
+    """
+    Detect the type of download based on URL pattern.
+
+    Args:
+        url: URL to analyze
+
+    Returns:
+        str: "torrent", "usenet", or "webdl"
+    """
+    url_lower = url.lower()
+
+    # Torrent detection
+    if (
+        url_lower.startswith("magnet:")
+        or url_lower.endswith(".torrent")
+        or "torrent" in url_lower
+    ):
+        return "torrent"
+
+    # Usenet detection (NZB files)
+    if (
+        url_lower.endswith(".nzb")
+        or "nzb" in url_lower
+        or any(x in url_lower for x in ["usenet", "newsgroup"])
+    ):
+        return "usenet"
+
+    # Default to web download for everything else
+    return "webdl"
+
+
+def _torbox_create_torrent(session, headers, url):
+    """
+    Create a torrent download using TorBox API.
+
+    Args:
+        session: HTTP session
+        headers: Request headers with authorization
+        url: Magnet link or torrent file URL
+
+    Returns:
+        Direct download link or details dictionary
+    """
+    try:
+        # Prepare form data according to API specification
+        if url.startswith("magnet:"):
+            # For magnet links, use form-data with magnet parameter
+            data = {"magnet": url}
+            files = None
+        else:
+            # For torrent file URLs, we need to download and upload the file
+            # This is a limitation - we can't directly pass URLs for torrent files
+            # TorBox expects actual file upload or magnet links
+            try:
+                torrent_resp = session.get(url, timeout=30)
+                if torrent_resp.status_code == 200:
+                    files = {
+                        "file": (
+                            "torrent.torrent",
+                            torrent_resp.content,
+                            "application/x-bittorrent",
+                        )
+                    }
+                    data = {}
+                else:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: Could not download torrent file from {url}"
+                    )
+            except Exception as e:
+                raise DirectDownloadLinkException(
+                    f"ERROR: Failed to fetch torrent file: {str(e)}"
+                )
+
+        # Add optional parameters for better control
+        data.update(
+            {
+                "seed": "1",  # Auto seed (default)
+                "allow_zip": "true",  # Allow zipping for large torrents
+            }
+        )
+
+        # Create torrent download using form-data (not JSON)
+        resp = session.post(
+            "https://api.torbox.app/v1/api/torrents/createtorrent",
+            headers=headers,
+            data=data,
+            files=files,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("detail", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(
+                f"TorBox torrent creation failed: {error_msg}"
+            )
+
+        result = resp.json()
+
+        if not result.get("success", False):
+            error_msg = result.get("detail", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: {error_msg}")
+
+        # Get torrent ID from response data
+        # According to API docs, response contains hash, torrent_id, auth_id
+        torrent_data = result.get("data", {})
+        torrent_id = torrent_data.get("torrent_id")
+
+        if not torrent_id:
+            raise DirectDownloadLinkException(
+                "ERROR: No torrent ID returned from TorBox"
+            )
+
+        # Wait for torrent to be processed and get download links
+        return _torbox_get_download_links(session, torrent_id, "torrent")
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        raise DirectDownloadLinkException(
+            f"ERROR: TorBox torrent creation failed - {str(e)}"
+        )
+
+
+def _torbox_create_usenet(session, headers, url):
+    """
+    Create a usenet download using TorBox API.
+
+    Args:
+        session: HTTP session
+        headers: Request headers with authorization
+        url: NZB file URL or link
+
+    Returns:
+        Direct download link or details dictionary
+    """
+    try:
+        # Prepare form data according to API specification
+        if url.endswith(".nzb"):
+            # For NZB file URLs, download and upload the file
+            try:
+                nzb_resp = session.get(url, timeout=30)
+                if nzb_resp.status_code == 200:
+                    files = {
+                        "file": (
+                            "download.nzb",
+                            nzb_resp.content,
+                            "application/x-nzb",
+                        )
+                    }
+                    data = {}
+                else:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: Could not download NZB file from {url}"
+                    )
+            except Exception as e:
+                raise DirectDownloadLinkException(
+                    f"ERROR: Failed to fetch NZB file: {str(e)}"
+                )
+        else:
+            # For direct links to NZB content
+            data = {"link": url}
+            files = None
+
+        # Add optional parameters according to API docs
+        data.update(
+            {
+                "post_processing": "-1",  # Default processing (repair, extract, delete source)
+                "as_queued": "false",  # Process immediately if possible
+            }
+        )
+
+        # Create usenet download using form-data
+        resp = session.post(
+            "https://api.torbox.app/v1/api/usenet/createusenetdownload",
+            headers=headers,
+            data=data,
+            files=files,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("detail", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(
+                f"TorBox usenet creation failed: {error_msg}"
+            )
+
+        result = resp.json()
+
+        if not result.get("success", False):
+            error_msg = result.get("detail", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: {error_msg}")
+
+        # Get usenet ID from response data
+        # According to API docs, response contains hash, usenetdownload_id, auth_id
+        usenet_data = result.get("data", {})
+        usenet_id = usenet_data.get("usenetdownload_id")
+
+        if not usenet_id:
+            raise DirectDownloadLinkException(
+                "ERROR: No usenet ID returned from TorBox"
+            )
+
+        # Wait for usenet download to be processed and get download links
+        return _torbox_get_download_links(session, usenet_id, "usenet")
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        raise DirectDownloadLinkException(
+            f"ERROR: TorBox usenet creation failed - {str(e)}"
+        )
+
+
+def _torbox_create_webdl(session, headers, url):
+    """
+    Create a web download using TorBox API.
+
+    Args:
+        session: HTTP session
+        headers: Request headers with authorization
+        url: Web download URL
+
+    Returns:
+        Direct download link or details dictionary
+    """
+    try:
+        # Prepare form data according to API specification
+        data = {
+            "link": url,
+            "as_queued": "false",  # Process immediately if possible
+        }
+
+        # Create web download using form-data
+        resp = session.post(
+            "https://api.torbox.app/v1/api/webdl/createwebdownload",
+            headers=headers,
+            data=data,
+            timeout=30,
+        )
+
+        if resp.status_code >= 400:
+            error_data = resp.json() if resp.content else {"error": "unknown_error"}
+            error_msg = error_data.get("detail", f"HTTP {resp.status_code}")
+            raise DirectDownloadLinkException(
+                f"TorBox web download creation failed: {error_msg}"
+            )
+
+        result = resp.json()
+
+        if not result.get("success", False):
+            error_msg = result.get("detail", "Unknown error")
+            raise DirectDownloadLinkException(f"ERROR: {error_msg}")
+
+        # Get web download ID from response data
+        # According to API docs, response contains hash, webdownload_id, auth_id
+        webdl_data = result.get("data", {})
+        webdl_id = webdl_data.get("webdownload_id")
+
+        if not webdl_id:
+            raise DirectDownloadLinkException(
+                "ERROR: No web download ID returned from TorBox"
+            )
+
+        # Wait for web download to be processed and get download links
+        return _torbox_get_download_links(session, webdl_id, "webdl")
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        raise DirectDownloadLinkException(
+            f"ERROR: TorBox web download creation failed - {str(e)}"
+        )
+
+
+def _torbox_get_download_links(session, download_id, download_type):
+    """
+    Get download links from TorBox after processing is complete.
+
+    Args:
+        session: HTTP session
+        download_id: ID of the download (torrent_id, usenet_id, or webdl_id)
+        download_type: Type of download ("torrent", "usenet", or "webdl")
+
+    Returns:
+        Direct download link or details dictionary for multi-file downloads
+    """
+    import time
+
+    try:
+        # Prepare headers for Bearer token authentication (for status checks)
+        headers = {
+            "Authorization": f"Bearer {Config.TORBOX_API_KEY}",
+            "User-Agent": user_agent,
+        }
+
+        # Wait for processing to complete (max 5 minutes)
+        max_wait_time = 300  # 5 minutes
+        check_interval = 10  # Check every 10 seconds
+        start_time = time.time()
+
+        while time.time() - start_time < max_wait_time:
+            # Get download status using Bearer token
+            if download_type == "torrent":
+                list_url = (
+                    f"https://api.torbox.app/v1/api/torrents/mylist?id={download_id}"
+                )
+            elif download_type == "usenet":
+                list_url = (
+                    f"https://api.torbox.app/v1/api/usenet/mylist?id={download_id}"
+                )
+            else:  # webdl
+                list_url = (
+                    f"https://api.torbox.app/v1/api/webdl/mylist?id={download_id}"
+                )
+
+            resp = session.get(list_url, headers=headers, timeout=30)
+
+            if resp.status_code >= 400:
+                error_data = (
+                    resp.json() if resp.content else {"error": "unknown_error"}
+                )
+                error_msg = error_data.get("detail", f"HTTP {resp.status_code}")
+                raise DirectDownloadLinkException(
+                    f"TorBox status check failed: {error_msg}"
+                )
+
+            result = resp.json()
+
+            if not result.get("success", False):
+                error_msg = result.get("detail", "Unknown error")
+                raise DirectDownloadLinkException(f"ERROR: {error_msg}")
+
+            data = result.get("data")
+            if not data:
+                time.sleep(check_interval)
+                continue
+
+            # Handle both single item and list responses
+            if isinstance(data, list):
+                if not data:
+                    time.sleep(check_interval)
+                    continue
+                download_info = data[0]
+            else:
+                download_info = data
+
+            # Check if download is finished
+            download_finished = download_info.get("download_finished", False)
+            download_present = download_info.get("download_present", False)
+
+            if download_finished and download_present:
+                # Get files and generate download links
+                files = download_info.get("files", [])
+                if not files:
+                    raise DirectDownloadLinkException(
+                        "ERROR: No files found in TorBox download"
+                    )
+
+                # If single file, return direct link
+                if len(files) == 1:
+                    file_info = files[0]
+                    file_id = file_info.get("id")
+                    if not file_id:
+                        raise DirectDownloadLinkException("ERROR: No file ID found")
+
+                    # Request download link using query parameters (not Bearer header)
+                    # According to API docs: "Requires an API key as a parameter for the token parameter"
+                    # IMPORTANT: Usenet uses "torrent_id" parameter, not "usenet_id" (API inconsistency)
+                    if download_type == "torrent":
+                        dl_url = f"https://api.torbox.app/v1/api/torrents/requestdl?token={Config.TORBOX_API_KEY}&torrent_id={download_id}&file_id={file_id}"
+                    elif download_type == "usenet":
+                        dl_url = f"https://api.torbox.app/v1/api/usenet/requestdl?token={Config.TORBOX_API_KEY}&torrent_id={download_id}&file_id={file_id}"
+                    else:  # webdl
+                        dl_url = f"https://api.torbox.app/v1/api/webdl/requestdl?token={Config.TORBOX_API_KEY}&web_id={download_id}&file_id={file_id}"
+
+                    # Get the actual download URL (no Bearer header needed for this endpoint)
+                    dl_resp = session.get(dl_url, timeout=30)
+                    if dl_resp.status_code >= 400:
+                        raise DirectDownloadLinkException(
+                            "ERROR: Failed to get download URL from TorBox"
+                        )
+
+                    dl_result = dl_resp.json()
+                    if dl_result.get("success") and dl_result.get("data"):
+                        return dl_result["data"]
+                    else:
+                        raise DirectDownloadLinkException(
+                            "ERROR: Invalid download URL response from TorBox"
+                        )
+
+                # Multiple files - return details dictionary
+                else:
+                    details = {
+                        "contents": [],
+                        "title": download_info.get("name", "TorBox Download"),
+                        "total_size": download_info.get("size", 0),
+                    }
+
+                    for file_info in files:
+                        file_id = file_info.get("id")
+                        if not file_id:
+                            continue
+
+                        # Request download link for each file using query parameters
+                        # IMPORTANT: Usenet uses "torrent_id" parameter, not "usenet_id" (API inconsistency)
+                        if download_type == "torrent":
+                            dl_url = f"https://api.torbox.app/v1/api/torrents/requestdl?token={Config.TORBOX_API_KEY}&torrent_id={download_id}&file_id={file_id}"
+                        elif download_type == "usenet":
+                            dl_url = f"https://api.torbox.app/v1/api/usenet/requestdl?token={Config.TORBOX_API_KEY}&torrent_id={download_id}&file_id={file_id}"
+                        else:  # webdl
+                            dl_url = f"https://api.torbox.app/v1/api/webdl/requestdl?token={Config.TORBOX_API_KEY}&web_id={download_id}&file_id={file_id}"
+
+                        try:
+                            # No Bearer header needed for requestdl endpoint
+                            dl_resp = session.get(dl_url, timeout=30)
+                            if dl_resp.status_code >= 400:
+                                continue
+
+                            dl_result = dl_resp.json()
+                            if dl_result.get("success") and dl_result.get("data"):
+                                item = {
+                                    "path": details["title"],
+                                    "filename": file_info.get(
+                                        "name", f"file_{file_id}"
+                                    ),
+                                    "url": dl_result["data"],
+                                }
+                                details["contents"].append(item)
+                        except:
+                            continue  # Skip failed files
+
+                    if not details["contents"]:
+                        raise DirectDownloadLinkException(
+                            "ERROR: No valid download links found"
+                        )
+
+                    return details
+
+            # Check for errors
+            if download_info.get("download_state") == "error":
+                error_msg = download_info.get("error", "Unknown download error")
+                raise DirectDownloadLinkException(
+                    f"ERROR: TorBox download failed - {error_msg}"
+                )
+
+            # Continue waiting
+            time.sleep(check_interval)
+
+        # Timeout reached
+        raise DirectDownloadLinkException(
+            "ERROR: TorBox download processing timeout (5 minutes)"
+        )
+
+    except DirectDownloadLinkException:
+        raise
+    except Exception as e:
+        raise DirectDownloadLinkException(
+            f"ERROR: TorBox download link retrieval failed - {str(e)}"
+        )
 
 
 def buzzheavier(url):
@@ -930,7 +3980,7 @@ def mediafireFolder(url, user_id=None):
             if auth_result:
                 return auth_result
     except Exception as e:
-        print(
+        LOGGER.warning(
             f"MediaFire authenticated folder download failed, using public API: {e}"
         )
 
@@ -1109,7 +4159,9 @@ def mediafire(url, session=None, user_id=None):
             if api_result:
                 return api_result
     except Exception as e:
-        print(f"MediaFire API download failed, falling back to scraping: {e}")
+        LOGGER.warning(
+            f"MediaFire API download failed, falling back to scraping: {e}"
+        )
 
     # Fallback to web scraping method
     return _mediafire_scraping_download(url, _password, session, user_id)
@@ -1182,7 +4234,7 @@ def _mediafire_api_download(url, password="", user_id=None):
             return download_link
 
     except Exception as e:
-        print(f"MediaFire API download error: {e}")
+        LOGGER.warning(f"MediaFire API download error: {e}")
 
     return None
 
@@ -1226,12 +4278,12 @@ def _get_mediafire_session_token(session, user_id=None):
         if result.get("response", {}).get("result") == "Success":
             return result["response"]["session_token"]
         else:
-            print(
+            LOGGER.warning(
                 f"MediaFire authentication failed: {result.get('response', {}).get('message', 'Unknown error')}"
             )
 
     except Exception as e:
-        print(f"MediaFire session token error: {e}")
+        LOGGER.warning(f"MediaFire session token error: {e}")
 
     return None
 
@@ -1279,7 +4331,7 @@ def _get_mediafire_download_link(session, quickkey, session_token):
                 return links[0]["direct_download"]
 
     except Exception as e:
-        print(f"MediaFire download link error: {e}")
+        LOGGER.warning(f"MediaFire download link error: {e}")
 
     return None
 
@@ -1380,7 +4432,7 @@ def _mediafire_authenticated_folder_download(folderkey, password="", user_id=Non
         return folder_contents
 
     except Exception as e:
-        print(f"MediaFire authenticated folder download error: {e}")
+        LOGGER.warning(f"MediaFire authenticated folder download error: {e}")
 
     return None
 
@@ -1403,7 +4455,7 @@ def _get_mediafire_authenticated_folder_info(session, folderkey, session_token):
             return result["response"]
 
     except Exception as e:
-        print(f"MediaFire authenticated folder info error: {e}")
+        LOGGER.warning(f"MediaFire authenticated folder info error: {e}")
 
     return None
 
@@ -1460,7 +4512,7 @@ def _get_mediafire_authenticated_folder_contents(session, folderkey, session_tok
             return details
 
     except Exception as e:
-        print(f"MediaFire authenticated folder contents error: {e}")
+        LOGGER.warning(f"MediaFire authenticated folder contents error: {e}")
 
     return None
 

@@ -582,12 +582,7 @@ async def update_variables():
                             # Ensure BASE_URL ends with '/' for proper URL generation
                             Config.set("BASE_URL", web_url.rstrip("/"))
 
-                            # ReelNN: Also set STREAM_BASE_URL if not already configured
-                            if not getattr(Config, "STREAM_BASE_URL", ""):
-                                Config.set("STREAM_BASE_URL", web_url.rstrip("/"))
-                                LOGGER.info(
-                                    f"Auto-detected Heroku STREAM_BASE_URL: {web_url.rstrip('/')}"
-                                )
+                            # STREAM_BASE_URL auto-detection removed - streaming functionality disabled
                             return
                 except Exception as e:
                     LOGGER.error(f"BASE_URL error: {e}")

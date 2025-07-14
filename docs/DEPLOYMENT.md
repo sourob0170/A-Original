@@ -1,6 +1,42 @@
-## Deployment Instructions (Heroku)
+## Deployment Instructions through Google Colab (Heroku)
 
-Follow these steps to deploy Aeon to Heroku:
+Follow these steps to deploy Aeon-MLTB to Heroku using Google Colab:
+
+### 1. Open the Colab Notebook
+- Click on this link to open the deployment notebook: [Deploy to Heroku via Colab](https://colab.research.google.com/github/AeonOrg/Aeon-MLTB/blob/deploy_extended/Deploy_to_Heroku.ipynb)
+- Make sure you're signed in to your Google account.
+
+### 2. Fork and Star the Repository
+- Before proceeding with the deployment, fork the [Aeon-MLTB repository](https://github.com/AeonOrg/Aeon-MLTB).
+- Give the repository a star to show your support.
+
+### 3. Prepare Required Information
+Gather the following information before running the notebook:
+- **BOT_TOKEN**: Your Telegram bot token from [@BotFather](https://t.me/BotFather).
+- **OWNER_ID**: Your Telegram user ID.
+- **DATABASE_URL**: MongoDB connection string.
+- **TELEGRAM_API**: Telegram API ID from [my.telegram.org](https://my.telegram.org/).
+- **TELEGRAM_HASH**: Telegram API hash from [my.telegram.org](https://my.telegram.org/).
+- **HEROKU_APP_NAME**: Desired name for your Heroku app.
+- **HEROKU_EMAIL**: Email address associated with your Heroku account.
+- **HEROKU_API_KEY**: API key from your Heroku account dashboard.
+
+### 4. Run the Colab Notebook
+1. Execute each cell in the notebook sequentially by clicking the play button or using `Shift + Enter`.
+2. When prompted, enter the required configuration values.
+3. Follow the on-screen instructions provided by the notebook.
+4. Wait for the deployment process to complete.
+
+### 5. Finalize Setup
+- After successful deployment, your bot will be running on Heroku.
+- Configure any additional variables in your Heroku dashboard if needed.
+- Use the `/botsettings` command to upload sensitive files like `token.pickle` if needed.
+
+---
+
+## Deployment Instructions through Github Workflow (Heroku)
+
+Follow these steps to deploy Aeon-MLTB to Heroku:
 
 ### 1. Fork and Star the Repository
 - Click the **Fork** button at the top-right corner of this repository.
@@ -206,47 +242,13 @@ pkg update -y && pkg install git -y
    - Click the **Fork** button to create your own copy
    - Star the repository to show support
 
-2. **Clone Your Fork and Switch to Extended Branch**
+2. **Clone Your Fork and Switch to deploy_extended Branch**
 ```bash
-git clone https://github.com/YOUR-GITHUB-USERNAME/Aeon-MLTB.git && cd Aeon-MLTB && git checkout extended
+git clone https://github.com/YOUR-GITHUB-USERNAME/Aeon-MLTB.git && cd Aeon-MLTB && git checkout deploy_extended
 ```
 Replace `YOUR-GITHUB-USERNAME` with your actual GitHub username.
 
-#### 2. Prepare Deployment Branch
-
-1. **Create Deploy Branch from Extended**
-```bash
-git checkout extended && git branch deploy && git checkout deploy
-```
-
-2. **Clean Up Files for Deployment**
-
-   **Linux & Android (Termux):**
-```bash
-rm -rf bot myjd qBittorrent web sabnzbd sabnzbdapi && rm alive.py aria.sh
-```
-
-   **Windows:**
-   - Manually delete the following folders: `bot`, `myjd`, `qBittorrent`, `web`, `sabnzbd`, `sabnzbdapi`
-   - Manually delete the following files: `alive.py`, `aria.sh`
-
-   **Keep only these files:**
-   - `.git` folder
-   - `Dockerfile`
-   - `requirements.txt`
-   - `config_sample.py`
-   - `start.sh`
-   - `update.py`
-
-3. **Create Heroku Configuration File**
-   Create a file named `heroku.yml` and add the following content:
-```yaml
-build:
-  docker:
-    web: Dockerfile
-```
-
-#### 3. Configure the Bot
+#### 2. Configure the Bot
 
 1. **Rename Configuration File**
 ```bash
@@ -262,14 +264,15 @@ ren config_sample.py config.py  # Windows
    - `TELEGRAM_HASH` - Get from [my.telegram.org](https://my.telegram.org)
    - `DATABASE_URL` - MongoDB connection string
    - Other optional configurations as needed
+   - You can also add your pvt files in the like `token.pickle`, `shorteners.txt`, `cookies.txt`, `accounts.zip`, `rclone.conf`, `list_drives.txt`, `cookies.txt`, `.netrc`, `shorteners.txt`, `streamrip_config.toml`, `zotify_credentials.json` in the root directory of the deploy_extended branch but make sure your repo is private in that case.
 
-#### 4. Commit Changes
+#### 3. Commit Changes
 
 ```bash
 git add . -f && git commit -m "deploy: extended branch deployment"
 ```
 
-#### 5. Install Heroku CLI
+#### 4. Install Heroku CLI
 
 **Linux:**
 ```bash
@@ -286,7 +289,7 @@ curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
 pkg update -y && pkg upgrade -y && pkg install -y nodejs git && npm install -g heroku
 ```
 
-#### 6. Login to Heroku
+#### 5. Login to Heroku
 
 ```bash
 heroku login
@@ -294,7 +297,7 @@ heroku login
 - This will open a browser window for authentication
 - If it doesn't open automatically, copy and paste the provided URL
 
-#### 7. Create Heroku Application
+#### 6. Create Heroku Application
 
 **For Personal Account:**
 ```bash
@@ -310,14 +313,14 @@ heroku create your-app-name --team your-team-name --region eu  # Europe Region
 
 Replace `your-app-name` with your desired app name and `your-team-name` with your Heroku team name.
 
-#### 8. Configure Git Remote and Set Container Stack
+#### 7. Configure Git Remote and Set Container Stack
 
 ```bash
 heroku git:remote -a YOUR-APP-NAME && heroku stack:set container
 ```
 Replace `YOUR-APP-NAME` with the app name you created in step 7.
 
-#### 9. Deploy Extended Branch to Heroku
+#### 8. Deploy Extended Branch to Heroku
 
 ```bash
 git push heroku deploy:main -f
@@ -325,10 +328,10 @@ git push heroku deploy:main -f
 
 This command pushes your local `deploy` branch (which contains the extended branch code) to Heroku's `main` branch for deployment.
 
-#### 10. Post-Deployment Setup
+#### 9. Post-Deployment Setup
 
-1. **Upload Important Files**
-   After successful deployment, use the bot's settings to upload sensitive files:
+**Upload Important Files**
+   After successful deployment, use the bot's settings to upload sensitive files (ignore if you added before in the root directory of the deploy_extended branch):
    - Go to Bot Settings → Private Files
    - Upload files like:
      - `token.pickle` (Google Drive authentication)
@@ -337,114 +340,32 @@ This command pushes your local `deploy` branch (which contains the extended bran
      - `accounts.zip` (Service accounts for Google Drive)
      - `rclone.conf` (Rclone configuration)
 
-2. **Configure Environment Variables (Optional)**
-```bash
-heroku config:set VARIABLE_NAME=value -a YOUR-APP-NAME
-```
-
-### Quick Command Summary
-
-For experienced users, here's the complete deployment in one-liner commands:
-
-```bash
-# 1. Clone and setup
-git clone https://github.com/YOUR-GITHUB-USERNAME/Aeon-MLTB.git && cd Aeon-MLTB && git checkout extended && git branch deploy && git checkout deploy
-
-# 2. Clean files (Linux/Android)
-rm -rf bot myjd qBittorrent web sabnzbd sabnzbdapi minim venv downloads dev docs && rm alive.py aria.sh default.otf docker-compose.yml open_ports.sh pyproject.toml streamrip_config.toml log.txt README.md
-
-# 3. Create heroku.yml (Linux/Android)
-echo -e "build:\n  docker:\n    web: Dockerfile" > heroku.yml
-
-# 4. Configure and commit
-mv config_sample.py config.py && git add . -f && git commit -m "deploy: extended branch deployment"
-
-# 5. Install Heroku CLI (Linux)
-sudo apt update -y && sudo apt install curl -y && curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
-
-# 6. Deploy to Heroku
-heroku login && heroku create your-app-name --region us && heroku git:remote -a YOUR-APP-NAME && heroku stack:set container && git push heroku deploy:main -f
-```
-
-### Workflow Summary
-
-```mermaid
-graph TD
-    A[Fork Repository] --> B[Clone Fork to Extended Branch]
-    B --> C[Create Deploy Branch from Extended]
-    C --> D[Clean Up Files]
-    D --> E[Create heroku.yml]
-    E --> F[Configure config.py]
-    F --> G[Commit Changes]
-    G --> H[Install Heroku CLI]
-    H --> I[Login to Heroku]
-    I --> J[Create Heroku App]
-    J --> K[Add Git Remote & Set Container]
-    K --> L[Deploy Deploy Branch (Extended Content) to Heroku]
-    L --> M[Upload Private Files]
-    M --> N[Bot Ready]
-```
-
-### Troubleshooting
-
-#### Common Issues and Solutions
-
-1. **Git Authentication Issues**
-```bash
-git config --global user.name "Your Name" && git config --global user.email "your.email@example.com"
-```
-
-2. **Heroku Login Problems**
-   - Ensure you have a stable internet connection
-   - Try using `heroku login -i` for interactive login
-   - Clear browser cache if web login fails
-
-3. **Deployment Failures**
-```bash
-heroku logs --tail -a YOUR-APP-NAME  # Check logs
-```
-   - Ensure all required files are present
-   - Verify `heroku.yml` syntax is correct
-
-4. **App Name Already Taken**
-   - Choose a unique app name
-   - Add random numbers or your username to make it unique
-
-5. **Build Failures**
-   - Check if `Dockerfile` is present and valid
-   - Ensure `requirements.txt` contains all necessary dependencies
-   - Verify container stack is set correctly
-
 ### Video Guides
 
 - **Android Guide**: [Telegram Link](https://t.me/AeonDiscussion/80629)
 - **Linux Guide**: [Telegram Link](https://t.me/AeonDiscussion/80729)
 
-### Important Notes
-
-- This method deploys the **extended** branch directly without merging to main
-- Keep your fork updated by regularly syncing with the upstream repository
-- Never commit sensitive information like tokens directly to the repository
-- Use environment variables or the bot's private file upload feature for sensitive data
-- The deployment process may take 5-15 minutes depending on your internet connection and Heroku's build time
-
 ### Updating Your Deployment
 
 To update your deployed bot with the latest changes:
 
-1. **Sync with upstream extended branch:**
+**Sync with upstream extended branch:**
 ```bash
-git checkout extended && git pull upstream extended && git push origin extended
+git checkout extended && git pull && git push origin extended
 ```
 
-2. **Update deploy branch:**
-```bash
-git checkout deploy && git reset --hard extended && git push heroku deploy:main -f
-```
+If any major update comes then redeploy is recommended following the same methods from beginning.
+
+### Important Notes
+
+- This method deploys the **extended** branch directly without merging to main
+- Keep your fork updated by regularly syncing with the upstream repository
+- Use environment variables or the bot's private file upload feature for sensitive data
+- The deployment process may take 5-15 minutes depending on your internet connection and Heroku's build time
 
 ---
 
-## Aeon-MLTB Docker Build Guide
+## Aeon-MLTB Docker Image Build Guide
 
 ### Usage
 

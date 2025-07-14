@@ -58,11 +58,9 @@ COMMANDS = {
     "VirusTotalCommand": "- Scan files or URLs for viruses using VirusTotal",
     # QuickInfo Commands
     "QuickInfoCommand": "- Get chat/user information with interactive buttons",
-    # File-to-Link Commands
-    "File2LinkCommand": "- Convert files to permanent download/stream links",
-    "StreamStatsCommand": "- View streaming server statistics",
+    # File-to-Link Commands - REMOVED (streaming functionality disabled)
     "ToolCommand": "- Media conversion and processing tools (gif, sticker, emoji, voice, etc.)",
-    "IndexCommand": "- [ADMIN] Reindex media files from dump chats",
+    # IndexCommand removed - media indexing functionality disabled
     "BotSetCommand": "- [ADMIN] Open Bot settings",
     "LogCommand": "- [ADMIN] View log",
     "RestartCommand": "- [ADMIN] Restart the bot",
@@ -206,28 +204,13 @@ async def main():
     LOGGER.info("Loading user data for limits tracking...")
     await _load_user_data()
 
-    # Streaming functionality is now fully integrated with wserver
-    # No separate stream server needed
-    LOGGER.info("Streaming functionality integrated with wserver")
-
-    # Initialize File-to-Link functionality if enabled
-    if Config.FILE_TO_LINK_ENABLED:
-        from .modules.file_to_link import initialize_file_to_link
-
-        LOGGER.info("Initializing File-to-Link functionality...")
-        create_task(initialize_file_to_link())  # noqa: RUF006
-
     # Initialize whisper cleanup task
     LOGGER.info("Initializing whisper cleanup task...")
     from .modules.whisper import start_whisper_cleanup
 
     create_task(start_whisper_cleanup())  # noqa: RUF006
 
-    # Run automatic indexing to sync dump chats with database on startup
-    LOGGER.info("Starting automatic indexing to sync dump chats with database...")
-    from .modules.index_command import auto_index_on_startup
-
-    create_task(auto_index_on_startup())  # noqa: RUF006
+    # Automatic indexing removed - media indexing functionality disabled
 
     # Initial garbage collection and memory usage logging (less aggressive during startup)
     LOGGER.info("Performing initial garbage collection...")

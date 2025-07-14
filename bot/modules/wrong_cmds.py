@@ -169,13 +169,7 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # QuickInfo commands
         "quickinfo",
         "qi",
-        # File-to-Link commands
-        "file2link",
-        "f2l",
-        "streamstats",
-        "sstats",
-        # Index command
-        "index",
+        # File-to-Link and Index commands removed - functionality disabled
         # NSFW Detection commands
         "nsfwstats",
         "nsfwtest",
@@ -184,6 +178,7 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # Tool commands
         "tool",
         "t",
+
     ]
 
     # Find the base command (without any suffix)

@@ -25,7 +25,6 @@ except ImportError:
 from .help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
-    FILE_TO_LINK_HELP_DICT,
     GALLERY_DL_HELP_DICT,
     MIRROR_HELP_DICT,
     NSFW_HELP_DICT,
@@ -139,7 +138,8 @@ def create_help_buttons():
     _build_command_usage(STREAMRIP_HELP_DICT, "streamrip")
     _build_command_usage(ZOTIFY_HELP_DICT, "zotify")
     _build_command_usage(GALLERY_DL_HELP_DICT, "gdl")
-    _build_command_usage(FILE_TO_LINK_HELP_DICT, "f2l")
+    # FILE_TO_LINK_HELP_DICT removed - streaming functionality disabled
+
 
 
 def bt_selection_buttons(id_):

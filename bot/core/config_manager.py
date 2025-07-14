@@ -127,7 +127,33 @@ class Config:
     CMD_SUFFIX: str = ""
     DATABASE_URL: str = ""
     DEFAULT_UPLOAD: str = "gd"
-    DEBRID_LINK_API = ""
+    # Debrid-Link Authentication Settings
+    DEBRID_LINK_API = ""  # Legacy API key or OAuth2 access_token
+    DEBRID_LINK_ACCESS_TOKEN = ""  # OAuth2 access_token (recommended)
+    DEBRID_LINK_REFRESH_TOKEN = ""  # OAuth2 refresh_token for token renewal
+    DEBRID_LINK_CLIENT_ID = ""  # OAuth2 client_id from Debrid-Link app
+    DEBRID_LINK_CLIENT_SECRET = ""  # OAuth2 client_secret (keep secure)
+    DEBRID_LINK_TOKEN_EXPIRES = 0  # Token expiration timestamp
+
+    # TorBox API Settings
+    TORBOX_API_KEY: str = ""  # TorBox API key for premium downloads
+
+    # Mega-Debrid API Settings
+    MEGA_DEBRID_API_TOKEN: str = ""  # Mega-Debrid API token for premium downloads
+    MEGA_DEBRID_LOGIN: str = ""  # Mega-Debrid login username
+    MEGA_DEBRID_PASSWORD: str = ""  # Mega-Debrid login password
+
+    # AllDebrid API Settings
+    ALLDEBRID_API_KEY: str = ""  # AllDebrid API key for premium downloads
+
+    # Real-Debrid API Settings
+    REAL_DEBRID_API_KEY: str = ""  # Real-Debrid API key for premium downloads
+    REAL_DEBRID_ACCESS_TOKEN: str = ""  # OAuth2 access token (recommended)
+    REAL_DEBRID_REFRESH_TOKEN: str = ""  # OAuth2 refresh token for automatic renewal
+    REAL_DEBRID_CLIENT_ID: str = ""  # OAuth2 client ID from Real-Debrid app
+    REAL_DEBRID_CLIENT_SECRET: str = ""  # OAuth2 client secret (keep secure)
+    REAL_DEBRID_TOKEN_EXPIRES: int = 0  # Token expiration timestamp
+
     EXCLUDED_EXTENSIONS: str = ""
     FFMPEG_CMDS: ClassVar[dict[str, list[str]]] = {}
     FILELION_API: str = ""
@@ -151,15 +177,8 @@ class Config:
 
     # MEGA Upload Settings
     MEGA_UPLOAD_ENABLED: bool = True
-    # MEGA_UPLOAD_FOLDER removed - using folder selector instead
     MEGA_UPLOAD_PUBLIC: bool = True  # Generate public links by default
-    # MEGA_UPLOAD_PRIVATE removed - not supported by MEGA SDK v4.8.0
-    # MEGA_UPLOAD_UNLISTED removed - not supported by MEGA SDK v4.8.0
-    # MEGA_UPLOAD_EXPIRY_DAYS removed - premium feature not implemented
-    # MEGA_UPLOAD_PASSWORD removed - premium feature not implemented
-    # MEGA_UPLOAD_ENCRYPTION_KEY removed - not supported by MEGA SDK v4.8.0
     MEGA_UPLOAD_THUMBNAIL: bool = True  # Generate thumbnails for videos using FFmpeg
-    # MEGA_UPLOAD_DELETE_AFTER removed - always delete after upload
 
     # MEGA Search Settings
     MEGA_SEARCH_ENABLED: bool = True  # Enable/disable MEGA search functionality
@@ -526,42 +545,6 @@ class Config:
     MEDIA_TOOLS_ENABLED: bool = True
     MEDIAINFO_ENABLED: bool = False
 
-    # File-to-Link Settings
-    FILE_TO_LINK_ENABLED: bool = False
-    STREAM_SECURITY_HASH: bool = True
-    PERMANENT_LINKS: bool = True
-    STREAM_CHATS: ClassVar[
-        list[str]
-    ] = []  # ReelNN-style media storage chats (separate from leech dump)
-    STREAM_BASE_URL: str = (
-        ""  # Custom streaming base URL (can be different from BASE_URL)
-    )
-    STREAM_PASSWORD_PROTECTION: bool = False
-    STREAM_DEFAULT_PASSWORD: str = ""
-    STREAM_NO_ADS: bool = True
-    BANNED_STREAM_CHANNELS: str = ""
-    STREAM_CACHE_ENABLED: bool = True
-    STREAM_LOAD_BALANCING: bool = True
-
-    # ReelNN-Specific Streaming Settings
-    REELNN_MODE: bool = True  # Enable ReelNN-style streaming and UI
-    STREAM_AUTO_QUALITY: bool = True  # Enable automatic quality selection
-    STREAM_QUALITY_OPTIONS: str = (
-        "4K,1080p,720p,480p,360p"  # Available quality options
-    )
-    STREAM_BUFFER_SIZE: int = 8192  # Stream buffer size in bytes
-    STREAM_TIMEOUT: int = 300  # Stream timeout in seconds
-    STREAM_MAX_CONCURRENT: int = 10  # Maximum concurrent streams per user
-    STREAM_ENABLE_SUBTITLES: bool = True  # Enable subtitle support
-    STREAM_ENABLE_DOWNLOAD: bool = True  # Enable download functionality
-    STREAM_ENABLE_DIRECT_LINKS: bool = True  # Enable direct streaming links
-    STREAM_PLAYER_AUTOPLAY: bool = False  # Enable autoplay in video player
-    STREAM_PLAYER_CONTROLS: bool = True  # Show player controls
-    STREAM_PLAYER_FULLSCREEN: bool = True  # Enable fullscreen mode
-    STREAM_PLAYER_PIP: bool = True  # Enable picture-in-picture mode
-    STREAM_PLAYER_VOLUME: int = 80  # Default player volume (0-100)
-    STREAM_PLAYER_SPEED_CONTROL: bool = True  # Enable playback speed control
-    STREAM_PLAYER_QUALITY_SELECTOR: bool = True  # Enable quality selector
 
     # DDL (Direct Download Link) Upload Settings
     DDL_ENABLED: bool = True  # Enable/disable DDL upload feature
@@ -1314,7 +1297,7 @@ class Config:
         if value is None:
             return None
 
-        if key in ("LEECH_DUMP_CHAT", "STREAM_CHATS"):
+        if key in ("LEECH_DUMP_CHAT",):
             if isinstance(value, list):
                 return [str(v).strip() for v in value if str(v).strip()]
 
@@ -1436,8 +1419,8 @@ class Config:
                     return evaluated
                 raise TypeError
             except (ValueError, SyntaxError, TypeError) as e:
-                # For LEECH_DUMP_CHAT and STREAM_CHATS specifically, return an empty list on error
-                if key in ("LEECH_DUMP_CHAT", "STREAM_CHATS"):
+                # For LEECH_DUMP_CHAT specifically, return an empty list on error
+                if key in ("LEECH_DUMP_CHAT",):
                     return []
                 raise TypeError(
                     f"{key} should be {expected_type.__name__}, got invalid string: {value}"

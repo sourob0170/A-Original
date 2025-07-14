@@ -39,7 +39,7 @@ USER_SESSION_STRING = (
 CMD_SUFFIX = ""  # Command suffix to distinguish commands, e.g. "1" would make commands like /mirror1
 CORRECT_CMD_SUFFIX = ""  # Comma-separated list of command suffixes that won't trigger warnings, e.g. "1,2,3"
 WRONG_CMD_WARNINGS_ENABLED = (
-    True  # Enable/disable warnings for wrong command suffixes
+    False  # Enable/disable warnings for wrong command suffixes
 )
 AUTHORIZED_CHATS = (
     ""  # List of authorized chat IDs where the bot can be used, separated by space
@@ -50,7 +50,33 @@ SUDO_USERS = (
 DEFAULT_UPLOAD = "gd"  # Default upload destination: 'gd' for Google Drive, 'rc' for rclone, 'ddl' for Direct Download Links
 FILELION_API = ""  # FileLion API key for direct links
 STREAMWISH_API = ""  # StreamWish API key for direct links
-DEBRID_LINK_API = ""  # Debrid Link API key for premium link generation
+# Debrid-Link Authentication Settings - Get from https://debrid-link.com/webapp/apikey
+DEBRID_LINK_API = ""  # Legacy API key or OAuth2 access_token for premium link generation
+DEBRID_LINK_ACCESS_TOKEN = ""  # OAuth2 access_token (recommended, expires periodically)
+DEBRID_LINK_REFRESH_TOKEN = ""  # OAuth2 refresh_token for automatic token renewal
+DEBRID_LINK_CLIENT_ID = ""  # OAuth2 client_id from your Debrid-Link app
+DEBRID_LINK_CLIENT_SECRET = ""  # OAuth2 client_secret (keep secure, server-side only)
+DEBRID_LINK_TOKEN_EXPIRES = 0  # Token expiration timestamp (auto-managed)
+
+# TorBox API Settings - Get from https://torbox.app/settings
+TORBOX_API_KEY = ""  # TorBox API key for premium downloads (torrents, usenet, web downloads)
+
+# Mega-Debrid API Settings - Get from https://www.mega-debrid.eu/
+MEGA_DEBRID_API_TOKEN = ""  # Mega-Debrid API token (if you have one)
+MEGA_DEBRID_LOGIN = ""  # Mega-Debrid login username (alternative to token)
+MEGA_DEBRID_PASSWORD = ""  # Mega-Debrid login password (alternative to token)
+
+# AllDebrid API Settings - Get from https://alldebrid.com/apikey/
+ALLDEBRID_API_KEY = ""  # AllDebrid API key for premium downloads (supports torrents, magnets, and 100+ file hosts)
+
+# Real-Debrid API Settings - Get from https://real-debrid.com/apitoken
+REAL_DEBRID_API_KEY = ""  # Real-Debrid API key for premium downloads (private token)
+REAL_DEBRID_ACCESS_TOKEN = ""  # OAuth2 access token (recommended for apps)
+REAL_DEBRID_REFRESH_TOKEN = ""  # OAuth2 refresh token for automatic renewal
+REAL_DEBRID_CLIENT_ID = ""  # OAuth2 client ID from Real-Debrid app (use X245A4XAIBGVM for opensource)
+REAL_DEBRID_CLIENT_SECRET = ""  # OAuth2 client secret (keep secure, not needed for opensource apps)
+REAL_DEBRID_TOKEN_EXPIRES = 0  # Token expiration timestamp (auto-managed)
+
 EXCLUDED_EXTENSIONS = (
     ""  # File extensions to exclude from processing, separated by space
 )
@@ -166,16 +192,28 @@ MEDIAFIRE_PASSWORD = ""  # MediaFire account password for authentication
 MEDIAFIRE_APP_ID = ""  # MediaFire application ID (required for API access)
 MEDIAFIRE_API_KEY = ""  # MediaFire API key (optional, for enhanced features)
 
-# File-to-Link Settings
-FILE_TO_LINK_ENABLED = True  # Enable/disable file-to-link functionality
-STREAM_SECURITY_HASH = True  # Enable hash-based security
-PERMANENT_LINKS = True  # Links don't expire
-STREAM_PASSWORD_PROTECTION = False  # Enable password protection for files
-STREAM_DEFAULT_PASSWORD = ""  # Default password for protected files
-STREAM_NO_ADS = True  # Ensure no ads in generated links
-BANNED_STREAM_CHANNELS = ""  # Comma-separated list of banned channel IDs
-STREAM_CACHE_ENABLED = True  # Enable caching for better performance
-STREAM_LOAD_BALANCING = True  # Enable multi-client load balancing
+# Streamtape allowed extensions for video uploads
+STREAMTAPE_ALLOWED_EXTENSIONS = [
+    ".avi",
+    ".mkv",
+    ".mpg",
+    ".mpeg",
+    ".vob",
+    ".wmv",
+    ".flv",
+    ".mp4",
+    ".mov",
+    ".m4v",
+    ".m2v",
+    ".divx",
+    ".3gp",
+    ".webm",
+    ".ogv",
+    ".ogg",
+    ".ts",
+    ".ogm",
+]  # Allowed video extensions for Streamtape
+
 
 # Sabnzbd
 HYDRA_IP = ""  # Hydra IP address for direct links
@@ -624,8 +662,32 @@ ZOTIFY_PRINT_SKIPS = False  # Print skip messages for existing files
 # Zotify Match Functionality
 ZOTIFY_MATCH_EXISTING = False  # Match existing files for skip functionality
 
+# Zotify Supported Formats (for validation)
+ZOTIFY_SUPPORTED_AUDIO_FORMATS = [
+    "vorbis",
+    "mp3",
+    "flac",
+    "aac",
+    "fdk_aac",
+    "opus",
+    "wav",
+    "wavpack",
+]
+ZOTIFY_SUPPORTED_QUALITIES = [
+    "auto",
+    "normal",
+    "high",
+    "very_high",
+]
+ZOTIFY_SUPPORTED_ARTWORK_SIZES = [
+    "small",
+    "medium",
+    "large",
+]
+
 # Gallery-dl Settings - Multi-platform Media Downloader
 GALLERY_DL_ENABLED = True  # Enable/disable gallery-dl feature for 200+ platforms
+GALLERY_DL_OPTIONS = {}  # Gallery-dl configuration options as dictionary
 GALLERY_DL_QUALITY_SELECTION = True  # Enable interactive quality selection
 GALLERY_DL_MAX_DOWNLOADS = 50  # Maximum files per download (0 = unlimited)
 GALLERY_DL_RATE_LIMIT = (
@@ -670,6 +732,19 @@ GALLERY_DL_TUMBLR_TOKEN_SECRET = ""  # Tumblr access token secret
 # Discord - For server content
 GALLERY_DL_DISCORD_TOKEN = ""  # Discord bot token
 
+# MEGA Settings
+MEGA_ENABLED = True  # Enable/disable Mega.nz downloads
+MEGA_EMAIL = ""  # Mega.nz account email (optional, for premium features)
+MEGA_PASSWORD = ""  # Mega.nz account password (optional, for premium features)
+
+# MEGA Upload Settings
+MEGA_UPLOAD_ENABLED = True  # Enable MEGA upload functionality
+MEGA_UPLOAD_PUBLIC = True  # Generate public links by default
+MEGA_UPLOAD_THUMBNAIL = True  # Generate thumbnails for videos using FFmpeg
+
+# MEGA Search Settings
+MEGA_SEARCH_ENABLED = True  # Enable/disable MEGA search functionality
+
 
 # YouTube Upload Settings
 YOUTUBE_UPLOAD_ENABLED = False  # Enable/disable YouTube upload feature
@@ -711,6 +786,353 @@ YOUTUBE_UPLOAD_RECORDING_DATE = (
 
 YOUTUBE_UPLOAD_AUTO_LEVELS = False  # Auto-enhance video levels
 YOUTUBE_UPLOAD_STABILIZE = False  # Auto-stabilize shaky videos
+
+# Global metadata settings
+METADATA_KEY = ""  # Legacy metadata key
+METADATA_ALL = ""  # Global metadata for all fields
+METADATA_TITLE = ""  # Global title metadata
+METADATA_AUTHOR = ""  # Global author metadata
+METADATA_COMMENT = ""  # Global comment metadata
+
+# Video track metadata
+METADATA_VIDEO_TITLE = ""  # Video track title metadata
+METADATA_VIDEO_AUTHOR = ""  # Video track author metadata
+METADATA_VIDEO_COMMENT = ""  # Video track comment metadata
+
+# Audio track metadata
+METADATA_AUDIO_TITLE = ""  # Audio track title metadata
+METADATA_AUDIO_AUTHOR = ""  # Audio track author metadata
+METADATA_AUDIO_COMMENT = ""  # Audio track comment metadata
+
+# Subtitle track metadata
+METADATA_SUBTITLE_TITLE = ""  # Subtitle track title metadata
+METADATA_SUBTITLE_AUTHOR = ""  # Subtitle track author metadata
+METADATA_SUBTITLE_COMMENT = ""  # Subtitle track comment metadata
+
+
+
+# Media Tools - Advanced Processing
+# Compression Settings
+COMPRESSION_ENABLED = False  # Enable compression functionality
+COMPRESSION_PRIORITY = 4  # Compression task priority
+COMPRESSION_DELETE_ORIGINAL = True  # Delete original files after compression
+
+# Video Compression Settings
+COMPRESSION_VIDEO_ENABLED = False  # Enable video compression
+COMPRESSION_VIDEO_CODEC = "libx264"  # Video codec for compression
+COMPRESSION_VIDEO_PRESET = "medium"  # Video encoding preset
+COMPRESSION_VIDEO_CRF = 23  # Constant Rate Factor for video quality
+COMPRESSION_VIDEO_BITRATE = "none"  # Video bitrate for compression
+COMPRESSION_VIDEO_RESOLUTION = "none"  # Target resolution for video compression
+COMPRESSION_VIDEO_FPS = "none"  # Target frame rate for video compression
+
+# Audio Compression Settings
+COMPRESSION_AUDIO_ENABLED = False  # Enable audio compression
+COMPRESSION_AUDIO_CODEC = "aac"  # Audio codec for compression
+COMPRESSION_AUDIO_BITRATE = "128k"  # Audio bitrate for compression
+COMPRESSION_AUDIO_QUALITY = "none"  # Audio quality setting
+COMPRESSION_AUDIO_CHANNELS = "none"  # Audio channel configuration
+COMPRESSION_AUDIO_SAMPLE_RATE = "none"  # Audio sample rate
+
+# Image Compression Settings
+COMPRESSION_IMAGE_ENABLED = False  # Enable image compression
+COMPRESSION_IMAGE_QUALITY = 85  # Image compression quality (1-100)
+COMPRESSION_IMAGE_FORMAT = "none"  # Output format for image compression
+COMPRESSION_IMAGE_RESIZE = "none"  # Resize dimensions for images
+
+# Archive Compression Settings
+COMPRESSION_ARCHIVE_ENABLED = False  # Enable archive compression
+COMPRESSION_ARCHIVE_LEVEL = 6  # Compression level (0-9)
+COMPRESSION_ARCHIVE_PASSWORD = "none"  # Password for archive protection
+COMPRESSION_ARCHIVE_ALGORITHM = "none"  # Archive algorithm (e.g., 7z, zip)
+
+# Trim Settings
+TRIM_ENABLED = False  # Enable trim functionality
+TRIM_PRIORITY = 5  # Trim task priority
+TRIM_START_TIME = "00:00:00"  # Start time for trimming
+TRIM_END_TIME = ""  # End time for trimming
+TRIM_DELETE_ORIGINAL = False  # Delete original files after trimming
+
+# Video Trim Settings
+TRIM_VIDEO_ENABLED = False  # Enable video trimming
+TRIM_VIDEO_CODEC = "none"  # Video codec for trimming
+TRIM_VIDEO_PRESET = "none"  # Video encoding preset
+TRIM_VIDEO_FORMAT = "none"  # Output format for video trimming
+TRIM_VIDEO_QUALITY = "none"  # Video quality setting
+TRIM_VIDEO_BITRATE = "none"  # Video bitrate for trimming
+TRIM_VIDEO_RESOLUTION = "none"  # Video resolution for trimming
+TRIM_VIDEO_FPS = "none"  # Video frame rate for trimming
+
+# Audio Trim Settings
+TRIM_AUDIO_ENABLED = False  # Enable audio trimming
+TRIM_AUDIO_CODEC = "none"  # Audio codec for trimming
+TRIM_AUDIO_BITRATE = "none"  # Audio bitrate for trimming
+TRIM_AUDIO_QUALITY = "none"  # Audio quality setting
+TRIM_AUDIO_CHANNELS = "none"  # Audio channel configuration
+TRIM_AUDIO_SAMPLE_RATE = "none"  # Audio sample rate
+
+# Image Trim Settings
+TRIM_IMAGE_ENABLED = False  # Enable image trimming
+TRIM_IMAGE_QUALITY = 90  # Image quality for trimming
+TRIM_IMAGE_FORMAT = "none"  # Output format for image trimming
+
+# Document Trim Settings
+TRIM_DOCUMENT_ENABLED = False  # Enable document trimming
+TRIM_DOCUMENT_QUALITY = 90  # Document quality for trimming
+TRIM_DOCUMENT_FORMAT = "none"  # Output format for document trimming
+
+# Subtitle Trim Settings
+TRIM_SUBTITLE_ENABLED = False  # Enable subtitle trimming
+TRIM_SUBTITLE_ENCODING = "none"  # Subtitle encoding for trimming
+TRIM_SUBTITLE_FORMAT = "none"  # Output format for subtitle trimming
+
+# Archive Trim Settings
+TRIM_ARCHIVE_ENABLED = False  # Enable archive trimming
+TRIM_ARCHIVE_FORMAT = "none"  # Output format for archive trimming
+
+# Extract Settings
+EXTRACT_ENABLED = False  # Enable extract functionality
+EXTRACT_PRIORITY = 6  # Extract task priority
+EXTRACT_DELETE_ORIGINAL = True  # Delete original files after extraction
+EXTRACT_MAINTAIN_QUALITY = True  # Maintain quality during extraction
+
+# Video Extract Settings
+EXTRACT_VIDEO_ENABLED = False  # Enable video extraction
+EXTRACT_VIDEO_CODEC = "none"  # Video codec for extraction
+EXTRACT_VIDEO_FORMAT = "none"  # Output format for video extraction
+EXTRACT_VIDEO_INDEX = None  # Video track index to extract
+EXTRACT_VIDEO_QUALITY = "none"  # Quality setting for video extraction
+EXTRACT_VIDEO_PRESET = "none"  # Preset for video encoding
+EXTRACT_VIDEO_BITRATE = "none"  # Bitrate for video encoding
+EXTRACT_VIDEO_RESOLUTION = "none"  # Resolution for video extraction
+EXTRACT_VIDEO_FPS = "none"  # Frame rate for video extraction
+
+# Audio Extract Settings
+EXTRACT_AUDIO_ENABLED = False  # Enable audio extraction
+EXTRACT_AUDIO_CODEC = "none"  # Audio codec for extraction
+EXTRACT_AUDIO_FORMAT = "none"  # Output format for audio extraction
+EXTRACT_AUDIO_INDEX = None  # Audio track index to extract
+EXTRACT_AUDIO_BITRATE = "none"  # Audio bitrate for extraction
+EXTRACT_AUDIO_CHANNELS = "none"  # Audio channel configuration
+EXTRACT_AUDIO_SAMPLING = "none"  # Audio sampling rate
+
+# Subtitle Extract Settings
+EXTRACT_SUBTITLE_ENABLED = False  # Enable subtitle extraction
+EXTRACT_SUBTITLE_INDEX = None  # Subtitle track index to extract
+EXTRACT_SUBTITLE_FORMAT = "none"  # Output format for subtitle extraction
+EXTRACT_SUBTITLE_ENCODING = "none"  # Subtitle encoding
+
+# Attachment Extract Settings
+EXTRACT_ATTACHMENT_ENABLED = False  # Enable attachment extraction
+EXTRACT_ATTACHMENT_INDEX = None  # Attachment index to extract
+EXTRACT_ATTACHMENT_FORMAT = "none"  # Output format for attachment extraction
+
+# Remove Settings
+REMOVE_ENABLED = False  # Enable remove functionality
+REMOVE_PRIORITY = 8  # Remove task priority
+REMOVE_DELETE_ORIGINAL = True  # Delete original files after removal
+REMOVE_METADATA = False  # Remove metadata during processing
+REMOVE_MAINTAIN_QUALITY = True  # Maintain quality during removal
+
+# Video Remove Settings
+REMOVE_VIDEO_ENABLED = False  # Enable video track removal
+REMOVE_VIDEO_CODEC = "none"  # Video codec for removal processing
+REMOVE_VIDEO_FORMAT = "none"  # Output format after video removal
+REMOVE_VIDEO_INDEX = None  # Video track index to remove
+REMOVE_VIDEO_QUALITY = "none"  # Video quality setting
+REMOVE_VIDEO_PRESET = "none"  # Video encoding preset
+REMOVE_VIDEO_BITRATE = "none"  # Video bitrate setting
+REMOVE_VIDEO_RESOLUTION = "none"  # Video resolution setting
+REMOVE_VIDEO_FPS = "none"  # Video frame rate setting
+
+# Audio Remove Settings
+REMOVE_AUDIO_ENABLED = False  # Enable audio track removal
+REMOVE_AUDIO_CODEC = "none"  # Audio codec for removal processing
+REMOVE_AUDIO_FORMAT = "none"  # Output format after audio removal
+REMOVE_AUDIO_INDEX = None  # Audio track index to remove
+REMOVE_AUDIO_BITRATE = "none"  # Audio bitrate setting
+REMOVE_AUDIO_CHANNELS = "none"  # Audio channel configuration
+REMOVE_AUDIO_SAMPLING = "none"  # Audio sampling rate setting
+
+# Subtitle Remove Settings
+REMOVE_SUBTITLE_ENABLED = False  # Enable subtitle track removal
+REMOVE_SUBTITLE_INDEX = None  # Subtitle track index to remove
+REMOVE_SUBTITLE_FORMAT = "none"  # Output format after subtitle removal
+REMOVE_SUBTITLE_ENCODING = "none"  # Subtitle encoding setting
+
+# Attachment Remove Settings
+REMOVE_ATTACHMENT_ENABLED = False  # Enable attachment removal
+REMOVE_ATTACHMENT_FORMAT = "none"  # Output format after attachment removal
+REMOVE_ATTACHMENT_INDEX = None  # Attachment index to remove
+REMOVE_ATTACHMENT_FILTER = "none"  # Filter for attachment removal
+
+# Add Settings
+ADD_ENABLED = False  # Enable add functionality
+ADD_PRIORITY = 7  # Add task priority
+ADD_DELETE_ORIGINAL = True  # Delete original files after adding
+ADD_PRESERVE_TRACKS = False  # Preserve existing tracks when adding
+ADD_REPLACE_TRACKS = False  # Replace existing tracks when adding
+
+# Video Add Settings
+ADD_VIDEO_ENABLED = False  # Enable video track addition
+ADD_VIDEO_CODEC = "copy"  # Video codec for addition
+ADD_VIDEO_INDEX = None  # Video track index to add
+ADD_VIDEO_QUALITY = "none"  # Video quality setting
+ADD_VIDEO_PRESET = "none"  # Video encoding preset
+ADD_VIDEO_BITRATE = "none"  # Video bitrate setting
+ADD_VIDEO_RESOLUTION = "none"  # Video resolution setting
+ADD_VIDEO_FPS = "none"  # Video frame rate setting
+
+# Audio Add Settings
+ADD_AUDIO_ENABLED = False  # Enable audio track addition
+ADD_AUDIO_CODEC = "copy"  # Audio codec for addition
+ADD_AUDIO_INDEX = None  # Audio track index to add
+ADD_AUDIO_BITRATE = "none"  # Audio bitrate setting
+ADD_AUDIO_CHANNELS = "none"  # Audio channel configuration
+ADD_AUDIO_SAMPLING = "none"  # Audio sampling rate setting
+
+# Subtitle Add Settings
+ADD_SUBTITLE_ENABLED = False  # Enable subtitle track addition
+ADD_SUBTITLE_INDEX = None  # Subtitle track index to add
+ADD_SUBTITLE_FORMAT = "none"  # Subtitle format for addition
+ADD_SUBTITLE_ENCODING = "none"  # Subtitle encoding setting
+ADD_SUBTITLE_HARDSUB_ENABLED = False  # Enable hardcoded subtitles when adding
+
+# Attachment Add Settings
+ADD_ATTACHMENT_ENABLED = False  # Enable attachment addition
+ADD_ATTACHMENT_INDEX = None  # Attachment index to add
+ADD_ATTACHMENT_MIMETYPE = "none"  # MIME type for attachment
+
+# Swap Settings
+SWAP_ENABLED = False  # Enable swap functionality
+SWAP_PRIORITY = 6  # Swap task priority
+SWAP_REMOVE_ORIGINAL = False  # Remove original files after swapping
+
+# Audio Swap Settings
+SWAP_AUDIO_ENABLED = False  # Enable audio track swapping
+SWAP_AUDIO_USE_LANGUAGE = True  # Use language for audio track selection
+SWAP_AUDIO_LANGUAGE_ORDER = "eng,hin"  # Language order for audio track selection
+SWAP_AUDIO_INDEX_ORDER = "0,1"  # Index order for audio track selection
+
+# Video Swap Settings
+SWAP_VIDEO_ENABLED = False  # Enable video track swapping
+SWAP_VIDEO_USE_LANGUAGE = True  # Use language for video track selection
+SWAP_VIDEO_LANGUAGE_ORDER = "eng,hin"  # Language order for video track selection
+SWAP_VIDEO_INDEX_ORDER = "0,1"  # Index order for video track selection
+
+# Subtitle Swap Settings
+SWAP_SUBTITLE_ENABLED = False  # Enable subtitle track swapping
+SWAP_SUBTITLE_USE_LANGUAGE = True  # Use language for subtitle track selection
+SWAP_SUBTITLE_LANGUAGE_ORDER = "eng,hin"  # Language order for subtitle track selection
+SWAP_SUBTITLE_INDEX_ORDER = "0,1"  # Index order for subtitle track selection
+
+# Convert Settings
+CONVERT_ENABLED = False  # Enable convert functionality
+CONVERT_PRIORITY = 3  # Convert task priority
+CONVERT_DELETE_ORIGINAL = True  # Delete original files after conversion
+
+# Video Convert Settings
+CONVERT_VIDEO_ENABLED = False  # Enable video conversion
+CONVERT_VIDEO_CODEC = "libx264"  # Video codec for conversion
+CONVERT_VIDEO_FORMAT = "mp4"  # Output format for video conversion
+CONVERT_VIDEO_PRESET = "medium"  # Video encoding preset
+CONVERT_VIDEO_CRF = 23  # Constant Rate Factor for video quality
+CONVERT_VIDEO_BITRATE = "none"  # Video bitrate for conversion
+CONVERT_VIDEO_RESOLUTION = "none"  # Video resolution for conversion
+CONVERT_VIDEO_FPS = "none"  # Video frame rate for conversion
+
+# Audio Convert Settings
+CONVERT_AUDIO_ENABLED = False  # Enable audio conversion
+CONVERT_AUDIO_CODEC = "aac"  # Audio codec for conversion
+CONVERT_AUDIO_FORMAT = "mp3"  # Output format for audio conversion
+CONVERT_AUDIO_BITRATE = "128k"  # Audio bitrate for conversion
+CONVERT_AUDIO_QUALITY = "none"  # Audio quality setting
+CONVERT_AUDIO_CHANNELS = "none"  # Audio channel configuration
+CONVERT_AUDIO_SAMPLE_RATE = "none"  # Audio sample rate for conversion
+
+# Image Convert Settings
+CONVERT_IMAGE_ENABLED = False  # Enable image conversion
+CONVERT_IMAGE_FORMAT = "jpg"  # Output format for image conversion
+CONVERT_IMAGE_QUALITY = 90  # Image quality for conversion (1-100)
+CONVERT_IMAGE_RESIZE = "none"  # Resize dimensions for images
+
+# Document Convert Settings
+CONVERT_DOCUMENT_ENABLED = False  # Enable document conversion
+CONVERT_DOCUMENT_FORMAT = "pdf"  # Output format for document conversion
+CONVERT_DOCUMENT_QUALITY = 90  # Document quality for conversion
+
+
+
+# Bulk Operation Settings
+BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
+
+# AI and Extra Modules
+# AI Settings
+AI_ENABLED = True  # Enable/disable AI functionality
+DEFAULT_AI_PROVIDER = "mistral"  # Default AI provider (mistral, deepseek)
+MISTRAL_API_URL = ""  # Mistral AI API URL
+DEEPSEEK_API_URL = ""  # DeepSeek AI API URL
+
+# Extra Module Settings
+IMDB_ENABLED = True  # Enable/disable IMDB functionality
+TRUECALLER_ENABLED = True  # Enable/disable Truecaller functionality
+ENCODING_ENABLED = True  # Enable/disable encoding functionality
+DECODING_ENABLED = True  # Enable/disable decoding functionality
+
+# VirusTotal Settings
+VT_API_KEY = ""  # VirusTotal API key for file scanning
+VT_API_TIMEOUT = 500  # VirusTotal API timeout in seconds
+VT_ENABLED = False  # Enable/disable VirusTotal functionality
+VT_MAX_FILE_SIZE = 33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
+
+# Enhanced NSFW Detection
+# Basic NSFW Settings
+NSFW_DETECTION_ENABLED = True  # Master toggle for NSFW detection
+NSFW_DETECTION_SENSITIVITY = "moderate"  # Detection sensitivity: strict, moderate, permissive
+NSFW_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for NSFW detection (0.0-1.0)
+NSFW_CACHE_DURATION = 3600  # Cache detection results duration in seconds
+NSFW_MAX_FILE_SIZE = 52428800  # Maximum file size for NSFW analysis in bytes (50MB)
+
+# NSFW Detection Methods
+NSFW_KEYWORD_DETECTION = True  # Enable enhanced keyword detection
+NSFW_VISUAL_DETECTION = False  # Enable AI-powered visual analysis
+NSFW_AUDIO_DETECTION = False  # Enable audio content analysis
+NSFW_FUZZY_MATCHING = False  # Enable fuzzy keyword matching
+NSFW_LEETSPEAK_DETECTION = True  # Enable leetspeak detection
+NSFW_MULTI_LANGUAGE = False  # Enable multi-language keyword support
+NSFW_CONTEXT_CHECKING = True  # Enable context-aware detection
+
+# NSFW Media Analysis
+NSFW_VIDEO_ANALYSIS = True  # Enable video frame analysis
+NSFW_VIDEO_FRAME_COUNT = 5  # Number of frames to extract for analysis
+NSFW_FRAME_QUALITY = 2  # Frame extraction quality (1-5)
+NSFW_AUDIO_ANALYSIS = True  # Enable audio content analysis
+NSFW_SUBTITLE_ANALYSIS = True  # Enable subtitle text analysis
+
+# NSFW Visual Analysis API Settings
+NSFW_GOOGLE_VISION_API_KEY = ""  # Google Cloud Vision API key for visual analysis
+NSFW_AWS_ACCESS_KEY = ""  # AWS Rekognition access key for visual analysis
+NSFW_AWS_SECRET_KEY = ""  # AWS Rekognition secret key for visual analysis
+NSFW_AWS_REGION = "us-east-1"  # AWS region for Rekognition
+NSFW_AZURE_ENDPOINT = ""  # Azure Content Moderator endpoint URL
+NSFW_AZURE_KEY = ""  # Azure Content Moderator API key
+NSFW_OPENAI_API_KEY = ""  # OpenAI API key for vision analysis
+
+# NSFW Behavior and Logging
+NSFW_LOG_DETECTIONS = True  # Log NSFW detections for analysis
+NSFW_STORE_METADATA = True  # Store detection metadata in database
+NSFW_AUTO_DELETE = False  # Auto-delete detected NSFW content
+NSFW_NOTIFY_ADMINS = True  # Notify admins of NSFW detections
+
+# Archive Operation Settings
+ARCHIVE_FLAGS_ENABLED = True  # Enable archive operation flags
+
+# Rclone Settings
+RCLONE_ENABLED = True  # Enable/disable Rclone functionality
+
+# Additional Settings
+UNIVERSAL_FILENAME = ""  # Universal filename template for both mirror and leech files (supports all template variables)
+EQUAL_SPLITS = False  # Create equal-sized parts when splitting files
 
 # Media Tools Settings
 MEDIA_TOOLS_ENABLED = (
@@ -1200,24 +1622,4 @@ CONVERT_ARCHIVE_FORMAT = "none"  # Target format: none, zip, 7z, tar.gz, etc.
 CONVERT_ARCHIVE_LEVEL = 0  # Compression level (0-9, higher is more compression)
 CONVERT_ARCHIVE_METHOD = "none"  # Compression method: none, deflate, lzma, etc.
 
-# Metadata Settings
-METADATA_KEY = ""  # Legacy metadata key
-METADATA_ALL = ""  # Global metadata template for all media types
-METADATA_TITLE = ""  # Default title metadata for all media types
-METADATA_AUTHOR = ""  # Default author metadata for all media types
-METADATA_COMMENT = ""  # Default comment metadata for all media types
-METADATA_VIDEO_TITLE = ""  # Default title metadata specifically for video files
-METADATA_VIDEO_AUTHOR = ""  # Default author metadata specifically for video files
-METADATA_VIDEO_COMMENT = ""  # Default comment metadata specifically for video files
-METADATA_AUDIO_TITLE = ""  # Default title metadata specifically for audio files
-METADATA_AUDIO_AUTHOR = ""  # Default author metadata specifically for audio files
-METADATA_AUDIO_COMMENT = ""  # Default comment metadata specifically for audio files
-METADATA_SUBTITLE_TITLE = (
-    ""  # Default title metadata specifically for subtitle files
-)
-METADATA_SUBTITLE_AUTHOR = (
-    ""  # Default author metadata specifically for subtitle files
-)
-METADATA_SUBTITLE_COMMENT = (
-    ""  # Default comment metadata specifically for subtitle files
-)
+

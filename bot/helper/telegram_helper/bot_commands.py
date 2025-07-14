@@ -73,15 +73,14 @@ class BotCommands:
     DecodeCommand = [f"decode{i}", f"dec{i}"]
     # QuickInfo Commands
     QuickInfoCommand = [f"quickinfo{i}", f"qi{i}"]
-    # File-to-Link Commands
-    File2LinkCommand = [f"file2link{i}", f"f2l{i}"]
     # Tool Commands
     ToolCommand = [f"tool{i}", f"t{i}"]
-    StreamStatsCommand = [f"streamstats{i}", f"sstats{i}"]
-    # Index Command
-    IndexCommand = f"index{i}"
+    # File-to-Link and StreamStats commands removed - streaming disabled
+    # IndexCommand removed - media indexing functionality disabled
     # Enhanced NSFW Detection Commands
     NSFWStatsCommand = f"nsfwstats{i}"
     NSFWTestCommand = f"nsfwtest{i}"
     # Scraping Commands
     ScrapCommand = f"scrap{i}"
+
+

@@ -18,7 +18,9 @@ from bot.core.config_manager import Config
 # Use compatibility layer for aiofiles
 from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.template_processor import extract_metadata_from_filename
-from bot.helper.stream_utils.tmdb_helper import TMDBHelper
+# TMDB functionality moved here from stream_utils
+import re
+from datetime import datetime, timedelta
 
 
 class AutoThumbnailHelper:
@@ -404,3 +406,377 @@ class AutoThumbnailHelper:
 
         except Exception as e:
             LOGGER.error(f"Error cleaning up thumbnail cache: {e}")
+
+
+class TMDBHelper:
+    """TMDB API Helper for fetching movie and TV show metadata"""
+
+    BASE_URL = "https://api.themoviedb.org/3"
+    IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+
+    # Cache for TMDB data
+    _cache = {}
+    _cache_timestamps = {}
+
+    @classmethod
+    async def search_movie(cls, title: str, year: int | None = None) -> dict | None:
+        """Search for a movie by title and optional year"""
+        try:
+            if not Config.TMDB_API_KEY:
+                LOGGER.warning("TMDB API key not configured")
+                return None
+
+            # Clean title for better search results
+            clean_title = cls._clean_title(title)
+
+            # Check cache first
+            cache_key = f"search_movie_{clean_title}_{year}"
+            if cls._is_cached(cache_key):
+                return cls._cache[cache_key]
+
+            # Check if TMDB API key is available
+            if not hasattr(Config, "TMDB_API_KEY") or not Config.TMDB_API_KEY:
+                LOGGER.error("❌ TMDB_API_KEY not found in configuration")
+                return None
+
+            params = {
+                "api_key": Config.TMDB_API_KEY,
+                "query": clean_title,
+                "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
+                "include_adult": str(
+                    getattr(Config, "TMDB_ADULT_CONTENT", False)
+                ).lower(),
+            }
+
+            LOGGER.info(f"🔍 TMDB movie search: '{clean_title}' (year: {year})")
+
+            if year:
+                params["year"] = year
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{cls.BASE_URL}/search/movie", params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("results"):
+                            result = data["results"][0]  # Get first result
+                            cls._cache_result(cache_key, result)
+                            LOGGER.info(
+                                f"✅ Found TMDB movie: {result.get('title', 'Unknown')}"
+                            )
+                            return result
+                        LOGGER.info(f"🔍 No TMDB movie results for: {clean_title}")
+                        # Try alternative search strategies for anime/niche content
+                        return await cls._try_alternative_movie_search(
+                            title, year, session, original_title=title
+                        )
+                    LOGGER.warning(
+                        f"❌ TMDB API error {response.status} for movie search: {clean_title}"
+                    )
+                    if response.status == 401:
+                        LOGGER.error("❌ TMDB API key is invalid or missing")
+
+            return None
+
+        except Exception as e:
+            LOGGER.error(f"Error searching movie '{title}': {e}")
+            return None
+
+    @classmethod
+    async def search_tv_show(
+        cls, title: str, year: int | None = None
+    ) -> dict | None:
+        """Search for a TV show by title and optional year"""
+        try:
+            if not Config.TMDB_API_KEY:
+                LOGGER.warning("TMDB API key not configured")
+                return None
+
+            # Clean title for better search results
+            clean_title = cls._clean_title(title)
+
+            # Check cache first
+            cache_key = f"search_tv_{clean_title}_{year}"
+            if cls._is_cached(cache_key):
+                return cls._cache[cache_key]
+
+            # Check if TMDB API key is available
+            if not hasattr(Config, "TMDB_API_KEY") or not Config.TMDB_API_KEY:
+                LOGGER.error("❌ TMDB_API_KEY not found in configuration")
+                return None
+
+            params = {
+                "api_key": Config.TMDB_API_KEY,
+                "query": clean_title,
+                "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
+                "include_adult": str(
+                    getattr(Config, "TMDB_ADULT_CONTENT", False)
+                ).lower(),
+            }
+
+            LOGGER.info(f"🔍 TMDB TV search: '{clean_title}' (year: {year})")
+
+            if year:
+                params["first_air_date_year"] = year
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{cls.BASE_URL}/search/tv", params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("results"):
+                            result = data["results"][0]  # Get first result
+                            cls._cache_result(cache_key, result)
+                            LOGGER.info(
+                                f"✅ Found TMDB TV show: {result.get('name', 'Unknown')}"
+                            )
+                            return result
+                        LOGGER.info(f"🔍 No TMDB TV results for: {clean_title}")
+                        # Try alternative search strategies for anime/niche content
+                        return await cls._try_alternative_tv_search(
+                            title, year, session, original_title=title
+                        )
+                    LOGGER.warning(
+                        f"❌ TMDB API error {response.status} for TV search: {clean_title}"
+                    )
+                    if response.status == 401:
+                        LOGGER.error("❌ TMDB API key is invalid or missing")
+
+            return None
+
+        except Exception as e:
+            LOGGER.error(f"Error searching TV show '{title}': {e}")
+            return None
+
+    @classmethod
+    def get_poster_url(cls, poster_path: str, size: str = "w500") -> str:
+        """Get full poster URL from TMDB poster path"""
+        if not poster_path:
+            return ""
+        return f"{cls.IMAGE_BASE_URL}/{size}{poster_path}"
+
+    @classmethod
+    def get_backdrop_url(cls, backdrop_path: str, size: str = "original") -> str:
+        """Get full backdrop URL from TMDB backdrop path"""
+        if not backdrop_path:
+            return ""
+        return f"{cls.IMAGE_BASE_URL}/{size}{backdrop_path}"
+
+    @classmethod
+    def _clean_title(cls, title: str) -> str:
+        """Enhanced title cleaning for better search results"""
+        if not title:
+            return ""
+
+        # Store original for fallback
+        original_title = title
+
+        # Remove file extensions
+        title = re.sub(r"\.[a-zA-Z0-9]{2,4}$", "", title)
+
+        # Replace dots, underscores, and dashes with spaces first
+        title = re.sub(r"[._-]+", " ", title)
+
+        # Remove quality indicators (more comprehensive)
+        quality_patterns = [
+            r"\b(720p|1080p|2160p|4k|hd|uhd|bluray|brrip|webrip|web-dl|dvdrip|hdtv|cam|ts|tc)\b",
+            r"\b(x264|x265|h264|h265|hevc|avc|xvid|divx)\b",
+            r"\b(aac|ac3|dts|mp3|flac|dd5\.1|dd\+|atmos)\b",
+            r"\b(hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|gujarati|marathi)\b",
+            r"\b(dubbed|dual|audio|multi|eng|english)\b",
+            r"\b(esub|sub|subtitle|subs)\b",
+            r"\b(rip|encode|repack|proper|real|extended|unrated|directors?\.cut)\b",
+            r"\b(season|episode|s\d+|e\d+|\d+x\d+)\b",
+        ]
+        for pattern in quality_patterns:
+            title = re.sub(pattern, "", title, flags=re.IGNORECASE)
+
+        # Remove brackets and their contents (but preserve main title)
+        title = re.sub(r"\[.*?\]", "", title)
+        title = re.sub(r"\{.*?\}", "", title)
+
+        # Handle parentheses more carefully - keep year if present
+        year_in_parens = re.search(r"\((\d{4})\)", title)
+        title = re.sub(r"\(.*?\)", "", title)
+
+        # Remove common release group patterns
+        title = re.sub(r"-\w+$", "", title)
+        title = re.sub(r"^\w+-", "", title)  # Remove prefix groups
+
+        # Remove episode/season indicators for anime
+        title = re.sub(r"\s+(ep|episode|ova|ona|special)\s*\d+.*$", "", title, flags=re.IGNORECASE)
+
+        # Clean up whitespace and special characters
+        title = re.sub(r"\s+", " ", title)
+        title = title.strip()
+
+        # If title becomes too short or empty, try a simpler approach
+        if len(title) < 3:
+            # Fallback: just remove file extension and basic cleaning
+            title = re.sub(r"\.[a-zA-Z0-9]{2,4}$", "", original_title)
+            title = re.sub(r"[._-]+", " ", title)
+            title = re.sub(r"\s+", " ", title).strip()
+
+        return title
+
+    @classmethod
+    def _is_cached(cls, cache_key: str) -> bool:
+        """Check if data is cached and not expired"""
+        if cache_key not in cls._cache:
+            return False
+
+        # Check if cache is expired (24 hours)
+        cache_time = cls._cache_timestamps.get(cache_key)
+        if not cache_time:
+            return False
+
+        return datetime.now() - cache_time < timedelta(hours=24)
+
+    @classmethod
+    def _cache_result(cls, cache_key: str, result: dict):
+        """Cache the result with timestamp"""
+        cls._cache[cache_key] = result
+        cls._cache_timestamps[cache_key] = datetime.now()
+
+        # Clean old cache entries (keep only last 1000)
+        if len(cls._cache) > 1000:
+            # Remove oldest 100 entries
+            oldest_keys = sorted(
+                cls._cache_timestamps.keys(), key=lambda k: cls._cache_timestamps[k]
+            )[:100]
+            for key in oldest_keys:
+                cls._cache.pop(key, None)
+                cls._cache_timestamps.pop(key, None)
+
+    @classmethod
+    async def _try_alternative_movie_search(
+        cls, title: str, year: int | None, session, original_title: str = None
+    ) -> dict | None:
+        """Enhanced alternative search strategies for anime/niche content"""
+        try:
+            search_attempts = []
+
+            # Strategy 1: Try with original filename (minimal cleaning)
+            if original_title and original_title != title:
+                minimal_clean = re.sub(r"\.[a-zA-Z0-9]{2,4}$", "", original_title)
+                minimal_clean = re.sub(r"[._-]+", " ", minimal_clean).strip()
+                search_attempts.append(("original filename", minimal_clean))
+
+            # Strategy 2: Search with just the main title (remove episode info)
+            main_title = re.sub(r"\s+S\d+E\d+.*", "", title, flags=re.IGNORECASE)
+            main_title = re.sub(r"\s+Episode.*", "", main_title, flags=re.IGNORECASE)
+            main_title = re.sub(r"\s+\d+.*", "", main_title)  # Remove trailing numbers
+            search_attempts.append(("main title", main_title))
+
+            # Strategy 3: Try first few words only (for long titles)
+            words = title.split()
+            if len(words) > 3:
+                short_title = " ".join(words[:3])
+                search_attempts.append(("short title", short_title))
+
+            # Try each search strategy
+            for strategy_name, search_title in search_attempts:
+                if not search_title or len(search_title.strip()) < 2:
+                    continue
+
+                LOGGER.info(f"🔄 Trying {strategy_name} search: '{search_title}'")
+                params = {
+                    "api_key": Config.TMDB_API_KEY,
+                    "query": search_title,
+                    "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
+                    "include_adult": str(
+                        getattr(Config, "TMDB_ADULT_CONTENT", False)
+                    ).lower(),
+                }
+                if year:
+                    params["year"] = year
+
+                async with session.get(
+                    f"{cls.BASE_URL}/search/movie", params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("results"):
+                            result = data["results"][0]
+                            LOGGER.info(
+                                f"✅ Found via {strategy_name}: {result.get('title', 'Unknown')}"
+                            )
+                            return result
+
+            # Strategy 2: Try as TV show instead (anime often categorized as TV)
+            LOGGER.info(f"🔄 Trying as TV show: '{main_title}'")
+            tv_result = await cls.search_tv_show(main_title, year)
+            if tv_result:
+                LOGGER.info(
+                    f"✅ Found as TV show: {tv_result.get('name', 'Unknown')}"
+                )
+                return tv_result
+
+            return None
+
+        except Exception as e:
+            LOGGER.error(f"Error in alternative movie search: {e}")
+            return None
+
+    @classmethod
+    async def _try_alternative_tv_search(
+        cls, title: str, year: int | None, session, original_title: str = None
+    ) -> dict | None:
+        """Enhanced alternative search strategies for anime/niche TV content"""
+        try:
+            search_attempts = []
+
+            # Strategy 1: Try with original filename (minimal cleaning)
+            if original_title and original_title != title:
+                minimal_clean = re.sub(r"\.[a-zA-Z0-9]{2,4}$", "", original_title)
+                minimal_clean = re.sub(r"[._-]+", " ", minimal_clean).strip()
+                search_attempts.append(("original filename", minimal_clean))
+
+            # Strategy 2: Search with just the main title (remove episode info)
+            main_title = re.sub(r"\s+S\d+E\d+.*", "", title, flags=re.IGNORECASE)
+            main_title = re.sub(r"\s+Episode.*", "", main_title, flags=re.IGNORECASE)
+            main_title = re.sub(r"\s+\d+.*", "", main_title)  # Remove trailing numbers
+            search_attempts.append(("main title", main_title))
+
+            # Strategy 3: Try first few words only (for long titles)
+            words = title.split()
+            if len(words) > 3:
+                short_title = " ".join(words[:3])
+                search_attempts.append(("short title", short_title))
+
+            # Try each search strategy
+            for strategy_name, search_title in search_attempts:
+                if not search_title or len(search_title.strip()) < 2:
+                    continue
+
+                LOGGER.info(f"🔄 Trying {strategy_name} TV search: '{search_title}'")
+                params = {
+                    "api_key": Config.TMDB_API_KEY,
+                    "query": search_title,
+                    "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
+                    "include_adult": str(
+                        getattr(Config, "TMDB_ADULT_CONTENT", False)
+                    ).lower(),
+                }
+                if year:
+                    params["first_air_date_year"] = year
+
+                async with session.get(
+                    f"{cls.BASE_URL}/search/tv", params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("results"):
+                            result = data["results"][0]
+                            LOGGER.info(
+                                f"✅ Found via {strategy_name} TV: {result.get('name', 'Unknown')}"
+                            )
+                            return result
+
+            return None
+
+        except Exception as e:
+            LOGGER.error(f"Error in alternative TV search: {e}")
+            return None
