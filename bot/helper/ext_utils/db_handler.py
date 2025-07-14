@@ -1,9 +1,7 @@
 import asyncio
 import contextlib
 import inspect
-import math
 import time
-from datetime import datetime
 from time import time as get_time
 
 from aiofiles import open as aiopen
@@ -1342,6 +1340,7 @@ class DbManager:
             LOGGER.info("Database schema initialized successfully")
         except Exception as e:
             LOGGER.error(f"Error initializing database schema: {e}")
+
 
 class DatabaseManager(DbManager):
     def __init__(self):

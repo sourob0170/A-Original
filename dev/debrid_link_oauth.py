@@ -20,16 +20,13 @@ Dependencies: Only Python standard library (no external packages required)
 
 import json
 import time
-import urllib.request
-import urllib.parse
 import urllib.error
-import sys
+import urllib.parse
+import urllib.request
 
 
 class DebridLinkException(Exception):
     """Custom exception for Debrid-Link API errors"""
-
-    pass
 
 
 def make_request(url, data=None, headers=None, timeout=30):
@@ -69,13 +66,13 @@ def make_request(url, data=None, headers=None, timeout=30):
         raise DebridLinkException(f"HTTP Error: {error_msg}")
 
     except urllib.error.URLError as e:
-        raise DebridLinkException(f"Network Error: {str(e)}")
+        raise DebridLinkException(f"Network Error: {e!s}")
 
     except json.JSONDecodeError as e:
-        raise DebridLinkException(f"Invalid JSON response: {str(e)}")
+        raise DebridLinkException(f"Invalid JSON response: {e!s}")
 
     except Exception as e:
-        raise DebridLinkException(f"Request failed: {str(e)}")
+        raise DebridLinkException(f"Request failed: {e!s}")
 
 
 def get_debrid_oauth_device_code(client_id, scope="get.post.downloader get.account"):
@@ -87,7 +84,7 @@ def get_debrid_oauth_device_code(client_id, scope="get.post.downloader get.accou
             "https://debrid-link.com/api/oauth/device/code", data=data
         )
     except Exception as e:
-        raise DebridLinkException(f"Device code request failed: {str(e)}")
+        raise DebridLinkException(f"Device code request failed: {e!s}")
 
 
 def poll_debrid_oauth_token(client_id, device_code):

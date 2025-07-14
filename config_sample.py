@@ -51,15 +51,23 @@ DEFAULT_UPLOAD = "gd"  # Default upload destination: 'gd' for Google Drive, 'rc'
 FILELION_API = ""  # FileLion API key for direct links
 STREAMWISH_API = ""  # StreamWish API key for direct links
 # Debrid-Link Authentication Settings - Get from https://debrid-link.com/webapp/apikey
-DEBRID_LINK_API = ""  # Legacy API key or OAuth2 access_token for premium link generation
-DEBRID_LINK_ACCESS_TOKEN = ""  # OAuth2 access_token (recommended, expires periodically)
+DEBRID_LINK_API = (
+    ""  # Legacy API key or OAuth2 access_token for premium link generation
+)
+DEBRID_LINK_ACCESS_TOKEN = (
+    ""  # OAuth2 access_token (recommended, expires periodically)
+)
 DEBRID_LINK_REFRESH_TOKEN = ""  # OAuth2 refresh_token for automatic token renewal
 DEBRID_LINK_CLIENT_ID = ""  # OAuth2 client_id from your Debrid-Link app
-DEBRID_LINK_CLIENT_SECRET = ""  # OAuth2 client_secret (keep secure, server-side only)
+DEBRID_LINK_CLIENT_SECRET = (
+    ""  # OAuth2 client_secret (keep secure, server-side only)
+)
 DEBRID_LINK_TOKEN_EXPIRES = 0  # Token expiration timestamp (auto-managed)
 
 # TorBox API Settings - Get from https://torbox.app/settings
-TORBOX_API_KEY = ""  # TorBox API key for premium downloads (torrents, usenet, web downloads)
+TORBOX_API_KEY = (
+    ""  # TorBox API key for premium downloads (torrents, usenet, web downloads)
+)
 
 # Mega-Debrid API Settings - Get from https://www.mega-debrid.eu/
 MEGA_DEBRID_API_TOKEN = ""  # Mega-Debrid API token (if you have one)
@@ -73,8 +81,12 @@ ALLDEBRID_API_KEY = ""  # AllDebrid API key for premium downloads (supports torr
 REAL_DEBRID_API_KEY = ""  # Real-Debrid API key for premium downloads (private token)
 REAL_DEBRID_ACCESS_TOKEN = ""  # OAuth2 access token (recommended for apps)
 REAL_DEBRID_REFRESH_TOKEN = ""  # OAuth2 refresh token for automatic renewal
-REAL_DEBRID_CLIENT_ID = ""  # OAuth2 client ID from Real-Debrid app (use X245A4XAIBGVM for opensource)
-REAL_DEBRID_CLIENT_SECRET = ""  # OAuth2 client secret (keep secure, not needed for opensource apps)
+REAL_DEBRID_CLIENT_ID = (
+    ""  # OAuth2 client ID from Real-Debrid app (use X245A4XAIBGVM for opensource)
+)
+REAL_DEBRID_CLIENT_SECRET = (
+    ""  # OAuth2 client secret (keep secure, not needed for opensource apps)
+)
 REAL_DEBRID_TOKEN_EXPIRES = 0  # Token expiration timestamp (auto-managed)
 
 EXCLUDED_EXTENSIONS = (
@@ -810,7 +822,6 @@ METADATA_SUBTITLE_AUTHOR = ""  # Subtitle track author metadata
 METADATA_SUBTITLE_COMMENT = ""  # Subtitle track comment metadata
 
 
-
 # Media Tools - Advanced Processing
 # Compression Settings
 COMPRESSION_ENABLED = False  # Enable compression functionality
@@ -1023,7 +1034,9 @@ SWAP_VIDEO_INDEX_ORDER = "0,1"  # Index order for video track selection
 # Subtitle Swap Settings
 SWAP_SUBTITLE_ENABLED = False  # Enable subtitle track swapping
 SWAP_SUBTITLE_USE_LANGUAGE = True  # Use language for subtitle track selection
-SWAP_SUBTITLE_LANGUAGE_ORDER = "eng,hin"  # Language order for subtitle track selection
+SWAP_SUBTITLE_LANGUAGE_ORDER = (
+    "eng,hin"  # Language order for subtitle track selection
+)
 SWAP_SUBTITLE_INDEX_ORDER = "0,1"  # Index order for subtitle track selection
 
 # Convert Settings
@@ -1062,7 +1075,6 @@ CONVERT_DOCUMENT_FORMAT = "pdf"  # Output format for document conversion
 CONVERT_DOCUMENT_QUALITY = 90  # Document quality for conversion
 
 
-
 # Bulk Operation Settings
 BULK_ENABLED = True  # Enable/disable bulk operations (-b flag)
 
@@ -1083,12 +1095,16 @@ DECODING_ENABLED = True  # Enable/disable decoding functionality
 VT_API_KEY = ""  # VirusTotal API key for file scanning
 VT_API_TIMEOUT = 500  # VirusTotal API timeout in seconds
 VT_ENABLED = False  # Enable/disable VirusTotal functionality
-VT_MAX_FILE_SIZE = 33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
+VT_MAX_FILE_SIZE = (
+    33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
+)
 
 # Enhanced NSFW Detection
 # Basic NSFW Settings
 NSFW_DETECTION_ENABLED = True  # Master toggle for NSFW detection
-NSFW_DETECTION_SENSITIVITY = "moderate"  # Detection sensitivity: strict, moderate, permissive
+NSFW_DETECTION_SENSITIVITY = (
+    "moderate"  # Detection sensitivity: strict, moderate, permissive
+)
 NSFW_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for NSFW detection (0.0-1.0)
 NSFW_CACHE_DURATION = 3600  # Cache detection results duration in seconds
 NSFW_MAX_FILE_SIZE = 52428800  # Maximum file size for NSFW analysis in bytes (50MB)
@@ -1621,5 +1637,3 @@ CONVERT_ARCHIVE_ENABLED = False  # Enable/disable archive conversion
 CONVERT_ARCHIVE_FORMAT = "none"  # Target format: none, zip, 7z, tar.gz, etc.
 CONVERT_ARCHIVE_LEVEL = 0  # Compression level (0-9, higher is more compression)
 CONVERT_ARCHIVE_METHOD = "none"  # Compression method: none, deflate, lzma, etc.
-
-

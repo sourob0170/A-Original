@@ -141,7 +141,6 @@ def create_help_buttons():
     # FILE_TO_LINK_HELP_DICT removed - streaming functionality disabled
 
 
-
 def bt_selection_buttons(id_):
     # Convert id_ to string before slicing
     id_str = str(id_)

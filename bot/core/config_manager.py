@@ -545,7 +545,6 @@ class Config:
     MEDIA_TOOLS_ENABLED: bool = True
     MEDIAINFO_ENABLED: bool = False
 
-
     # DDL (Direct Download Link) Upload Settings
     DDL_ENABLED: bool = True  # Enable/disable DDL upload feature
     DDL_DEFAULT_SERVER: str = (

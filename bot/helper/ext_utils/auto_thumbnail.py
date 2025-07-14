@@ -6,6 +6,9 @@ Automatically fetches movie/TV show thumbnails from IMDB and TMDB based on filen
 import asyncio
 import os
 import re
+
+# TMDB functionality moved here from stream_utils
+from datetime import datetime, timedelta
 from os import path as ospath
 from time import time
 
@@ -18,9 +21,6 @@ from bot.core.config_manager import Config
 # Use compatibility layer for aiofiles
 from bot.helper.ext_utils.aiofiles_compat import aiopath, makedirs, remove
 from bot.helper.ext_utils.template_processor import extract_metadata_from_filename
-# TMDB functionality moved here from stream_utils
-import re
-from datetime import datetime, timedelta
 
 
 class AutoThumbnailHelper:
@@ -598,7 +598,7 @@ class TMDBHelper:
         title = re.sub(r"\{.*?\}", "", title)
 
         # Handle parentheses more carefully - keep year if present
-        year_in_parens = re.search(r"\((\d{4})\)", title)
+        re.search(r"\((\d{4})\)", title)
         title = re.sub(r"\(.*?\)", "", title)
 
         # Remove common release group patterns
@@ -606,7 +606,12 @@ class TMDBHelper:
         title = re.sub(r"^\w+-", "", title)  # Remove prefix groups
 
         # Remove episode/season indicators for anime
-        title = re.sub(r"\s+(ep|episode|ova|ona|special)\s*\d+.*$", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s+(ep|episode|ova|ona|special)\s*\d+.*$",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Clean up whitespace and special characters
         title = re.sub(r"\s+", " ", title)
@@ -652,7 +657,7 @@ class TMDBHelper:
 
     @classmethod
     async def _try_alternative_movie_search(
-        cls, title: str, year: int | None, session, original_title: str = None
+        cls, title: str, year: int | None, session, original_title: str | None = None
     ) -> dict | None:
         """Enhanced alternative search strategies for anime/niche content"""
         try:
@@ -667,7 +672,9 @@ class TMDBHelper:
             # Strategy 2: Search with just the main title (remove episode info)
             main_title = re.sub(r"\s+S\d+E\d+.*", "", title, flags=re.IGNORECASE)
             main_title = re.sub(r"\s+Episode.*", "", main_title, flags=re.IGNORECASE)
-            main_title = re.sub(r"\s+\d+.*", "", main_title)  # Remove trailing numbers
+            main_title = re.sub(
+                r"\s+\d+.*", "", main_title
+            )  # Remove trailing numbers
             search_attempts.append(("main title", main_title))
 
             # Strategy 3: Try first few words only (for long titles)
@@ -722,7 +729,7 @@ class TMDBHelper:
 
     @classmethod
     async def _try_alternative_tv_search(
-        cls, title: str, year: int | None, session, original_title: str = None
+        cls, title: str, year: int | None, session, original_title: str | None = None
     ) -> dict | None:
         """Enhanced alternative search strategies for anime/niche TV content"""
         try:
@@ -737,7 +744,9 @@ class TMDBHelper:
             # Strategy 2: Search with just the main title (remove episode info)
             main_title = re.sub(r"\s+S\d+E\d+.*", "", title, flags=re.IGNORECASE)
             main_title = re.sub(r"\s+Episode.*", "", main_title, flags=re.IGNORECASE)
-            main_title = re.sub(r"\s+\d+.*", "", main_title)  # Remove trailing numbers
+            main_title = re.sub(
+                r"\s+\d+.*", "", main_title
+            )  # Remove trailing numbers
             search_attempts.append(("main title", main_title))
 
             # Strategy 3: Try first few words only (for long titles)

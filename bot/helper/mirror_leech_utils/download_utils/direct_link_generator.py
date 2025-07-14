@@ -452,7 +452,9 @@ def direct_link_generator(link, user_id=None):
     ):
         return debrid_link(link)
     # Mega-Debrid support for premium downloads (including torrents)
-    if Config.MEGA_DEBRID_API_TOKEN or (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD):
+    if Config.MEGA_DEBRID_API_TOKEN or (
+        Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD
+    ):
         # Check if it's a torrent/magnet link
         if link.startswith("magnet:") or link.endswith(".torrent"):
             return mega_debrid(link)
@@ -1190,7 +1192,10 @@ def mega_debrid(url):
     Raises:
         DirectDownloadLinkException: If API request fails or no credentials
     """
-    if not (Config.MEGA_DEBRID_API_TOKEN or (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD)):
+    if not (
+        Config.MEGA_DEBRID_API_TOKEN
+        or (Config.MEGA_DEBRID_LOGIN and Config.MEGA_DEBRID_PASSWORD)
+    ):
         raise DirectDownloadLinkException(
             "ERROR: Mega-Debrid credentials not configured. Please set MEGA_DEBRID_API_TOKEN or MEGA_DEBRID_LOGIN/MEGA_DEBRID_PASSWORD in your config."
         )
@@ -1215,7 +1220,9 @@ def mega_debrid(url):
             raise DirectDownloadLinkException(
                 "ERROR: Mega-Debrid API timeout - request timed out"
             )
-        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Mega-Debrid request failed - {str(e)}"
+        )
 
 
 def _get_mega_debrid_token(session):
@@ -1249,7 +1256,7 @@ def _get_mega_debrid_token(session):
         auth_params = {
             "action": "connectUser",
             "login": Config.MEGA_DEBRID_LOGIN,
-            "password": Config.MEGA_DEBRID_PASSWORD
+            "password": Config.MEGA_DEBRID_PASSWORD,
         }
 
         resp = session.get(auth_url, params=auth_params, timeout=30)
@@ -1269,12 +1276,16 @@ def _get_mega_debrid_token(session):
                 raise DirectDownloadLinkException(
                     "ERROR: Mega-Debrid account is not premium. Only premium members can use the API."
                 )
-            raise DirectDownloadLinkException(f"ERROR: Mega-Debrid authentication failed - {error_msg}")
+            raise DirectDownloadLinkException(
+                f"ERROR: Mega-Debrid authentication failed - {error_msg}"
+            )
 
         # Get token from response
         token = result.get("token")
         if not token:
-            raise DirectDownloadLinkException("ERROR: No token received from Mega-Debrid")
+            raise DirectDownloadLinkException(
+                "ERROR: No token received from Mega-Debrid"
+            )
 
         # Cache the token for future use (valid until next connection attempt per docs)
         Config.MEGA_DEBRID_API_TOKEN = token
@@ -1285,8 +1296,12 @@ def _get_mega_debrid_token(session):
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: Mega-Debrid authentication timeout")
-        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid authentication failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: Mega-Debrid authentication timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: Mega-Debrid authentication failed - {str(e)}"
+        )
 
 
 def _mega_debrid_get_link(session, token, url, password=""):
@@ -1310,15 +1325,13 @@ def _mega_debrid_get_link(session, token, url, password=""):
     try:
         # Get debrid link using POST request as per API docs
         api_url = "https://www.mega-debrid.eu/api.php"
-        params = {
-            "action": "getLink",
-            "token": token
-        }
+        params = {"action": "getLink", "token": token}
 
         # POST data with the link and optional password (md5 encoded as per docs)
         data = {"link": url}
         if password:
             import hashlib
+
             data["password"] = hashlib.md5(password.encode()).hexdigest()
 
         resp = session.post(api_url, params=params, data=data, timeout=30)
@@ -1352,7 +1365,9 @@ def _mega_debrid_get_link(session, token, url, password=""):
         # Get debrid link from response
         debrid_link = result.get("debridLink")
         if not debrid_link:
-            raise DirectDownloadLinkException("ERROR: No debrid link received from Mega-Debrid")
+            raise DirectDownloadLinkException(
+                "ERROR: No debrid link received from Mega-Debrid"
+            )
 
         return debrid_link
 
@@ -1361,7 +1376,9 @@ def _mega_debrid_get_link(session, token, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: Mega-Debrid API timeout")
-        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid API request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Mega-Debrid API request failed - {str(e)}"
+        )
 
 
 def _mega_debrid_upload_torrent(session, token, url):
@@ -1383,10 +1400,7 @@ def _mega_debrid_upload_torrent(session, token, url):
     """
     try:
         api_url = "https://www.mega-debrid.eu/api.php"
-        params = {
-            "action": "uploadTorrent",
-            "token": token
-        }
+        params = {"action": "uploadTorrent", "token": token}
 
         if url.startswith("magnet:"):
             # For magnet links
@@ -1414,7 +1428,9 @@ def _mega_debrid_upload_torrent(session, token, url):
                     f"ERROR: Failed to fetch torrent file: {str(e)}"
                 )
 
-        resp = session.post(api_url, params=params, data=data, files=files, timeout=30)
+        resp = session.post(
+            api_url, params=params, data=data, files=files, timeout=30
+        )
 
         if resp.status_code >= 400:
             raise DirectDownloadLinkException(
@@ -1426,27 +1442,35 @@ def _mega_debrid_upload_torrent(session, token, url):
         # Check response_code as per API docs
         if result.get("response_code") != "ok":
             error_msg = result.get("response_text", "Unknown error")
-            raise DirectDownloadLinkException(f"ERROR: Mega-Debrid torrent upload - {error_msg}")
+            raise DirectDownloadLinkException(
+                f"ERROR: Mega-Debrid torrent upload - {error_msg}"
+            )
 
         # Get torrent info from response: { name, size, hash }
         torrent_info = result.get("newTorrent", {})
         if not torrent_info:
-            raise DirectDownloadLinkException("ERROR: No torrent info received from Mega-Debrid")
+            raise DirectDownloadLinkException(
+                "ERROR: No torrent info received from Mega-Debrid"
+            )
 
         # Return torrent details - user can check status later with getTorrent API
         return {
             "title": torrent_info.get("name", "Mega-Debrid Torrent"),
             "hash": torrent_info.get("hash", ""),
             "size": torrent_info.get("size", 0),
-            "message": f"Torrent uploaded to Mega-Debrid successfully. Hash: {torrent_info.get('hash', 'N/A')}"
+            "message": f"Torrent uploaded to Mega-Debrid successfully. Hash: {torrent_info.get('hash', 'N/A')}",
         }
 
     except DirectDownloadLinkException:
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: Mega-Debrid torrent upload timeout")
-        raise DirectDownloadLinkException(f"ERROR: Mega-Debrid torrent upload failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: Mega-Debrid torrent upload timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: Mega-Debrid torrent upload failed - {str(e)}"
+        )
 
 
 def _is_mega_debrid_supported(domain):
@@ -1541,11 +1565,20 @@ def alldebrid(url):
         # Check if it's a redirector link (common redirector domains)
         domain = urlparse(url).hostname
         redirector_domains = [
-            "adf.ly", "bit.ly", "tinyurl.com", "short.link", "dl-protect",
-            "linkvertise.com", "ouo.io", "sh.st", "adfly.com"
+            "adf.ly",
+            "bit.ly",
+            "tinyurl.com",
+            "short.link",
+            "dl-protect",
+            "linkvertise.com",
+            "ouo.io",
+            "sh.st",
+            "adfly.com",
         ]
 
-        if domain and any(redirector_domain in domain for redirector_domain in redirector_domains):
+        if domain and any(
+            redirector_domain in domain for redirector_domain in redirector_domains
+        ):
             try:
                 # Try to extract links from redirector first
                 extracted_links = _alldebrid_handle_redirector(session, url)
@@ -1566,7 +1599,9 @@ def alldebrid(url):
             raise DirectDownloadLinkException(
                 "ERROR: AllDebrid API timeout - request timed out"
             )
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid request failed - {str(e)}"
+        )
 
 
 def _alldebrid_unlock_link(session, url, password=""):
@@ -1645,7 +1680,9 @@ def _alldebrid_unlock_link(session, url, password=""):
         # Get data from successful response
         data = result.get("data", {})
         if not data:
-            raise DirectDownloadLinkException("ERROR: Empty response from AllDebrid API")
+            raise DirectDownloadLinkException(
+                "ERROR: Empty response from AllDebrid API"
+            )
 
         # Check if it's a delayed link
         if "delayed" in data:
@@ -1661,12 +1698,16 @@ def _alldebrid_unlock_link(session, url, password=""):
             generation_id = data.get("id")
 
             if stream_id and generation_id:
-                return _alldebrid_get_streaming_link(session, generation_id, stream_id)
+                return _alldebrid_get_streaming_link(
+                    session, generation_id, stream_id
+                )
 
         # Get direct download link
         download_url = data.get("link")
         if not download_url:
-            raise DirectDownloadLinkException("ERROR: No download URL in AllDebrid response")
+            raise DirectDownloadLinkException(
+                "ERROR: No download URL in AllDebrid response"
+            )
 
         return download_url
 
@@ -1675,7 +1716,9 @@ def _alldebrid_unlock_link(session, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: AllDebrid API timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid API request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid API request failed - {str(e)}"
+        )
 
 
 def _alldebrid_upload_magnet(session, url):
@@ -1768,19 +1811,25 @@ def _alldebrid_upload_magnet(session, url):
             }
 
             detailed_error = error_messages.get(error_code, error_message)
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet upload - {detailed_error}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid magnet upload - {detailed_error}"
+            )
 
         # Get magnet info from response
         data = result.get("data", {})
         if url.startswith("magnet:"):
             magnets = data.get("magnets", [])
             if not magnets:
-                raise DirectDownloadLinkException("ERROR: No magnet info received from AllDebrid")
+                raise DirectDownloadLinkException(
+                    "ERROR: No magnet info received from AllDebrid"
+                )
             magnet_info = magnets[0]
         else:
             files = data.get("files", [])
             if not files:
-                raise DirectDownloadLinkException("ERROR: No file info received from AllDebrid")
+                raise DirectDownloadLinkException(
+                    "ERROR: No file info received from AllDebrid"
+                )
             magnet_info = files[0]
 
         # Check for errors in magnet info
@@ -1788,7 +1837,9 @@ def _alldebrid_upload_magnet(session, url):
             error_info = magnet_info["error"]
             error_code = error_info.get("code", "unknown_error")
             error_message = error_info.get("message", "Unknown error")
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet - {error_message}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid magnet - {error_message}"
+            )
 
         # Return magnet details - user can check status later with magnet/status API
         return {
@@ -1797,15 +1848,19 @@ def _alldebrid_upload_magnet(session, url):
             "size": magnet_info.get("size", 0),
             "id": magnet_info.get("id", ""),
             "ready": magnet_info.get("ready", False),
-            "message": f"Magnet uploaded to AllDebrid successfully. ID: {magnet_info.get('id', 'N/A')}"
+            "message": f"Magnet uploaded to AllDebrid successfully. ID: {magnet_info.get('id', 'N/A')}",
         }
 
     except DirectDownloadLinkException:
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: AllDebrid magnet upload timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet upload failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: AllDebrid magnet upload timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid magnet upload failed - {str(e)}"
+        )
 
 
 def _alldebrid_handle_delayed_link(session, delayed_id):
@@ -1853,7 +1908,9 @@ def _alldebrid_handle_delayed_link(session, delayed_id):
             if result.get("status") != "success":
                 error_info = result.get("error", {})
                 error_message = error_info.get("message", "Unknown error")
-                raise DirectDownloadLinkException(f"ERROR: AllDebrid delayed link - {error_message}")
+                raise DirectDownloadLinkException(
+                    f"ERROR: AllDebrid delayed link - {error_message}"
+                )
 
             data = result.get("data", {})
             status = data.get("status")
@@ -1864,24 +1921,38 @@ def _alldebrid_handle_delayed_link(session, delayed_id):
                 if download_url:
                     return download_url
                 else:
-                    raise DirectDownloadLinkException("ERROR: No download URL in delayed response")
+                    raise DirectDownloadLinkException(
+                        "ERROR: No download URL in delayed response"
+                    )
             elif status == 3:  # Error, could not generate download link
-                raise DirectDownloadLinkException("ERROR: AllDebrid could not generate download link")
+                raise DirectDownloadLinkException(
+                    "ERROR: AllDebrid could not generate download link"
+                )
             elif status == 1:  # Still processing
-                LOGGER.info(f"AllDebrid delayed link still processing. Time left: {time_left}s")
+                LOGGER.info(
+                    f"AllDebrid delayed link still processing. Time left: {time_left}s"
+                )
                 sleep(5)  # Wait 5 seconds before next check
                 attempt += 1
             else:
-                raise DirectDownloadLinkException(f"ERROR: Unknown delayed link status: {status}")
+                raise DirectDownloadLinkException(
+                    f"ERROR: Unknown delayed link status: {status}"
+                )
 
-        raise DirectDownloadLinkException("ERROR: AllDebrid delayed link timeout - took too long to process")
+        raise DirectDownloadLinkException(
+            "ERROR: AllDebrid delayed link timeout - took too long to process"
+        )
 
     except DirectDownloadLinkException:
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: AllDebrid delayed link timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid delayed link failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: AllDebrid delayed link timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid delayed link failed - {str(e)}"
+        )
 
 
 def _is_alldebrid_supported(domain):
@@ -1942,7 +2013,11 @@ def _is_alldebrid_supported(domain):
                     "Authorization": f"Bearer {Config.ALLDEBRID_API_KEY}",
                     "User-Agent": user_agent,
                 }
-                resp = session.get("https://api.alldebrid.com/v4.1/user/hosts", headers=headers, timeout=15)
+                resp = session.get(
+                    "https://api.alldebrid.com/v4.1/user/hosts",
+                    headers=headers,
+                    timeout=15,
+                )
                 if resp.status_code == 200:
                     result = resp.json()
                     if result.get("status") == "success":
@@ -2015,14 +2090,18 @@ def _alldebrid_handle_redirector(session, url):
             }
 
             detailed_error = error_messages.get(error_code, error_message)
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid redirector - {detailed_error}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid redirector - {detailed_error}"
+            )
 
         # Get extracted links
         data = result.get("data", {})
         links = data.get("links", [])
 
         if not links:
-            raise DirectDownloadLinkException("ERROR: No links extracted from redirector")
+            raise DirectDownloadLinkException(
+                "ERROR: No links extracted from redirector"
+            )
 
         return links
 
@@ -2031,7 +2110,9 @@ def _alldebrid_handle_redirector(session, url):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: AllDebrid redirector timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid redirector failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid redirector failed - {str(e)}"
+        )
 
 
 def _alldebrid_get_link_info(session, url, password=""):
@@ -2077,7 +2158,9 @@ def _alldebrid_get_link_info(session, url, password=""):
         if result.get("status") != "success":
             error_info = result.get("error", {})
             error_message = error_info.get("message", "Unknown error")
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid link info - {error_message}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid link info - {error_message}"
+            )
 
         # Get link info
         data = result.get("data", {})
@@ -2104,7 +2187,9 @@ def _alldebrid_get_link_info(session, url, password=""):
             }
 
             detailed_error = error_messages.get(error_code, error_message)
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid link info - {detailed_error}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid link info - {detailed_error}"
+            )
 
         return link_info
 
@@ -2113,7 +2198,9 @@ def _alldebrid_get_link_info(session, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: AllDebrid link info timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid link info failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid link info failed - {str(e)}"
+        )
 
 
 def _alldebrid_get_streaming_link(session, generation_id, stream_id):
@@ -2169,7 +2256,9 @@ def _alldebrid_get_streaming_link(session, generation_id, stream_id):
             }
 
             detailed_error = error_messages.get(error_code, error_message)
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid streaming - {detailed_error}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid streaming - {detailed_error}"
+            )
 
         # Get streaming data
         data = result.get("data", {})
@@ -2182,7 +2271,9 @@ def _alldebrid_get_streaming_link(session, generation_id, stream_id):
         # Get direct streaming link
         streaming_url = data.get("link")
         if not streaming_url:
-            raise DirectDownloadLinkException("ERROR: No streaming URL in AllDebrid response")
+            raise DirectDownloadLinkException(
+                "ERROR: No streaming URL in AllDebrid response"
+            )
 
         return streaming_url
 
@@ -2191,7 +2282,9 @@ def _alldebrid_get_streaming_link(session, generation_id, stream_id):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: AllDebrid streaming timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid streaming failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid streaming failed - {str(e)}"
+        )
 
 
 def _alldebrid_check_magnet_status(session, magnet_id):
@@ -2242,14 +2335,18 @@ def _alldebrid_check_magnet_status(session, magnet_id):
             }
 
             detailed_error = error_messages.get(error_code, error_message)
-            raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet status - {detailed_error}")
+            raise DirectDownloadLinkException(
+                f"ERROR: AllDebrid magnet status - {detailed_error}"
+            )
 
         # Get magnet status data
         data = result.get("data", {})
         magnets = data.get("magnets", [])
 
         if not magnets:
-            raise DirectDownloadLinkException("ERROR: No magnet status information received")
+            raise DirectDownloadLinkException(
+                "ERROR: No magnet status information received"
+            )
 
         return magnets[0]  # Return first magnet info
 
@@ -2257,8 +2354,12 @@ def _alldebrid_check_magnet_status(session, magnet_id):
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: AllDebrid magnet status timeout")
-        raise DirectDownloadLinkException(f"ERROR: AllDebrid magnet status failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: AllDebrid magnet status timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: AllDebrid magnet status failed - {str(e)}"
+        )
 
 
 def real_debrid(url):
@@ -2307,7 +2408,9 @@ def real_debrid(url):
             raise DirectDownloadLinkException(
                 "ERROR: Real-Debrid API timeout - request timed out"
             )
-        raise DirectDownloadLinkException(f"ERROR: Real-Debrid request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Real-Debrid request failed - {str(e)}"
+        )
 
 
 def _real_debrid_unrestrict_link(session, url, password=""):
@@ -2408,7 +2511,7 @@ def _real_debrid_unrestrict_link(session, url, password=""):
                 34: "Too many requests",
                 35: "Infringing file",
                 36: "Fair Usage Limit",
-                37: "Disabled endpoint"
+                37: "Disabled endpoint",
             }
 
             specific_msg = error_messages.get(error_code, error_msg)
@@ -2419,7 +2522,9 @@ def _real_debrid_unrestrict_link(session, url, password=""):
         # Get download link from response
         download_url = result.get("download")
         if not download_url:
-            raise DirectDownloadLinkException("ERROR: No download URL received from Real-Debrid")
+            raise DirectDownloadLinkException(
+                "ERROR: No download URL received from Real-Debrid"
+            )
 
         return download_url
 
@@ -2428,7 +2533,9 @@ def _real_debrid_unrestrict_link(session, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: Real-Debrid API timeout")
-        raise DirectDownloadLinkException(f"ERROR: Real-Debrid API request failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Real-Debrid API request failed - {str(e)}"
+        )
 
 
 def _real_debrid_add_torrent(session, url):
@@ -2539,33 +2646,41 @@ def _real_debrid_add_torrent(session, url):
                 34: "Too many requests",
                 35: "Infringing file",
                 36: "Fair Usage Limit",
-                37: "Disabled endpoint"
+                37: "Disabled endpoint",
             }
 
             specific_msg = error_messages.get(error_code, error_msg)
-            raise DirectDownloadLinkException(f"ERROR: Real-Debrid torrent - {specific_msg}")
+            raise DirectDownloadLinkException(
+                f"ERROR: Real-Debrid torrent - {specific_msg}"
+            )
 
         result = resp.json()
 
         # Get torrent info from response
         torrent_id = result.get("id")
         if not torrent_id:
-            raise DirectDownloadLinkException("ERROR: No torrent ID received from Real-Debrid")
+            raise DirectDownloadLinkException(
+                "ERROR: No torrent ID received from Real-Debrid"
+            )
 
         # Return torrent details - user can check status later
         return {
             "title": result.get("filename", "Real-Debrid Torrent"),
             "id": torrent_id,
             "uri": result.get("uri", ""),
-            "message": f"Torrent added to Real-Debrid successfully. ID: {torrent_id}"
+            "message": f"Torrent added to Real-Debrid successfully. ID: {torrent_id}",
         }
 
     except DirectDownloadLinkException:
         raise
     except Exception as e:
         if "timeout" in str(e).lower():
-            raise DirectDownloadLinkException("ERROR: Real-Debrid torrent upload timeout")
-        raise DirectDownloadLinkException(f"ERROR: Real-Debrid torrent upload failed - {str(e)}")
+            raise DirectDownloadLinkException(
+                "ERROR: Real-Debrid torrent upload timeout"
+            )
+        raise DirectDownloadLinkException(
+            f"ERROR: Real-Debrid torrent upload failed - {str(e)}"
+        )
 
 
 def _get_valid_real_debrid_token():
@@ -2712,9 +2827,7 @@ def _is_real_debrid_supported(domain):
             headers = {"User-Agent": user_agent}
 
         resp = session.get(
-            "https://api.real-debrid.com/rest/1.0/hosts",
-            headers=headers,
-            timeout=15
+            "https://api.real-debrid.com/rest/1.0/hosts", headers=headers, timeout=15
         )
 
         if resp.status_code >= 400:
@@ -2741,7 +2854,9 @@ def _is_real_debrid_supported(domain):
         return False
 
 
-def get_real_debrid_oauth_device_code(client_id="X245A4XAIBGVM", new_credentials=False):
+def get_real_debrid_oauth_device_code(
+    client_id="X245A4XAIBGVM", new_credentials=False
+):
     """
     Helper function to get device code for OAuth2 device flow.
     Used for setting up Real-Debrid authentication on limited input devices.
@@ -2896,7 +3011,9 @@ def poll_real_debrid_oauth_token(client_id, device_code, client_secret=""):
         raise DirectDownloadLinkException(f"Token polling error: {str(e)}")
 
 
-def setup_real_debrid_oauth_device_flow(client_id="X245A4XAIBGVM", client_secret="", opensource_app=True):
+def setup_real_debrid_oauth_device_flow(
+    client_id="X245A4XAIBGVM", client_secret="", opensource_app=True
+):
     """
     Complete OAuth2 device flow setup for Real-Debrid.
     This is a helper function for initial authentication setup.
@@ -2913,7 +3030,9 @@ def setup_real_debrid_oauth_device_flow(client_id="X245A4XAIBGVM", client_secret
     try:
         # Step 1: Get device code (with new_credentials for opensource apps)
         LOGGER.info("Getting Real-Debrid device code...")
-        device_data = get_real_debrid_oauth_device_code(client_id, new_credentials=opensource_app)
+        device_data = get_real_debrid_oauth_device_code(
+            client_id, new_credentials=opensource_app
+        )
 
         device_code = device_data["device_code"]
         user_code = device_data["user_code"]
@@ -2933,11 +3052,14 @@ def setup_real_debrid_oauth_device_flow(client_id="X245A4XAIBGVM", client_secret
         if opensource_app:
             LOGGER.info("Waiting for user authorization to get credentials...")
             import time
+
             start_time = time.time()
 
             while time.time() - start_time < expires_in:
                 try:
-                    user_credentials = get_real_debrid_oauth_credentials(client_id, device_code)
+                    user_credentials = get_real_debrid_oauth_credentials(
+                        client_id, device_code
+                    )
                     LOGGER.info("User-bound credentials obtained!")
                     # Update client_id and client_secret with user-bound values
                     client_id = user_credentials["client_id"]
@@ -2951,11 +3073,14 @@ def setup_real_debrid_oauth_device_flow(client_id="X245A4XAIBGVM", client_secret
                         raise e
 
             if not user_credentials:
-                raise DirectDownloadLinkException("Failed to get user-bound credentials")
+                raise DirectDownloadLinkException(
+                    "Failed to get user-bound credentials"
+                )
 
         # Step 3: Poll for tokens using the (possibly updated) credentials
         LOGGER.info("Polling for access tokens...")
         import time
+
         start_time = time.time()
 
         while time.time() - start_time < expires_in:
@@ -3066,11 +3191,13 @@ def _real_debrid_check_link(session, url, password=""):
                 24: "File unavailable",
                 25: "Service unavailable",
                 34: "Too many requests",
-                37: "Disabled endpoint"
+                37: "Disabled endpoint",
             }
 
             specific_msg = error_messages.get(error_code, error_msg)
-            raise DirectDownloadLinkException(f"ERROR: Real-Debrid check - {specific_msg}")
+            raise DirectDownloadLinkException(
+                f"ERROR: Real-Debrid check - {specific_msg}"
+            )
 
         result = resp.json()
         return result
@@ -3080,7 +3207,9 @@ def _real_debrid_check_link(session, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: Real-Debrid check timeout")
-        raise DirectDownloadLinkException(f"ERROR: Real-Debrid check failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Real-Debrid check failed - {str(e)}"
+        )
 
 
 def _real_debrid_unrestrict_folder(session, url, password=""):
@@ -3163,17 +3292,21 @@ def _real_debrid_unrestrict_folder(session, url, password=""):
                 24: "File unavailable",
                 25: "Service unavailable",
                 34: "Too many requests",
-                37: "Disabled endpoint"
+                37: "Disabled endpoint",
             }
 
             specific_msg = error_messages.get(error_code, error_msg)
-            raise DirectDownloadLinkException(f"ERROR: Real-Debrid folder - {specific_msg}")
+            raise DirectDownloadLinkException(
+                f"ERROR: Real-Debrid folder - {specific_msg}"
+            )
 
         result = resp.json()
 
         # Process folder response - should contain array of files
         if not isinstance(result, list) or not result:
-            raise DirectDownloadLinkException("ERROR: No files found in folder or invalid folder link")
+            raise DirectDownloadLinkException(
+                "ERROR: No files found in folder or invalid folder link"
+            )
 
         # Build folder details response
         details = {
@@ -3203,7 +3336,9 @@ def _real_debrid_unrestrict_folder(session, url, password=""):
 
         # Check if we have any valid files
         if not details["contents"]:
-            raise DirectDownloadLinkException("ERROR: No valid download links found in folder")
+            raise DirectDownloadLinkException(
+                "ERROR: No valid download links found in folder"
+            )
 
         return details
 
@@ -3212,7 +3347,9 @@ def _real_debrid_unrestrict_folder(session, url, password=""):
     except Exception as e:
         if "timeout" in str(e).lower():
             raise DirectDownloadLinkException("ERROR: Real-Debrid folder timeout")
-        raise DirectDownloadLinkException(f"ERROR: Real-Debrid folder failed - {str(e)}")
+        raise DirectDownloadLinkException(
+            f"ERROR: Real-Debrid folder failed - {str(e)}"
+        )
 
 
 def torbox(url):
