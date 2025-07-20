@@ -178,10 +178,16 @@
 ## Security Tools
 
 - **VirusTotal Integration**: Scan files and URLs for malware detection.
+- **Phish Directory**: Check domains and emails for phishing/security threats.
+- **WOT (Web of Trust)**: Website reputation and trustworthiness checking.
+- **AbuseIPDB Integration**: IP address abuse confidence scoring and threat analysis.
 - **Truecaller Lookup**: Phone number information and spam detection.
 - Comprehensive threat analysis and reporting.
 - Support for multiple file types and URL schemes.
 - Detailed scan results with threat classifications.
+- Community-driven reputation scoring and safety assessments.
+- Comprehensive IP geolocation, ISP information, and abuse history.
+- Automatic domain-to-IP resolution for multi-layered security analysis.
 - API key management and rate limiting.
 
 ## Media Search

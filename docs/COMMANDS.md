@@ -60,6 +60,8 @@ ask - Chat with AI using the bot
 spectrum - or /sox Generate spectrum from audio
 paste - Paste text to katb.in website
 virustotal - Scan files or URLs for viruses using VirusTotal
+phishcheck - Check domains and emails for phishing/security threats
+wot - Check website, domain, and IP reputation using WOT and AbuseIPDB
 streamripsearch - or /srsearch or /srs Search music across platforms
 zotifysearch - or /zsearch or /zs Search music on Spotify
 megasearch - or /mgs Search files on MEGA

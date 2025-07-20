@@ -605,7 +605,7 @@ async def detect_account_type() -> str:
     from bot import LOGGER
 
     try:
-        from bot.helper.zotify_utils.improved_session_manager import (
+        from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import (
             improved_session_manager,
         )
 

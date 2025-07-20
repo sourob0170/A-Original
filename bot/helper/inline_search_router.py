@@ -29,7 +29,7 @@ async def ensure_platforms_initialized():
     # Initialize Streamrip if enabled
     if Config.STREAMRIP_ENABLED:
         try:
-            from bot.helper.streamrip_utils.streamrip_config import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                 ensure_streamrip_initialized,
             )
 
@@ -56,7 +56,7 @@ async def ensure_zotify_initialized_on_demand():
     await setup_credentials_from_environment()
 
     try:
-        from bot.helper.zotify_utils.zotify_config import ensure_zotify_initialized
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import ensure_zotify_initialized
 
         # Add timeout for Zotify initialization to prevent hanging
         return await asyncio.wait_for(ensure_zotify_initialized(), timeout=30.0)
@@ -331,7 +331,7 @@ async def unified_inline_search_handler(client, inline_query: InlineQuery):
             modified_inline_query = ModifiedInlineQuery(inline_query, modified_query)
 
             # Import and call zotify inline search
-            from bot.helper.zotify_utils.search_handler import inline_zotify_search
+            from bot.helper.mirror_leech_utils.zotify_utils.search_handler import inline_zotify_search
 
             await inline_zotify_search(client, modified_inline_query)
             return
@@ -393,7 +393,7 @@ async def unified_inline_search_handler(client, inline_query: InlineQuery):
             modified_inline_query = ModifiedInlineQuery(inline_query, modified_query)
 
             # Import and call streamrip inline search
-            from bot.helper.streamrip_utils.search_handler import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
                 inline_streamrip_search,
             )
 
@@ -463,7 +463,7 @@ async def perform_background_search(client, inline_query: InlineQuery, query: st
         # Add Streamrip search task if enabled
         if Config.STREAMRIP_ENABLED:
             try:
-                from bot.helper.streamrip_utils.search_handler import (
+                from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
                     perform_inline_streamrip_search,
                 )
 
@@ -726,7 +726,7 @@ async def send_search_results(
                 platform_name_lower = result.get("platform", "").lower()
                 if platform_name_lower == "spotify":
                     # Use Zotify callback
-                    from bot.helper.zotify_utils.search_handler import (
+                    from bot.helper.mirror_leech_utils.zotify_utils.search_handler import (
                         encrypt_zotify_data,
                     )
 
@@ -742,7 +742,7 @@ async def send_search_results(
                     callback_data = f"zotify_dl_{encrypted_id}"
                 else:
                     # Use Streamrip callback
-                    from bot.helper.streamrip_utils.search_handler import (
+                    from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
                         encrypt_streamrip_data,
                     )
 
@@ -1003,7 +1003,7 @@ def init_unified_inline_search(bot):
     # Initialize individual platform handlers (non-inline)
     if Config.STREAMRIP_ENABLED:
         try:
-            from bot.helper.streamrip_utils.search_handler import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
                 init_streamrip_inline_search,
             )
 
@@ -1014,7 +1014,7 @@ def init_unified_inline_search(bot):
 
     if Config.ZOTIFY_ENABLED:
         try:
-            from bot.helper.zotify_utils.search_handler import (
+            from bot.helper.mirror_leech_utils.zotify_utils.search_handler import (
                 init_zotify_inline_search,
             )
 

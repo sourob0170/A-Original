@@ -185,6 +185,12 @@ class Config:
 
     IS_TEAM_DRIVE: bool = False
     LEECH_DUMP_CHAT: ClassVar[list[str]] = []
+    BOT_PM: bool = True  # Enable/disable sending media to user's bot PM
+
+    # Forwarding Settings
+    FORWARD_SOURCE: ClassVar[list[str]] = []  # Source chat IDs/usernames for automatic forwarding (comma-separated)
+    FORWARD_DESTINATION: ClassVar[list[str]] = []  # Destination chat IDs/usernames for automatic forwarding (comma-separated)
+
     LEECH_FILENAME_PREFIX: str = ""
     LEECH_SUFFIX: str = ""
     LEECH_FONT: str = ""
@@ -1183,8 +1189,9 @@ class Config:
     TMDB_ENABLED: bool = True
     TMDB_LANGUAGE: str = "en-US"
     TMDB_REGION: str = "US"
-    TMDB_ADULT_CONTENT: bool = False
-    TMDB_CACHE_DURATION: int = 86400  # 24 hours in seconds
+
+    # Cat API Settings
+    CAT_API_KEY: str = ""  # The Cat API key for enhanced features
 
     # Auto Thumbnail Settings
     AUTO_THUMBNAIL: bool = True  # Enable/disable auto thumbnail from IMDB/TMDB
@@ -1207,6 +1214,12 @@ class Config:
 
     # Shortener Settings
     SHORTENER_MIN_TIME: int = 10  # Minimum time in seconds for shortener to process
+
+    # File2Link Settings
+    FILE2LINK_ENABLED: bool = True
+    FILE2LINK_BIN_CHANNEL: int = 0  # Channel to store files for File2Link streaming
+    FILE2LINK_BASE_URL: str = ""  # Base URL for File2Link streaming (separate from main BASE_URL)
+    FILE2LINK_ALLOWED_TYPES: str = "video,audio,document,photo,animation,voice,video_note"
 
     # Command Suffix Settings
     CORRECT_CMD_SUFFIX: str = ""  # Comma-separated list of allowed command suffixes
@@ -1231,6 +1244,35 @@ class Config:
     VT_API_TIMEOUT: int = 500
     VT_ENABLED: bool = False
     VT_MAX_FILE_SIZE: int = 32 * 1024 * 1024  # 32MB default limit
+
+    # Phish Directory Settings
+    PHISH_DIRECTORY_API_URL: str = "https://api.phish.directory"
+    PHISH_DIRECTORY_ENABLED: bool = True
+    PHISH_DIRECTORY_TIMEOUT: int = 30
+    PHISH_DIRECTORY_API_KEY: str = ""
+
+    # WOT (Web of Trust) Settings
+    WOT_API_URL: str = "https://scorecard.api.mywot.com"
+    WOT_ENABLED: bool = True
+    WOT_TIMEOUT: int = 30
+    WOT_API_KEY: str = ""
+    WOT_USER_ID: str = ""
+
+    # AbuseIPDB Settings
+    ABUSEIPDB_API_URL: str = "https://api.abuseipdb.com/api/v2"
+    ABUSEIPDB_ENABLED: bool = True
+    ABUSEIPDB_TIMEOUT: int = 30
+    ABUSEIPDB_API_KEY: str = ""
+    ABUSEIPDB_MAX_AGE_DAYS: int = 90
+
+    # Trace.moe Settings
+    TRACE_MOE_API_KEY: str = ""  # trace.moe API key for enhanced search quota
+    TRACE_MOE_ENABLED: bool = True  # Enable/disable trace.moe functionality
+    TRACE_MOE_CUT_BORDERS: bool = True  # Enable border cutting for better accuracy
+    TRACE_MOE_VIDEO_PREVIEW: bool = True  # Enable video preview in results
+    TRACE_MOE_MUTE_PREVIEW: bool = False  # Mute video previews by default
+    TRACE_MOE_SKIP_PREVIEW: bool = False  # Skip video preview entirely
+    TRACE_MOE_MAX_FILE_SIZE: int = 25 * 1024 * 1024  # 25MB max file size for trace.moe (API limit)
 
     # Enhanced NSFW Detection Settings
     NSFW_DETECTION_ENABLED: bool = True  # Master toggle for NSFW detection
@@ -1281,6 +1323,10 @@ class Config:
     # Terabox Proxy Settings
     TERABOX_PROXY: str = "https://wdzone-terabox-api.vercel.app/"
 
+    # Pastebin API Settings
+    PASTEBIN_API_KEY: str = ""  # Pastebin Developer API Key
+    PASTEBIN_ENABLED: bool = False  # Enable/disable Pastebin functionality
+
     HEROKU_APP_NAME: str = ""
     HEROKU_API_KEY: str = ""
 
@@ -1296,7 +1342,7 @@ class Config:
         if value is None:
             return None
 
-        if key in ("LEECH_DUMP_CHAT",):
+        if key in ("LEECH_DUMP_CHAT", "FORWARD_SOURCE", "FORWARD_DESTINATION"):
             if isinstance(value, list):
                 return [str(v).strip() for v in value if str(v).strip()]
 
@@ -1418,8 +1464,8 @@ class Config:
                     return evaluated
                 raise TypeError
             except (ValueError, SyntaxError, TypeError) as e:
-                # For LEECH_DUMP_CHAT specifically, return an empty list on error
-                if key in ("LEECH_DUMP_CHAT",):
+                # For list-type configs, return an empty list on error
+                if key in ("LEECH_DUMP_CHAT", "FORWARD_SOURCE", "FORWARD_DESTINATION"):
                     return []
                 raise TypeError(
                     f"{key} should be {expected_type.__name__}, got invalid string: {value}"

@@ -28,15 +28,15 @@ from bot.helper.mirror_leech_utils.status_utils.zotify_status import (
     ZotifyDownloadStatus,
 )
 from bot.helper.telegram_helper.message_utils import send_status_message
-from bot.helper.zotify_utils.improved_session_manager import improved_session_manager
-from bot.helper.zotify_utils.quality_selector import show_zotify_quality_selector
-from bot.helper.zotify_utils.special_downloads import (
+from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import improved_session_manager
+from bot.helper.mirror_leech_utils.zotify_utils.quality_selector import show_zotify_quality_selector
+from bot.helper.mirror_leech_utils.zotify_utils.special_downloads import (
     get_special_download_info,
     get_special_download_type,
     is_special_download,
 )
-from bot.helper.zotify_utils.url_parser import ZotifyUrlParser
-from bot.helper.zotify_utils.zotify_config import zotify_config
+from bot.helper.mirror_leech_utils.zotify_utils.url_parser import ZotifyUrlParser
+from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
 
 class ZotifyDownloadHelper:

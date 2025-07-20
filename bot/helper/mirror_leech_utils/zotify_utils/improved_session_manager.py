@@ -13,7 +13,7 @@ from typing import Any
 from zotify import Session
 
 from bot import LOGGER
-from bot.helper.zotify_utils.zotify_config import zotify_config
+from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
 # Memory optimization: Track active objects for cleanup
 _active_sessions: set[weakref.ref] = set()

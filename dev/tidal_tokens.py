@@ -1,3 +1,10 @@
+"""
+Script to get tidal tokens using tidalapi
+
+Requirements: pip install tidalapi
+
+"""
+
 import sys
 import time
 

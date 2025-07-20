@@ -157,6 +157,14 @@ class TelegramUploader:
         # Flag to prevent multiple stop_transmission calls
         self._transmission_stopped = False
 
+    def _is_bot_pm_enabled(self):
+        """Check if BOT_PM is enabled with user priority over owner config"""
+        user_dict = user_data.get(self._user_id, {})
+        bot_pm_enabled = user_dict.get("BOT_PM", None)
+        if bot_pm_enabled is None:
+            bot_pm_enabled = Config.BOT_PM
+        return bot_pm_enabled
+
     async def _upload_progress(self, current, _):
         if self._listener.is_cancelled and not self._transmission_stopped:
             try:
@@ -1477,9 +1485,9 @@ class TelegramUploader:
             if self._user_dump and source_chat_id != int(self._user_dump):
                 destinations.append(int(self._user_dump))
 
-            # Add user's PM if it's not already the source
-            if source_chat_id != self._user_id:
-                destinations.append(self._user_id)  # Always send to user's PM
+            # Add user's PM if it's not already the source and BOT_PM is enabled
+            if source_chat_id != self._user_id and self._is_bot_pm_enabled():
+                destinations.append(self._user_id)
         else:
             # No specific destination was specified
             # Follow the standard destination logic based on old Aeon-MLTB requirements
@@ -1517,8 +1525,8 @@ class TelegramUploader:
                 elif source_chat_id != Config.LEECH_DUMP_CHAT:
                     destinations.append(Config.LEECH_DUMP_CHAT)
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 2: If user set their own dump and owner didn't set leech dump chat
@@ -1535,8 +1543,8 @@ class TelegramUploader:
                         f"Failed to convert user_dump '{user_dump}' to int: {e}"
                     )
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 3: If user didn't set their own dump and owner set leech dump chat
@@ -1566,13 +1574,13 @@ class TelegramUploader:
                 elif source_chat_id != Config.LEECH_DUMP_CHAT:
                     destinations.append(Config.LEECH_DUMP_CHAT)
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 4: If user didn't set their own dump and owner didn't set leech dump chat
-            # Only send to user's PM
-            elif source_chat_id != self._user_id:
+            # Only send to user's PM if BOT_PM is enabled
+            elif source_chat_id != self._user_id and self._is_bot_pm_enabled():
                 destinations.append(self._user_id)
 
         # Remove duplicates while preserving order
@@ -1787,8 +1795,8 @@ class TelegramUploader:
                         f"Failed to convert user_dump '{user_dump}' to int (with -up flag): {e}"
                     )
 
-            # We only need to copy to user's PM if it's not already there
-            if source_chat_id != self._user_id:
+            # We only need to copy to user's PM if it's not already there and BOT_PM is enabled
+            if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                 destinations.append(self._user_id)
         else:
             # No specific destination was specified
@@ -1827,8 +1835,8 @@ class TelegramUploader:
                 elif source_chat_id != Config.LEECH_DUMP_CHAT:
                     destinations.append(Config.LEECH_DUMP_CHAT)
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 2: If user set their own dump and owner didn't set leech dump chat
@@ -1845,8 +1853,8 @@ class TelegramUploader:
                         f"Failed to convert user_dump '{user_dump}' to int in _copy_message: {e}"
                     )
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 3: If user didn't set their own dump and owner set leech dump chat
@@ -1876,13 +1884,13 @@ class TelegramUploader:
                 elif source_chat_id != Config.LEECH_DUMP_CHAT:
                     destinations.append(Config.LEECH_DUMP_CHAT)
 
-                # Add user's PM if not already there
-                if source_chat_id != self._user_id:
+                # Add user's PM if not already there and BOT_PM is enabled
+                if source_chat_id != self._user_id and self._is_bot_pm_enabled():
                     destinations.append(self._user_id)
 
             # Case 4: If user didn't set their own dump and owner didn't set leech dump chat
-            # Only send to user's PM
-            elif source_chat_id != self._user_id:
+            # Only send to user's PM if BOT_PM is enabled
+            elif source_chat_id != self._user_id and self._is_bot_pm_enabled():
                 destinations.append(self._user_id)
 
         # Remove duplicates while preserving order

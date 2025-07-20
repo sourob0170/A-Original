@@ -9,7 +9,7 @@ from zotify import Session
 from zotify.app import Selection
 
 from bot import LOGGER
-from bot.helper.zotify_utils.zotify_config import zotify_config
+from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
 
 class ZotifySpecialDownloads:
@@ -184,14 +184,14 @@ async def get_special_download_info(special_type: str) -> dict[str, any]:
 
 def is_special_download(url: str) -> bool:
     """Check if URL is a special download keyword"""
-    from bot.helper.zotify_utils.url_parser import ZotifyUrlParser
+    from bot.helper.mirror_leech_utils.zotify_utils.url_parser import ZotifyUrlParser
 
     return ZotifyUrlParser.is_special_keyword(url)
 
 
 def get_special_download_type(url: str) -> str | None:
     """Get special download type from URL/keyword"""
-    from bot.helper.zotify_utils.url_parser import ZotifyUrlParser
+    from bot.helper.mirror_leech_utils.zotify_utils.url_parser import ZotifyUrlParser
 
     return ZotifyUrlParser.get_special_keyword_type(url)
 

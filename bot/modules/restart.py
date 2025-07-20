@@ -164,7 +164,7 @@ async def confirm_restart(_, query):
 
             # Cleanup streamrip sessions to prevent unclosed session warnings
             try:
-                from bot.helper.streamrip_utils.search_handler import (
+                from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
                     cleanup_all_streamrip_sessions,
                 )
 

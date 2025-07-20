@@ -168,7 +168,7 @@ class StreamripSearchHandler:
 
         try:
             # Ensure streamrip is initialized first
-            from bot.helper.streamrip_utils.streamrip_config import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                 ensure_streamrip_initialized,
                 streamrip_config,
             )
@@ -510,7 +510,7 @@ class StreamripSearchHandler:
                             f"{platform.title()} session is closed, recreating client"
                         )
                         # Recreate client if session is closed
-                        from bot.helper.streamrip_utils.streamrip_config import (
+                        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                             streamrip_config,
                         )
 
@@ -590,7 +590,7 @@ class StreamripSearchHandler:
                             )
                             try:
                                 # Recreate client and retry once
-                                from bot.helper.streamrip_utils.streamrip_config import (
+                                from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                                     streamrip_config,
                                 )
 
@@ -1978,7 +1978,7 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
         clients = {}
 
         # Initialize streamrip on-demand
-        from bot.helper.streamrip_utils.streamrip_config import (
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
             ensure_streamrip_initialized,
         )
 
@@ -1987,7 +1987,7 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             return []
 
         # Import streamrip configuration
-        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
 
         config = streamrip_config.get_config()
         if not config:
@@ -2247,7 +2247,7 @@ async def _search_platform_inline(client, platform_name, query, media_type):
                     )
                     try:
                         # Recreate client and retry once for inline search
-                        from bot.helper.streamrip_utils.streamrip_config import (
+                        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                             streamrip_config,
                         )
 
@@ -2951,7 +2951,7 @@ def _generate_platform_url_inline(platform, media_type, media_id):
 async def inline_streamrip_search(_, inline_query: InlineQuery):
     """Handle inline queries for streamrip search."""
     # Initialize streamrip on-demand
-    from bot.helper.streamrip_utils.streamrip_config import (
+    from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
         ensure_streamrip_initialized,
     )
 
@@ -3340,7 +3340,7 @@ async def handle_streamrip_callback(_, callback_query):
         callback_data = callback_query.data
         if callback_data.startswith("srq"):
             # Check if there's an active quality selector for this user
-            from bot.helper.streamrip_utils.quality_selector import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import (
                 get_active_quality_selector,
             )
 
@@ -3590,7 +3590,7 @@ async def handle_streamrip_callback(_, callback_query):
         listener.media_type = media_type
 
         # Show quality selector
-        from bot.helper.streamrip_utils.quality_selector import show_quality_selector
+        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
 
         selection = await show_quality_selector(listener, platform, media_type)
 
@@ -3617,7 +3617,7 @@ async def handle_streamrip_start_command(client, message):
     """Handle start commands for streamrip downloads from inline search results."""
     try:
         # Initialize streamrip on-demand
-        from bot.helper.streamrip_utils.streamrip_config import (
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
             ensure_streamrip_initialized,
         )
 
@@ -3710,7 +3710,7 @@ async def handle_streamrip_start_command(client, message):
         listener.media_type = media_type
 
         # Show quality selector
-        from bot.helper.streamrip_utils.quality_selector import show_quality_selector
+        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
 
         selection = await show_quality_selector(listener, platform, media_type)
 

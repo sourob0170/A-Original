@@ -15,6 +15,7 @@ from .check_deletion import (
     delete_pending_messages,
     force_delete_all_messages,
 )
+from .contact import ban_command, contact_command, unban_command
 from .clone import clone_node
 from .encoding import (
     decode_command,
@@ -25,11 +26,22 @@ from .encoding import (
     list_methods_command,
 )
 from .exec import aioexecute, clear, execute
-from .file_selector import confirm_selection, select
 
-# file_to_link module removed - streaming functionality disabled
+# File2Link module for streaming functionality
+from .file2link import file2link_command
+from .file_selector import confirm_selection, select
 from .font_styles import font_styles_cmd
 from .force_start import remove_from_queue
+from .forward import (
+    auto_forward_handler,
+    cancel_forward_callback,
+    finish_pagination_callback,
+    forward_batch_callback,
+    forward_command,
+    mode_batch_callback,
+    mode_direct_callback,
+    next_batch_callback,
+)
 from .gallery_dl import gdl_leech, gdl_mirror
 from .gd_count import count_node
 from .gd_delete import delete_file
@@ -43,6 +55,7 @@ from .gen_session import (
 )
 from .help import arg_usage, bot_help
 from .imdb import imdb_callback, imdb_search
+from .tmdb import tmdb_callback_handler, tmdb_search_command
 
 # index_command removed - media indexing functionality disabled
 from .media_search import (
@@ -66,8 +79,10 @@ from .nsfw_management import (
     nsfw_stats_command,
     nsfw_test_command,
 )
+from .neko import neko_callback_handler, neko_command
 from .nzb_search import hydra_search
 from .paste import paste_text
+from .phish_check import phish_check_command
 from .quickinfo import (
     handle_forwarded_message,
     handle_shared_entities,
@@ -89,12 +104,15 @@ from .speedtest import speedtest
 from .stats import bot_stats, get_packages_version
 from .status import status_pages, task_status
 from .tool_commands import tool_command
+from .trace_moe import trace_command
 from .truecaller import truecaller_lookup
+from .osint import osint_command, osint_callback_handler
 from .users_settings import (
     edit_user_settings,
     get_users_settings,
     send_user_settings,
 )
+from .wot import wot_command
 from .virustotal import virustotal_scan
 from .whisper import whisper_callback, whisper_command
 from .wrong_cmds import handle_no_suffix_commands, handle_qb_commands
@@ -108,6 +126,8 @@ __all__ = [
     "arg_usage",
     "ask_ai",
     "authorize",
+    "auto_forward_handler",
+    "ban_command",
     "bot_help",
     "bot_stats",
     "broadcast",
@@ -115,12 +135,14 @@ __all__ = [
     "cancel",
     "cancel_all_buttons",
     "cancel_all_update",
+    "cancel_forward_callback",
     "cancel_multi",
     "check_scheduled_deletions",
     "clear",
     "clone_node",
     "confirm_restart",
     "confirm_selection",
+    "contact_command",
     "count_node",
     "decode_command",
     "delete_file",
@@ -133,9 +155,12 @@ __all__ = [
     "encoding_callback",
     "encoding_help_command",
     "execute",
-    # File-to-Link functions removed - streaming disabled
+    "file2link_command",
+    "finish_pagination_callback",
     "font_styles_cmd",
     "force_delete_all_messages",
+    "forward_batch_callback",
+    "forward_command",
     "gdl_leech",
     "gdl_mirror",
     "gdrive_search",
@@ -158,6 +183,8 @@ __all__ = [
     "hydra_search",
     "imdb_callback",
     "imdb_search",
+    "tmdb_callback_handler",
+    "tmdb_search_command",
     # index_command removed - media indexing functionality disabled
     "initiate_search_tools",
     "inline_media_search",
@@ -174,9 +201,17 @@ __all__ = [
     "media_tools_settings",
     "mediainfo",
     "mirror",
+    "mode_batch_callback",
+    "mode_direct_callback",
+    "neko_callback_handler",
+    "neko_command",
     "nzb_leech",
     "nzb_mirror",
+    "next_batch_callback",
+    "osint_callback_handler",
+    "osint_command",
     "paste_text",
+    "phish_check_command",
     "ping",
     "quickinfo_callback",
     # QuickInfo functions
@@ -201,9 +236,12 @@ __all__ = [
     "tool_command",
     "torrent_search",
     "torrent_search_update",
+    "trace_command",
     "truecaller_lookup",
+    "unban_command",
     "unauthorize",
     "virustotal_scan",
+    "wot_command",
     "ytdl",
     "ytdl_leech",
     "zotify_leech",

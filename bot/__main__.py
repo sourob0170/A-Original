@@ -56,17 +56,25 @@ COMMANDS = {
     "SpeedTest": "- Get speedtest result",
     "GenSessionCommand": "- Generate Pyrogram session string",
     "VirusTotalCommand": "- Scan files or URLs for viruses using VirusTotal",
+    "PasteCommand": "- Paste text to katb.in website",
+    "NSFWStatsCommand": "- Get NSFW detection statistics",
+    "NSFWTestCommand": "- Test NSFW detection on images",
     # QuickInfo Commands
     "QuickInfoCommand": "- Get chat/user information with interactive buttons",
-    # File-to-Link Commands - REMOVED (streaming functionality disabled)
+    "File2LinkCommand": "- Convert Telegram media files into direct streaming links",
     "ToolCommand": "- Media conversion and processing tools (gif, sticker, emoji, voice, etc.)",
     # IndexCommand removed - media indexing functionality disabled
     "BotSetCommand": "- [ADMIN] Open Bot settings",
+    "ForwardCommand": "- [SUDO] Forward messages between chats",
     "LogCommand": "- [ADMIN] View log",
     "RestartCommand": "- [ADMIN] Restart the bot",
     "WhisperCommand": "- Send private whisper messages in group chats",
+    # Contact Commands
+    "ContactCommand": "- Contact the bot owner (available to all users)",
     # Scraping Commands
     "ScrapCommand": "- Scrape movie info (title, size, magnet) from 1tamilmv",
+    # Cat API Commands
+    "NekoCommand": "- Get adorable cat images with voting system 🐱💕",
 }
 
 # Add AI command if enabled
@@ -76,6 +84,10 @@ if Config.AI_ENABLED:
 # Add IMDB command if enabled
 if Config.IMDB_ENABLED:
     COMMANDS["IMDBCommand"] = "- Search for movies or TV series info"
+
+# Add TMDB command if enabled
+if Config.TMDB_ENABLED:
+    COMMANDS["TMDBCommand"] = "- Search TMDB for movies, TV shows, and people"
 
 # Add Truecaller command if enabled
 if Config.TRUECALLER_ENABLED:
@@ -87,6 +99,21 @@ if Config.ENCODING_ENABLED:
 
 if Config.DECODING_ENABLED:
     COMMANDS["DecodeCommand"] = "- Decode encoded text with auto-detection"
+
+# Add trace.moe command if enabled
+if Config.TRACE_MOE_ENABLED:
+    COMMANDS["TraceCommand"] = "- Identify anime from images, videos, or GIFs"
+
+# Add phishcheck command if enabled
+if Config.PHISH_DIRECTORY_ENABLED:
+    COMMANDS["PhishCheckCommand"] = "- Check domains and emails for phishing/security threats"
+
+# Add WOT command if enabled (includes AbuseIPDB integration)
+if Config.WOT_ENABLED or Config.ABUSEIPDB_ENABLED:
+    COMMANDS["WotCommand"] = "- Check website, domain, and IP reputation using WOT and AbuseIPDB"
+
+# Add OSINT command (sudo only)
+COMMANDS["OSINTCommand"] = "- Comprehensive OSINT intelligence suite (sudo only)"
 
 # Setup Commands
 COMMAND_OBJECTS = [
@@ -126,6 +153,13 @@ async def main():
         update_qb_options,
         update_variables,
     )
+
+    # Start web server immediately for Heroku PORT binding
+    from os import environ
+    if environ.get("PORT"):
+        LOGGER.info("Heroku deployment detected - starting web server immediately")
+        from .core.startup import start_web_server_early
+        await start_web_server_early()
 
     await gather(
         TgClient.start_bot(), TgClient.start_user(), TgClient.start_helper_bots()
@@ -251,7 +285,7 @@ async def cleanup():
 
     # Cleanup streamrip sessions to prevent unclosed session warnings
     try:
-        from .helper.streamrip_utils.search_handler import (
+        from .helper.mirror_leech_utils.streamrip_utils.search_handler import (
             cleanup_all_streamrip_sessions,
         )
 

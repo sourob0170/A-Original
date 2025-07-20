@@ -2,12 +2,17 @@ from bot.helper.ext_utils.bot_utils import COMMAND_USAGE, new_task
 from bot.helper.ext_utils.help_messages import (
     AI_HELP_DICT,
     CLONE_HELP_DICT,
+    FORWARD_HELP_DICT,
     GALLERY_DL_HELP_DICT,
     MIRROR_HELP_DICT,
     NSFW_HELP_DICT,
+    OSINT_HELP_DICT,
+    PHISH_HELP_DICT,
     STREAMRIP_HELP_DICT,
     TOOL_HELP_DICT,
+    TRACE_HELP_DICT,
     VT_HELP_DICT,
+    WOT_HELP_DICT,
     YT_HELP_DICT,
     ZOTIFY_HELP_DICT,
     help_string,
@@ -56,7 +61,6 @@ async def arg_usage(_, query):
         buttons.data_button("📊 Status", "help page status")
         buttons.data_button("🔍 Search", "help page search")
         buttons.data_button("📁 Files", "help page file")
-        # File-to-Link button removed - functionality disabled
         buttons.data_button("🔒 Security", "help page security")
         buttons.data_button("⚙️ Settings", "help page settings")
         buttons.data_button("🤖 Special", "help page special")
@@ -107,6 +111,12 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["virustotal"][0],
                 COMMAND_USAGE["virustotal"][1],
             )
+        elif data[2] == "p":
+            await edit_message(
+                message,
+                COMMAND_USAGE["phishcheck"][0],
+                COMMAND_USAGE["phishcheck"][1],
+            )
         elif data[2] == "sr":
             await edit_message(
                 message,
@@ -125,7 +135,12 @@ async def arg_usage(_, query):
                 COMMAND_USAGE["gdl"][0],
                 COMMAND_USAGE["gdl"][1],
             )
-        # f2l page handler removed - File-to-Link functionality disabled
+        elif data[2] == "f2l":
+            await edit_message(
+                message,
+                COMMAND_USAGE["f2l"][0],
+                COMMAND_USAGE["f2l"][1],
+            )
         elif data[2] == "nsfw":
             await edit_message(
                 message,
@@ -142,6 +157,12 @@ async def arg_usage(_, query):
             buttons.data_button("❌ Close", "help close")
             button = buttons.build_menu(2)
             await edit_message(message, TOOL_HELP_DICT["main"], button)
+        elif data[2] == "osint":
+            # For OSINT commands, show the main help page
+            buttons = ButtonMaker()
+            buttons.data_button("❌ Close", "help close")
+            button = buttons.build_menu(1)
+            await edit_message(message, OSINT_HELP_DICT["main"], button)
 
     elif data[1] == "mirror":
         buttons = ButtonMaker()
@@ -173,6 +194,12 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, VT_HELP_DICT[data[2]], button)
+    elif data[1] == "phish":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back p")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, PHISH_HELP_DICT[data[2]], button)
     elif data[1] == "streamrip":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back sr")
@@ -191,7 +218,7 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, GALLERY_DL_HELP_DICT[data[2]], button)
-    # f2l callback handler removed - File-to-Link functionality disabled
+
     elif data[1] == "nsfw":
         buttons = ButtonMaker()
         buttons.data_button("Back", "help back nsfw")
@@ -204,6 +231,31 @@ async def arg_usage(_, query):
         buttons.data_button("Close", "help close")
         button = buttons.build_menu(2)
         await edit_message(message, TOOL_HELP_DICT[data[2]], button)
+    elif data[1] == "forward":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back forward")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, FORWARD_HELP_DICT[data[2]], button)
+    elif data[1] == "trace":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back trace")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, TRACE_HELP_DICT[data[2]], button)
+    elif data[1] == "wot":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back wot")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, WOT_HELP_DICT[data[2]], button)
+    elif data[1] == "osint":
+        buttons = ButtonMaker()
+        buttons.data_button("Back", "help back osint")
+        buttons.data_button("Close", "help close")
+        button = buttons.build_menu(2)
+        await edit_message(message, OSINT_HELP_DICT[data[2]], button)
+
 
     try:
         await query.answer()
@@ -233,7 +285,6 @@ async def bot_help(_, message):
     buttons.data_button("📊 Status", "help page status")
     buttons.data_button("🔍 Search", "help page search")
     buttons.data_button("📁 Files", "help page file")
-    # File-to-Link button removed - functionality disabled
     buttons.data_button("🔒 Security", "help page security")
     buttons.data_button("⚙️ Settings", "help page settings")
     buttons.data_button("🤖 Special", "help page special")

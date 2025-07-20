@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
 Script to extract Qobuz app ID and secrets using qobuz-dl
+
+Requirements: pip install qobuz-dl
+
 """
 
 try:

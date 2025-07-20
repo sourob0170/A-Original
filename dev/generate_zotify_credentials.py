@@ -9,7 +9,7 @@ Requirements:
 - Spotify Premium account
 - Internet connection
 - Web browser for OAuth authentication
-- Zotify library: pip install zotify
+- Zotify library: pip install git+https://github.com/DraftKinner/zotify.git@dev
 
 Usage:
     python generate_zotify_credentials.py [output_file]
@@ -34,10 +34,10 @@ except ImportError:
     print("❌ Error: Zotify library not found!")
     print()
     print("Please install it with:")
-    print("  pip install zotify")
+    print("  pip install git+https://github.com/DraftKinner/zotify.git@dev")
     print()
     print("Or if you're using conda:")
-    print("  conda install -c conda-forge zotify")
+    print("  conda install -c conda-forge git+https://github.com/DraftKinner/zotify.git@dev")
     print()
     sys.exit(1)
 

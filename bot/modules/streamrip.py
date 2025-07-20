@@ -7,12 +7,12 @@ from bot.helper.ext_utils.bot_utils import arg_parser, new_task
 from bot.helper.mirror_leech_utils.download_utils.streamrip_download import (
     add_streamrip_download,
 )
-from bot.helper.streamrip_utils.quality_selector import show_quality_selector
-from bot.helper.streamrip_utils.search_handler import (
+from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
+from bot.helper.mirror_leech_utils.streamrip_utils.search_handler import (
     search_music,
     search_music_auto_first,
 )
-from bot.helper.streamrip_utils.url_parser import (
+from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import (
     is_file_input,
     is_lastfm_url,
     is_streamrip_url,
@@ -558,7 +558,7 @@ async def _extract_streamrip_metadata_name(
         from streamrip.rip.main import Main
 
         # Get streamrip config
-        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
 
         config = streamrip_config.get_config()
         if not config:
@@ -568,7 +568,7 @@ async def _extract_streamrip_metadata_name(
         main = Main(config)
 
         # Parse URL to get media ID
-        from bot.helper.streamrip_utils.url_parser import parse_streamrip_url
+        from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import parse_streamrip_url
 
         parsed = await parse_streamrip_url(url)
         if not parsed:

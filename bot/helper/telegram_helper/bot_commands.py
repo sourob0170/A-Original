@@ -45,11 +45,13 @@ class BotCommands:
     UserSetCommand = [f"settings{i}", f"usettings{i}", f"us{i}"]
     SpeedTest = f"speedtest{i}"
     BroadcastCommand = [f"broadcast{i}", "broadcastall"]
+    ForwardCommand = f"forward{i}"
     SelectCommand = f"sel{i}"
     RssCommand = f"rss{i}"
     FontStylesCommand = [f"fontstyles{i}", f"fonts{i}"]
     CheckDeletionsCommand = [f"check_deletions{i}", f"cd{i}"]
     IMDBCommand = f"imdb{i}"
+    TMDBCommand = f"tmdb{i}"
     WhisperCommand = f"whisper{i}"
     LoginCommand = f"login{i}"
     MediaSearchCommand = [f"mediasearch{i}", f"mds{i}"]
@@ -61,6 +63,8 @@ class BotCommands:
     SoxCommand = [f"spectrum{i}", f"sox{i}"]
     PasteCommand = f"paste{i}"
     VirusTotalCommand = f"virustotal{i}"
+    PhishCheckCommand = f"phishcheck{i}"
+    WotCommand = f"wot{i}"
     StreamripMirrorCommand = [f"streamripmirror{i}", f"srmirror{i}", f"srm{i}"]
     StreamripLeechCommand = [f"streamripleech{i}", f"srleech{i}", f"srl{i}"]
     StreamripSearchCommand = [f"streamripsearch{i}", f"srsearch{i}", f"srs{i}"]
@@ -75,10 +79,22 @@ class BotCommands:
     QuickInfoCommand = [f"quickinfo{i}", f"qi{i}"]
     # Tool Commands
     ToolCommand = [f"tool{i}", f"t{i}"]
-    # File-to-Link and StreamStats commands removed - streaming disabled
-    # IndexCommand removed - media indexing functionality disabled
     # Enhanced NSFW Detection Commands
     NSFWStatsCommand = f"nsfwstats{i}"
     NSFWTestCommand = f"nsfwtest{i}"
     # Scraping Commands
     ScrapCommand = f"scrap{i}"
+    # File2Link Commands
+    File2LinkCommand = [f"file2link{i}", f"f2l{i}"]
+    # Cat API Commands
+    NekoCommand = f"neko{i}"
+    # Trace.moe Commands
+    TraceCommand = f"trace{i}"
+    # OSINT Commands
+    OSINTCommand = f"osint{i}"
+    # Contact Commands
+    ContactCommand = f"contact{i}"
+    BanCommand = f"ban{i}"
+    UnbanCommand = f"unban{i}"
+
+

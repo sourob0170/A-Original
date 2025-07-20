@@ -1378,6 +1378,86 @@ class DatabaseManager(DbManager):
             self._heartbeat_task = None
             LOGGER.info("Database heartbeat task stopped")
 
+    # File2Link Database Methods
+    async def store_stream_file(self, file_data: dict):
+        """Store file metadata for streaming"""
+        if self._return:
+            return False
+
+        try:
+            file_data.update({
+                "bot_id": TgClient.ID,
+                "created_at": time.time()
+            })
+
+            # Use upsert to avoid duplicates
+            await self.db.stream_files.update_one(
+                {"message_id": file_data["message_id"], "file_hash": file_data["file_hash"]},
+                {"$set": file_data},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            LOGGER.error(f"Error storing stream file: {e}")
+            return False
+
+    async def get_stream_file(self, hash_id: str, message_id: int):
+        """Retrieve file metadata for streaming"""
+        if self._return:
+            return None
+
+        try:
+            file_data = await self.db.stream_files.find_one({
+                "file_hash": hash_id,
+                "message_id": message_id,
+                "bot_id": TgClient.ID
+            })
+            return file_data
+        except Exception as e:
+            LOGGER.error(f"Error getting stream file: {e}")
+            return None
+
+    async def get_stream_stats(self):
+        """Get File2Link streaming statistics"""
+        if self._return:
+            return {}
+
+        try:
+            total_files = await self.db.stream_files.count_documents({"bot_id": TgClient.ID})
+
+            # Get files from last 7 days
+            week_ago = time.time() - (7 * 24 * 60 * 60)
+            recent_files = await self.db.stream_files.count_documents({
+                "bot_id": TgClient.ID,
+                "created_at": {"$gte": week_ago}
+            })
+
+            return {
+                "total_files": total_files,
+                "recent_files": recent_files,
+                "storage_channel": Config.FILE2LINK_BIN_CHANNEL or Config.BIN_CHANNEL
+            }
+        except Exception as e:
+            LOGGER.error(f"Error getting stream stats: {e}")
+            return {}
+
+    async def cleanup_expired_stream_files(self):
+        """Clean up expired file records"""
+        if self._return:
+            return False
+
+        try:
+            # Clean up files older than 30 days
+            cutoff_time = time.time() - (30 * 24 * 60 * 60)
+            result = await self.db.stream_files.delete_many(
+                {"created_at": {"$lt": cutoff_time}}
+            )
+
+            return True
+        except Exception as e:
+            LOGGER.error(f"Error cleaning up expired files: {e}")
+            return False
+
 
 database = DatabaseManager()
 

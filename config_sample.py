@@ -282,6 +282,12 @@ BASE_URL = ""  # Base URL for web server
 BASE_URL_PORT = 80  # Port for web server (0 to disable)
 WEB_PINCODE = False  # Enable pincode protection for web server
 
+# File2Link Settings
+FILE2LINK_ENABLED = True  # Enable File2Link functionality
+FILE2LINK_BASE_URL = ""  # Dedicated base URL for File2Link streaming (optional, uses BASE_URL if not set)
+FILE2LINK_BIN_CHANNEL = 0  # REQUIRED: Private channel ID to store files for streaming (e.g., -1001234567890)
+FILE2LINK_ALLOWED_TYPES = "video,audio,document,photo,animation,voice,video_note"  # Allowed media types for streaming
+
 # Queueing system
 QUEUE_ALL = 0  # Maximum number of concurrent tasks (0 = unlimited)
 QUEUE_DOWNLOAD = 0  # Maximum number of concurrent downloads (0 = unlimited)
@@ -365,6 +371,7 @@ GC_AGGRESSIVE_MODE = (
 # Extra Modules Settings
 AI_ENABLED = True  # Enable/disable AI functionality
 IMDB_ENABLED = True  # Enable/disable IMDB functionality
+TMDB_ENABLED = True  # Enable/disable TMDB functionality
 TRUECALLER_ENABLED = True  # Enable/disable Truecaller functionality
 
 # Encoding/Decoding Settings
@@ -378,6 +385,26 @@ VT_ENABLED = False  # Enable/disable VirusTotal functionality
 VT_MAX_FILE_SIZE = (
     33554432  # Maximum file size for VirusTotal scanning in bytes (32MB)
 )
+
+# Phish Directory API Settings
+PHISH_DIRECTORY_API_URL = "https://api.phish.directory"  # Phish Directory API base URL
+PHISH_DIRECTORY_ENABLED = True  # Enable/disable Phish Directory functionality
+PHISH_DIRECTORY_TIMEOUT = 30  # Phish Directory API timeout in seconds
+PHISH_DIRECTORY_API_KEY = ""  # Phish Directory API key (optional, for authenticated endpoints)
+
+# WOT (Web of Trust) API Settings
+WOT_API_URL = "https://scorecard.api.mywot.com"  # WOT API base URL
+WOT_ENABLED = True  # Enable/disable WOT functionality
+WOT_TIMEOUT = 30  # WOT API timeout in seconds
+WOT_API_KEY = ""  # WOT API key (required for API access)
+WOT_USER_ID = ""  # WOT User ID (required for API access)
+
+# AbuseIPDB API Settings
+ABUSEIPDB_API_URL = "https://api.abuseipdb.com/api/v2"  # AbuseIPDB API base URL
+ABUSEIPDB_ENABLED = True  # Enable/disable AbuseIPDB functionality
+ABUSEIPDB_TIMEOUT = 30  # AbuseIPDB API timeout in seconds
+ABUSEIPDB_API_KEY = ""  # AbuseIPDB API key (required for API access)
+ABUSEIPDB_MAX_AGE_DAYS = 90  # Maximum age of reports to consider (1-365 days)
 
 # Enhanced NSFW Detection Settings
 NSFW_DETECTION_ENABLED = True  # Master toggle for NSFW detection
@@ -430,6 +457,10 @@ TRUECALLER_API_URL = ""  # Truecaller API URL for phone number lookup
 # Direct Link Generator Settings
 TERABOX_PROXY = "https://teradlrobot.cheemsbackup.workers.dev/"  # Terabox proxy URL for bypassing restrictions
 
+# Pastebin API Settings
+PASTEBIN_API_KEY = ""  # Pastebin Developer API Key (get from https://pastebin.com/doc_api)
+PASTEBIN_ENABLED = False  # Enable/disable Pastebin functionality
+
 # Custom template for IMDB results formatting.
 IMDB_TEMPLATE = """<b>🎬 Title:</b> <code>{title}</code> [{year}]
  <b>⭐ Rating:</b> <i>{rating}</i>
@@ -453,6 +484,15 @@ IMDB_TEMPLATE = """<b>🎬 Title:</b> <code>{title}</code> [{year}]
  <b>⏱️ Runtime:</b> {runtime} minutes
  <b>🏆 Awards:</b> {certificates}
  <i>Powered by IMDb</i>"""
+
+# TMDB API Settings
+TMDB_API_KEY = ""  # TMDB API key from https://www.themoviedb.org/settings/api
+TMDB_LANGUAGE = "en-US"  # Language for TMDB results (e.g., en-US, es-ES, fr-FR)
+TMDB_REGION = "US"  # Region for TMDB results (e.g., US, GB, IN)
+# Note: Adult content is always excluded, cache duration is hardcoded to 1 hour
+
+# Cat API Settings
+CAT_API_KEY = ""  # The Cat API key from https://thecatapi.com/ (optional, but recommended for full features)
 
 # AI Settings
 DEFAULT_AI_PROVIDER = (
@@ -1087,6 +1127,7 @@ DEEPSEEK_API_URL = ""  # DeepSeek AI API URL
 
 # Extra Module Settings
 IMDB_ENABLED = True  # Enable/disable IMDB functionality
+TMDB_ENABLED = True  # Enable/disable TMDB functionality
 TRUECALLER_ENABLED = True  # Enable/disable Truecaller functionality
 ENCODING_ENABLED = True  # Enable/disable encoding functionality
 DECODING_ENABLED = True  # Enable/disable decoding functionality

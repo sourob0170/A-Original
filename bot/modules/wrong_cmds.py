@@ -123,6 +123,7 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         "check_deletions",
         "cd",
         "imdb",
+        "tmdb",
         "login",
         "mediasearch",
         "mds",
@@ -148,6 +149,8 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         "srsearch",
         "srs",
         "virustotal",
+        "phishcheck",
+        "wot",
         "mediatools",
         "mt",
         "mthelp",
@@ -169,7 +172,9 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # QuickInfo commands
         "quickinfo",
         "qi",
-        # File-to-Link and Index commands removed - functionality disabled
+        # File2Link commands
+        "file2link",
+        "f2l",
         # NSFW Detection commands
         "nsfwstats",
         "nsfwtest",
@@ -178,6 +183,19 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         # Tool commands
         "tool",
         "t",
+        # Forward command
+        "forward",
+        # Cat API command
+        "neko",
+        # Trace.moe command
+        "trace",
+        # OSINT command
+        "osint",
+        # Contact commands
+        "contact",
+        "ban",
+        "unban",
+
     ]
 
     # Find the base command (without any suffix)

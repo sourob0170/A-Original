@@ -13,14 +13,14 @@ from bot.helper.ext_utils.bot_utils import (
 )
 from bot.helper.ext_utils.links_utils import is_url
 from bot.helper.ext_utils.task_manager import check_running_tasks
-from bot.helper.gallery_dl_utils.quality_selector import (
+from bot.helper.mirror_leech_utils.gallery_dl_utils.quality_selector import (
     get_gallery_dl_quality_selector,
     get_platform_from_url,
     get_platform_info,
     is_platform_supported,
     show_gallery_dl_quality_selector,
 )
-from bot.helper.gallery_dl_utils.url_parser import (
+from bot.helper.mirror_leech_utils.gallery_dl_utils.url_parser import (
     get_gallery_dl_info,
     is_gallery_dl_url,
 )

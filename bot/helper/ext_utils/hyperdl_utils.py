@@ -946,6 +946,7 @@ class HyperTGDownload:
             mime_type = getattr(media, "mime_type", "image/jpeg")
             date = getattr(media, "date", None)
 
+
             self.directory, self.file_name = ospath.split(file_name)
             self.file_name = self.file_name or media_file_name or ""
 

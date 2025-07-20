@@ -14,18 +14,18 @@ from bot.helper.telegram_helper.message_utils import (
     delete_message,
     send_message,
 )
-from bot.helper.zotify_utils.search_handler import search_music
-from bot.helper.zotify_utils.special_downloads import (
+from bot.helper.mirror_leech_utils.zotify_utils.search_handler import search_music
+from bot.helper.mirror_leech_utils.zotify_utils.special_downloads import (
     get_special_download_info,
     get_special_download_type,
     is_special_download,
 )
-from bot.helper.zotify_utils.url_parser import (
+from bot.helper.mirror_leech_utils.zotify_utils.url_parser import (
     ZotifyUrlParser,
     is_file_input,
     parse_file_content,
 )
-from bot.helper.zotify_utils.zotify_config import (
+from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
     has_zotify_credentials,
     is_zotify_enabled,
 )
@@ -347,7 +347,7 @@ class ZotifyCommands:
             listener = ZotifyListener(message, is_leech=True, tag="")
 
             # Use the new StreamRip-style search interface
-            from bot.helper.zotify_utils.search_handler import (
+            from bot.helper.mirror_leech_utils.zotify_utils.search_handler import (
                 show_zotify_search_interface,
             )
 
@@ -410,10 +410,10 @@ async def _extract_zotify_metadata_name(url: str) -> str | None:
         from zotify.collections import Album, Artist, Playlist, Show
 
         # Parse URL to get content type and ID
-        from bot.helper.zotify_utils.url_parser import ZotifyUrlParser
+        from bot.helper.mirror_leech_utils.zotify_utils.url_parser import ZotifyUrlParser
 
         # Get zotify config
-        from bot.helper.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
         parsed = ZotifyUrlParser.parse_spotify_url(url)
         if not parsed:

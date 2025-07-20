@@ -12,25 +12,23 @@ from bot.core.config_manager import Config
 
 async def short(long_url):
     """
-    Shorten a URL with minimum time enforcement and bypass detection.
+    Shorten a URL with minimum time enforcement.
 
     Args:
         long_url (str): The URL to shorten
 
     Returns:
-        str: Shortened URL or original URL if shortening fails/bypassed
+        str: Shortened URL or original URL if shortening fails
     """
     # Get minimum time configuration
     min_time = Config.SHORTENER_MIN_TIME or 10
     start_time = time()
 
-    # If no shorteners configured, return original URL
+    # If no shorteners configured, wait minimum time and return original URL
     if not shorteners_list:
-        # Ensure minimum time is met
         elapsed = time() - start_time
         if elapsed < min_time:
             await sleep(min_time - elapsed)
-            return "⚠️ Shortener bypassed."
         return long_url
 
     shortened_url = long_url
@@ -64,14 +62,11 @@ async def short(long_url):
             except Exception:
                 await sleep(1)
 
-    # Check if minimum time has elapsed
+    # Ensure minimum time has elapsed before returning result
     elapsed = time() - start_time
     if elapsed < min_time:
-        # Wait for remaining time
         remaining_time = min_time - elapsed
         await sleep(remaining_time)
 
-        # Return bypass message if completed too quickly
-        return "⚠️ Shortener bypassed."
-
+    # Return the shortened URL (or original if shortening failed)
     return shortened_url

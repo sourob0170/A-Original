@@ -36,6 +36,30 @@ from .config_manager import Config
 from .torrent_manager import TorrentManager
 
 
+async def start_web_server_early():
+    """Start web server early for Heroku PORT binding"""
+    from os import environ
+
+    # First, kill any running web server processes regardless of configuration
+    try:
+        LOGGER.info("Killing any existing web server processes...")
+        await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
+    except Exception as e:
+        LOGGER.error(f"Error killing web server processes: {e}")
+
+    # Check if web server should be started (BASE_URL_PORT = 0 means disabled)
+    if Config.BASE_URL_PORT == 0:
+        LOGGER.info("Web server is disabled (BASE_URL_PORT = 0)")
+    else:
+        # Use Config.BASE_URL_PORT instead of environment variable
+        # Explicitly convert to string to avoid any type issues
+        PORT = environ.get("PORT") or str(Config.BASE_URL_PORT) or "80"
+        LOGGER.info(f"Starting web server early on port {PORT} for Heroku compatibility")
+        await create_subprocess_shell(
+            f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}",
+        )
+
+
 async def update_qb_options():
     # Check if qBittorrent is available before trying to update options
     if TorrentManager.qbittorrent is None:
@@ -92,7 +116,7 @@ async def load_zotify_credentials_from_db():
     """Load Zotify credentials from database and recreate credentials file"""
     try:
         from bot import LOGGER
-        from bot.helper.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
         # Check if we have any users with Zotify credentials
         if database.db is not None:
@@ -135,31 +159,7 @@ async def load_settings():
             await rmtree(p, ignore_errors=True)
     await database.connect()
 
-    # Write shared configuration for web server process
-    try:
-        import json
-        import os
-        import tempfile
-
-        # Create a shared config file for web server process
-        shared_config = {
-            "DATABASE_URL": Config.DATABASE_URL,
-            "BOT_TOKEN": Config.BOT_TOKEN,
-            "TG_CLIENT_ID": getattr(TgClient, "ID", None),
-            "HELPER_TOKENS": getattr(Config, "HELPER_TOKENS", ""),
-            "TELEGRAM_API": getattr(Config, "TELEGRAM_API", None),
-            "TELEGRAM_HASH": getattr(Config, "TELEGRAM_HASH", None),
-        }
-
-        # Write to a temporary file that web server can read
-        config_file_path = os.path.join(
-            tempfile.gettempdir(), "aimleechbot_shared_config.json"
-        )
-        with open(config_file_path, "w") as f:
-            json.dump(shared_config, f)
-
-    except Exception as e:
-        LOGGER.warning(f"Failed to write shared configuration: {e}")
+    # Shared configuration will be written after database config is loaded
 
     # Clean up invalid configuration keys BEFORE loading any config
     await database._cleanup_invalid_config_keys()
@@ -335,6 +335,42 @@ async def load_settings():
             # Final cleanup: Remove any invalid keys that might have been re-added during sync
             await database._cleanup_invalid_config_keys()
 
+    # Write shared configuration for web server process AFTER database config is loaded
+    try:
+        import json
+        import os
+        import tempfile
+
+        # Create a shared config file for web server process
+        shared_config = {
+            "DATABASE_URL": Config.DATABASE_URL,
+            "BOT_TOKEN": Config.BOT_TOKEN,
+            "TG_CLIENT_ID": getattr(TgClient, "ID", None),
+            "HELPER_TOKENS": getattr(Config, "HELPER_TOKENS", ""),
+            "TELEGRAM_API": getattr(Config, "TELEGRAM_API", None),
+            "TELEGRAM_HASH": getattr(Config, "TELEGRAM_HASH", None),
+            "LOGIN_PASS": getattr(Config, "LOGIN_PASS", ""),
+            # File2Link configurations
+            "FILE2LINK_ENABLED": getattr(Config, "FILE2LINK_ENABLED", True),
+            "FILE2LINK_BIN_CHANNEL": getattr(Config, "FILE2LINK_BIN_CHANNEL", 0),
+            "FILE2LINK_BASE_URL": getattr(Config, "FILE2LINK_BASE_URL", ""),
+            "FILE2LINK_ALLOWED_TYPES": getattr(Config, "FILE2LINK_ALLOWED_TYPES", "video,audio,document,photo,animation,voice,video_note"),
+            # Base URL for web server
+            "BASE_URL": getattr(Config, "BASE_URL", ""),
+            "BASE_URL_PORT": getattr(Config, "BASE_URL_PORT", 80),
+        }
+
+        # Write to a temporary file that web server can read
+        config_file_path = os.path.join(
+            tempfile.gettempdir(), "aimleechbot_shared_config.json"
+        )
+        with open(config_file_path, "w") as f:
+            json.dump(shared_config, f)
+
+
+    except Exception as e:
+        LOGGER.warning(f"Failed to write shared configuration: {e}")
+
         if pf_dict := await database.db.settings.files.find_one(
             {"_id": BOT_ID},
             {"_id": 0},
@@ -432,7 +468,7 @@ async def load_settings():
 
         # Force update streamrip config after settings are loaded
         try:
-            from bot.helper.streamrip_utils.streamrip_config import (
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                 force_streamrip_config_update,
             )
 
@@ -599,40 +635,54 @@ async def load_configurations():
         )
     ).wait()
 
-    # First, kill any running web server processes regardless of configuration
+    # Check if web server is already running (for Heroku early start)
+    web_server_already_running = False
     try:
-        LOGGER.info("Killing any existing web server processes...")
-        await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
-    except Exception as e:
-        LOGGER.error(f"Error killing web server processes: {e}")
-
-    # Check if web server should be started (BASE_URL_PORT = 0 means disabled)
-    if Config.BASE_URL_PORT == 0:
-        LOGGER.info("Web server is disabled (BASE_URL_PORT = 0)")
-        # Double-check to make sure no web server is running
-        try:
-            # Use pgrep to check if any gunicorn processes are still running
-            process = await create_subprocess_exec(
-                "pgrep", "-f", "gunicorn", stdout=-1
-            )
-            stdout, _ = await process.communicate()
-            if stdout:
-                LOGGER.warning(
-                    "Gunicorn processes still detected, attempting to kill again..."
-                )
-                await (
-                    await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")
-                ).wait()
-        except Exception as e:
-            LOGGER.error(f"Error checking for gunicorn processes: {e}")
-    else:
-        # Use Config.BASE_URL_PORT instead of environment variable
-        # Explicitly convert to string to avoid any type issues
-        PORT = environ.get("PORT") or str(Config.BASE_URL_PORT) or "80"
-        LOGGER.info(f"Starting web server on port {PORT}")
-        await create_subprocess_shell(
-            f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}",
+        process = await create_subprocess_exec(
+            "pgrep", "-f", "gunicorn", stdout=-1
         )
+        stdout, _ = await process.communicate()
+        if stdout:
+            web_server_already_running = True
+            LOGGER.info("Web server already running (started early for Heroku)")
+    except Exception as e:
+        LOGGER.error(f"Error checking for existing gunicorn processes: {e}")
+
+    if not web_server_already_running:
+        # First, kill any running web server processes regardless of configuration
+        try:
+            LOGGER.info("Killing any existing web server processes...")
+            await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
+        except Exception as e:
+            LOGGER.error(f"Error killing web server processes: {e}")
+
+        # Check if web server should be started (BASE_URL_PORT = 0 means disabled)
+        if Config.BASE_URL_PORT == 0:
+            LOGGER.info("Web server is disabled (BASE_URL_PORT = 0)")
+            # Double-check to make sure no web server is running
+            try:
+                # Use pgrep to check if any gunicorn processes are still running
+                process = await create_subprocess_exec(
+                    "pgrep", "-f", "gunicorn", stdout=-1
+                )
+                stdout, _ = await process.communicate()
+                if stdout:
+                    LOGGER.warning(
+                        "Gunicorn processes still detected, attempting to kill again..."
+                    )
+                    await (
+                        await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")
+                    ).wait()
+            except Exception as e:
+                LOGGER.error(f"Error checking for gunicorn processes: {e}")
+        else:
+            # Use Config.BASE_URL_PORT instead of environment variable
+            # Explicitly convert to string to avoid any type issues
+            PORT = environ.get("PORT") or str(Config.BASE_URL_PORT) or "80"
+            LOGGER.info(f"Starting web server on port {PORT}")
+            await create_subprocess_shell(
+                f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}",
+            )
 
     if await aiopath.exists("cfg.zip"):
         if await aiopath.exists("/JDownloader/cfg"):

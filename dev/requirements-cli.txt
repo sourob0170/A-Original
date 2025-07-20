@@ -2,6 +2,10 @@ oauth2client
 google-api-python-client
 progress
 progressbar2
+qobuz-dl
+tidalapi
 httplib2shim
 google_auth_oauthlib
-electrogram
+httpx
+kurigram
+git+https://github.com/DraftKinner/zotify.git@dev

@@ -35,12 +35,20 @@ session_cache = TTLCache(
 )  # Reduced from 1000 to 100, and 36000 to 3600
 
 
-async def with_timeout_retry(coro, timeout=30, max_retries=3, backoff_factor=2):
+async def with_timeout_retry(coro_func, timeout=30, max_retries=3, backoff_factor=2):
     """
     Execute a coroutine with timeout and retry logic for handling request timeouts
+
+    Args:
+        coro_func: A callable that returns a coroutine (not the coroutine itself)
+        timeout: Timeout in seconds for each attempt
+        max_retries: Maximum number of retry attempts
+        backoff_factor: Exponential backoff factor for retry delays
     """
     for attempt in range(max_retries):
         try:
+            # Create a fresh coroutine for each attempt
+            coro = coro_func() if callable(coro_func) else coro_func
             return await wait_for(coro, timeout=timeout)
         except TimeoutError:
             if attempt < max_retries - 1:
@@ -237,10 +245,10 @@ async def edit_message(
                 # Create InputMediaPhoto with the correct parse_mode
                 media = InputMediaPhoto(photo, caption=text, parse_mode=parse_mode)
                 return await with_timeout_retry(
-                    message.edit_media(media=media, reply_markup=buttons), timeout=30
+                    lambda: message.edit_media(media=media, reply_markup=buttons), timeout=30
                 )
             return await with_timeout_retry(
-                message.edit_caption(
+                lambda: message.edit_caption(
                     caption=text,
                     reply_markup=buttons,
                     parse_mode=parse_mode,
@@ -248,7 +256,7 @@ async def edit_message(
                 timeout=30,
             )
         await with_timeout_retry(
-            message.edit(
+            lambda: message.edit(
                 text=text,
                 disable_web_page_preview=True,
                 reply_markup=buttons,

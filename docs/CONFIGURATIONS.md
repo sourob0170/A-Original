@@ -33,6 +33,10 @@
 | `TORRENT_TIMEOUT`         | `int`          | Timeout for torrent operations in seconds. Default: `0` (no timeout). |
 | `STOP_DUPLICATE`          | `bool`         | Stop duplicate downloads. Default: `False`. |
 | `WEB_PINCODE`             | `bool`         | Enable web interface PIN code protection. Default: `False`. |
+| `FILE2LINK_ENABLED`       | `bool`         | Enable File2Link streaming functionality. Default: `True`. |
+| `FILE2LINK_BASE_URL`      | `str`          | Dedicated base URL for File2Link streaming. Uses `BASE_URL` if not set. Auto-detects Heroku/Railway/Render. |
+| `FILE2LINK_BIN_CHANNEL`   | `int`          | Channel ID for storing streaming files. Uses `BIN_CHANNEL` if not set. Default: `0`. |
+| `FILE2LINK_ALLOWED_TYPES` | `str`          | Comma-separated list of allowed media types. Default: `video,audio,document,photo,animation,voice,video_note`. |
 | `UPSTREAM_REPO`           | `str`          | Upstream repository URL for updates. |
 | `UPSTREAM_BRANCH`         | `str`          | Upstream repository branch. Default: `main`. |
 | `HELPER_TOKENS`           | `str`          | Additional helper bot tokens for load balancing. |
@@ -93,7 +97,27 @@
 | `BASE_URL_PORT`     | `int`  | Port. Default: `80`. |
 | `WEB_PINCODE`       | `bool` | Ask PIN before file selection. Default: `False`. |
 
-## 8. JDownloader
+## 8. File2Link Streaming
+
+| Variable                  | Type   | Description |
+|---------------------------|--------|-------------|
+| `FILE2LINK_ENABLED`       | `bool` | Enable File2Link streaming functionality. Default: `True`. |
+| `FILE2LINK_BASE_URL`      | `str`  | Dedicated base URL for File2Link streaming. If not set, uses `BASE_URL`. Supports auto-detection for Heroku (`HEROKU_APP_NAME`), Railway (`RAILWAY_STATIC_URL`), and Render (`RENDER_EXTERNAL_URL`). |
+| `FILE2LINK_BIN_CHANNEL`   | `int`  | **REQUIRED**: Private channel ID for storing streaming files (e.g., `-1001234567890`). Must be set for File2Link to work. Default: `0`. |
+| `FILE2LINK_ALLOWED_TYPES` | `str`  | Comma-separated list of allowed media types for streaming. Default: `video,audio,document,photo,animation,voice,video_note`. |
+
+**File Size Limits:**
+- Automatically detects based on Telegram account type
+- Non-Premium accounts: 2GB limit
+- Premium accounts: 4GB limit
+- Uses `USER_SESSION_STRING` and `USER_TRANSMISSION` for detection
+
+**Commands:**
+- `/file2link` or `/f2l` - Reply to any media file to generate streaming links
+- Generates both streaming (browser player) and direct download links
+- Supports range requests for video seeking
+
+## 9. JDownloader
 
 | Variable     | Type  | Description |
 |--------------|-------|-------------|

@@ -127,17 +127,9 @@ async def verify_token(user_id, button=None):
             f"https://t.me/{TgClient.BNAME}?start={encrypt_url}"
         )
 
-        # Check if shortener was bypassed
-        if short_link.startswith("⚠️ Shortener bypassed"):
-            msg = f"┠ <i>Verify Access Token has been expired,</i> Kindly validate a new access token to start using bot again.\n┃\n┖ <b>Validity :</b> <code>{get_readable_time(Config.VERIFY_TIMEOUT)}</code>\n\n{short_link}"
-            # Use original link if bypassed
-            button.url_button(
-                "Verify Access Token",
-                f"https://t.me/{TgClient.BNAME}?start={encrypt_url}",
-            )
-        else:
-            button.url_button("Verify Access Token", short_link)
-            msg = f"┠ <i>Verify Access Token has been expired,</i> Kindly validate a new access token to start using bot again.\n┃\n┖ <b>Validity :</b> <code>{get_readable_time(Config.VERIFY_TIMEOUT)}</code>"
+        # Use the shortened link (or original if shortening failed)
+        button.url_button("Verify Access Token", short_link)
+        msg = f"┠ <i>Verify Access Token has been expired,</i> Kindly validate a new access token to start using bot again.\n┃\n┖ <b>Validity :</b> <code>{get_readable_time(Config.VERIFY_TIMEOUT)}</code>"
 
         return (msg, button)
     return None, button

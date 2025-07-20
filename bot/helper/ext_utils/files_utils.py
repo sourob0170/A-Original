@@ -4,7 +4,7 @@ import re
 import shlex
 from asyncio import create_subprocess_exec, sleep, wait_for
 from asyncio.subprocess import PIPE
-from glob import glob
+from glob import glob, escape as glob_escape
 from os import path as ospath
 from os import readlink, walk
 from pathlib import Path
@@ -357,7 +357,6 @@ async def split_file(f_path, split_size, listener):
     Returns:
         bool: True if splitting was successful, False otherwise
     """
-    out_path = f"{f_path}."
     if listener.is_cancelled:
         return False
 
@@ -385,13 +384,19 @@ async def split_file(f_path, split_size, listener):
     # The split_size has already been validated in proceed_split and get_user_split_size
     split_size_bytes = int(split_size)
 
+    # Set the working directory to the file's directory to avoid path issues
+    cwd = ospath.dirname(f_path)
+    file_name = ospath.basename(f_path)
+    out_name = f"{file_name}."
+
+    # Use relative paths when working directory is set
     cmd = [
         "split",
         "--numeric-suffixes=1",
         "--suffix-length=3",
         f"--bytes={split_size_bytes}",
-        f_path,
-        out_path,
+        file_name,
+        out_name,
     ]
 
     # Execute the command
@@ -399,6 +404,7 @@ async def split_file(f_path, split_size, listener):
         listener.subproc = await create_subprocess_exec(
             *cmd,
             stderr=PIPE,
+            cwd=cwd,
         )
 
         _, stderr = await listener.subproc.communicate()
@@ -414,21 +420,64 @@ async def split_file(f_path, split_size, listener):
                 stderr = stderr.decode().strip()
             except Exception:
                 stderr = "Unable to decode the error!"
-            LOGGER.error(f"Split error: {stderr}. File: {f_path}")
+            LOGGER.error(f"Split command failed with code {code}: {stderr}. File: {f_path}")
+            LOGGER.error(f"Split command was: {' '.join(cmd)}")
             return False
 
-        # Verify the split was successful by checking if at least one split file exists (Old Aeon-MLTB logic)
-        split_pattern = f"{out_path}*"
-        split_files = glob(split_pattern)
+        # Log successful command execution
+        LOGGER.info(f"Split command executed successfully for: {f_path}")
+
+        # Verify the split was successful by checking if at least one split file exists
+        # Use the working directory and relative paths for pattern matching
+        # Need to escape special characters in filenames for glob patterns
+
+        escaped_out_name = glob_escape(out_name)
+        escaped_file_name = glob_escape(file_name)
+
+        split_patterns = [
+            ospath.join(cwd, f"{escaped_out_name}*"),  # Standard pattern: filename.001, filename.002, etc.
+            ospath.join(cwd, f"{escaped_file_name}.*"),   # Alternative pattern: original_file.001, original_file.002, etc.
+            ospath.join(cwd, "*.0[0-9][0-9]"),  # Fallback pattern: any file ending with .001, .002, etc.
+        ]
+
+        split_files = []
+        for pattern in split_patterns:
+            files = glob(pattern)
+            if files:
+                # Filter to only include files that start with our filename
+                # This is needed for the fallback pattern
+                filtered_files = [f for f in files if ospath.basename(f).startswith(file_name)]
+                if filtered_files:
+                    split_files = filtered_files
+                    break
 
         if not split_files:
-            LOGGER.error(
-                f"Split command completed but no split files were created: {f_path}"
-            )
+            # Additional debugging: check what files exist in the directory
+            try:
+                all_files = await listdir(cwd)
+                # Filter files that might be split files
+                potential_split_files = [f for f in all_files if file_name in f and '.' in f]
+                LOGGER.error(
+                    f"Split command completed but no split files were created: {f_path}. "
+                    f"Files in directory: {len(all_files)} total. "
+                    f"Potential split files: {potential_split_files[:5]}..."
+                )
+                LOGGER.error(f"Searched patterns: {split_patterns}")
+            except Exception as e:
+                LOGGER.error(
+                    f"Split command completed but no split files were created: {f_path}. "
+                    f"Could not list directory: {e}"
+                )
             return False
 
         # Simple validation - just log the split files created (Old Aeon-MLTB approach)
         LOGGER.info(f"Successfully split {f_path} into {len(split_files)} parts")
+
+        # Log the first few split file names for debugging
+        if len(split_files) <= 5:
+            LOGGER.info(f"Split files created: {[ospath.basename(f) for f in split_files]}")
+        else:
+            LOGGER.info(f"Split files created: {[ospath.basename(f) for f in split_files[:3]]} ... {[ospath.basename(f) for f in split_files[-2:]]}")
 
         return True
     except Exception as e:

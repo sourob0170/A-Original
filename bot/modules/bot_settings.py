@@ -1556,6 +1556,14 @@ Send one of the following position options:
             "DEBRID_LINK_API",
         ]
 
+        # Add File2Link settings to the config menu
+        file2link_keys = [
+            "FILE2LINK_ENABLED",
+            "FILE2LINK_BIN_CHANNEL",
+            "FILE2LINK_BASE_URL",
+            "FILE2LINK_ALLOWED_TYPES",
+        ]
+
         # Add module control settings to the config menu
         module_keys = [
             "AI_ENABLED",
@@ -1589,6 +1597,7 @@ Send one of the following position options:
             "NZB_ENABLED": "Enable NZB Operations",
             "JD_ENABLED": "Enable JDownloader Operations",
             "RCLONE_ENABLED": "Enable Rclone Operations",
+            "FILE2LINK_ENABLED": "Enable File2Link streaming and download links",
             # Removed MEDIA_TOOLS_ENABLED description
         }
 
@@ -1601,6 +1610,11 @@ Send one of the following position options:
         for ak in api_keys:
             if ak not in filtered_keys:
                 filtered_keys.append(ak)
+
+        # Ensure File2Link keys are in the filtered keys list
+        for f2k in file2link_keys:
+            if f2k not in filtered_keys:
+                filtered_keys.append(f2k)
 
         # Ensure module keys are in the filtered keys list
         for mk in module_keys:
@@ -1623,6 +1637,9 @@ Send one of the following position options:
             # Highlight API settings
             elif k in api_keys:
                 buttons.data_button(f"🔌 {k}", callback)
+            # Highlight File2Link settings
+            elif k in file2link_keys:
+                buttons.data_button(f"🔗 {k}", callback)
             # Highlight module control settings
             elif k in module_keys:
                 # Use the module descriptions for better display
@@ -3340,7 +3357,7 @@ These are core Zotify settings that control the basic download behavior."""
         )
 
         # Check if credentials exist (database first, then file)
-        from bot.helper.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
         # Use the user_id parameter passed to get_buttons function
         creds_exist = await zotify_config.has_credentials(user_id)
@@ -3944,6 +3961,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             "YOUTUBE_UPLOAD_ENABLED",
             "MEGA_ENABLED",
             "DDL_ENABLED",
+            "FILE2LINK_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",
@@ -4008,6 +4026,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         )
         mega_enabled = "✅ Enabled" if Config.MEGA_ENABLED else "❌ Disabled"
         ddl_enabled = "✅ Enabled" if Config.DDL_ENABLED else "❌ Disabled"
+        file2link_enabled = "✅ Enabled" if Config.FILE2LINK_ENABLED else "❌ Disabled"
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
         )
@@ -4102,6 +4121,10 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
             f"botset toggle DDL_ENABLED {not Config.DDL_ENABLED}",
         )
         buttons.data_button(
+            f"🔗 File2Link: {file2link_enabled}",
+            f"botset toggle FILE2LINK_ENABLED {not Config.FILE2LINK_ENABLED}",
+        )
+        buttons.data_button(
             f"⚠️ Command Warnings: {wrong_cmd_warnings_enabled}",
             f"botset toggle WRONG_CMD_WARNINGS_ENABLED {not Config.WRONG_CMD_WARNINGS_ENABLED}",
         )
@@ -4140,6 +4163,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 <b>YouTube Upload:</b> {youtube_upload_enabled}
 <b>MEGA Operations:</b> {mega_enabled}
 <b>DDL Operations:</b> {ddl_enabled}
+<b>File2Link:</b> {file2link_enabled}
 <b>Command Warnings:</b> {wrong_cmd_warnings_enabled}
 <b>VirusTotal Scan:</b> {virustotal_enabled}
 <b>Ad Broadcaster:</b> {ad_broadcaster_enabled}
@@ -4164,6 +4188,7 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
 • <b>Zotify Downloads:</b> Controls whether users can download music from Spotify using Zotify
 • <b>YouTube Upload:</b> Controls whether users can upload videos directly to YouTube after downloading
 • <b>DDL Operations:</b> Controls whether users can upload files to Direct Download Link servers (Gofile, Streamtape, DevUploads, MediaFire)
+• <b>File2Link:</b> Controls whether users can generate streaming and download links for Telegram files with web player support
 • <b>Command Warnings:</b> Controls whether warnings are shown for wrong command suffixes
 • <b>VirusTotal Scan:</b> Controls whether users can scan files and URLs for viruses using VirusTotal
 • <b>Ad Broadcaster:</b> Controls whether the bot automatically broadcasts ads from FSUB channels to users</blockquote>"""
@@ -4450,6 +4475,7 @@ The following MEGA security features are <b>not supported</b> by MEGA SDK v4.8.0
             )
             else "❌ Not Set"
         )
+
 
         msg = f"""<b>📤 DDL (Direct Download Link) Settings</b> | State: {state}
 
@@ -8166,7 +8192,7 @@ async def _process_zotify_credentials_upload(
             return False, f"Invalid JSON format: {e}"
 
         # Save credentials to database and file using the zotify config helper
-        from bot.helper.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
         success = await zotify_config.save_credentials(credentials_data, user_id)
 
@@ -8209,7 +8235,7 @@ async def _process_streamrip_config_upload(
             return False, f"Invalid TOML format: {e}"
 
         # Save to database using streamrip config helper
-        from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
 
         success = await streamrip_config.save_custom_config_to_db(config_content)
 
@@ -8725,6 +8751,7 @@ async def edit_variable(_, message, pre_message, key):
         "TASK_MONITOR_CPU_LOW",
         "TASK_MONITOR_MEMORY_HIGH",
         "TASK_MONITOR_MEMORY_LOW",
+        "FILE2LINK_BIN_CHANNEL",
     }:
         try:
             value = int(value)
@@ -8780,6 +8807,8 @@ async def edit_variable(_, message, pre_message, key):
                 value = 75
             elif key == "TASK_MONITOR_MEMORY_LOW":
                 value = 60
+            elif key == "FILE2LINK_BIN_CHANNEL":
+                value = 0  # Default to 0 if invalid channel ID
     elif key == "WATERMARK_OPACITY":
         try:
             value = float(value)
@@ -9677,7 +9706,7 @@ async def update_private_file(_, message, pre_message):
         elif file_name == "streamrip_config.toml":
             # Handle streamrip config deletion - use same logic as dedicated streamrip config reset
             try:
-                from bot.helper.streamrip_utils.streamrip_config import (
+                from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                     streamrip_config,
                 )
 
@@ -10386,7 +10415,7 @@ async def edit_bot_settings(client, query):
 
         try:
             # Import streamrip config helper
-            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
 
             # Try to get custom config from database first
             config_content = await streamrip_config.get_custom_config_from_db()
@@ -10508,7 +10537,7 @@ async def edit_bot_settings(client, query):
 
         try:
             # Import streamrip config helper
-            from bot.helper.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
 
             # Delete custom config from database
             success = await streamrip_config.delete_custom_config_from_db()
@@ -14736,6 +14765,18 @@ async def edit_bot_settings(client, query):
         value = ""
         if data[2] in DEFAULT_VALUES:
             value = DEFAULT_VALUES[data[2]]
+        elif data[2] == "PAID_CHANNEL_ID":
+            value = 0
+        elif data[2] == "TOKEN_TIMEOUT":
+            value = 0
+        elif data[2] == "LOG_CHAT_ID":
+            value = 0
+        elif data[2] == "OWNER_ID":
+            value = 0
+        elif data[2] == "TELEGRAM_API":
+            value = 0
+        elif data[2] in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]:
+            value = 0
         elif data[2] == "EXCLUDED_EXTENSIONS":
             excluded_extensions.clear()
             excluded_extensions.extend(["aria2", "!qB"])
@@ -15511,7 +15552,7 @@ Are you sure you want to delete <b>{display_name}</b>?
                 ).wait()
             elif file_name == "streamrip_config.toml":
                 try:
-                    from bot.helper.streamrip_utils.streamrip_config import (
+                    from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                         streamrip_config,
                     )
 
@@ -15618,7 +15659,7 @@ Are you sure you want to delete <b>{display_name}</b>?
 
                 # Reset streamrip config
                 try:
-                    from bot.helper.streamrip_utils.streamrip_config import (
+                    from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
                         streamrip_config,
                     )
 
@@ -17536,6 +17577,7 @@ No database-only files found."""
             "YOUTUBE_UPLOAD_ENABLED",
             "MEGA_ENABLED",
             "DDL_ENABLED",
+            "FILE2LINK_ENABLED",
             "WRONG_CMD_WARNINGS_ENABLED",
             "VT_ENABLED",
             "AD_BROADCASTER_ENABLED",

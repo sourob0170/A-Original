@@ -640,6 +640,7 @@ def direct_link_generator(link, user_id=None):
             "lbx.to",
             "teltobx.net",
             "telbx.net",
+            "linkbox.cloud",
         ]
     ):
         return linkBox(link)
@@ -4174,14 +4175,6 @@ def mediafireFolder(url, user_id=None):
         parsed_url = urlparse(url)
         url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
 
-        def __repair_download(url):
-            try:
-                html = HTML(session.get(url).text)
-                if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
-                    return __scraper(f"https://mediafire.com/{new_link[0]}")
-            except:
-                return None
-
         try:
             html = HTML(session.get(url).text)
         except:
@@ -4197,13 +4190,31 @@ def mediafireFolder(url, user_id=None):
                 return None
             if html.xpath("//div[@class='passwordPrompt']"):
                 return None
-        if final_link := html.xpath('//a[@aria-label="Download file"]/@href'):
-            if final_link[0].startswith("//"):
-                return __scraper(f"https://{final_link[0][2:]}")
-            return final_link[0]
-        if repair_link := html.xpath("//a[@class='retry']/@href"):
-            return __repair_download(repair_link[0])
-        return None
+        try:
+            final_link = __decode_url(html)
+        except:
+            return None
+        return final_link
+    
+    def __decode_url(html):
+        enc_url = html.xpath('//a[@id="downloadButton"]')
+        if enc_url:
+            final_link = enc_url[0].attrib.get('href')
+            scrambled = enc_url[0].attrib.get('data-scrambled-url')
+            if final_link and scrambled:
+                try:
+                    final_link = b64decode(scrambled).decode("utf-8")
+                    return final_link
+                except:
+                    return None
+            elif final_link.startswith("http"):
+                return final_link
+            elif final_link.startswith("//"):
+                return __scraper(f"https:{final_link}")
+            else:
+                return None
+        else:
+            return None
 
     def __get_content(folderKey, folderPath="", content_type="folders"):
         try:
@@ -4479,15 +4490,26 @@ def _mediafire_scraping_download(url, password="", session=None):
     Used as fallback when API method fails or for password-protected files.
     """
 
-    def _repair_download(url, session):
-        try:
-            html = HTML(session.get(url).text)
-            if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
-                return mediafire(f"https://mediafire.com/{new_link[0]}")
-        except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}"
-            ) from e
+    def _decode_url(html, session):
+        enc_url = html.xpath('//a[@id="downloadButton"]')
+        if enc_url:
+            final_link = enc_url[0].attrib.get('href')
+            scrambled = enc_url[0].attrib.get('data-scrambled-url')
+
+            if final_link and scrambled:
+                try:
+                    final_link = b64decode(scrambled).decode("utf-8")
+                    return final_link
+                except Exception as e:
+                    raise ValueError(f"Failed to decode final link. {e.__class__.__name__}") from e
+            elif final_link.startswith("http"):
+                return final_link
+            elif final_link.startswith("//"):
+                return mediafire(f"https:{final_link}", session=session)
+            else:
+                raise ValueError(f"No download link found")
+        else:
+            raise ValueError("Download button not found in the HTML content. It may have been blocked by Cloudflare's anti-bot protection.")
 
     if session is None:
         session = create_scraper()
@@ -4520,22 +4542,12 @@ def _mediafire_scraping_download(url, password="", session=None):
         if html.xpath("//div[@class='passwordPrompt']"):
             session.close()
             raise DirectDownloadLinkException("ERROR: Wrong password.")
-
-    if not (final_link := html.xpath('//a[@aria-label="Download file"]/@href')):
-        if repair_link := html.xpath("//a[@class='retry']/@href"):
-            return _repair_download(repair_link[0], session)
-        raise DirectDownloadLinkException(
-            "ERROR: No links found in this page Try Again"
-        )
-
-    if final_link[0].startswith("//"):
-        final_url = f"https://{final_link[0][2:]}"
-        if password:
-            final_url += f"::{password}"
-        return mediafire(final_url, session)
-
+    try:
+        final_link = _decode_url(html, session)
+    except Exception as e:
+        raise DirectDownloadLinkException(f"ERROR: {str(e)}")
     session.close()
-    return final_link[0]
+    return final_link
 
 
 def _mediafire_authenticated_folder_download(folderkey, password="", user_id=None):

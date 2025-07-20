@@ -2140,6 +2140,19 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
             f"userset {user_id} tog MEDIAINFO_ENABLED {'f' if mediainfo_enabled else 't'}",
         )
 
+        # Add BOT_PM toggle
+        bot_pm_enabled = user_dict.get("BOT_PM", None)
+        if bot_pm_enabled is None:
+            bot_pm_enabled = Config.BOT_PM
+            bot_pm_source = "Owner"
+        else:
+            bot_pm_source = "User"
+
+        buttons.data_button(
+            f"Bot PM: {'✅ ON' if bot_pm_enabled else '❌ OFF'}",
+            f"userset {user_id} tog BOT_PM {'f' if bot_pm_enabled else 't'}",
+        )
+
         # Watermark moved to Media Tools
 
         # Get metadata value for display - prioritize METADATA_ALL over METADATA_KEY
@@ -2171,6 +2184,15 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
         else:
             mediainfo_source = "User"
         mediainfo_status = f"{'Enabled' if mediainfo_enabled else 'Disabled'} (Set by {mediainfo_source})"
+
+        # Get BOT_PM status for display
+        bot_pm_enabled = user_dict.get("BOT_PM", None)
+        if bot_pm_enabled is None:
+            bot_pm_enabled = Config.BOT_PM
+            bot_pm_source = "Owner"
+        else:
+            bot_pm_source = "User"
+        bot_pm_status = f"{'Enabled' if bot_pm_enabled else 'Disabled'} (Set by {bot_pm_source})"
 
         # Get DDL status for display
         ddl_status = ""
@@ -2251,10 +2273,11 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
         if is_media_tool_enabled("xtra"):
             text_parts.append(f"-> FFMPEG Commands: <code>{ffc}</code>")
 
-        # Always show MediaInfo and Metadata
+        # Always show MediaInfo, BOT_PM, and Metadata
         text_parts.extend(
             [
                 f"-> MediaInfo: <b>{mediainfo_status}</b>",
+                f"-> Bot PM: <b>{bot_pm_status}</b>",
                 f"-> Metadata Text: <code>{mdt}</code>{f' ({mdt_source})' if mdt != 'None' and mdt_source else ''}",
             ]
         )
@@ -3095,7 +3118,7 @@ Cookies allow you to access restricted content on YouTube, Instagram, Twitter, a
         update_user_ldata(user_id, data[3], data[4] == "t")
         if data[3] == "STOP_DUPLICATE":
             back_to = "gdrive"
-        elif data[3] == "USER_TOKENS" or data[3] == "MEDIAINFO_ENABLED":
+        elif data[3] in ["USER_TOKENS", "MEDIAINFO_ENABLED", "BOT_PM"]:
             back_to = "main"
         elif data[3] in [
             "MEGA_UPLOAD_PUBLIC",

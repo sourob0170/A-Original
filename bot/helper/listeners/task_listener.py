@@ -19,6 +19,7 @@ from bot import (
     same_directory_lock,
     task_dict,
     task_dict_lock,
+    user_data,
 )
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
@@ -92,6 +93,13 @@ class TaskListener(TaskConfig):
         self.proceed_count = 0
         self.progress = True
 
+    def _is_bot_pm_enabled(self):
+        """Check if BOT_PM is enabled with user priority over owner config"""
+        bot_pm_enabled = self.user_dict.get("BOT_PM", None)
+        if bot_pm_enabled is None:
+            bot_pm_enabled = Config.BOT_PM
+        return bot_pm_enabled
+
     async def _send_message_part(self, msg, fmsg):
         """Helper method to send a message part to appropriate destinations"""
         # Check if user specified a destination with -up flag
@@ -108,8 +116,8 @@ class TaskListener(TaskConfig):
                     int(self.up_dest),
                     f"{msg}<blockquote expandable>{fmsg}</blockquote>",
                 )
-                # Also send to user's PM if it's not the same as the specified destination
-                if int(self.up_dest) != self.user_id:
+                # Also send to user's PM if it's not the same as the specified destination and BOT_PM is enabled
+                if int(self.up_dest) != self.user_id and self._is_bot_pm_enabled():
                     await send_message(
                         self.user_id,
                         f"{msg}<blockquote expandable>{fmsg}</blockquote>",
@@ -209,18 +217,21 @@ class TaskListener(TaskConfig):
                     f"Failed to send leech log to specified destination {self.up_dest}: {e}"
                 )
                 # Fallback to user's PM
-                await send_message(
-                    self.user_id,
-                    f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                )
+                # Send to user's PM only if BOT_PM is enabled
+                if self._is_bot_pm_enabled():
+                    await send_message(
+                        self.user_id,
+                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                    )
         else:
             # No specific destination was specified or it's a cloud destination
             # Determine leech destinations based on requirements
             leech_destinations = []
 
-            # Only add user's PM for file details, not for task completion messages
+            # Only add user's PM for file details if BOT_PM is enabled, not for task completion messages
             # We'll send the task completion message only to groups/supergroups
-            leech_destinations.append(self.user_id)
+            if self._is_bot_pm_enabled():
+                leech_destinations.append(self.user_id)
 
             # Check if user has set their own dump and owner's premium status
             user_dump = self.user_dict.get("USER_DUMP")
@@ -321,8 +332,11 @@ class TaskListener(TaskConfig):
                 x for x in leech_destinations if not (x in seen or seen.add(x))
             ]
 
-            # Send to all destinations
+            # Send to all destinations, filtering user's PM if BOT_PM is disabled
             for dest in leech_destinations:
+                # Skip user's PM if BOT_PM is disabled
+                if dest == self.user_id and not self._is_bot_pm_enabled():
+                    continue
                 try:
                     await send_message(
                         dest,
@@ -1556,23 +1570,25 @@ class TaskListener(TaskConfig):
                 try:
                     # Send to the specified destination
                     await send_message(int(self.up_dest), msg, button)
-                    # Also send to user's PM if it's not the same as the specified destination
-                    if int(self.up_dest) != self.user_id:
+                    # Also send to user's PM if it's not the same as the specified destination and BOT_PM is enabled
+                    if int(self.up_dest) != self.user_id and self._is_bot_pm_enabled():
                         await send_message(self.user_id, msg, button)
                 except Exception as e:
                     LOGGER.error(
                         f"Failed to send mirror log to specified destination {self.up_dest}: {e}"
                     )
-                    # Fallback to user's PM
-                    await send_message(self.user_id, msg, button)
+                    # Fallback to user's PM only if BOT_PM is enabled
+                    if self._is_bot_pm_enabled():
+                        await send_message(self.user_id, msg, button)
             else:
                 # No specific destination was specified or it's a cloud destination
                 # Determine mirror log destinations based on requirements
                 mirror_destinations = []
 
-                # Only add user's PM for file details, not for task completion messages
+                # Only add user's PM for file details if BOT_PM is enabled, not for task completion messages
                 # We'll send the task completion message only to groups/supergroups
-                mirror_destinations.append(self.user_id)
+                if self._is_bot_pm_enabled():
+                    mirror_destinations.append(self.user_id)
 
                 # Check if user has set their own dump
                 user_dump = self.user_dict.get("USER_DUMP")
@@ -1599,8 +1615,11 @@ class TaskListener(TaskConfig):
                     x for x in mirror_destinations if not (x in seen or seen.add(x))
                 ]
 
-                # Send to all destinations including user's PM
+                # Send to all destinations, filtering user's PM if BOT_PM is disabled
                 for dest in mirror_destinations:
+                    # Skip user's PM if BOT_PM is disabled
+                    if dest == self.user_id and not self._is_bot_pm_enabled():
+                        continue
                     try:
                         await send_message(dest, msg, button)
                     except Exception as e:

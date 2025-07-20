@@ -1180,7 +1180,6 @@ MIRROR_HELP_DICT = {
     "Leech-Type": leech_as,
     "FFmpeg-Cmds": ffmpeg_cmds,
     "Media-Tools-Flag": media_tools_flag,
-    "AI-Chatbot": ai_help,
 }
 
 CLONE_HELP_DICT = {
@@ -1218,6 +1217,345 @@ Scan files and URLs for viruses and malware using VirusTotal.
 
 VT_HELP_DICT = {
     "main": virustotal_help,
+}
+
+# Phish Directory help content
+phish_directory_help = """<b>🔍 Phish Directory Security Check</b>
+
+Check domains and emails for phishing, malware, and security threats using the phish.directory API.
+
+<blockquote>
+<b>🎯 Features:</b>
+• Domain phishing detection
+• Email validation and reputation checking
+• Fraud score assessment
+• Disposable email detection
+• DNS validation
+• Recent abuse detection
+</blockquote>
+
+<blockquote>
+<b>📝 Usage:</b>
+<code>/phishcheck &lt;domain_or_email&gt;</code>
+
+<b>Examples:</b>
+• <code>/phishcheck google.com</code> - Check domain safety
+• <code>/phishcheck user@example.com</code> - Validate email
+• <code>/phishcheck https://suspicious-site.com</code> - Check URL
+• <code>/phishcheck temp@tempmail.org</code> - Check disposable email
+</blockquote>
+
+<blockquote>
+<b>🛡️ Domain Check Results:</b>
+• Safety status (Safe/Malicious)
+• Phishing detection
+• Risk level assessment
+• Detailed security report
+</blockquote>
+
+<blockquote>
+<b>📧 Email Check Results:</b>
+• Format validation
+• DNS validity
+• Disposable email detection
+• Fraud score (0-100)
+• Recent abuse history
+• First seen date
+</blockquote>
+
+<blockquote>
+<b>⚠️ Important Notes:</b>
+• Results are provided by phish.directory community database
+• Always use caution with suspicious domains/emails
+• Reports are for informational purposes only
+• Service requires internet connection
+• <b>Authentication required:</b> Register at https://phish.directory for API access
+</blockquote>
+"""
+
+PHISH_HELP_DICT = {
+    "main": phish_directory_help,
+}
+
+# WOT (Web of Trust) help content
+wot_help = f"""<b>🛡️ COMPREHENSIVE REPUTATION CHECKER</b>
+
+Check website, domain, and IP reputation using multiple security databases including Web of Trust (WOT) and AbuseIPDB.
+
+<blockquote>
+<b>🎯 Features:</b>
+• Website trustworthiness assessment (WOT: 0-100 scale)
+• IP abuse confidence scoring (AbuseIPDB: 0-100 scale)
+• Child safety ratings and threat categorization
+• Geographic and ISP information for IPs
+• Third-party blacklist detection
+• Community-driven reputation scores
+• Real-time safety status and risk assessment
+• Automatic domain-to-IP resolution for comprehensive analysis
+</blockquote></blockquote>
+
+<b>📝 Usage:</b>
+<code>/{BotCommands.WotCommand} &lt;website_url_or_domain_or_ip&gt;</code>
+<code>/{BotCommands.WotCommand} &lt;target1&gt; &lt;target2&gt; ...</code>
+<code>/{BotCommands.WotCommand} &lt;target1,target2,target3&gt;</code>
+
+<b>📋 Examples:</b>
+• <code>/{BotCommands.WotCommand} google.com</code> (domain reputation)
+• <code>/{BotCommands.WotCommand} https://example.com</code> (URL analysis)
+• <code>/{BotCommands.WotCommand} 8.8.8.8</code> (IP reputation)
+• <code>/{BotCommands.WotCommand} 2001:4860:4860::8888</code> (IPv6 support)
+• <code>/{BotCommands.WotCommand} 192.168.1.0/24</code> (network analysis)
+• <code>/{BotCommands.WotCommand} suspicious-site.com</code> (threat analysis)
+• <code>/{BotCommands.WotCommand} google.com 8.8.8.8</code> (multiple targets)
+• <code>/{BotCommands.WotCommand} site1.com,192.168.1.1,site2.com</code> (mixed types)
+• <code>/{BotCommands.WotCommand} ääkkönen.fi</code> (IDN support)
+
+<blockquote>
+<b>🔍 WOT Reputation Scale (Domains):</b>
+• 80-100: Excellent (🟢)
+• 60-79: Good (🟡)
+• 40-59: Unsatisfactory (🟠)
+• 20-39: Poor (🔴)
+• 0-19: Very Poor (⚫)
+</blockquote>
+
+<blockquote>
+<b>🚨 AbuseIPDB Confidence Scale (IPs):</b>
+• 75-100: Critical Risk (🚨) - Recommended for blocking
+• 50-74: High Risk (🔴) - Exercise extreme caution
+• 25-49: Medium Risk (🟠) - AbuseIPDB minimum threshold
+• 1-24: Low Risk (🟡) - Below threshold, minimal concern
+• 0: No Reports (🟢) - Clean record
+</blockquote>
+
+<blockquote>
+<b>⚠️ Important Notes:</b>
+• <b>Dual Analysis:</b> Automatically uses both WOT and AbuseIPDB when available
+• <b>Smart Resolution:</b> Domains are resolved to IPs for comprehensive analysis
+• <b>Network Analysis:</b> Supports CIDR notation for subnet analysis (e.g., 192.168.1.0/24)
+• Results are based on community ratings and third-party sources
+• Confidence threshold ≥ 10 required for reliable warnings (WOT standard)
+• AbuseIPDB minimum threshold: 25% (75%+ recommended for blocking)
+• Supports IPv4, IPv6, and Internationalized Domain Names (IDN) per RFC 3490
+• Can analyze up to 10 targets per request
+• Always exercise caution with high-risk targets
+• Reports are for informational purposes only
+• Service requires internet connection
+• <b>Authentication required:</b>
+  - WOT: Register at https://www.mywot.com/developers
+  - AbuseIPDB: Register at https://www.abuseipdb.com/api
+</blockquote>
+"""
+
+WOT_HELP_DICT = {
+    "main": wot_help,
+}
+
+# Trace.moe help content
+trace_moe_help = """<b>🔍 Trace.moe Anime Identification</b>
+
+Identify anime scenes from images, videos, or GIFs using the trace.moe API.
+
+<blockquote>
+<b>🎯 Features:</b>
+• Multi-language anime titles (Japanese, Romaji, English, Chinese)
+• Video preview of identified scenes
+• Support for images, videos, GIFs, and URLs
+• Works in both private chats and groups
+• Adult content filtering in groups
+• High accuracy anime scene matching
+</blockquote>
+
+<blockquote>
+<b>📱 Usage:</b>
+• Send <code>/trace</code> with an image, video, or GIF
+• Reply to media with <code>/trace</code>
+• Send image URLs directly in text messages
+• Maximum file size: 10MB (configurable)
+</blockquote>
+
+<blockquote>
+<b>📋 Sample Output:</b>
+🎌 <b>Anime Identified</b>
+
+📺 <b>Titles:</b>
+   🔸 <b>進撃の巨人</b>
+   ▫️ <i>Shingeki no Kyojin</i>
+   ▫️ <i>Attack on Titan</i>
+
+📁 <b>Source Info:</b>
+   📄 File: <code>attack_on_titan_s1_ep1.mkv</code>
+   ⏰ Time: <code>02:05</code>
+
+🎯 <b>Match Accuracy:</b>
+   🎯 <b>95.0%</b> (Excellent)
+
+<b>⚠️ Important:</b> Results below 90% similarity are usually incorrect according to trace.moe official guidelines.
+
+Plus a video preview showing the exact scene!
+</blockquote>
+
+<blockquote>
+<b>🎬 Supported Media:</b>
+• <b>Images:</b> JPG, PNG, WebP, BMP
+• <b>Videos:</b> MP4, MKV, AVI, MOV, WebM
+• <b>Animations:</b> GIF, animated WebP
+• <b>URLs:</b> Direct links to supported media
+</blockquote>
+
+<blockquote>
+<b>🛡️ Security Features:</b>
+• Authentication required (authorized users only)
+• Adult content blocked in groups
+• File size limits to prevent abuse
+• Temporary file cleanup after processing
+• Rate limiting with retry logic
+</blockquote>
+
+<blockquote>
+<b>⚙️ Configuration:</b>
+• <code>TRACE_MOE_ENABLED</code>: Enable/disable functionality
+• <code>TRACE_MOE_API_KEY</code>: Optional API key for higher quota
+• <code>TRACE_MOE_VIDEO_PREVIEW</code>: Enable/disable video previews
+• <code>TRACE_MOE_MAX_FILE_SIZE</code>: Maximum file size limit
+</blockquote>
+
+<blockquote>
+<b>❌ Common Issues:</b>
+• <b>"No supported media found":</b> Send an image, video, or GIF
+• <b>"File too large":</b> Reduce file size under 10MB
+• <b>"You are not authorized":</b> Ask admin for authorization
+• <b>"Rate limit exceeded":</b> Wait a few minutes and try again
+• <b>"No anime found":</b> Try a clearer screenshot or different frame
+</blockquote>
+
+<blockquote>
+<b>💡 Pro Tips:</b>
+• Use clear, unedited screenshots for best results
+• Avoid heavily compressed or watermarked images
+• Try different frames if one doesn't work
+• Recent anime (2000+) have higher accuracy
+• Opening/ending scenes often work well
+</blockquote>
+
+<b>Note:</b> Requires authorization to use. Only works with actual anime content, not fan art or heavily edited images."""
+
+TRACE_HELP_DICT = {
+    "main": trace_moe_help,
+}
+
+# OSINT Help
+osint_help = """<b>🔍 OSINT Intelligence Suite</b>
+
+<blockquote>
+<b>Comprehensive Open Source Intelligence Tools</b>
+All OSINT features consolidated under a single command for advanced investigations.
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>📱 Phone Number Intelligence:</b>
+<code>/osint number &lt;phone_number&gt;</code>
+
+• Advanced phone tracing via multiple sources
+• Owner details and SIM card information
+• IMEI and MAC address tracking
+• Location and carrier information
+• Complaint history and tracking data
+• International format support
+
+<b>Example:</b> <code>/osint number 919999999999</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>🌐 IP Address Geolocation:</b>
+<code>/osint ip &lt;ip_address&gt;</code>
+
+• Comprehensive IP intelligence
+• Country, city, and ISP details
+• Proxy/VPN/mobile detection
+• Coordinates and timezone
+• Organization information
+
+<b>Example:</b> <code>/osint ip 8.8.8.8</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>🏦 Bank IFSC Code Lookup:</b>
+<code>/osint ifsc &lt;ifsc_code&gt;</code>
+
+• Complete bank and branch information
+• Address and contact details
+• MICR codes and email
+• State and district data
+
+<b>Example:</b> <code>/osint ifsc SBIN0000001</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>🚗 Vehicle Information:</b>
+<code>/osint vehicle &lt;vehicle_number&gt;</code>
+
+• Registration details and RTO office
+• Vehicle specifications and owner type
+• Insurance and PUC status
+• 500+ RTO offices mapped across India
+• Intelligent fallback analysis
+
+<b>Example:</b> <code>/osint vehicle MH01AB1234</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>📧 Advanced Email OSINT:</b>
+<code>/osint email &lt;email_address&gt;</code>
+
+• Breach database analysis
+• Social media profile discovery
+• Domain intelligence and MX records
+• Provider security analysis
+• Risk assessment and creation estimation
+• Professional investigation tips
+
+<b>Example:</b> <code>/osint email example@gmail.com</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>👤 User Lookup & Analysis:</b>
+<code>/osint user &lt;user_id_or_username&gt;</code>
+
+• Deep Telegram user analysis
+• Account creation estimation
+• Privacy analysis and activity patterns
+• Cross-platform search suggestions
+• Username availability checking
+
+<b>Examples:</b>
+<code>/osint user 123456789</code>
+<code>/osint user @username</code>
+</blockquote>
+
+<blockquote expandable="expandable">
+<b>🔍 Advanced Username Scanner:</b>
+<code>/osint scan &lt;username&gt;</code>
+
+• 50+ website coverage
+• Real-time verification across platforms
+• Social media, professional networks, gaming
+• Progress tracking and detailed reports
+• Comprehensive availability analysis
+
+<b>Example:</b> <code>/osint scan johndoe</code>
+</blockquote>
+
+<b>🔒 Privacy & Ethics:</b>
+• All tools respect privacy policies
+• Educational purposes only
+• Responsible OSINT practices
+• No data storage or logging
+
+<b>Note:</b> This command is restricted to sudo users only for security purposes."""
+
+OSINT_HELP_DICT = {
+    "main": osint_help,
 }
 
 NSFW_HELP_DICT = {
@@ -2289,6 +2627,156 @@ Practical examples of using QuickInfo in different scenarios.
 • Respects Telegram's privacy settings
 • Some information may be limited by permissions"""
 
+# Forward help content
+forward_main = """<b>🔄 Message Forwarding</b>
+
+Copy messages between Telegram chats using the bot's forwarding system.
+
+<b>🎯 Manual Forwarding:</b>
+<code>/forward source_chat destination_chat [-skip N] [-range START-END]</code>
+
+<b>📝 Examples:</b>
+• <code>/forward @source_channel @dest_channel</code>
+• <code>/forward -1001234567890 @mychannel</code>
+• <code>/forward @source @dest -skip 3</code>
+• <code>/forward @source @dest -range 100-200</code>
+• <code>/forward @source @dest -skip 2 -range 50-150</code>
+
+<b>🔧 Parameters:</b>
+• <b>source_chat</b>: Source chat ID or @username
+• <b>destination_chat</b>: Destination chat ID or @username
+• <b>-skip N</b>: Skip N messages between each forwarded message (optional)
+• <b>-range START-END</b>: Forward specific message range (optional)
+
+<b>⏭️ Skip Pattern Example:</b>
+With <code>-skip 3</code>: Forward msg1 → Skip msg2,3,4 → Forward msg5 → Skip msg6,7,8 → Forward msg9...
+
+<b>⚡ Features:</b>
+• Copies messages without "Forwarded from" label
+• Prevents duplicate forwarding
+• Real-time progress updates with cancel button
+• Supports all message types (text, media, files)
+• Works with groups, channels, supergroups
+• Cancellable during execution
+
+<b>🔒 Access Requirements:</b>
+• Command is sudo-only
+• Bot/user must have access to both chats
+• Uses USER_SESSION_STRING for better access"""
+
+forward_automatic = """<b>🤖 Automatic Forwarding</b>
+
+Set up automatic message forwarding from source chats to destination chats.
+
+<b>⚙️ Configuration:</b>
+Add these to your config:
+<code>FORWARD_SOURCE = "chat1,@channel1,chat2"
+FORWARD_DESTINATION = "dest1,@dest_channel"</code>
+
+<b>📋 Examples:</b>
+<code>FORWARD_SOURCE = "-1001234567890,@mychannel"
+FORWARD_DESTINATION = "@destination_channel"</code>
+
+<b>🔄 How it works:</b>
+• Monitors configured source chats
+• Automatically copies new messages
+• Forwards to all destination chats
+• Prevents duplicate forwarding
+• Sends completion notifications to owner
+
+<b>✨ Benefits:</b>
+• Real-time forwarding
+• No manual intervention needed
+• Handles all message types
+• Database tracking for duplicates
+• Owner notifications for monitoring"""
+
+forward_advanced = """<b>🚀 Advanced Features</b>
+
+<b>🎛️ Skip Functionality:</b>
+The -skip flag creates a pattern for selective forwarding:
+• <code>-skip 3</code>: Forward 1 message, skip 3, forward 1, skip 3, repeat...
+• <code>-skip 0</code> or no flag: Forward all messages
+• Useful for sampling content or reducing volume
+• Optional parameter (default: no skip)
+
+<b>📍 Range Functionality:</b>
+The -range flag allows forwarding specific message ranges:
+• <code>-range 100-200</code>: Forward messages with IDs 100 to 200
+• <code>-range 1-50</code>: Forward first 50 messages by ID
+• Works with any valid message ID range
+• Can be combined with -skip for selective range forwarding
+• Optional parameter (default: recent messages)
+
+<b>🔄 Message Processing:</b>
+• Processes messages in chronological order
+• Handles media groups (albums) properly
+• Supports all Telegram message types
+• Maintains message formatting and metadata
+
+<b>📊 Progress Tracking:</b>
+• Real-time status updates during forwarding
+• Shows forwarded/failed/skipped counts
+• Cancel button to stop forwarding mid-process
+• Completion notifications to bot owner
+• Detailed logging for monitoring
+
+<b>🛡️ Error Handling:</b>
+• Automatic FloodWait handling
+• Graceful handling of access errors
+• Continues processing on individual failures
+• Comprehensive error logging
+
+<b>💾 Database Integration:</b>
+• Tracks forwarded messages to prevent duplicates
+• Stores source/destination mapping
+• Supports multiple bot instances
+• Efficient duplicate checking"""
+
+forward_troubleshooting = """<b>🔧 Troubleshooting</b>
+
+<b>❌ Common Issues:</b>
+
+<b>1. "Could not resolve chat"</b>
+• Check chat ID/username spelling
+• Ensure chat exists and is accessible
+• Verify bot/user has access to the chat
+
+<b>2. "Access error copying message"</b>
+• Bot/user not member of source chat
+• Insufficient permissions in chat
+• Private chat without conversation history
+
+<b>3. "No messages found"</b>
+• Empty source chat
+• All messages already forwarded
+• Skip count too high
+
+<b>🔍 Debug Steps:</b>
+• Check bot logs for detailed errors
+• Verify USER_SESSION_STRING is configured
+• Test with public channels first
+• Ensure DATABASE_URL is set for tracking
+
+<b>⚡ Performance Tips:</b>
+• Use USER_SESSION_STRING for better access
+• Configure DATABASE_URL for duplicate prevention
+• Monitor owner notifications for status
+• Check logs for any rate limiting issues
+
+<b>🔒 Security Notes:</b>
+• Only sudo users can use manual forwarding
+• Automatic forwarding requires proper config
+• All activities are logged for monitoring
+• Respects Telegram's rate limits and policies"""
+
+FORWARD_HELP_DICT = {
+    "main": forward_main,
+    "Automatic": forward_automatic,
+    "Advanced": forward_advanced,
+    "Troubleshooting": forward_troubleshooting,
+}
+
 QUICKINFO_HELP_DICT = {
     "main": quickinfo_main,
     "Interactive-Buttons": quickinfo_buttons,
@@ -2898,7 +3386,9 @@ search_commands = f"""
 /{BotCommands.HydraSearchCommamd} [query]: Search for NZB files.
 /{BotCommands.MediaSearchCommand[0]} or /{BotCommands.MediaSearchCommand[1]}: Search for media files in configured channels.
 /{BotCommands.IMDBCommand}: Search for movies or TV series info on IMDB.
+/{BotCommands.TMDBCommand}: Search for movies, TV shows, and people on TMDB.
 /{BotCommands.ScrapCommand} [url|help|domains]: Scrape movie info (title, qualities, sizes, magnet links) from 1tamilmv websites.
+/{BotCommands.TraceCommand}: Identify anime from images, videos, or GIFs using trace.moe API.
 
 """
 
@@ -2911,7 +3401,7 @@ file_commands = f"""
 /{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
 /{BotCommands.SoxCommand[0]} or /{BotCommands.SoxCommand[1]}: Generate audio spectrum from audio files.
 /{BotCommands.PasteCommand}: Paste text/code to a pastebin service.
-# File2Link command removed - streaming functionality disabled
+/{BotCommands.File2LinkCommand}: Convert Telegram media files into direct streaming links. Reply to any media file to generate streaming and download links.
 /{BotCommands.ToolCommand[0]} or /{BotCommands.ToolCommand[1]}: Media conversion and processing tools (gif, sticker, emoji, voice, vnote, image processing, text tools). Also supports direct GitHub repo download with URL.
 # IndexCommand removed - media indexing functionality disabled
 """
@@ -2928,8 +3418,13 @@ security_commands = f"""
 /{BotCommands.UsersCommand}: Show authorized users (Owner & Sudo only).
 /{BotCommands.GenSessionCommand[0]} or /{BotCommands.GenSessionCommand[1]}: Generate a Pyrogram session string securely.
 /{BotCommands.VirusTotalCommand}: Scan files or URLs for viruses using VirusTotal.
+/{BotCommands.PhishCheckCommand}: Check domains and emails for phishing/security threats.
+/{BotCommands.WotCommand}: Check website, domain, and IP reputation using WOT and AbuseIPDB.
 /{BotCommands.NSFWStatsCommand}: View NSFW detection statistics and system status.
 /{BotCommands.NSFWTestCommand}: Test NSFW detection on text or media content.
+/{BotCommands.ContactCommand}: Contact the bot owner (available to all users).
+/{BotCommands.BanCommand}: Ban a user from using the contact feature (Sudo only).
+/{BotCommands.UnbanCommand}: Unban a user from using the contact feature (Sudo only).
 """
 
 # Settings & Configuration page
@@ -2950,11 +3445,13 @@ special_commands = f"""
 
 /{BotCommands.AskCommand}: Chat with AI using the bot (Mistral or DeepSeek).
 /{BotCommands.TruecallerCommand}: Lookup phone numbers using Truecaller.
+/{BotCommands.OSINTCommand}: Comprehensive OSINT intelligence suite with phone, IP, email, user, and vehicle lookup capabilities (Sudo only).
 /{BotCommands.EncodeCommand[0]} or /{BotCommands.EncodeCommand[1]} [query]: Encode text using various encoding methods (Base64, Binary, Cryptography, etc.).
 /{BotCommands.DecodeCommand[0]} or /{BotCommands.DecodeCommand[1]} [query]: Decode text using various decoding methods.
 /{BotCommands.QuickInfoCommand[0]} or /{BotCommands.QuickInfoCommand[1]} [chat]: Get chat/user information with interactive buttons.
-# File2Link and StreamStats commands removed - streaming functionality disabled
+/{BotCommands.File2LinkCommand}: Convert Telegram media files into direct streaming links with browser player support.
 /{BotCommands.WhisperCommand}: Send private whisper messages in group chats (reply to user or use -to flag for multiple targets).
+/{BotCommands.NekoCommand}: Get adorable cat images with voting system 🐱💕 (use /neko or /neko [number] for multiple cats).
 """
 
 # System Commands page
@@ -2971,6 +3468,44 @@ system_commands = f"""
 # IndexCommand removed - media indexing functionality disabled
 """
 
+# File2Link Commands page
+f2l_commands = f"""
+<b>🔗 File2Link Commands</b>
+
+/{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}: Convert Telegram media files into direct streaming links. Reply to any media file to generate streaming and download links.
+
+<b>Features:</b>
+• Stream files directly in browser with media player
+• Generate direct download links
+• Support for videos, audio, documents, images, and more
+• Automatic file size detection (2GB for non-premium, 4GB for premium accounts)
+• Multi-client load balancing for optimal performance
+• Secure hash-based access control
+
+<b>Usage:</b>
+1. Send or forward a media file to the bot
+2. Reply to the media file with /{BotCommands.File2LinkCommand[0]} or /{BotCommands.File2LinkCommand[1]}
+3. Get streaming and download links with inline buttons
+
+<b>Supported File Types:</b>
+• Videos (MP4, MKV, AVI, etc.)
+• Audio (MP3, FLAC, M4A, etc.)
+• Documents (PDF, ZIP, etc.)
+• Images (JPG, PNG, etc.)
+• Animations (GIF, etc.)
+• Voice messages and video notes
+
+<b>Requirements:</b>
+• FILE2LINK_ENABLED must be True in config
+• BASE_URL or FILE2LINK_BASE_URL must be configured
+• BIN_CHANNEL must be set for file storage
+"""
+
+# File2Link Help Dictionary
+F2L_HELP_DICT = {
+    "main": f2l_commands,
+}
+
 # Help page
 help_commands = f"""
 <b>❓ Help</b>
@@ -2978,7 +3513,7 @@ help_commands = f"""
 /{BotCommands.HelpCommand}: Show this help message.
 """
 
-# Dictionary to store all help pages
+# Dictionary to store all help pages (moved after all command definitions)
 help_string = {
     "main": main_help_string,
     "download": download_commands,
@@ -2990,5 +3525,4 @@ help_string = {
     "special": special_commands,
     "system": system_commands,
     "help": help_commands,
-    # "f2l" help removed - File-to-Link functionality disabled
 }
