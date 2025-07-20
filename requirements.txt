@@ -5,6 +5,7 @@ anytree
 apscheduler
 aioaria2
 aioqbt
+aient
 beautifulsoup4
 git+https://github.com/cinemagoer/cinemagoer
 cloudscraper
@@ -23,6 +24,7 @@ jinja2
 kurigram
 langcodes
 lxml
+md2tgmd
 natsort
 orjson
 pycountry
@@ -37,6 +39,7 @@ pytdbot[tdjson]
 reportlab>=4.0.0
 requests
 speedtest-cli
+tmdb3
 tgcrypto
 telegraph
 tenacity
