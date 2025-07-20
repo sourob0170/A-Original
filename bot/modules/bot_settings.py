@@ -3357,7 +3357,9 @@ These are core Zotify settings that control the basic download behavior."""
         )
 
         # Check if credentials exist (database first, then file)
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            zotify_config,
+        )
 
         # Use the user_id parameter passed to get_buttons function
         creds_exist = await zotify_config.has_credentials(user_id)
@@ -4026,7 +4028,9 @@ To generate a token, use the /dev/generate_yt_drive_token.py script."""
         )
         mega_enabled = "✅ Enabled" if Config.MEGA_ENABLED else "❌ Disabled"
         ddl_enabled = "✅ Enabled" if Config.DDL_ENABLED else "❌ Disabled"
-        file2link_enabled = "✅ Enabled" if Config.FILE2LINK_ENABLED else "❌ Disabled"
+        file2link_enabled = (
+            "✅ Enabled" if Config.FILE2LINK_ENABLED else "❌ Disabled"
+        )
         wrong_cmd_warnings_enabled = (
             "✅ Enabled" if Config.WRONG_CMD_WARNINGS_ENABLED else "❌ Disabled"
         )
@@ -4475,7 +4479,6 @@ The following MEGA security features are <b>not supported</b> by MEGA SDK v4.8.0
             )
             else "❌ Not Set"
         )
-
 
         msg = f"""<b>📤 DDL (Direct Download Link) Settings</b> | State: {state}
 
@@ -8192,7 +8195,9 @@ async def _process_zotify_credentials_upload(
             return False, f"Invalid JSON format: {e}"
 
         # Save credentials to database and file using the zotify config helper
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            zotify_config,
+        )
 
         success = await zotify_config.save_credentials(credentials_data, user_id)
 
@@ -8235,7 +8240,9 @@ async def _process_streamrip_config_upload(
             return False, f"Invalid TOML format: {e}"
 
         # Save to database using streamrip config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         success = await streamrip_config.save_custom_config_to_db(config_content)
 
@@ -10415,7 +10422,9 @@ async def edit_bot_settings(client, query):
 
         try:
             # Import streamrip config helper
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             # Try to get custom config from database first
             config_content = await streamrip_config.get_custom_config_from_db()
@@ -10537,7 +10546,9 @@ async def edit_bot_settings(client, query):
 
         try:
             # Import streamrip config helper
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             # Delete custom config from database
             success = await streamrip_config.delete_custom_config_from_db()
@@ -14765,17 +14776,14 @@ async def edit_bot_settings(client, query):
         value = ""
         if data[2] in DEFAULT_VALUES:
             value = DEFAULT_VALUES[data[2]]
-        elif data[2] == "PAID_CHANNEL_ID":
-            value = 0
-        elif data[2] == "TOKEN_TIMEOUT":
-            value = 0
-        elif data[2] == "LOG_CHAT_ID":
-            value = 0
-        elif data[2] == "OWNER_ID":
-            value = 0
-        elif data[2] == "TELEGRAM_API":
-            value = 0
-        elif data[2] in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]:
+        elif (
+            data[2] == "PAID_CHANNEL_ID"
+            or data[2] == "TOKEN_TIMEOUT"
+            or data[2] == "LOG_CHAT_ID"
+            or data[2] == "OWNER_ID"
+            or data[2] == "TELEGRAM_API"
+            or data[2] in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]
+        ):
             value = 0
         elif data[2] == "EXCLUDED_EXTENSIONS":
             excluded_extensions.clear()

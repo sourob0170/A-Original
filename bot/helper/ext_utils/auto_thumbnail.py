@@ -3,6 +3,7 @@ Auto Thumbnail Helper Module
 Automatically fetches movie/TV show thumbnails from IMDB and TMDB based on filename metadata
 """
 
+import contextlib
 import os
 import re
 
@@ -122,16 +123,25 @@ class AutoThumbnailHelper:
                     best_title = extracted_title
                     best_score = score
 
-            except Exception as e:
+            except Exception:
                 continue
 
-        return best_title.strip() if best_title else cls._extract_title_fallback(original_filename)
+        return (
+            best_title.strip()
+            if best_title
+            else cls._extract_title_fallback(original_filename)
+        )
 
     @classmethod
     def _extract_title_strategy_1(cls, title: str, _original: str) -> str:
         """Enhanced conservative cleaning with better title preservation"""
         # Remove website prefixes first
-        title = re.sub(r"^www\.\w+\.(com|net|org|in|onl|co|tv|me|to|cc|xyz)\s*-\s*", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"^www\.\w+\.(com|net|org|in|onl|co|tv|me|to|cc|xyz)\s*-\s*",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Replace separators with spaces
         title = re.sub(r"[._-]+", " ", title)
@@ -143,8 +153,8 @@ class AutoThumbnailHelper:
         # Detect TV show patterns
         tv_patterns = [
             r"\bS\d{1,2}E\d{1,3}\b",  # S01E01
-            r"\bSeason\s*\d+\b",      # Season 1
-            r"\bEpisode\s*\d+\b",     # Episode 1
+            r"\bSeason\s*\d+\b",  # Season 1
+            r"\bEpisode\s*\d+\b",  # Episode 1
             r"\b\d{1,2}x\d{1,3}\b",  # 1x01
         ]
 
@@ -152,7 +162,7 @@ class AutoThumbnailHelper:
         for pattern in tv_patterns:
             match = re.search(pattern, title, re.IGNORECASE)
             if match:
-                title = title[:match.start()].strip()
+                title = title[: match.start()].strip()
                 is_tv_show = True
                 break
 
@@ -172,8 +182,18 @@ class AutoThumbnailHelper:
             title = re.sub(pattern, "", title, flags=re.IGNORECASE)
 
         # Remove bracketed/parenthetical content that looks technical
-        title = re.sub(r"\s*\[[^\]]*(?:rip|encode|web|hd|quality|group|tam|tel|hin|aac|mb|esub)\s*[^\]]*\]", "", title, flags=re.IGNORECASE)
-        title = re.sub(r"\s*\([^)]*(?:rip|encode|web|hd|quality|group|tam|tel|hin|aac|mb|esub)\s*[^)]*\)", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s*\[[^\]]*(?:rip|encode|web|hd|quality|group|tam|tel|hin|aac|mb|esub)\s*[^\]]*\]",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
+        title = re.sub(
+            r"\s*\([^)]*(?:rip|encode|web|hd|quality|group|tam|tel|hin|aac|mb|esub)\s*[^)]*\)",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Clean up spacing and multiple spaces
         title = re.sub(r"\s+", " ", title).strip()
@@ -266,15 +286,20 @@ class AutoThumbnailHelper:
             title = re.sub(pattern, "", title, flags=re.IGNORECASE)
 
         # Remove technical terms but preserve anime-specific terms
-        title = re.sub(r"\s+(720p|1080p|x264|x265|aac|flac).*$", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s+(720p|1080p|x264|x265|aac|flac).*$", "", title, flags=re.IGNORECASE
+        )
 
         # Remove bracketed content except if it might be part of title
-        title = re.sub(r"\s*\[[^\]]*(?:rip|encode|web|bd|dvd)\s*[^\]]*\]", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s*\[[^\]]*(?:rip|encode|web|bd|dvd)\s*[^\]]*\]",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Clean up
-        title = re.sub(r"\s+", " ", title).strip()
-
-        return title
+        return re.sub(r"\s+", " ", title).strip()
 
     @classmethod
     def _extract_title_strategy_4(cls, title: str, _original: str) -> str:
@@ -295,7 +320,9 @@ class AutoThumbnailHelper:
         title_words = []
         for word in words:
             # Stop at technical indicators
-            if any(re.match(pattern, word, re.IGNORECASE) for pattern in stop_indicators):
+            if any(
+                re.match(pattern, word, re.IGNORECASE) for pattern in stop_indicators
+            ):
                 break
 
             # Skip obvious technical terms
@@ -339,7 +366,15 @@ class AutoThumbnailHelper:
             score -= 3
 
         # Penalize if contains technical terms
-        technical_terms = ["720p", "1080p", "x264", "x265", "bluray", "webrip", "hdtv"]
+        technical_terms = [
+            "720p",
+            "1080p",
+            "x264",
+            "x265",
+            "bluray",
+            "webrip",
+            "hdtv",
+        ]
         if any(term in title.lower() for term in technical_terms):
             score -= 10
 
@@ -364,17 +399,22 @@ class AutoThumbnailHelper:
 
     @classmethod
     async def _advanced_search_strategy(
-        cls, clean_title: str, year: int | None, is_tv_show: bool, original_filename: str
+        cls,
+        clean_title: str,
+        year: int | None,
+        is_tv_show: bool,
+        original_filename: str,
     ) -> str | None:
         """Advanced search strategy with multiple approaches and fallbacks"""
 
         # Generate multiple search variations
-        search_variations = cls._generate_search_variations(clean_title, year, is_tv_show, original_filename)
+        search_variations = cls._generate_search_variations(
+            clean_title, year, is_tv_show, original_filename
+        )
 
         # Try TMDB first (better quality images)
         if Config.TMDB_API_KEY and Config.TMDB_ENABLED:
-            for variation_name, search_query, search_year in search_variations:
-
+            for _variation_name, search_query, search_year in search_variations:
                 thumbnail_url = await cls._get_tmdb_thumbnail(
                     search_query, search_year, is_tv_show
                 )
@@ -392,16 +432,22 @@ class AutoThumbnailHelper:
 
         # Fallback to IMDB with same variations
         if Config.IMDB_ENABLED:
-            for variation_name, search_query, search_year in search_variations:
+            for _variation_name, search_query, search_year in search_variations:
                 # Format query for IMDB
-                imdb_query = f"{search_query} {search_year}" if search_year else search_query
-                thumbnail_url = await cls._get_imdb_thumbnail(imdb_query, search_year)
+                imdb_query = (
+                    f"{search_query} {search_year}" if search_year else search_query
+                )
+                thumbnail_url = await cls._get_imdb_thumbnail(
+                    imdb_query, search_year
+                )
 
                 if thumbnail_url:
                     return thumbnail_url
 
         # Last resort: Word-by-word and partial search
-        thumbnail_url = await cls._desperate_search_strategy(clean_title, year, is_tv_show)
+        thumbnail_url = await cls._desperate_search_strategy(
+            clean_title, year, is_tv_show
+        )
         if thumbnail_url:
             return thumbnail_url
 
@@ -447,8 +493,27 @@ class AutoThumbnailHelper:
         words = title.split()
 
         # Remove common stop words that don't help with search
-        stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
-        meaningful_words = [word for word in words if word.lower() not in stop_words and len(word) > 2]
+        stop_words = {
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+        }
+        meaningful_words = [
+            word
+            for word in words
+            if word.lower() not in stop_words and len(word) > 2
+        ]
 
         # 1. Individual meaningful words (most important)
         for word in meaningful_words:
@@ -553,38 +618,33 @@ class AutoThumbnailHelper:
         # Common romanization transformations
         transformations = [
             # Long vowel variations
-            (r"ou", "o"),      # Shounen -> Shonen
-            (r"oo", "o"),      # Dragonball -> Dragonbal
-            (r"uu", "u"),      # Yuugi -> Yugi
-            (r"aa", "a"),      # Naato -> Nato
-            (r"ii", "i"),      # Shiina -> Shina
-            (r"ee", "e"),      # Keeko -> Keko
-
+            (r"ou", "o"),  # Shounen -> Shonen
+            (r"oo", "o"),  # Dragonball -> Dragonbal
+            (r"uu", "u"),  # Yuugi -> Yugi
+            (r"aa", "a"),  # Naato -> Nato
+            (r"ii", "i"),  # Shiina -> Shina
+            (r"ee", "e"),  # Keeko -> Keko
             # Particle variations
             (r"\bwo\b", "o"),  # wo -> o
-            (r"\bwa\b", "ha"), # wa -> ha (sometimes)
-
+            (r"\bwa\b", "ha"),  # wa -> ha (sometimes)
             # Common consonant variations
-            (r"tsu", "tu"),    # Natsu -> Natu
-            (r"chi", "ti"),    # Machi -> Mati
-            (r"shi", "si"),    # Shiro -> Siro
-            (r"ji", "zi"),     # Jiro -> Ziro
-            (r"fu", "hu"),     # Fuji -> Huji
-
+            (r"tsu", "tu"),  # Natsu -> Natu
+            (r"chi", "ti"),  # Machi -> Mati
+            (r"shi", "si"),  # Shiro -> Siro
+            (r"ji", "zi"),  # Jiro -> Ziro
+            (r"fu", "hu"),  # Fuji -> Huji
             # Double consonant variations
-            (r"kk", "k"),      # Rokka -> Roka
-            (r"pp", "p"),      # Nippon -> Nipon
-            (r"tt", "t"),      # Natto -> Nato
-            (r"ss", "s"),      # Kissu -> Kisu
-
+            (r"kk", "k"),  # Rokka -> Roka
+            (r"pp", "p"),  # Nippon -> Nipon
+            (r"tt", "t"),  # Natto -> Nato
+            (r"ss", "s"),  # Kissu -> Kisu
             # 'n' variations
-            (r"n'", "n"),      # Shin'ya -> Shinya
-            (r"nb", "mb"),     # Shinbun -> Shimbun
-            (r"np", "mp"),     # Shinpai -> Shimpai
-
+            (r"n'", "n"),  # Shin'ya -> Shinya
+            (r"nb", "mb"),  # Shinbun -> Shimbun
+            (r"np", "mp"),  # Shinpai -> Shimpai
             # Reverse some transformations too
-            (r"o", "ou"),      # Shonen -> Shounen
-            (r"u", "uu"),      # Yugi -> Yuugi
+            (r"o", "ou"),  # Shonen -> Shounen
+            (r"u", "uu"),  # Yugi -> Yuugi
         ]
 
         current_variants = [title]
@@ -593,7 +653,9 @@ class AutoThumbnailHelper:
         for pattern, replacement in transformations:
             new_variants = []
             for variant in current_variants:
-                new_variant = re.sub(pattern, replacement, variant, flags=re.IGNORECASE)
+                new_variant = re.sub(
+                    pattern, replacement, variant, flags=re.IGNORECASE
+                )
                 if new_variant != variant and new_variant not in current_variants:
                     new_variants.append(new_variant)
             current_variants.extend(new_variants)
@@ -607,7 +669,17 @@ class AutoThumbnailHelper:
             # Try without particles
             no_particles = []
             for word in words:
-                if word.lower() not in ["no", "wa", "ga", "wo", "ni", "de", "to", "ka", "na"]:
+                if word.lower() not in [
+                    "no",
+                    "wa",
+                    "ga",
+                    "wo",
+                    "ni",
+                    "de",
+                    "to",
+                    "ka",
+                    "na",
+                ]:
                     no_particles.append(word)
 
             if len(no_particles) != len(words) and len(no_particles) > 0:
@@ -623,46 +695,51 @@ class AutoThumbnailHelper:
             r"\b(anime|manga|ova|ona|special|movie)\b",
             r"\b(episode|ep)\s*\d+\b",
             r"\b(season|s)\d+\b",
-
             # Japanese romanization patterns (common particles and words)
             r"\b(no|wa|ga|wo|ni|de|to|ka|na|da|desu|masu|chan|kun|san|sama)\b",
             r"\b(senpai|kouhai|sensei|onii|onee|imouto|oniisan|oneechan)\b",
-
             # Common anime title patterns
             r"\b(shippuden|kai|brotherhood|alchemist|titan|hero|academia|slayer|hunter)\b",
             r"\b(dragon|ball|piece|naruto|bleach|attack|death|note|fullmetal)\b",
             r"\b(my|boku|watashi|ore|kimi|anata)\b.*\b(hero|academia|love|story|life)\b",
-
             # Anime-specific suffixes and formats
             r"\b(tv|bd|dvd)\b.*\d+",
             r"\b(batch|complete|collection)\b",
             r"\b(sub|dub|raw)\b",
-
             # Japanese naming patterns
             r"[A-Za-z]+\s+(no|wa|ga|wo|ni|de|to)\s+[A-Za-z]+",
-
             # Common anime studios/sources
             r"\b(studio|toei|madhouse|bones|wit|mappa|pierrot|sunrise)\b",
             r"\b(crunchyroll|funimation|aniplex|viz)\b",
         ]
 
         # Check for multiple indicators (stronger confidence)
-        matches = sum(1 for pattern in anime_indicators if re.search(pattern, title, re.IGNORECASE))
+        matches = sum(
+            1
+            for pattern in anime_indicators
+            if re.search(pattern, title, re.IGNORECASE)
+        )
 
         # Also check filename patterns that suggest anime
         filename_patterns = [
             r"\[.*\].*\[.*\]",  # Multiple brackets (common in anime releases)
-            r"_\d{2,3}_",       # Episode numbers with underscores
-            r"\.S\d+E\d+\.",    # Season/Episode format
+            r"_\d{2,3}_",  # Episode numbers with underscores
+            r"\.S\d+E\d+\.",  # Season/Episode format
         ]
 
-        filename_matches = sum(1 for pattern in filename_patterns if re.search(pattern, title))
+        filename_matches = sum(
+            1 for pattern in filename_patterns if re.search(pattern, title)
+        )
 
         return matches >= 2 or filename_matches >= 1
 
     @classmethod
     def _generate_search_variations(
-        cls, clean_title: str, year: int | None, is_tv_show: bool, original_filename: str
+        cls,
+        clean_title: str,
+        year: int | None,
+        is_tv_show: bool,
+        original_filename: str,
     ) -> list[tuple[str, str, int | None]]:
         """Generate multiple search variations for better matching"""
         variations = []
@@ -702,8 +779,12 @@ class AutoThumbnailHelper:
                 variations.append(("anime_clean", anime_title, year))
 
             # Add multiple anime variations
-            anime_variations = cls._generate_anime_search_variations(anime_title or clean_title)
-            for i, anime_var in enumerate(anime_variations[1:], 1):  # Skip first (original)
+            anime_variations = cls._generate_anime_search_variations(
+                anime_title or clean_title
+            )
+            for i, anime_var in enumerate(
+                anime_variations[1:], 1
+            ):  # Skip first (original)
                 variations.append((f"anime_var_{i}", anime_var, year))
 
         # Variation 7: Try first few words only (for very long titles)
@@ -723,10 +804,18 @@ class AutoThumbnailHelper:
         """Remove common words that might interfere with search"""
         # Words that often cause search issues
         interfering_words = [
-            r"\bThe\b", r"\bA\b", r"\bAn\b",  # Articles
-            r"\bPart\b", r"\bVolume\b", r"\bVol\b",  # Parts
-            r"\bExtended\b", r"\bDirectors?\b", r"\bCut\b",  # Versions
-            r"\bRemastered\b", r"\bSpecial\b", r"\bEdition\b",
+            r"\bThe\b",
+            r"\bA\b",
+            r"\bAn\b",  # Articles
+            r"\bPart\b",
+            r"\bVolume\b",
+            r"\bVol\b",  # Parts
+            r"\bExtended\b",
+            r"\bDirectors?\b",
+            r"\bCut\b",  # Versions
+            r"\bRemastered\b",
+            r"\bSpecial\b",
+            r"\bEdition\b",
         ]
 
         simplified = title
@@ -746,7 +835,9 @@ class AutoThumbnailHelper:
         if bracket_match:
             bracket_title = bracket_match.group(1)
             # Check if it looks like a title (not technical info)
-            if not re.search(r"\d{3,4}p|x264|x265|bluray|webrip", bracket_title, re.IGNORECASE):
+            if not re.search(
+                r"\d{3,4}p|x264|x265|bluray|webrip", bracket_title, re.IGNORECASE
+            ):
                 return bracket_title.strip()
 
         # Try extracting by stopping at first technical indicator
@@ -754,7 +845,9 @@ class AutoThumbnailHelper:
         title_words = []
 
         for word in words:
-            if re.match(r"(s\d+e\d+|\d{3,4}p|x264|x265|season|episode)", word, re.IGNORECASE):
+            if re.match(
+                r"(s\d+e\d+|\d{3,4}p|x264|x265|season|episode)", word, re.IGNORECASE
+            ):
                 break
             title_words.append(word)
 
@@ -785,9 +878,7 @@ class AutoThumbnailHelper:
         cleaned = re.sub(r"\{.*?\}", "", cleaned)  # Remove all braced content
 
         # Clean up spacing
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
-        return cleaned
+        return re.sub(r"\s+", " ", cleaned).strip()
 
     @classmethod
     def _generate_anime_search_variations(cls, title: str) -> list[str]:
@@ -799,26 +890,25 @@ class AutoThumbnailHelper:
             # Remove common prefixes/suffixes
             (r"^(the|a|an)\s+", ""),
             (r"\s+(anime|series|tv|show)$", ""),
-
             # Japanese romanization alternatives
-            (r"\bou\b", "o"),    # ou -> o
-            (r"\boo\b", "o"),    # oo -> o
-            (r"\buu\b", "u"),    # uu -> u
-            (r"wo", "o"),        # wo -> o
-            (r"wo", "wo"),       # Keep wo as is
-
+            (r"\bou\b", "o"),  # ou -> o
+            (r"\boo\b", "o"),  # oo -> o
+            (r"\buu\b", "u"),  # uu -> u
+            (r"wo", "o"),  # wo -> o
+            (r"wo", "wo"),  # Keep wo as is
             # Common anime word variations
-            (r"\bno\b", ""),     # Remove particle "no"
-            (r"\bwa\b", ""),     # Remove particle "wa"
-            (r"\bga\b", ""),     # Remove particle "ga"
-
+            (r"\bno\b", ""),  # Remove particle "no"
+            (r"\bwa\b", ""),  # Remove particle "wa"
+            (r"\bga\b", ""),  # Remove particle "ga"
             # Number format variations
             (r"\b(\d+)\b", r"0\1"),  # Add leading zero to numbers
             (r"\b0(\d{2,})\b", r"\1"),  # Remove leading zero from multi-digit
         ]
 
         for pattern, replacement in transformations:
-            variant = re.sub(pattern, replacement, title, flags=re.IGNORECASE).strip()
+            variant = re.sub(
+                pattern, replacement, title, flags=re.IGNORECASE
+            ).strip()
             if variant and variant != title and variant not in variations:
                 variations.append(variant)
 
@@ -829,12 +919,15 @@ class AutoThumbnailHelper:
 
         # Try with different word orders (for titles with particles)
         words = title.split()
-        if len(words) >= 3 and any(word.lower() in ["no", "wa", "ga", "wo", "ni", "de", "to"] for word in words):
+        if len(words) >= 3 and any(
+            word.lower() in ["no", "wa", "ga", "wo", "ni", "de", "to"]
+            for word in words
+        ):
             # Try moving particles to different positions
             for i, word in enumerate(words):
                 if word.lower() in ["no", "wa", "ga"]:
                     # Try without the particle
-                    variant_words = words[:i] + words[i+1:]
+                    variant_words = words[:i] + words[i + 1 :]
                     variant = " ".join(variant_words)
                     if variant not in variations:
                         variations.append(variant)
@@ -1012,7 +1105,9 @@ class TMDBHelper:
     _cache_timestamps: ClassVar[dict] = {}
 
     @classmethod
-    async def search_movie_enhanced(cls, title: str, year: int | None = None) -> dict | None:
+    async def search_movie_enhanced(
+        cls, title: str, year: int | None = None
+    ) -> dict | None:
         """Enhanced movie search with better result selection"""
         try:
             # Try multiple search approaches
@@ -1028,14 +1123,21 @@ class TMDBHelper:
             if year:
                 no_year_result = await cls.search_movie(title, None)
                 if no_year_result and no_year_result != primary_result:
-                    score = cls._score_search_result(no_year_result, title, year, False)
+                    score = cls._score_search_result(
+                        no_year_result, title, year, False
+                    )
                     search_results.append((no_year_result, score, "no_year"))
 
             # Multi-search (searches across movies, TV, and people)
             multi_result = await cls._multi_search(title, year)
             if multi_result and multi_result.get("media_type") == "movie":
-                if not any(r[0].get("id") == multi_result.get("id") for r, _, _ in search_results):
-                    score = cls._score_search_result(multi_result, title, year, False)
+                if not any(
+                    r[0].get("id") == multi_result.get("id")
+                    for r, _, _ in search_results
+                ):
+                    score = cls._score_search_result(
+                        multi_result, title, year, False
+                    )
                     search_results.append((multi_result, score, "multi"))
 
             # Return best result with validation
@@ -1047,12 +1149,15 @@ class TMDBHelper:
                     # Validate the result before returning
                     if cls._validate_search_result(result, title, year, False):
                         return result
-                    else:
-                        LOGGER.warning(f"⚠️ Rejected result via {method} (score: {score}): {result.get('title', 'Unknown')} - failed validation")
+                    LOGGER.warning(
+                        f"⚠️ Rejected result via {method} (score: {score}): {result.get('title', 'Unknown')} - failed validation"
+                    )
 
                 # If no result passes validation, return the highest scored one with warning
                 best_result = search_results[0]
-                LOGGER.warning(f"⚠️ Using unvalidated result via {best_result[2]} (score: {best_result[1]}): {best_result[0].get('title', 'Unknown')}")
+                LOGGER.warning(
+                    f"⚠️ Using unvalidated result via {best_result[2]} (score: {best_result[1]}): {best_result[0].get('title', 'Unknown')}"
+                )
                 return best_result[0]
 
             return None
@@ -1062,7 +1167,9 @@ class TMDBHelper:
             return await cls.search_movie(title, year)  # Fallback to basic search
 
     @classmethod
-    async def search_tv_show_enhanced(cls, title: str, year: int | None = None) -> dict | None:
+    async def search_tv_show_enhanced(
+        cls, title: str, year: int | None = None
+    ) -> dict | None:
         """Enhanced TV show search with better result selection"""
         try:
             # Try multiple search approaches
@@ -1078,13 +1185,18 @@ class TMDBHelper:
             if year:
                 no_year_result = await cls.search_tv_show(title, None)
                 if no_year_result and no_year_result != primary_result:
-                    score = cls._score_search_result(no_year_result, title, year, True)
+                    score = cls._score_search_result(
+                        no_year_result, title, year, True
+                    )
                     search_results.append((no_year_result, score, "no_year"))
 
             # Multi-search
             multi_result = await cls._multi_search(title, year)
             if multi_result and multi_result.get("media_type") == "tv":
-                if not any(r[0].get("id") == multi_result.get("id") for r, _, _ in search_results):
+                if not any(
+                    r[0].get("id") == multi_result.get("id")
+                    for r, _, _ in search_results
+                ):
                     score = cls._score_search_result(multi_result, title, year, True)
                     search_results.append((multi_result, score, "multi"))
 
@@ -1097,12 +1209,15 @@ class TMDBHelper:
                     # Validate the result before returning
                     if cls._validate_search_result(result, title, year, True):
                         return result
-                    else:
-                        LOGGER.warning(f"⚠️ Rejected TV result via {method} (score: {score}): {result.get('name', 'Unknown')} - failed validation")
+                    LOGGER.warning(
+                        f"⚠️ Rejected TV result via {method} (score: {score}): {result.get('name', 'Unknown')} - failed validation"
+                    )
 
                 # If no result passes validation, return the highest scored one with warning
                 best_result = search_results[0]
-                LOGGER.warning(f"⚠️ Using unvalidated TV result via {best_result[2]} (score: {best_result[1]}): {best_result[0].get('name', 'Unknown')}")
+                LOGGER.warning(
+                    f"⚠️ Using unvalidated TV result via {best_result[2]} (score: {best_result[1]}): {best_result[0].get('name', 'Unknown')}"
+                )
                 return best_result[0]
 
             return None
@@ -1122,11 +1237,15 @@ class TMDBHelper:
                 "api_key": Config.TMDB_API_KEY,
                 "query": title,
                 "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
-                "include_adult": str(getattr(Config, "TMDB_ADULT_CONTENT", False)).lower(),
+                "include_adult": str(
+                    getattr(Config, "TMDB_ADULT_CONTENT", False)
+                ).lower(),
             }
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{cls.BASE_URL}/search/multi", params=params) as response:
+                async with session.get(
+                    f"{cls.BASE_URL}/search/multi", params=params
+                ) as response:
                     if response.status == 200:
                         data = await response.json()
                         if data.get("results"):
@@ -1142,12 +1261,17 @@ class TMDBHelper:
                                             if release_date:
                                                 result_year = int(release_date[:4])
                                         elif media_type == "tv":
-                                            first_air_date = result.get("first_air_date")
+                                            first_air_date = result.get(
+                                                "first_air_date"
+                                            )
                                             if first_air_date:
                                                 result_year = int(first_air_date[:4])
 
                                         # Allow ±2 years tolerance
-                                        if result_year and abs(result_year - year) <= 2:
+                                        if (
+                                            result_year
+                                            and abs(result_year - year) <= 2
+                                        ):
                                             return result
                                     else:
                                         return result
@@ -1159,7 +1283,9 @@ class TMDBHelper:
             return None
 
     @classmethod
-    def _score_search_result(cls, result: dict, search_title: str, search_year: int | None, is_tv: bool) -> float:
+    def _score_search_result(
+        cls, result: dict, search_title: str, search_year: int | None, is_tv: bool
+    ) -> float:
         """Enhanced scoring with strict validation for accurate media matching"""
         score = 0.0
 
@@ -1169,19 +1295,15 @@ class TMDBHelper:
             result_year = None
             first_air_date = result.get("first_air_date")
             if first_air_date:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     result_year = int(first_air_date[:4])
-                except (ValueError, TypeError):
-                    pass
         else:
             result_title = result.get("title", "")
             result_year = None
             release_date = result.get("release_date")
             if release_date:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     result_year = int(release_date[:4])
-                except (ValueError, TypeError):
-                    pass
 
         # Strict title validation first
         if not result_title or len(result_title.strip()) < 2:
@@ -1214,13 +1336,19 @@ class TMDBHelper:
                 total_words = search_words.union(result_words)
 
                 # Jaccard similarity
-                jaccard_similarity = len(common_words) / len(total_words) if total_words else 0
+                jaccard_similarity = (
+                    len(common_words) / len(total_words) if total_words else 0
+                )
 
                 # Word overlap percentage
-                overlap_percentage = len(common_words) / max(len(search_words), len(result_words))
+                overlap_percentage = len(common_words) / max(
+                    len(search_words), len(result_words)
+                )
 
                 # Combined similarity score
-                similarity_score = (jaccard_similarity * 0.6 + overlap_percentage * 0.4) * 80
+                similarity_score = (
+                    jaccard_similarity * 0.6 + overlap_percentage * 0.4
+                ) * 80
                 score += similarity_score
 
                 # Penalty for too few common words
@@ -1231,8 +1359,12 @@ class TMDBHelper:
         if search_year and result_year:
             try:
                 # Ensure both are integers
-                search_year_int = int(search_year) if isinstance(search_year, str) else search_year
-                result_year_int = int(result_year) if isinstance(result_year, str) else result_year
+                search_year_int = (
+                    int(search_year) if isinstance(search_year, str) else search_year
+                )
+                result_year_int = (
+                    int(result_year) if isinstance(result_year, str) else result_year
+                )
 
                 year_diff = abs(search_year_int - result_year_int)
                 if year_diff == 0:
@@ -1249,7 +1381,7 @@ class TMDBHelper:
                 # If year conversion fails, treat as missing year
                 score -= 5
         elif search_year and not result_year:
-            score -= 5   # Missing year when expected
+            score -= 5  # Missing year when expected
 
         # Language and region validation
         original_language = result.get("original_language", "")
@@ -1330,19 +1462,21 @@ class TMDBHelper:
         normalized = re.sub(r"^(the|a|an)\s+", "", normalized, flags=re.IGNORECASE)
 
         # Remove common suffixes
-        normalized = re.sub(r"\s+(movie|film|series|show|tv)$", "", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(
+            r"\s+(movie|film|series|show|tv)$", "", normalized, flags=re.IGNORECASE
+        )
 
         # Remove year in parentheses
         normalized = re.sub(r"\s*\(\d{4}\)\s*", "", normalized)
 
         # Remove special characters and extra spaces
         normalized = re.sub(r"[^\w\s]", " ", normalized)
-        normalized = re.sub(r"\s+", " ", normalized).strip()
-
-        return normalized
+        return re.sub(r"\s+", " ", normalized).strip()
 
     @classmethod
-    def _validate_search_result(cls, result: dict, search_title: str, search_year: int | None, is_tv: bool) -> bool:
+    def _validate_search_result(
+        cls, result: dict, search_title: str, search_year: int | None, is_tv: bool
+    ) -> bool:
         """Validate that the search result actually matches what we're looking for"""
         if not result:
             return False
@@ -1353,19 +1487,15 @@ class TMDBHelper:
             result_year = None
             first_air_date = result.get("first_air_date")
             if first_air_date:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     result_year = int(first_air_date[:4])
-                except (ValueError, TypeError):
-                    pass
         else:
             result_title = result.get("title", "")
             result_year = None
             release_date = result.get("release_date")
             if release_date:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     result_year = int(release_date[:4])
-                except (ValueError, TypeError):
-                    pass
 
         # Basic validation
         if not result_title or len(result_title.strip()) < 2:
@@ -1391,8 +1521,12 @@ class TMDBHelper:
         if search_year and result_year:
             try:
                 # Ensure both are integers for comparison
-                search_year_int = int(search_year) if isinstance(search_year, str) else search_year
-                result_year_int = int(result_year) if isinstance(result_year, str) else result_year
+                search_year_int = (
+                    int(search_year) if isinstance(search_year, str) else search_year
+                )
+                result_year_int = (
+                    int(result_year) if isinstance(result_year, str) else result_year
+                )
 
                 year_diff = abs(search_year_int - result_year_int)
                 if year_diff > 3:  # Allow max 3 years difference
@@ -1406,10 +1540,9 @@ class TMDBHelper:
             # For TV shows, should have first_air_date
             if not result.get("first_air_date"):
                 return False
-        else:
-            # For movies, should have release_date
-            if not result.get("release_date"):
-                return False
+        # For movies, should have release_date
+        elif not result.get("release_date"):
+            return False
 
         # Poster validation - essential for thumbnails
         if not result.get("poster_path"):
@@ -1676,7 +1809,7 @@ class TMDBHelper:
                 search_attempts.append(("short title", short_title))
 
             # Try each search strategy
-            for strategy_name, search_title in search_attempts:
+            for _strategy_name, search_title in search_attempts:
                 if not search_title or len(search_title.strip()) < 2:
                     continue
 
@@ -1697,8 +1830,7 @@ class TMDBHelper:
                     if response.status == 200:
                         data = await response.json()
                         if data.get("results"):
-                            result = data["results"][0]
-                            return result
+                            return data["results"][0]
 
             # Strategy 2: Try as TV show instead (anime often categorized as TV)
             tv_result = await cls.search_tv_show(main_title, year)
@@ -1740,7 +1872,7 @@ class TMDBHelper:
                 search_attempts.append(("short title", short_title))
 
             # Try each search strategy
-            for strategy_name, search_title in search_attempts:
+            for _strategy_name, search_title in search_attempts:
                 if not search_title or len(search_title.strip()) < 2:
                     continue
 
@@ -1761,8 +1893,7 @@ class TMDBHelper:
                     if response.status == 200:
                         data = await response.json()
                         if data.get("results"):
-                            result = data["results"][0]
-                            return result
+                            return data["results"][0]
 
             return None
 
@@ -1805,27 +1936,33 @@ class TMDBHelper:
             return {}
 
     @classmethod
-    async def _intelligent_media_search(cls, title: str, year: int | None, media_type: str) -> dict | None:
+    async def _intelligent_media_search(
+        cls, title: str, year: int | None, media_type: str
+    ) -> dict | None:
         """Intelligent multi-source search with fallbacks and validation"""
         try:
             # Strategy 1: TMDB search with enhanced matching
             if Config.TMDB_API_KEY:
-                if media_type == "tv" or media_type == "anime":
+                if media_type in {"tv", "anime"}:
                     result = await cls._enhanced_tv_search(title, year)
                 else:
                     result = await cls._enhanced_movie_search(title, year)
 
-                if result and cls._validate_search_result(result, title, year, media_type == "tv"):
+                if result and cls._validate_search_result(
+                    result, title, year, media_type == "tv"
+                ):
                     return result
 
             # Strategy 2: Multi-search fallback
             if Config.TMDB_API_KEY:
                 result = await cls._multi_search(title, year)
-                if result and cls._validate_search_result(result, title, year, media_type == "tv"):
+                if result and cls._validate_search_result(
+                    result, title, year, media_type == "tv"
+                ):
                     return result
 
             # Strategy 3: Alternative search with relaxed criteria
-            if media_type == "tv" or media_type == "anime":
+            if media_type in {"tv", "anime"}:
                 result = await cls._alternative_tv_search(title, year)
             else:
                 result = await cls._alternative_movie_search(title, year)
@@ -1840,7 +1977,9 @@ class TMDBHelper:
             return None
 
     @classmethod
-    async def _alternative_movie_search(cls, title: str, year: int | None) -> dict | None:
+    async def _alternative_movie_search(
+        cls, title: str, year: int | None
+    ) -> dict | None:
         """Alternative movie search with relaxed matching"""
         try:
             if not Config.TMDB_API_KEY:
@@ -1864,13 +2003,17 @@ class TMDBHelper:
                         "api_key": Config.TMDB_API_KEY,
                         "query": search_title,
                         "language": getattr(Config, "TMDB_LANGUAGE", "en-US"),
-                        "include_adult": str(getattr(Config, "TMDB_ADULT_CONTENT", False)).lower(),
+                        "include_adult": str(
+                            getattr(Config, "TMDB_ADULT_CONTENT", False)
+                        ).lower(),
                     }
 
                     if year:
                         params["year"] = year
 
-                    async with session.get(f"{cls.BASE_URL}/search/movie", params=params) as response:
+                    async with session.get(
+                        f"{cls.BASE_URL}/search/movie", params=params
+                    ) as response:
                         if response.status == 200:
                             data = await response.json()
                             if data.get("results"):

@@ -3,14 +3,17 @@ Client management for File2Link streaming
 Integrates with existing client system
 """
 
-from typing import Tuple, Dict, Any
+from typing import Any
+
 from pyrogram import Client
 
 from bot import LOGGER
 
+
 def get_tg_client():
     """Lazy import of TgClient to avoid startup delays"""
     from bot.core.aeon_client import TgClient
+
     return TgClient
 
 
@@ -29,9 +32,8 @@ class StreamClientManager:
             if "unauthorized" in error_msg or "auth" in error_msg:
                 LOGGER.error(f"Client {client_id} authentication failed: {e}")
                 return False
-            else:
-                LOGGER.warning(f"Client {client_id} health check failed: {e}")
-                return False
+            LOGGER.warning(f"Client {client_id} health check failed: {e}")
+            return False
 
     @staticmethod
     def get_optimal_client() -> tuple[Client, int]:
@@ -43,12 +45,19 @@ class StreamClientManager:
             TgClient = get_tg_client()
 
             # Check if TgClient is properly initialized
-            if not hasattr(TgClient, 'bot') or TgClient.bot is None:
-                LOGGER.warning("TgClient not initialized yet, streaming may not work")
+            if not hasattr(TgClient, "bot") or TgClient.bot is None:
+                LOGGER.warning(
+                    "TgClient not initialized yet, streaming may not work"
+                )
                 return None, 0
 
             # Use helper bots if available
-            if hasattr(TgClient, 'helper_bots') and TgClient.helper_bots and hasattr(TgClient, 'helper_loads') and TgClient.helper_loads:
+            if (
+                hasattr(TgClient, "helper_bots")
+                and TgClient.helper_bots
+                and hasattr(TgClient, "helper_loads")
+                and TgClient.helper_loads
+            ):
                 # Find client with minimum load
                 min_load_client_id = min(
                     TgClient.helper_loads, key=TgClient.helper_loads.get
@@ -61,9 +70,7 @@ class StreamClientManager:
                         min_load_client_id
                     ], min_load_client_id
                 # All helper bots are busy, use the least busy one
-                return TgClient.helper_bots[
-                    min_load_client_id
-                ], min_load_client_id
+                return TgClient.helper_bots[min_load_client_id], min_load_client_id
 
             # Fallback to main bot if no helper bots available
             return TgClient.bot, 0
@@ -143,7 +150,7 @@ class StreamClientManager:
         try:
             TgClient = get_tg_client()
 
-            info = {
+            return {
                 "total_clients": StreamClientManager.get_total_clients(),
                 "workload_distribution": StreamClientManager.get_client_workload(),
                 "main_bot_id": TgClient.ID,
@@ -151,7 +158,6 @@ class StreamClientManager:
                 if TgClient.helper_bots
                 else 0,
             }
-            return info
         except Exception as e:
             LOGGER.error(f"Error getting client info: {e}")
             TgClient = get_tg_client()

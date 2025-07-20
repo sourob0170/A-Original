@@ -27,6 +27,7 @@ from bot import LOGGER
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.status_utils import get_readable_time
+from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
@@ -34,7 +35,6 @@ from bot.helper.telegram_helper.message_utils import (
     edit_message,
     send_message,
 )
-from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
 _search_cache = OrderedDict()
 _cache_timestamps = {}
@@ -963,7 +963,9 @@ async def perform_inline_zotify_search(
             return cached_result
 
         # Initialize Zotify on-demand
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import ensure_zotify_initialized
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            ensure_zotify_initialized,
+        )
 
         if not await ensure_zotify_initialized():
             LOGGER.warning("Zotify initialization failed for inline search")
@@ -1436,7 +1438,9 @@ def decrypt_zotify_data(encrypted_data: str) -> str:
 async def inline_zotify_search(_, inline_query: InlineQuery):
     """Handle inline queries for Zotify search."""
     # Initialize Zotify on-demand
-    from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import ensure_zotify_initialized
+    from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+        ensure_zotify_initialized,
+    )
 
     if not await ensure_zotify_initialized():
         LOGGER.warning("Zotify initialization failed")
@@ -2010,7 +2014,9 @@ async def handle_zotify_start_command(client, message):
     """Handle start commands for Zotify downloads from inline search results."""
     try:
         # Initialize Zotify on-demand
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import ensure_zotify_initialized
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            ensure_zotify_initialized,
+        )
 
         if not await ensure_zotify_initialized():
             from bot.helper.telegram_helper.message_utils import send_message

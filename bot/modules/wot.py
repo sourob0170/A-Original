@@ -1,10 +1,9 @@
-import re
 import asyncio
 import socket
-from urllib.parse import urlparse, quote
 from logging import getLogger
-import idna
+from urllib.parse import quote, urlparse
 
+import idna
 from httpx import AsyncClient, RequestError, TimeoutException
 
 from bot.core.config_manager import Config
@@ -25,7 +24,6 @@ WOT_CATEGORIES = {
     103: "Phishing",
     104: "Scam",
     105: "Potentially illegal",
-
     # Questionable categories
     201: "Misleading claims or unethical",
     202: "Privacy risks",
@@ -34,16 +32,13 @@ WOT_CATEGORIES = {
     205: "Spam",
     206: "Potentially unwanted programs",
     207: "Ads / pop-ups",
-
     # Neutral categories
     301: "Online tracking",
     302: "Alternative or controversial medicine",
     303: "Opinions, religion, politics",
     304: "Other",
-
     # Positive categories
     501: "Good site",
-
     # Child safety categories
     401: "Adult content",
     402: "Incidental nudity",
@@ -131,7 +126,7 @@ class AbuseIPDBApi:
                 }
 
             # URL encode IP address (required for IPv6 due to colons)
-            encoded_ip = quote(ip_address, safe='')
+            encoded_ip = quote(ip_address, safe="")
 
             # Prepare query parameters
             params = {
@@ -147,47 +142,51 @@ class AbuseIPDBApi:
 
                 if response.status_code == 200:
                     return {"success": True, "data": response.json()}
-                elif response.status_code == 400:
-                    return {"success": False, "error": "Invalid IP address or parameters"}
-                elif response.status_code == 401:
+                if response.status_code == 400:
+                    return {
+                        "success": False,
+                        "error": "Invalid IP address or parameters",
+                    }
+                if response.status_code == 401:
                     return {
                         "success": False,
                         "error": "Invalid API key. Please check your AbuseIPDB credentials.",
                     }
-                elif response.status_code == 402:
+                if response.status_code == 402:
                     return {
                         "success": False,
                         "error": "Payment required. Your AbuseIPDB subscription may have expired.",
                     }
-                elif response.status_code == 422:
+                if response.status_code == 422:
                     return {
                         "success": False,
                         "error": "Unprocessable entity. Check parameter values (maxAgeInDays must be 1-365).",
                     }
-                elif response.status_code == 429:
+                if response.status_code == 429:
                     # Extract rate limit information from headers
                     retry_after = response.headers.get("Retry-After", "unknown")
                     rate_limit = response.headers.get("X-RateLimit-Limit", "unknown")
-                    remaining = response.headers.get("X-RateLimit-Remaining", "unknown")
+                    remaining = response.headers.get(
+                        "X-RateLimit-Remaining", "unknown"
+                    )
                     reset_time = response.headers.get("X-RateLimit-Reset", "unknown")
 
                     return {
                         "success": False,
                         "error": f"Rate limit exceeded. Daily limit: {rate_limit}, Remaining: {remaining}, Retry after: {retry_after} seconds, Reset at: {reset_time}",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API returned status code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API returned status code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "Request timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"Connection error: {str(e)}"}
+            return {"success": False, "error": f"Connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in AbuseIPDB API check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
     async def check_network(self, network: str) -> dict:
         """Check network/subnet using AbuseIPDB check-block endpoint"""
@@ -206,7 +205,7 @@ class AbuseIPDBApi:
                 }
 
             # URL encode network (required due to forward slash in CIDR notation)
-            encoded_network = quote(network, safe='')
+            encoded_network = quote(network, safe="")
 
             # Prepare query parameters
             params = {
@@ -221,43 +220,45 @@ class AbuseIPDBApi:
 
                 if response.status_code == 200:
                     return {"success": True, "data": response.json()}
-                elif response.status_code == 400:
-                    return {"success": False, "error": "Invalid network or parameters"}
-                elif response.status_code == 401:
+                if response.status_code == 400:
+                    return {
+                        "success": False,
+                        "error": "Invalid network or parameters",
+                    }
+                if response.status_code == 401:
                     return {
                         "success": False,
                         "error": "Invalid API key. Please check your AbuseIPDB credentials.",
                     }
-                elif response.status_code == 402:
+                if response.status_code == 402:
                     return {
                         "success": False,
                         "error": "Payment required. Network size may exceed your subscription limits.",
                     }
-                elif response.status_code == 422:
+                if response.status_code == 422:
                     return {
                         "success": False,
                         "error": "Unprocessable entity. Check network format and parameter values.",
                     }
-                elif response.status_code == 429:
+                if response.status_code == 429:
                     # Extract rate limit information from headers
                     retry_after = response.headers.get("Retry-After", "unknown")
                     return {
                         "success": False,
                         "error": f"Rate limit exceeded. Retry after: {retry_after} seconds",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API returned status code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API returned status code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "Request timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"Connection error: {str(e)}"}
+            return {"success": False, "error": f"Connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in AbuseIPDB network check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
 
 class WOTApi:
@@ -299,40 +300,39 @@ class WOTApi:
 
                 if response.status_code == 200:
                     return {"success": True, "data": response.json()}
-                elif response.status_code == 400:
+                if response.status_code == 400:
                     return {"success": False, "error": "Invalid request parameters"}
-                elif response.status_code == 403:
+                if response.status_code == 403:
                     return {
                         "success": False,
                         "error": "Invalid API key or User ID. Please check your WOT credentials.",
                     }
-                elif response.status_code == 429:
+                if response.status_code == 429:
                     return {
                         "success": False,
                         "error": "Rate limit exceeded. Please try again later.",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API returned status code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API returned status code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "Request timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"Connection error: {str(e)}"}
+            return {"success": False, "error": f"Connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in WOT API check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
 
 def is_network_cidr(input_text: str) -> bool:
     """Check if input is a valid CIDR network notation"""
     try:
-        if '/' not in input_text:
+        if "/" not in input_text:
             return False
 
-        ip_part, prefix_part = input_text.split('/', 1)
+        ip_part, prefix_part = input_text.split("/", 1)
 
         # Check if IP part is valid
         if not is_ip_address(ip_part):
@@ -342,10 +342,10 @@ def is_network_cidr(input_text: str) -> bool:
         prefix = int(prefix_part)
 
         # IPv4: /0 to /32, IPv6: /0 to /128
-        if ':' in ip_part:  # IPv6
+        if ":" in ip_part:  # IPv6
             return 0 <= prefix <= 128
-        else:  # IPv4
-            return 0 <= prefix <= 32
+        # IPv4
+        return 0 <= prefix <= 32
 
     except (ValueError, AttributeError):
         return False
@@ -356,11 +356,11 @@ def is_ip_address(input_text: str) -> bool:
     try:
         socket.inet_pton(socket.AF_INET, input_text)
         return True
-    except socket.error:
+    except OSError:
         try:
             socket.inet_pton(socket.AF_INET6, input_text)
             return True
-        except socket.error:
+        except OSError:
             return False
 
 
@@ -371,10 +371,10 @@ def extract_ip_from_url(url: str) -> str:
         host = parsed.netloc.lower()
 
         # Remove port if present
-        if ':' in host and not host.startswith('['):  # IPv4 with port
-            host = host.split(':')[0]
-        elif host.startswith('[') and ']:' in host:  # IPv6 with port
-            host = host.split(']:')[0][1:]
+        if ":" in host and not host.startswith("["):  # IPv4 with port
+            host = host.split(":")[0]
+        elif host.startswith("[") and "]:" in host:  # IPv6 with port
+            host = host.split("]:")[0][1:]
 
         if is_ip_address(host):
             return host
@@ -393,7 +393,7 @@ async def resolve_domain_to_ip(domain: str) -> list[str]:
         )
 
         ips = []
-        for family, type, proto, canonname, sockaddr in result:
+        for _family, _type, _proto, _canonname, sockaddr in result:
             ip = sockaddr[0]
             if ip not in ips and is_ip_address(ip):
                 ips.append(ip)
@@ -423,14 +423,13 @@ def clean_domain(input_text: str) -> str:
         domain = input_text.lower()
 
     # Remove www. prefix if present
-    if domain.startswith("www."):
-        domain = domain[4:]
+    domain = domain.removeprefix("www.")
 
     # Handle Internationalized Domain Names (IDN)
     # Convert to ASCII representation as per RFC 3490
     try:
         # Try to encode as IDN (this will convert unicode domains to ASCII)
-        domain = idna.encode(domain).decode('ascii')
+        domain = idna.encode(domain).decode("ascii")
     except (idna.core.IDNAError, UnicodeError):
         # If IDN encoding fails, keep the original domain
         pass
@@ -442,14 +441,13 @@ def get_reputation_status(reputation: int) -> tuple[str, str]:
     """Get reputation status and emoji based on score"""
     if reputation >= 80:
         return "Excellent", "🟢"
-    elif reputation >= 60:
+    if reputation >= 60:
         return "Good", "🟡"
-    elif reputation >= 40:
+    if reputation >= 40:
         return "Unsatisfactory", "🟠"
-    elif reputation >= 20:
+    if reputation >= 20:
         return "Poor", "🔴"
-    else:
-        return "Very Poor", "⚫"
+    return "Very Poor", "⚫"
 
 
 def get_safety_status(status: str) -> tuple[str, str]:
@@ -472,14 +470,13 @@ def get_abuse_confidence_status(score: int) -> tuple[str, str]:
     """
     if score >= 75:
         return "Critical Risk", "🚨"
-    elif score >= 50:
+    if score >= 50:
         return "High Risk", "🔴"
-    elif score >= 25:
+    if score >= 25:
         return "Medium Risk", "🟠"
-    elif score > 0:
+    if score > 0:
         return "Low Risk", "🟡"
-    else:
-        return "No Reports", "🟢"
+    return "No Reports", "🟢"
 
 
 def format_abuseipdb_categories(categories: list) -> str:
@@ -511,7 +508,9 @@ def format_abuseipdb_categories(categories: list) -> str:
 def format_abuseipdb_response(data: dict, ip_address: str) -> str:
     """Format AbuseIPDB API response with beautiful HTML styling"""
     if not data:
-        return "<blockquote>❌ <b>No data received from AbuseIPDB API</b></blockquote>"
+        return (
+            "<blockquote>❌ <b>No data received from AbuseIPDB API</b></blockquote>"
+        )
 
     ip_data = data.get("data", {})
 
@@ -527,7 +526,7 @@ def format_abuseipdb_response(data: dict, ip_address: str) -> str:
     msg += f"🔓 <b>Public IP:</b> <code>{'Yes' if is_public else 'No'}</code>\n"
 
     if is_whitelisted:
-        msg += f"✅ <b>Whitelisted:</b> <code>Yes</code>\n"
+        msg += "✅ <b>Whitelisted:</b> <code>Yes</code>\n"
 
     msg += "\n"
 
@@ -535,7 +534,7 @@ def format_abuseipdb_response(data: dict, ip_address: str) -> str:
     abuse_score = ip_data.get("abuseConfidenceScore", 0)
     confidence_status, confidence_emoji = get_abuse_confidence_status(abuse_score)
 
-    msg += f"<b>🚨 ABUSE ASSESSMENT</b>\n"
+    msg += "<b>🚨 ABUSE ASSESSMENT</b>\n"
     msg += f"{confidence_emoji} <b>Confidence Score:</b> <code>{abuse_score}% ({confidence_status})</code>\n"
 
     # Geographic Information
@@ -568,7 +567,7 @@ def format_abuseipdb_response(data: dict, ip_address: str) -> str:
 
     is_tor = ip_data.get("isTor", False)
     if is_tor:
-        msg += f"🧅 <b>Tor Exit Node:</b> <code>Yes</code>\n"
+        msg += "🧅 <b>Tor Exit Node:</b> <code>Yes</code>\n"
 
     msg += "\n"
 
@@ -577,7 +576,7 @@ def format_abuseipdb_response(data: dict, ip_address: str) -> str:
     distinct_users = ip_data.get("numDistinctUsers", 0)
     last_reported = ip_data.get("lastReportedAt")
 
-    msg += f"<b>📊 REPORT STATISTICS</b>\n"
+    msg += "<b>📊 REPORT STATISTICS</b>\n"
     msg += f"📈 <b>Total Reports:</b> <code>{total_reports}</code>\n"
     msg += f"👥 <b>Distinct Reporters:</b> <code>{distinct_users}</code>\n"
 
@@ -593,7 +592,7 @@ def format_abuseipdb_response(data: dict, ip_address: str) -> str:
             all_categories.update(report.get("categories", []))
 
         if all_categories:
-            msg += f"\n<b>🏷️ THREAT CATEGORIES</b>\n"
+            msg += "\n<b>🏷️ THREAT CATEGORIES</b>\n"
             msg += f"{format_abuseipdb_categories(list(all_categories))}\n"
 
     msg += "\n"
@@ -645,7 +644,9 @@ def format_categories(categories: list) -> str:
         else:
             emoji = "📋"
 
-        formatted.append(f"{emoji} <b>{cat_description}</b> (Confidence: {confidence}%)")
+        formatted.append(
+            f"{emoji} <b>{cat_description}</b> (Confidence: {confidence}%)"
+        )
 
     return "\n".join(formatted)
 
@@ -675,7 +676,7 @@ def format_wot_response(data: list, original_input: str) -> str:
         safety_emoji, safety_text = get_safety_status(safety_status)
         rep_status, rep_emoji = get_reputation_status(safety_reputation)
 
-        msg += f"<b>🛡️ SAFETY ASSESSMENT</b>\n"
+        msg += "<b>🛡️ SAFETY ASSESSMENT</b>\n"
         msg += f"{safety_emoji} <b>Status:</b> <code>{safety_text}</code>\n"
         msg += f"{rep_emoji} <b>Reputation:</b> <code>{safety_reputation}/100 ({rep_status})</code>\n"
         msg += f"📊 <b>Confidence:</b> <code>{safety_confidence}%</code>\n\n"
@@ -686,22 +687,26 @@ def format_wot_response(data: list, original_input: str) -> str:
             child_confidence = child_safety.get("confidence", 0)
             child_status, child_emoji = get_reputation_status(child_reputation)
 
-            msg += f"<b>👶 CHILD SAFETY</b>\n"
+            msg += "<b>👶 CHILD SAFETY</b>\n"
             msg += f"{child_emoji} <b>Rating:</b> <code>{child_reputation}/100 ({child_status})</code>\n"
             msg += f"📊 <b>Confidence:</b> <code>{child_confidence}%</code>\n\n"
 
         # Categories
         if categories:
-            msg += f"<b>🏷️ THREAT CATEGORIES</b>\n"
+            msg += "<b>🏷️ THREAT CATEGORIES</b>\n"
             msg += f"<code>{format_categories(categories)}</code>\n\n"
 
         # Blacklist Information
         if blacklist:
-            msg += f"<b>🚫 BLACKLIST STATUS</b>\n"
+            msg += "<b>🚫 BLACKLIST STATUS</b>\n"
             blacklist_details = []
             for bl_type in blacklist:
-                bl_description = BLACKLIST_TYPES.get(bl_type.lower(), f"Listed in {bl_type} blacklist")
-                blacklist_details.append(f"🚫 <b>{bl_type.title()}:</b> {bl_description}")
+                bl_description = BLACKLIST_TYPES.get(
+                    bl_type.lower(), f"Listed in {bl_type} blacklist"
+                )
+                blacklist_details.append(
+                    f"🚫 <b>{bl_type.title()}:</b> {bl_description}"
+                )
             msg += "\n".join(blacklist_details) + "\n\n"
 
         # Overall Assessment with Confidence Thresholds
@@ -710,9 +715,15 @@ def format_wot_response(data: list, original_input: str) -> str:
 
         if safety_status == "NOT_SAFE" or blacklist:
             msg += "<blockquote>🚨 <b>WARNING:</b> This website has been flagged as unsafe or malicious. Avoid visiting or sharing personal information.</blockquote>"
-        elif safety_status == "SUSPICIOUS" or (safety_reputation < 40 and safety_confidence >= confidence_threshold):
+        elif safety_status == "SUSPICIOUS" or (
+            safety_reputation < 40 and safety_confidence >= confidence_threshold
+        ):
             msg += "<blockquote>⚠️ <b>CAUTION:</b> This website shows suspicious activity or has a poor reputation. Exercise caution when visiting.</blockquote>"
-        elif safety_status == "SAFE" and safety_reputation >= 60 and safety_confidence >= confidence_threshold:
+        elif (
+            safety_status == "SAFE"
+            and safety_reputation >= 60
+            and safety_confidence >= confidence_threshold
+        ):
             msg += "<blockquote>✅ <b>SAFE:</b> This website appears to be trustworthy and safe to visit.</blockquote>"
         elif safety_confidence < confidence_threshold:
             msg += "<blockquote>❓ <b>INSUFFICIENT DATA:</b> Not enough reliable data to determine website safety. Confidence level too low for assessment.</blockquote>"
@@ -724,7 +735,11 @@ def format_wot_response(data: list, original_input: str) -> str:
     return msg.rstrip("\n─ ")
 
 
-def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None, target: str = "") -> str:
+def format_combined_response(
+    wot_data: list | None = None,
+    abuseipdb_data: dict | None = None,
+    target: str = "",
+) -> str:
     """Format combined WOT and AbuseIPDB response"""
     msg = "<blockquote><b>🛡️ COMPREHENSIVE REPUTATION CHECK</b></blockquote>\n\n"
     msg += f"🎯 <b>Target:</b> <code>{target}</code>\n\n"
@@ -733,7 +748,7 @@ def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None,
     wot_available = wot_data and len(wot_data) > 0
     abuseipdb_available = abuseipdb_data and abuseipdb_data.get("data")
 
-    msg += f"<b>📊 DATA SOURCES</b>\n"
+    msg += "<b>📊 DATA SOURCES</b>\n"
     msg += f"🌐 <b>WOT (Web of Trust):</b> <code>{'✅ Available' if wot_available else '❌ Not Available'}</code>\n"
     msg += f"🛡️ <b>AbuseIPDB:</b> <code>{'✅ Available' if abuseipdb_available else '❌ Not Available'}</code>\n\n"
 
@@ -765,7 +780,9 @@ def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None,
         abuse_score = abuseipdb_data["data"].get("abuseConfidenceScore", 0)
 
         if abuse_score >= 75:
-            risk_details.append("AbuseIPDB: Critical risk (≥75% - recommended for blocking)")
+            risk_details.append(
+                "AbuseIPDB: Critical risk (≥75% - recommended for blocking)"
+            )
             overall_risk = "HIGH"
         elif abuse_score >= 50:
             risk_details.append("AbuseIPDB: High risk (≥50%)")
@@ -792,11 +809,11 @@ def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None,
     elif overall_risk == "LOW":
         risk_emoji = "🟢"
 
-    msg += f"<b>⚡ OVERALL RISK ASSESSMENT</b>\n"
+    msg += "<b>⚡ OVERALL RISK ASSESSMENT</b>\n"
     msg += f"{risk_emoji} <b>Risk Level:</b> <code>{overall_risk}</code>\n"
 
     if risk_details:
-        msg += f"📋 <b>Factors:</b>\n"
+        msg += "📋 <b>Factors:</b>\n"
         for detail in risk_details:
             msg += f"  • {detail}\n"
 
@@ -806,7 +823,9 @@ def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None,
     if wot_available:
         wot_section = format_wot_response(wot_data, target)
         # Extract just the content part (remove header)
-        wot_content = wot_section.split("🛡️ WOT - WEBSITE REPUTATION CHECK</b></blockquote>\n\n", 1)
+        wot_content = wot_section.split(
+            "🛡️ WOT - WEBSITE REPUTATION CHECK</b></blockquote>\n\n", 1
+        )
         if len(wot_content) > 1:
             msg += wot_content[1] + "\n"
 
@@ -814,7 +833,9 @@ def format_combined_response(wot_data: list = None, abuseipdb_data: dict = None,
     if abuseipdb_available:
         abuseipdb_section = format_abuseipdb_response(abuseipdb_data, target)
         # Extract just the content part (remove header)
-        abuseipdb_content = abuseipdb_section.split("🛡️ ABUSEIPDB - IP REPUTATION CHECK</b></blockquote>\n\n", 1)
+        abuseipdb_content = abuseipdb_section.split(
+            "🛡️ ABUSEIPDB - IP REPUTATION CHECK</b></blockquote>\n\n", 1
+        )
         if len(abuseipdb_content) > 1:
             msg += abuseipdb_content[1] + "\n"
 
@@ -887,8 +908,8 @@ async def wot_command(_, message):
 
     # Support multiple domains (space or comma separated, max 10 per API limit)
     domains = []
-    if ',' in input_text:
-        domains = [d.strip() for d in input_text.split(',') if d.strip()]
+    if "," in input_text:
+        domains = [d.strip() for d in input_text.split(",") if d.strip()]
     else:
         domains = [d.strip() for d in input_text.split() if d.strip()]
 
@@ -969,9 +990,16 @@ async def wot_command(_, message):
                 abuseipdb_results.append((f"Network {network}", network_result))
 
         # If we have domains but no direct IPs, try to resolve domains to IPs for AbuseIPDB
-        if Config.ABUSEIPDB_ENABLED and domain_names and not ip_addresses and not networks:
+        if (
+            Config.ABUSEIPDB_ENABLED
+            and domain_names
+            and not ip_addresses
+            and not networks
+        ):
             abuseipdb_client = AbuseIPDBApi()
-            for domain in domain_names[:2]:  # Limit to 2 domains to avoid too many requests
+            for domain in domain_names[
+                :2
+            ]:  # Limit to 2 domains to avoid too many requests
                 resolved_ips = await resolve_domain_to_ip(domain)
                 for ip in resolved_ips[:1]:  # Take only first IP per domain
                     ip_result = await abuseipdb_client.check_ip(ip)
@@ -981,14 +1009,17 @@ async def wot_command(_, message):
         await delete_message(status_msg)
 
         # Determine response format
-        use_combined = (
-            (wot_result and wot_result.get("success")) or
-            any(result[1].get("success") for result in abuseipdb_results)
+        use_combined = (wot_result and wot_result.get("success")) or any(
+            result[1].get("success") for result in abuseipdb_results
         )
 
         if use_combined and len(domains) == 1:
             # Use combined format for single target
-            wot_data = wot_result.get("data") if wot_result and wot_result.get("success") else None
+            wot_data = (
+                wot_result.get("data")
+                if wot_result and wot_result.get("success")
+                else None
+            )
             abuseipdb_data = None
 
             # Get the best AbuseIPDB result
@@ -997,7 +1028,9 @@ async def wot_command(_, message):
                     abuseipdb_data = result
                     break
 
-            response_text = format_combined_response(wot_data, abuseipdb_data, domains[0])
+            response_text = format_combined_response(
+                wot_data, abuseipdb_data, domains[0]
+            )
 
         else:
             # Use separate format for multiple targets or when only one service works
@@ -1005,7 +1038,9 @@ async def wot_command(_, message):
 
             # Add WOT results
             if wot_result and wot_result.get("success"):
-                wot_text = format_wot_response(wot_result["data"], " ".join(domain_names))
+                wot_text = format_wot_response(
+                    wot_result["data"], " ".join(domain_names)
+                )
                 response_parts.append(wot_text)
 
             # Add AbuseIPDB results
@@ -1028,11 +1063,15 @@ async def wot_command(_, message):
             error_messages = []
 
             if wot_result and not wot_result.get("success"):
-                error_messages.append(f"WOT: {wot_result.get('error', 'Unknown error')}")
+                error_messages.append(
+                    f"WOT: {wot_result.get('error', 'Unknown error')}"
+                )
 
             for ip_label, result in abuseipdb_results:
                 if not result.get("success"):
-                    error_messages.append(f"AbuseIPDB ({ip_label}): {result.get('error', 'Unknown error')}")
+                    error_messages.append(
+                        f"AbuseIPDB ({ip_label}): {result.get('error', 'Unknown error')}"
+                    )
 
             if error_messages:
                 error_text = "\n".join(error_messages)
@@ -1051,6 +1090,6 @@ async def wot_command(_, message):
             message,
             f"<blockquote>❌ <b>Unexpected Error</b>\n\n"
             f"An unexpected error occurred while processing your request.\n\n"
-            f"<b>Error:</b> <code>{str(e)}</code></blockquote>",
+            f"<b>Error:</b> <code>{e!s}</code></blockquote>",
         )
         await auto_delete_message(error_msg, time=300)

@@ -55,13 +55,13 @@ from bot.helper.mirror_leech_utils.download_utils.zotify_download import (
     add_zotify_download,
 )
 from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import is_streamrip_url
+from bot.helper.mirror_leech_utils.zotify_utils.url_parser import is_zotify_url
 from bot.helper.telegram_helper.message_utils import (
     auto_delete_message,
     delete_links,
     get_tg_link_message,
     send_message,
 )
-from bot.helper.mirror_leech_utils.zotify_utils.url_parser import is_zotify_url
 from bot.modules.media_tools import show_media_tools_for_task
 
 
@@ -1158,8 +1158,12 @@ class Mirror(TaskListener):
 
     async def _handle_streamrip_download(self):
         """Handle streamrip downloads with quality selection"""
-        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
-        from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import parse_streamrip_url
+        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import (
+            show_quality_selector,
+        )
+        from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import (
+            parse_streamrip_url,
+        )
 
         try:
             # Parse URL to get platform and media info

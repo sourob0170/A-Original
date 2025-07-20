@@ -4,7 +4,8 @@ import re
 import shlex
 from asyncio import create_subprocess_exec, sleep, wait_for
 from asyncio.subprocess import PIPE
-from glob import glob, escape as glob_escape
+from glob import escape as glob_escape
+from glob import glob
 from os import path as ospath
 from os import readlink, walk
 from pathlib import Path
@@ -420,7 +421,9 @@ async def split_file(f_path, split_size, listener):
                 stderr = stderr.decode().strip()
             except Exception:
                 stderr = "Unable to decode the error!"
-            LOGGER.error(f"Split command failed with code {code}: {stderr}. File: {f_path}")
+            LOGGER.error(
+                f"Split command failed with code {code}: {stderr}. File: {f_path}"
+            )
             LOGGER.error(f"Split command was: {' '.join(cmd)}")
             return False
 
@@ -435,9 +438,15 @@ async def split_file(f_path, split_size, listener):
         escaped_file_name = glob_escape(file_name)
 
         split_patterns = [
-            ospath.join(cwd, f"{escaped_out_name}*"),  # Standard pattern: filename.001, filename.002, etc.
-            ospath.join(cwd, f"{escaped_file_name}.*"),   # Alternative pattern: original_file.001, original_file.002, etc.
-            ospath.join(cwd, "*.0[0-9][0-9]"),  # Fallback pattern: any file ending with .001, .002, etc.
+            ospath.join(
+                cwd, f"{escaped_out_name}*"
+            ),  # Standard pattern: filename.001, filename.002, etc.
+            ospath.join(
+                cwd, f"{escaped_file_name}.*"
+            ),  # Alternative pattern: original_file.001, original_file.002, etc.
+            ospath.join(
+                cwd, "*.0[0-9][0-9]"
+            ),  # Fallback pattern: any file ending with .001, .002, etc.
         ]
 
         split_files = []
@@ -446,7 +455,9 @@ async def split_file(f_path, split_size, listener):
             if files:
                 # Filter to only include files that start with our filename
                 # This is needed for the fallback pattern
-                filtered_files = [f for f in files if ospath.basename(f).startswith(file_name)]
+                filtered_files = [
+                    f for f in files if ospath.basename(f).startswith(file_name)
+                ]
                 if filtered_files:
                     split_files = filtered_files
                     break
@@ -456,7 +467,9 @@ async def split_file(f_path, split_size, listener):
             try:
                 all_files = await listdir(cwd)
                 # Filter files that might be split files
-                potential_split_files = [f for f in all_files if file_name in f and '.' in f]
+                potential_split_files = [
+                    f for f in all_files if file_name in f and "." in f
+                ]
                 LOGGER.error(
                     f"Split command completed but no split files were created: {f_path}. "
                     f"Files in directory: {len(all_files)} total. "
@@ -475,9 +488,13 @@ async def split_file(f_path, split_size, listener):
 
         # Log the first few split file names for debugging
         if len(split_files) <= 5:
-            LOGGER.info(f"Split files created: {[ospath.basename(f) for f in split_files]}")
+            LOGGER.info(
+                f"Split files created: {[ospath.basename(f) for f in split_files]}"
+            )
         else:
-            LOGGER.info(f"Split files created: {[ospath.basename(f) for f in split_files[:3]]} ... {[ospath.basename(f) for f in split_files[-2:]]}")
+            LOGGER.info(
+                f"Split files created: {[ospath.basename(f) for f in split_files[:3]]} ... {[ospath.basename(f) for f in split_files[-2:]]}"
+            )
 
         return True
     except Exception as e:

@@ -11,8 +11,12 @@ from typing import Any
 from bot import LOGGER
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.files_utils import get_path_size
-from bot.helper.mirror_leech_utils.gallery_dl_utils.auth_manager import GalleryDLAuthManager
-from bot.helper.mirror_leech_utils.gallery_dl_utils.post_processor import GalleryDLPostProcessor
+from bot.helper.mirror_leech_utils.gallery_dl_utils.auth_manager import (
+    GalleryDLAuthManager,
+)
+from bot.helper.mirror_leech_utils.gallery_dl_utils.post_processor import (
+    GalleryDLPostProcessor,
+)
 from bot.helper.mirror_leech_utils.status_utils.gallery_dl_status import (
     GalleryDLStatus,
 )

@@ -245,7 +245,8 @@ async def edit_message(
                 # Create InputMediaPhoto with the correct parse_mode
                 media = InputMediaPhoto(photo, caption=text, parse_mode=parse_mode)
                 return await with_timeout_retry(
-                    lambda: message.edit_media(media=media, reply_markup=buttons), timeout=30
+                    lambda: message.edit_media(media=media, reply_markup=buttons),
+                    timeout=30,
                 )
             return await with_timeout_retry(
                 lambda: message.edit_caption(

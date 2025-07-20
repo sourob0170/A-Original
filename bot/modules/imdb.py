@@ -34,7 +34,8 @@ def _cleanup_cache():
     """Remove expired entries from cache"""
     current_time = time()
     expired_keys = [
-        key for key, value in _imdb_cache.items()
+        key
+        for key, value in _imdb_cache.items()
         if current_time - value.get("timestamp", 0) > _cache_timeout
     ]
     for key in expired_keys:
@@ -43,12 +44,12 @@ def _cleanup_cache():
     # If cache is still too large, remove oldest entries
     if len(_imdb_cache) > _max_cache_size:
         sorted_items = sorted(
-            _imdb_cache.items(),
-            key=lambda x: x[1].get("timestamp", 0)
+            _imdb_cache.items(), key=lambda x: x[1].get("timestamp", 0)
         )
         # Keep only the newest entries
         for key, _ in sorted_items[:-_max_cache_size]:
             del _imdb_cache[key]
+
 
 IMDB_GENRE_EMOJI = {
     "Action": "🚀",
@@ -148,7 +149,7 @@ async def _async_search_movie(title: str, results: int = 10) -> list[Any]:
         # Add timeout to prevent hanging
         return await asyncio.wait_for(
             loop.run_in_executor(None, imdb.search_movie, title.lower(), results),
-            timeout=15.0  # 15 second timeout
+            timeout=15.0,  # 15 second timeout
         )
     except TimeoutError:
         LOGGER.error(f"Timeout searching movie '{title}'")
@@ -165,7 +166,7 @@ async def _async_get_movie(movie_id: str | int) -> Any | None:
         # Add timeout to prevent hanging
         return await asyncio.wait_for(
             loop.run_in_executor(None, imdb.get_movie, movie_id),
-            timeout=10.0  # 10 second timeout
+            timeout=10.0,  # 10 second timeout
         )
     except TimeoutError:
         LOGGER.error(f"Timeout getting movie '{movie_id}'")
@@ -184,7 +185,7 @@ async def _async_update_movie(movie: Any, info_sets: list[str]) -> None:
             # Add timeout for each info set update
             await asyncio.wait_for(
                 loop.run_in_executor(None, imdb.update, movie, [info_set]),
-                timeout=8.0  # 8 second timeout per info set
+                timeout=8.0,  # 8 second timeout per info set
             )
         except TimeoutError:
             LOGGER.warning(f"Timeout updating {info_set} info")
@@ -203,11 +204,11 @@ def _is_field_available(value: Any) -> bool:
         return False
 
     # Handle empty lists, dicts, sets
-    if isinstance(value, (list, dict, set, tuple)) and len(value) == 0:
+    if isinstance(value, list | dict | set | tuple) and len(value) == 0:
         return False
 
     # Handle numeric values (0 is valid, but negative might not be for some fields)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return value >= 0  # Allow 0 as valid (e.g., 0 votes is still information)
 
     # Handle boolean values (False is still valid information)
@@ -223,18 +224,37 @@ def _is_field_available(value: Any) -> bool:
 
     # Check for various "not available" indicators (exact matches)
     na_indicators = {
-        "N/A", "n/a", "N/a", "n/A",
-        "Not Available", "not available", "NOT AVAILABLE",
-        "unavailable", "Unavailable", "UNAVAILABLE",
+        "N/A",
+        "n/a",
+        "N/a",
+        "n/A",
+        "Not Available",
+        "not available",
+        "NOT AVAILABLE",
+        "unavailable",
+        "Unavailable",
+        "UNAVAILABLE",
         "temporarily unavailable",
         "information temporarily unavailable",
         "Plot under wraps.",
-        "None", "none", "NONE",
-        "null", "NULL", "Null",
-        "undefined", "UNDEFINED", "Undefined",
-        "unknown", "Unknown", "UNKNOWN",
-        "TBD", "tbd", "To Be Determined",
-        "Coming Soon", "coming soon", "COMING SOON",
+        "None",
+        "none",
+        "NONE",
+        "null",
+        "NULL",
+        "Null",
+        "undefined",
+        "UNDEFINED",
+        "Undefined",
+        "unknown",
+        "Unknown",
+        "UNKNOWN",
+        "TBD",
+        "tbd",
+        "To Be Determined",
+        "Coming Soon",
+        "coming soon",
+        "COMING SOON",
         "No information available",
         "No data available",
         "Data not available",
@@ -243,7 +263,9 @@ def _is_field_available(value: Any) -> bool:
         "Not provided",
         "Not disclosed",
         "Pending",
-        "TBA", "tba", "To Be Announced",
+        "TBA",
+        "tba",
+        "To Be Announced",
     }
 
     # Exact match check
@@ -283,23 +305,18 @@ def _is_field_available(value: Any) -> bool:
 
     # Check for placeholder patterns (e.g., "---", "...", "???")
     placeholder_patterns = [
-        r"^-+$",           # Only dashes: ---, ----
-        r"^\.+$",          # Only dots: ..., ....
-        r"^\?+$",          # Only question marks: ???, ????
-        r"^_+$",           # Only underscores: ___, ____
-        r"^#+$",           # Only hashes: ###, ####
-        r"^\*+$",          # Only asterisks: ***, ****
-        r"^=+$",           # Only equals: ===, ====
-        r"^\s*-\s*$",      # Single dash with optional spaces
-        r"^\s*\.\s*$",     # Single dot with optional spaces
+        r"^-+$",  # Only dashes: ---, ----
+        r"^\.+$",  # Only dots: ..., ....
+        r"^\?+$",  # Only question marks: ???, ????
+        r"^_+$",  # Only underscores: ___, ____
+        r"^#+$",  # Only hashes: ###, ####
+        r"^\*+$",  # Only asterisks: ***, ****
+        r"^=+$",  # Only equals: ===, ====
+        r"^\s*-\s*$",  # Single dash with optional spaces
+        r"^\s*\.\s*$",  # Single dot with optional spaces
     ]
 
-    for pattern in placeholder_patterns:
-        if re.match(pattern, value_str):
-            return False
-
-    # If we get here, the field has meaningful content
-    return True
+    return all(not re.match(pattern, value_str) for pattern in placeholder_patterns)
 
 
 def _build_dynamic_template(data: dict[str, Any], compact_mode: bool = False) -> str:
@@ -326,45 +343,45 @@ def _build_dynamic_template(data: dict[str, Any], compact_mode: bool = False) ->
             ("title", "<b>🎬 Title:</b> <code>{title}</code> [{year}]", True),
             ("rating", "<b>⭐ Rating:</b> <i>{rating}</i>", False),
             ("genres", "<b>🎭 Genre:</b> {genres}", False),
-            ("release_date", "<b>📅 Released:</b> <a href=\"{url_releaseinfo}\">{release_date}</a>", False),
+            (
+                "release_date",
+                '<b>📅 Released:</b> <a href="{url_releaseinfo}">{release_date}</a>',
+                False,
+            ),
             ("languages", "<b>🎙️ Languages:</b> {languages}", False),
             ("countries", "<b>🌍 Country:</b> {countries}", False),
             ("kind", "<b>🎬 Type:</b> {kind}", False),
-
             # Plot section (special handling)
             ("plot", "PLOT_SECTION", False),
-
             # Technical Information
             ("runtime", "<b>⏱️ Runtime:</b> {runtime} minutes", False),
             ("keywords", "<b>🏷️ Keywords:</b> {keywords}", False),
             ("certificates", "<b>🏆 Certificates:</b> {certificates}", False),
-
             # Cast & Crew (if available)
             ("cast", "<b>👥 Cast:</b> {cast}", False),
             ("director", "<b>👨‍💼 Director:</b> {director}", False),
             ("writer", "<b>✍️ Writer:</b> {writer}", False),
             ("producer", "<b>🎬 Producer:</b> {producer}", False),
             ("composer", "<b>🎵 Music:</b> {composer}", False),
-            ("cinematographer", "<b>🎥 Cinematography:</b> {cinematographer}", False),
-
+            (
+                "cinematographer",
+                "<b>🎥 Cinematography:</b> {cinematographer}",
+                False,
+            ),
             # Additional Content
             ("trivia", "<b>🎭 Trivia:</b> {trivia}", False),
             ("quotes", "<b>💬 Quotes:</b> {quotes}", False),
             ("taglines", "<b>🏷️ Taglines:</b> {taglines}", False),
             ("goofs", "<b>😅 Goofs:</b> {goofs}", False),
             ("synopsis", "<b>📝 Synopsis:</b> {synopsis}", False),
-
             # Business Information
             ("box_office", "<b>💰 Box Office:</b> {box_office}", False),
             ("distributors", "<b>🏢 Distributors:</b> {distributors}", False),
-
             # TV Series Specific
             ("seasons", "<b>📺 Seasons:</b> {seasons}", False),
-
             # Alternative titles
             ("aka", "<b>🌐 Also Known As:</b> {aka}", False),
             ("localized_title", "<b>🗺️ Local Title:</b> {localized_title}", False),
-
             # Technical details
             ("votes", "<b>🗳️ Votes:</b> {votes}", False),
             ("tech_info", "<b>🔧 Technical:</b> {tech_info}", False),
@@ -391,29 +408,37 @@ def _build_dynamic_template(data: dict[str, Any], compact_mode: bool = False) ->
     # Always add IMDb links section (essential)
     if template_parts:  # Only if we have some content
         template_parts.append("")  # Empty line
-        template_parts.append("<b>🔗 IMDb URL:</b> <a href=\"{url}\">{url}</a>")
+        template_parts.append('<b>🔗 IMDb URL:</b> <a href="{url}">{url}</a>')
 
         # Only show cast & crew link if we don't have cast info in the template
         if not any("Cast:" in part for part in template_parts):
-            template_parts.append("<b>👥 Cast & Crew:</b> <a href=\"{url_cast}\">View on IMDb</a>")
+            template_parts.append(
+                '<b>👥 Cast & Crew:</b> <a href="{url_cast}">View on IMDb</a>'
+            )
 
     # Add footer
     template_parts.append("")  # Empty line
 
     # Only show unavailability note if we're missing cast/crew data and not in compact mode
     if not compact_mode:
-        has_cast_crew = any(field in [part for part in template_parts]
-                           for field in ["Cast:", "Director:", "Writer:"])
+        has_cast_crew = any(
+            field in list(template_parts)
+            for field in ["Cast:", "Director:", "Writer:"]
+        )
 
         if not has_cast_crew:
-            template_parts.append("<i>⚠️ Note: Cast/crew details temporarily unavailable due to IMDb changes</i>")
+            template_parts.append(
+                "<i>⚠️ Note: Cast/crew details temporarily unavailable due to IMDb changes</i>"
+            )
 
     template_parts.append("<i>Powered by IMDb</i>")
 
     return "\n".join(template_parts)
 
 
-def _truncate_caption_for_telegram(caption: str, data: dict[str, Any] | None = None, max_length: int = 1024) -> str:
+def _truncate_caption_for_telegram(
+    caption: str, data: dict[str, Any] | None = None, max_length: int = 1024
+) -> str:
     """Truncate caption to fit Telegram's media caption limit with smart strategies"""
     if len(caption) <= max_length:
         return caption
@@ -429,7 +454,7 @@ def _truncate_caption_for_telegram(caption: str, data: dict[str, Any] | None = N
             pass  # Fall back to truncation if compact mode fails
 
     # Strategy 2: Remove less important sections progressively
-    lines = caption.split('\n')
+    lines = caption.split("\n")
 
     # Remove sections in order of importance (least important first)
     sections_to_remove = [
@@ -452,49 +477,56 @@ def _truncate_caption_for_telegram(caption: str, data: dict[str, Any] | None = N
     ]
 
     for section in sections_to_remove:
-        if len('\n'.join(lines)) <= max_length:
+        if len("\n".join(lines)) <= max_length:
             break
 
         # Remove lines containing this section
         lines = [line for line in lines if section not in line]
 
     # Strategy 3: Truncate plot if still too long
-    if len('\n'.join(lines)) > max_length:
+    if len("\n".join(lines)) > max_length:
         for i, line in enumerate(lines):
             if "<blockquote>" in line and len(line) > 100:
                 # Truncate long plot
-                plot_content = line.replace("<blockquote>", "").replace("</blockquote>", "")
+                plot_content = line.replace("<blockquote>", "").replace(
+                    "</blockquote>", ""
+                )
                 if len(plot_content) > 150:
                     truncated_plot = plot_content[:150] + "..."
                     lines[i] = f"<blockquote>{truncated_plot}</blockquote>"
                 break
 
     # Strategy 4: Final truncation if still too long
-    result = '\n'.join(lines)
+    result = "\n".join(lines)
     if len(result) > max_length:
         # Truncate at a good breaking point
-        truncated = result[:max_length - 80]  # Leave room for truncation message
+        truncated = result[: max_length - 80]  # Leave room for truncation message
 
         # Find the last complete line or sentence
-        last_newline = truncated.rfind('\n')
-        last_period = truncated.rfind('.')
+        last_newline = truncated.rfind("\n")
+        last_period = truncated.rfind(".")
         last_break = max(last_newline, last_period)
 
         if last_break > max_length * 0.7:  # If we can keep at least 70% of content
-            truncated = result[:last_break + 1]
+            truncated = result[: last_break + 1]
         else:
             # Just truncate at word boundary
-            last_space = truncated.rfind(' ')
+            last_space = truncated.rfind(" ")
             if last_space > max_length * 0.8:
                 truncated = result[:last_space]
 
         # Add truncation notice
-        result = truncated + "\n\n<i>... (truncated for Telegram limits)</i>\n<i>Powered by IMDb</i>"
+        result = (
+            truncated
+            + "\n\n<i>... (truncated for Telegram limits)</i>\n<i>Powered by IMDb</i>"
+        )
 
     return result
 
 
-def _safe_format_template(template: str, data: dict[str, Any], fallback_template: str | None = None) -> str:
+def _safe_format_template(
+    template: str, data: dict[str, Any], fallback_template: str | None = None
+) -> str:
     """Safely format template with data, filtering out N/A values"""
 
     # Filter out N/A and unavailable data
@@ -502,12 +534,11 @@ def _safe_format_template(template: str, data: dict[str, Any], fallback_template
     for key, value in data.items():
         if _is_field_available(value):
             filtered_data[key] = value
+        # Keep essential fields even if N/A for template compatibility
+        elif key in ["title", "year", "url", "url_cast", "url_releaseinfo", "kind"]:
+            filtered_data[key] = value if value else "Unknown"
         else:
-            # Keep essential fields even if N/A for template compatibility
-            if key in ["title", "year", "url", "url_cast", "url_releaseinfo", "kind"]:
-                filtered_data[key] = value if value else "Unknown"
-            else:
-                filtered_data[key] = ""  # Empty string for unavailable optional fields
+            filtered_data[key] = ""  # Empty string for unavailable optional fields
 
     # Build dynamic template based on available data
     dynamic_template = _build_dynamic_template(filtered_data)
@@ -546,17 +577,17 @@ def _safe_format_template(template: str, data: dict[str, Any], fallback_template
                 LOGGER.error(f"Minimal template also failed: {e4}")
 
                 # Return basic info if all templates fail
-                title = filtered_data.get('title', 'Unknown')
-                year = filtered_data.get('year', 'Unknown')
-                url = filtered_data.get('url', '#')
-                return f"<b>🎬 Title:</b> {title} [{year}]\n<b>🔗 IMDb URL:</b> <a href=\"{url}\">{url}</a>"
+                title = filtered_data.get("title", "Unknown")
+                year = filtered_data.get("year", "Unknown")
+                url = filtered_data.get("url", "#")
+                return f'<b>🎬 Title:</b> {title} [{year}]\n<b>🔗 IMDb URL:</b> <a href="{url}">{url}</a>'
 
     except Exception as e:
         LOGGER.error(f"Template formatting error: {e}")
-        title = filtered_data.get('title', 'Unknown')
-        year = filtered_data.get('year', 'Unknown')
-        url = filtered_data.get('url', '#')
-        return f"<b>🎬 Title:</b> {title} [{year}]\n<b>🔗 IMDb URL:</b> <a href=\"{url}\">{url}</a>"
+        title = filtered_data.get("title", "Unknown")
+        year = filtered_data.get("year", "Unknown")
+        url = filtered_data.get("url", "#")
+        return f'<b>🎬 Title:</b> {title} [{year}]\n<b>🔗 IMDb URL:</b> <a href="{url}">{url}</a>'
 
 
 async def imdb_search(_, message: Message):
@@ -592,10 +623,6 @@ async def imdb_search(_, message: Message):
 
 <i>⚠️ Note: Cast/crew details temporarily unavailable due to IMDb changes</i>
 <i>Powered by IMDb</i>"""
-
-
-
-
 
     user_id = message.from_user.id
     buttons = ButtonMaker()
@@ -677,7 +704,9 @@ async def imdb_search(_, message: Message):
 
                 # Format caption with template using safe formatter
                 if imdb_data and template:
-                    cap = _safe_format_template(template, imdb_data, default_template)
+                    cap = _safe_format_template(
+                        template, imdb_data, default_template
+                    )
                 else:
                     cap = "No Results"
 
@@ -717,7 +746,9 @@ async def imdb_search(_, message: Message):
             return
         except Exception as e:
             LOGGER.error(f"Error fetching IMDB data: {e}")
-            error_msg = await edit_message(k, "<i>Error fetching movie details. Please try again.</i>")
+            error_msg = await edit_message(
+                k, "<i>Error fetching movie details. Please try again.</i>"
+            )
             create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
             return
 
@@ -726,7 +757,9 @@ async def imdb_search(_, message: Message):
         movies = await get_poster(title, bulk=True)
     except Exception as e:
         LOGGER.error(f"Error searching movies: {e}")
-        error_msg = await edit_message(k, "<i>Error searching movies. Please try again.</i>")
+        error_msg = await edit_message(
+            k, "<i>Error searching movies. Please try again.</i>"
+        )
         create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
         return
     if not movies:
@@ -794,17 +827,17 @@ async def _extract_comprehensive_movie_data(movie_id: str) -> dict[str, Any]:
     # Try to get additional info using working info sets
     # Based on testing, these are the info sets that actually work:
     working_info_sets = [
-        'technical',      # Provides runtime, sound mix, color info
-        'keywords',       # Provides keywords and relevant keywords
-        'plot',          # Already included in basic data
-        'quotes',        # Provides movie quotes
-        'trivia',        # Provides trivia information
-        'taglines',      # Provides taglines
-        'release info',  # Provides release information
-        'connections',   # Provides movie connections
-        'awards',        # Provides awards information
-        'locations',     # Provides filming locations
-        'soundtrack',    # Provides soundtrack information
+        "technical",  # Provides runtime, sound mix, color info
+        "keywords",  # Provides keywords and relevant keywords
+        "plot",  # Already included in basic data
+        "quotes",  # Provides movie quotes
+        "trivia",  # Provides trivia information
+        "taglines",  # Provides taglines
+        "release info",  # Provides release information
+        "connections",  # Provides movie connections
+        "awards",  # Provides awards information
+        "locations",  # Provides filming locations
+        "soundtrack",  # Provides soundtrack information
     ]
 
     # Update movie with working info sets
@@ -812,16 +845,39 @@ async def _extract_comprehensive_movie_data(movie_id: str) -> dict[str, Any]:
 
     # Try to extract genres from keywords as a fallback
     # Since genres are not directly available, we'll extract them from keywords
-    if not movie.get('genres') and movie.get('keywords'):
-        keywords = movie.get('keywords', [])
+    if not movie.get("genres") and movie.get("keywords"):
+        keywords = movie.get("keywords", [])
         if isinstance(keywords, list):
             # Common genre keywords that might be in the keywords list
             genre_keywords = [
-                "action", "comedy", "drama", "horror", "thriller", "romance",
-                "sci-fi", "fantasy", "adventure", "crime", "mystery", "animation",
-                "documentary", "biography", "history", "war", "western", "musical",
-                "family", "sport", "music", "short", "adult", "news", "reality-tv",
-                "game-show", "talk-show", "film-noir"
+                "action",
+                "comedy",
+                "drama",
+                "horror",
+                "thriller",
+                "romance",
+                "sci-fi",
+                "fantasy",
+                "adventure",
+                "crime",
+                "mystery",
+                "animation",
+                "documentary",
+                "biography",
+                "history",
+                "war",
+                "western",
+                "musical",
+                "family",
+                "sport",
+                "music",
+                "short",
+                "adult",
+                "news",
+                "reality-tv",
+                "game-show",
+                "talk-show",
+                "film-noir",
             ]
 
             found_genres = []
@@ -829,11 +885,14 @@ async def _extract_comprehensive_movie_data(movie_id: str) -> dict[str, Any]:
                 if isinstance(keyword, str):
                     keyword_lower = keyword.lower().replace("-", " ")
                     for genre in genre_keywords:
-                        if genre in keyword_lower and genre.title() not in found_genres:
+                        if (
+                            genre in keyword_lower
+                            and genre.title() not in found_genres
+                        ):
                             found_genres.append(genre.title())
 
             if found_genres:
-                movie['genres'] = found_genres[:5]  # Limit to 5 genres
+                movie["genres"] = found_genres[:5]  # Limit to 5 genres
 
     return movie
 
@@ -911,16 +970,32 @@ async def _process_movie_data(movie: Any, movie_id: str) -> dict[str, Any]:
         if keywords and isinstance(keywords, list):
             # Common genre keywords that might be in the keywords list
             genre_keywords = [
-                "action", "comedy", "drama", "horror", "thriller", "romance",
-                "sci-fi", "fantasy", "adventure", "crime", "mystery", "animation",
-                "documentary", "biography", "history", "war", "western", "musical"
+                "action",
+                "comedy",
+                "drama",
+                "horror",
+                "thriller",
+                "romance",
+                "sci-fi",
+                "fantasy",
+                "adventure",
+                "crime",
+                "mystery",
+                "animation",
+                "documentary",
+                "biography",
+                "history",
+                "war",
+                "western",
+                "musical",
             ]
             found_genres = []
             for keyword in keywords[:10]:  # Check first 10 keywords
                 if isinstance(keyword, str):
                     keyword_lower = keyword.lower().replace("-", " ")
                     found_genres.extend(
-                        genre.title() for genre in genre_keywords
+                        genre.title()
+                        for genre in genre_keywords
                         if genre in keyword_lower
                     )
             if found_genres:
@@ -945,7 +1020,9 @@ async def _process_movie_data(movie: Any, movie_id: str) -> dict[str, Any]:
         "rating": f"{movie.get('rating')} / 10" if movie.get("rating") else None,
         "votes": movie.get("votes"),
         "plot": plot,
-        "synopsis": list_to_str(movie.get("synopsis")) if movie.get("synopsis") else None,
+        "synopsis": list_to_str(movie.get("synopsis"))
+        if movie.get("synopsis")
+        else None,
         # Media & Visual
         "poster": movie.get("full-size cover url"),
         "poster_small": movie.get("cover url"),
@@ -955,13 +1032,17 @@ async def _process_movie_data(movie: Any, movie_id: str) -> dict[str, Any]:
         "tech_info": movie.get("tech"),
         # Content Classification
         "genres": list_to_hash(genres, emoji=True) if genres else None,
-        "keywords": list_to_str(movie.get("keywords")[:10]) if movie.get("keywords") else None,
+        "keywords": list_to_str(movie.get("keywords")[:10])
+        if movie.get("keywords")
+        else None,
         "certificates": list_to_str(certificates) if certificates else None,
         # Geographic & Release
         "countries": list_to_hash(countries, True) if countries else None,
         "country_codes": movie.get("country codes"),
         "languages": list_to_hash(languages) if languages else None,
-        "release_dates": list_to_str(movie.get("release dates")[:5]) if movie.get("release dates") else None,
+        "release_dates": list_to_str(movie.get("release dates")[:5])
+        if movie.get("release dates")
+        else None,
         "release_date": date,
         "original_air_date": movie.get("original air date"),
         "aka": list_to_str(movie.get("akas")) if movie.get("akas") else None,
@@ -976,11 +1057,19 @@ async def _process_movie_data(movie: Any, movie_id: str) -> dict[str, Any]:
         "music_team": None,  # Don't show unavailable music team info
         # Business Information
         "box_office": movie.get("box office"),
-        "distributors": list_to_str(movie.get("distributors")) if movie.get("distributors") else None,
+        "distributors": list_to_str(movie.get("distributors"))
+        if movie.get("distributors")
+        else None,
         # Additional Content
-        "trivia": list_to_str(movie.get("trivia")[:3]) if movie.get("trivia") else None,
-        "quotes": list_to_str(movie.get("quotes")[:3]) if movie.get("quotes") else None,
-        "taglines": list_to_str(movie.get("taglines")[:3]) if movie.get("taglines") else None,
+        "trivia": list_to_str(movie.get("trivia")[:3])
+        if movie.get("trivia")
+        else None,
+        "quotes": list_to_str(movie.get("quotes")[:3])
+        if movie.get("quotes")
+        else None,
+        "taglines": list_to_str(movie.get("taglines")[:3])
+        if movie.get("taglines")
+        else None,
         "goofs": list_to_str(movie.get("goofs")[:3]) if movie.get("goofs") else None,
         "connections": movie.get("connections"),
         # TV Series Specific
@@ -1043,10 +1132,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
 
         if bulk:
             # Cache bulk results
-            _imdb_cache[cache_key] = {
-                "data": movieid,
-                "timestamp": time()
-            }
+            _imdb_cache[cache_key] = {"data": movieid, "timestamp": time()}
             return movieid
 
         movieid = movieid[0].movieID
@@ -1062,10 +1148,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
     movie_data = await _process_movie_data(movie, str(movieid))
 
     # Cache the result for future use
-    _imdb_cache[cache_key] = {
-        "data": movie_data,
-        "timestamp": time()
-    }
+    _imdb_cache[cache_key] = {"data": movie_data, "timestamp": time()}
 
     return movie_data
 
@@ -1091,7 +1174,7 @@ async def imdb_callback(_, query):
         # Show loading status immediately
         await edit_message(
             message,
-            "🎬 <i>Fetching movie details...</i>\n\n⏳ Please wait while we get the information from IMDB..."
+            "🎬 <i>Fetching movie details...</i>\n\n⏳ Please wait while we get the information from IMDB...",
         )
 
         try:
@@ -1175,7 +1258,9 @@ async def imdb_callback(_, query):
                     )
                 except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
                     # Try with alternative poster URL
-                    poster = imdb_data.get("poster").replace(".jpg", "._V1_UX360.jpg")
+                    poster = imdb_data.get("poster").replace(
+                        ".jpg", "._V1_UX360.jpg"
+                    )
                     truncated_cap = _truncate_caption_for_telegram(cap, imdb_data)
                     await send_message(
                         message,
@@ -1195,5 +1280,7 @@ async def imdb_callback(_, query):
 
         except Exception as e:
             LOGGER.error(f"Error in IMDB callback: {e}")
-            await edit_message(message, "<i>❌ Error fetching movie details. Please try again.</i>")
+            await edit_message(
+                message, "<i>❌ Error fetching movie details. Please try again.</i>"
+            )
             create_task(auto_delete_message(message, time=300))  # noqa: RUF006

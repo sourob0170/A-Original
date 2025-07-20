@@ -106,11 +106,15 @@ if Config.TRACE_MOE_ENABLED:
 
 # Add phishcheck command if enabled
 if Config.PHISH_DIRECTORY_ENABLED:
-    COMMANDS["PhishCheckCommand"] = "- Check domains and emails for phishing/security threats"
+    COMMANDS["PhishCheckCommand"] = (
+        "- Check domains and emails for phishing/security threats"
+    )
 
 # Add WOT command if enabled (includes AbuseIPDB integration)
 if Config.WOT_ENABLED or Config.ABUSEIPDB_ENABLED:
-    COMMANDS["WotCommand"] = "- Check website, domain, and IP reputation using WOT and AbuseIPDB"
+    COMMANDS["WotCommand"] = (
+        "- Check website, domain, and IP reputation using WOT and AbuseIPDB"
+    )
 
 # Add OSINT command (sudo only)
 COMMANDS["OSINTCommand"] = "- Comprehensive OSINT intelligence suite (sudo only)"
@@ -144,6 +148,9 @@ async def main():
         1500, 20, 20
     )  # Balanced thresholds to reduce GC frequency while preventing memory bloat
 
+    # Start web server immediately for Heroku PORT binding
+    from os import environ
+
     from .core.startup import (
         load_configurations,
         save_settings,
@@ -154,11 +161,10 @@ async def main():
         update_variables,
     )
 
-    # Start web server immediately for Heroku PORT binding
-    from os import environ
     if environ.get("PORT"):
         LOGGER.info("Heroku deployment detected - starting web server immediately")
         from .core.startup import start_web_server_early
+
         await start_web_server_early()
 
     await gather(

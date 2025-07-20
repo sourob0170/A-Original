@@ -20,8 +20,7 @@ def escape_html(text):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
     text = text.replace('"', "&quot;")
-    text = text.replace("'", "&#x27;")
-    return text
+    return text.replace("'", "&#x27;")
 
 
 def trace_number(phone_number):
@@ -135,13 +134,13 @@ def trace_number(phone_number):
                 )
                 return details
             except Exception as e:
-                return f"⚠️ Error: Unable to extract all details. Error: {str(e)}"
+                return f"⚠️ Error: Unable to extract all details. Error: {e!s}"
         else:
             return (
                 f"⚠️ Failed to fetch data. HTTP Status Code: {response.status_code}"
             )
     except Exception as e:
-        return f"❌ An error occurred: {str(e)}"
+        return f"❌ An error occurred: {e!s}"
 
 
 async def osint_command(client, message):
@@ -320,7 +319,9 @@ async def handle_ifsc_lookup(message, ifsc_code):
         )
 
     except Exception as e:
-        msg = f"❌ <b>Invalid IFSC code or bank not found</b>\n\n{escape_html(str(e))}"
+        msg = (
+            f"❌ <b>Invalid IFSC code or bank not found</b>\n\n{escape_html(str(e))}"
+        )
 
     keyboard = [
         [InlineKeyboardButton("🔙 Back to OSINT Menu", callback_data="osint_back")]
@@ -839,9 +840,7 @@ async def advanced_email_osint(email_address):
     creation_estimate = "2010-2020"
     if any(char.isdigit() for char in local_part):
         numbers = "".join(filter(str.isdigit, local_part))
-        if len(numbers) == 4 and (
-            numbers.startswith(("19", "20"))
-        ):
+        if len(numbers) == 4 and (numbers.startswith(("19", "20"))):
             creation_estimate = f"Around {numbers}"
         elif len(numbers) == 2:
             year = int(numbers)
@@ -873,10 +872,10 @@ async def advanced_email_osint(email_address):
     osint_tips = [
         f'🔍 Google search: "{local_part}" + email domain',
         f"🔍 Search variations: {local_part.replace('.', '')}",
-        f"🔍 Check username on Sherlock tool",
+        "🔍 Check username on Sherlock tool",
         f"🔍 Look for {local_part} on professional networks",
-        f"🔍 Search for domain registrant info",
-        f"🔍 Check archived versions of associated websites",
+        "🔍 Search for domain registrant info",
+        "🔍 Check archived versions of associated websites",
     ]
 
     return {
@@ -909,15 +908,17 @@ async def handle_email_lookup(message, email_address):
         if "error" in analysis:
             msg = f"❌ <b>Error:</b> {escape_html(analysis['error'])}"
         else:
-            msg = f"📧 <b>Advanced Email OSINT Report</b>\n\n"
+            msg = "📧 <b>Advanced Email OSINT Report</b>\n\n"
 
             # Header
-            msg += f"📨 <b>Target:</b> <code>{escape_html(analysis['email'])}</code>\n"
+            msg += (
+                f"📨 <b>Target:</b> <code>{escape_html(analysis['email'])}</code>\n"
+            )
             msg += f"👤 <b>Username:</b> <code>{escape_html(analysis['local_part'])}</code>\n"
             msg += f"🌐 <b>Domain:</b> <code>{escape_html(analysis['domain'])}</code>\n\n"
 
             # Breach Intelligence
-            msg += f"🛡️ <b>Breach Database Analysis:</b>\n"
+            msg += "🛡️ <b>Breach Database Analysis:</b>\n"
             for breach in analysis["breach_sources"]:
                 msg += f"• {escape_html(breach)}\n"
             msg += "\n"
@@ -943,7 +944,9 @@ async def handle_email_lookup(message, email_address):
             msg += "🏢 <b>Provider Analysis:</b>\n"
             msg += f"• Security Level: {escape_html(str(provider.get('security', 'Unknown')))}\n"
             msg += f"• Business Email: {'Yes' if provider.get('business') else 'Personal'}\n"
-            msg += f"• Region: {escape_html(str(provider.get('region', 'Unknown')))}\n"
+            msg += (
+                f"• Region: {escape_html(str(provider.get('region', 'Unknown')))}\n"
+            )
             msg += f"• Features: {escape_html(str(provider.get('features', 'Unknown')))}\n\n"
 
             # Risk Assessment
@@ -971,9 +974,7 @@ async def handle_email_lookup(message, email_address):
             msg += "• Check professional licensing boards\n"
             msg += "• Search academic publications\n\n"
 
-            msg += (
-                "🔒 <b>Privacy Note:</b> Advanced OSINT for educational purposes only"
-            )
+            msg += "🔒 <b>Privacy Note:</b> Advanced OSINT for educational purposes only"
 
     except Exception as e:
         msg = f"❌ <b>OSINT Analysis Failed:</b> {escape_html(str(e))}"
@@ -994,8 +995,7 @@ async def handle_user_lookup(message, target, client):
 
     try:
         # Remove @ if present
-        if target.startswith("@"):
-            target = target[1:]
+        target = target.removeprefix("@")
 
         # Check if target is numeric (user ID) or username
         is_user_id = target.isdigit()
@@ -1092,7 +1092,7 @@ async def handle_user_lookup(message, target, client):
             # Username Analysis
             username = user_info["username"]
             if username and username != "No Username":
-                msg += f"🔤 <b>Username Analysis:</b>\n"
+                msg += "🔤 <b>Username Analysis:</b>\n"
                 msg += f"• Length: {len(username)} characters\n"
                 msg += f"• Has Numbers: {'Yes' if any(c.isdigit() for c in username) else 'No'}\n"
                 msg += f"• Has Underscores: {'Yes' if '_' in username else 'No'}\n"
@@ -1111,7 +1111,7 @@ async def handle_user_lookup(message, target, client):
             msg += "• Look for pattern similarities\n"
             msg += "• Analyze profile photo metadata\n"
             msg += "• Check common group memberships\n"
-            msg +="• Monitor activity patterns\n\n"
+            msg += "• Monitor activity patterns\n\n"
 
             # Additional Intelligence - only show available username info
             if user_info["username"] != "No Username":
@@ -1429,16 +1429,16 @@ async def handle_username_scan(message, username):
                 else:
                     results["not_found"].append(f"❌ {site_name}: Not Found")
 
-            except Exception as e:
+            except Exception:
                 results["errors"].append(f"⚠️ {site_name}: Error")
 
         # Format results
-        msg = f"🔍 <b>Username Scan Results</b>\n\n"
+        msg = "🔍 <b>Username Scan Results</b>\n\n"
         msg += f"👤 <b>Username:</b> <code>{escape_html(username)}</code>\n\n"
 
         # Show found results first
         if results["found"]:
-            msg += f"✅ <b>Found Profiles:</b>\n"
+            msg += "✅ <b>Found Profiles:</b>\n"
             for result in results["found"][:15]:  # Show first 15 found
                 msg += f"• {escape_html(result)}\n"
             if len(results["found"]) > 15:
@@ -1446,25 +1446,25 @@ async def handle_username_scan(message, username):
             msg += "\n"
 
         # Show summary
-        msg += f"📊 <b>Summary:</b>\n"
+        msg += "📊 <b>Summary:</b>\n"
         msg += f"✅ <b>Found:</b> {len(results['found'])}\n"
         msg += f"❌ <b>Not Found:</b> {len(results['not_found'])}\n"
         msg += f"⚠️ <b>Errors:</b> {len(results['errors'])}\n"
         msg += f"🌐 <b>Total Checked:</b> {total_sites} websites\n\n"
 
         # OSINT Tips
-        msg += f"🕵️ <b>OSINT Tips:</b>\n"
-        msg += f"• Check found profiles for additional info\n"
-        msg += f"• Look for pattern similarities\n"
-        msg += f"• Cross-reference with other data\n"
-        msg += f"• Check profile creation dates\n"
-        msg += f"• Analyze posting patterns\n\n"
+        msg += "🕵️ <b>OSINT Tips:</b>\n"
+        msg += "• Check found profiles for additional info\n"
+        msg += "• Look for pattern similarities\n"
+        msg += "• Cross-reference with other data\n"
+        msg += "• Check profile creation dates\n"
+        msg += "• Analyze posting patterns\n\n"
 
-        msg += f"⚠️ <b>Note:</b> Results based on public accessibility"
+        msg += "⚠️ <b>Note:</b> Results based on public accessibility"
 
     except Exception as e:
         msg = f"❌ <b>Username Scan Failed:</b> {escape_html(str(e))}\n\n"
-        msg += f"💡 <b>Fallback:</b> Try manual checking of major platforms"
+        msg += "💡 <b>Fallback:</b> Try manual checking of major platforms"
 
     keyboard = [
         [InlineKeyboardButton("🔙 Back to OSINT Menu", callback_data="osint_back")]
@@ -1489,7 +1489,9 @@ async def osint_callback_handler(client, callback_query):
             ],
             [
                 InlineKeyboardButton("🏦 IFSC Lookup", callback_data="osint_ifsc"),
-                InlineKeyboardButton("🚗 Vehicle Info", callback_data="osint_vehicle"),
+                InlineKeyboardButton(
+                    "🚗 Vehicle Info", callback_data="osint_vehicle"
+                ),
             ],
             [
                 InlineKeyboardButton("📧 Email Lookup", callback_data="osint_email"),
@@ -1529,7 +1531,9 @@ async def osint_callback_handler(client, callback_query):
             "• IMEI and MAC address\n"
             "• Tracking history\n"
             "• Advanced OSINT details",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_ip":
@@ -1544,7 +1548,9 @@ async def osint_callback_handler(client, callback_query):
             "• Timezone\n"
             "• Proxy/VPN detection\n"
             "• Mobile/Hosting detection",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_ifsc":
@@ -1558,7 +1564,9 @@ async def osint_callback_handler(client, callback_query):
             "• Address\n"
             "• Contact Information\n"
             "• MICR Code",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_vehicle":
@@ -1573,7 +1581,9 @@ async def osint_callback_handler(client, callback_query):
             "• State Information\n"
             "• Owner Type\n"
             "• Insurance & PUC Status",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_email":
@@ -1588,7 +1598,9 @@ async def osint_callback_handler(client, callback_query):
             "• Security analysis\n"
             "• Breach check\n"
             "• Social media accounts",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_user":
@@ -1606,7 +1618,9 @@ async def osint_callback_handler(client, callback_query):
             "• Bio & status extraction\n"
             "• Group/channel membership\n\n"
             "⚠️ <b>Note:</b> Respects Telegram privacy settings",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_scan":
@@ -1622,7 +1636,9 @@ async def osint_callback_handler(client, callback_query):
             "• Professional networks\n"
             "• Gaming platforms\n"
             "• Developer communities",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
     elif data == "osint_help":
@@ -1644,7 +1660,9 @@ async def osint_callback_handler(client, callback_query):
             "• Vehicle numbers without spaces\n"
             "• All searches are anonymous and secure\n\n"
             "🔒 <b>Privacy:</b> All OSINT tools respect privacy policies and are for educational purposes only.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Back", callback_data="osint_back")]]
+            ),
         )
 
 

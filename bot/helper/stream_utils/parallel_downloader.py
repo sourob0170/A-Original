@@ -7,9 +7,6 @@ import asyncio
 import contextlib
 import os
 import tempfile
-from math import ceil
-from pathlib import Path
-
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait
@@ -17,7 +14,6 @@ from pyrogram.types import Message
 
 from bot import LOGGER
 from bot.core.config_manager import Config
-
 
 
 class ParallelDownloader:
@@ -135,11 +131,10 @@ class ParallelDownloader:
                             raise ConnectionError(
                                 f"Telegram authentication failed: {e}"
                             )
-                        else:
-                            LOGGER.error(
-                                f"Error downloading chunk {chunk['index']}: {e}"
-                            )
-                            raise
+                        LOGGER.error(
+                            f"Error downloading chunk {chunk['index']}: {e}"
+                        )
+                        raise
 
             return chunk_file
 
@@ -166,8 +161,6 @@ class ParallelDownloader:
                         with contextlib.suppress(OSError):
                             os.remove(chunk_file)
 
-
-
         except Exception as e:
             LOGGER.error(f"Error combining chunks: {e}")
             raise
@@ -189,8 +182,6 @@ class ParallelDownloader:
             file_size = get_fsize(message)
             if file_size == 0:
                 raise ValueError("File size is 0")
-
-
 
             # Check if parallel download is beneficial
             clients = self._get_available_clients()
@@ -226,14 +217,12 @@ class ParallelDownloader:
                     actual_size = os.path.getsize(output_path)
                     if actual_size == file_size:
                         return True
-                    else:
-                        LOGGER.error(
-                            f"File size mismatch: expected {file_size}, got {actual_size}"
-                        )
-                        return False
-                else:
-                    LOGGER.error("Output file was not created")
+                    LOGGER.error(
+                        f"File size mismatch: expected {file_size}, got {actual_size}"
+                    )
                     return False
+                LOGGER.error("Output file was not created")
+                return False
 
             finally:
                 # Clean up temporary directory

@@ -1,7 +1,6 @@
 import re
-import asyncio
-from urllib.parse import urlparse
 from logging import getLogger
+from urllib.parse import urlparse
 
 from httpx import AsyncClient, RequestError, TimeoutException
 
@@ -47,31 +46,30 @@ class PhishDirectoryAPI:
 
                 if response.status_code == 200:
                     return {"success": True, "data": response.json()}
-                elif response.status_code == 400:
+                if response.status_code == 400:
                     return {"success": False, "error": "Invalid domain provided"}
-                elif response.status_code == 401:
+                if response.status_code == 401:
                     return {
                         "success": False,
                         "error": "Authentication required. Please register at https://phish.directory and configure PHISH_DIRECTORY_API_KEY in bot settings.",
                     }
-                elif response.status_code == 429:
+                if response.status_code == 429:
                     return {
                         "success": False,
                         "error": "Rate limit exceeded. Please try again later.",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API returned status code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API returned status code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "Request timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"Connection error: {str(e)}"}
+            return {"success": False, "error": f"Connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in domain check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
     async def check_email(self, email: str) -> dict:
         """Validate email and check reputation"""
@@ -96,31 +94,30 @@ class PhishDirectoryAPI:
 
                 if response.status_code == 200:
                     return {"success": True, "data": response.json()}
-                elif response.status_code == 400:
+                if response.status_code == 400:
                     return {"success": False, "error": "Invalid email provided"}
-                elif response.status_code == 401:
+                if response.status_code == 401:
                     return {
                         "success": False,
                         "error": "Authentication required. Please register at https://phish.directory and configure PHISH_DIRECTORY_API_KEY in bot settings.",
                     }
-                elif response.status_code == 429:
+                if response.status_code == 429:
                     return {
                         "success": False,
                         "error": "Rate limit exceeded. Please try again later.",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API returned status code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API returned status code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "Request timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"Connection error: {str(e)}"}
+            return {"success": False, "error": f"Connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in email check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
     async def check_api_status(self) -> dict:
         """Check if the API is accessible by testing the metrics endpoint"""
@@ -143,19 +140,18 @@ class PhishDirectoryAPI:
                         "data": data,
                         "message": "API is accessible. Authentication required for domain/email checks.",
                     }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"API status check failed with code: {response.status_code}",
-                    }
+                return {
+                    "success": False,
+                    "error": f"API status check failed with code: {response.status_code}",
+                }
 
         except TimeoutException:
             return {"success": False, "error": "API connection timeout"}
         except RequestError as e:
-            return {"success": False, "error": f"API connection error: {str(e)}"}
+            return {"success": False, "error": f"API connection error: {e!s}"}
         except Exception as e:
             LOGGER.error(f"Unexpected error in API status check: {e}")
-            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+            return {"success": False, "error": f"Unexpected error: {e!s}"}
 
 
 def detect_input_type(input_text: str) -> tuple[str, str]:
@@ -338,14 +334,14 @@ async def phish_check_command(_, message):
             if "Authentication required" in error_text:
                 error_msg = await send_message(
                     message,
-                    f"<blockquote>🔐 <b>Authentication Required</b>\n\n"
-                    f"The phish.directory API requires authentication for security checks.\n\n"
-                    f"<b>📋 Setup Instructions:</b>\n"
-                    f"1. Visit <a href='https://phish.directory'>phish.directory</a>\n"
-                    f"2. Create a free account\n"
-                    f"3. Get your API key from the dashboard\n"
-                    f"4. Configure <code>PHISH_DIRECTORY_API_KEY</code> in bot settings\n\n"
-                    f"<b>💡 Note:</b> This is a one-time setup for enhanced security features.</blockquote>",
+                    "<blockquote>🔐 <b>Authentication Required</b>\n\n"
+                    "The phish.directory API requires authentication for security checks.\n\n"
+                    "<b>📋 Setup Instructions:</b>\n"
+                    "1. Visit <a href='https://phish.directory'>phish.directory</a>\n"
+                    "2. Create a free account\n"
+                    "3. Get your API key from the dashboard\n"
+                    "4. Configure <code>PHISH_DIRECTORY_API_KEY</code> in bot settings\n\n"
+                    "<b>💡 Note:</b> This is a one-time setup for enhanced security features.</blockquote>",
                 )
             else:
                 error_msg = await send_message(
@@ -354,7 +350,9 @@ async def phish_check_command(_, message):
                     f"<b>Error:</b> <code>{error_text}</code>\n\n"
                     f"Please try again later or contact support if the issue persists.</blockquote>",
                 )
-            await auto_delete_message(error_msg, time=600)  # Longer timeout for setup instructions
+            await auto_delete_message(
+                error_msg, time=600
+            )  # Longer timeout for setup instructions
 
     except Exception as e:
         LOGGER.error(f"Unexpected error in phish_check_command: {e}")
@@ -363,6 +361,6 @@ async def phish_check_command(_, message):
             message,
             f"<blockquote>❌ <b>Unexpected Error</b>\n\n"
             f"An unexpected error occurred while processing your request.\n\n"
-            f"<b>Error:</b> <code>{str(e)}</code></blockquote>",
+            f"<b>Error:</b> <code>{e!s}</code></blockquote>",
         )
         await auto_delete_message(error_msg, time=300)

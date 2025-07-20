@@ -4195,12 +4195,12 @@ def mediafireFolder(url, user_id=None):
         except:
             return None
         return final_link
-    
+
     def __decode_url(html):
         enc_url = html.xpath('//a[@id="downloadButton"]')
         if enc_url:
-            final_link = enc_url[0].attrib.get('href')
-            scrambled = enc_url[0].attrib.get('data-scrambled-url')
+            final_link = enc_url[0].attrib.get("href")
+            scrambled = enc_url[0].attrib.get("data-scrambled-url")
             if final_link and scrambled:
                 try:
                     final_link = b64decode(scrambled).decode("utf-8")
@@ -4493,15 +4493,17 @@ def _mediafire_scraping_download(url, password="", session=None):
     def _decode_url(html, session):
         enc_url = html.xpath('//a[@id="downloadButton"]')
         if enc_url:
-            final_link = enc_url[0].attrib.get('href')
-            scrambled = enc_url[0].attrib.get('data-scrambled-url')
+            final_link = enc_url[0].attrib.get("href")
+            scrambled = enc_url[0].attrib.get("data-scrambled-url")
 
             if final_link and scrambled:
                 try:
                     final_link = b64decode(scrambled).decode("utf-8")
                     return final_link
                 except Exception as e:
-                    raise ValueError(f"Failed to decode final link. {e.__class__.__name__}") from e
+                    raise ValueError(
+                        f"Failed to decode final link. {e.__class__.__name__}"
+                    ) from e
             elif final_link.startswith("http"):
                 return final_link
             elif final_link.startswith("//"):
@@ -4509,7 +4511,9 @@ def _mediafire_scraping_download(url, password="", session=None):
             else:
                 raise ValueError(f"No download link found")
         else:
-            raise ValueError("Download button not found in the HTML content. It may have been blocked by Cloudflare's anti-bot protection.")
+            raise ValueError(
+                "Download button not found in the HTML content. It may have been blocked by Cloudflare's anti-bot protection."
+            )
 
     if session is None:
         session = create_scraper()

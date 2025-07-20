@@ -13,6 +13,10 @@ from bot.helper.ext_utils.bot_utils import (
 )
 from bot.helper.ext_utils.links_utils import is_url
 from bot.helper.ext_utils.task_manager import check_running_tasks
+from bot.helper.listeners.task_listener import TaskListener
+from bot.helper.mirror_leech_utils.download_utils.gallery_dl_download import (
+    GalleryDLHelper,
+)
 from bot.helper.mirror_leech_utils.gallery_dl_utils.quality_selector import (
     get_gallery_dl_quality_selector,
     get_platform_from_url,
@@ -23,10 +27,6 @@ from bot.helper.mirror_leech_utils.gallery_dl_utils.quality_selector import (
 from bot.helper.mirror_leech_utils.gallery_dl_utils.url_parser import (
     get_gallery_dl_info,
     is_gallery_dl_url,
-)
-from bot.helper.listeners.task_listener import TaskListener
-from bot.helper.mirror_leech_utils.download_utils.gallery_dl_download import (
-    GalleryDLHelper,
 )
 from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.telegram_helper.message_utils import (

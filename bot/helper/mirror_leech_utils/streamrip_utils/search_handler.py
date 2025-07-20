@@ -1987,7 +1987,9 @@ async def perform_inline_streamrip_search(query, platform, media_type, user_id):
             return []
 
         # Import streamrip configuration
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         config = streamrip_config.get_config()
         if not config:
@@ -3590,7 +3592,9 @@ async def handle_streamrip_callback(_, callback_query):
         listener.media_type = media_type
 
         # Show quality selector
-        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
+        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import (
+            show_quality_selector,
+        )
 
         selection = await show_quality_selector(listener, platform, media_type)
 
@@ -3710,7 +3714,9 @@ async def handle_streamrip_start_command(client, message):
         listener.media_type = media_type
 
         # Show quality selector
-        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import show_quality_selector
+        from bot.helper.mirror_leech_utils.streamrip_utils.quality_selector import (
+            show_quality_selector,
+        )
 
         selection = await show_quality_selector(listener, platform, media_type)
 

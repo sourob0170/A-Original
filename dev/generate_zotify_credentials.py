@@ -37,7 +37,9 @@ except ImportError:
     print("  pip install git+https://github.com/DraftKinner/zotify.git@dev")
     print()
     print("Or if you're using conda:")
-    print("  conda install -c conda-forge git+https://github.com/DraftKinner/zotify.git@dev")
+    print(
+        "  conda install -c conda-forge git+https://github.com/DraftKinner/zotify.git@dev"
+    )
     print()
     sys.exit(1)
 

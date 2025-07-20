@@ -17,7 +17,9 @@ async def handle_streamrip_setting_change(setting_key: str, new_value) -> bool:
         LOGGER.info(f"Streamrip setting changed: {setting_key} = {new_value}")
 
         # Import the new config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         # Update the config file from current bot settings
         success = await streamrip_config.update_config_from_bot_settings()
@@ -44,7 +46,9 @@ async def handle_streamrip_config_upload(config_content: str) -> bool:
         LOGGER.info("Processing streamrip config upload")
 
         # Import the new config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         # Upload and deploy the custom config
         success = await streamrip_config.upload_custom_config(config_content)
@@ -69,7 +73,9 @@ async def handle_streamrip_config_reset() -> bool:
         LOGGER.info("Resetting streamrip config to default")
 
         # Import the new config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         # Reset to default config
         success = await streamrip_config.reset_to_default_config()
@@ -92,7 +98,9 @@ async def get_streamrip_config_content() -> str | None:
     """
     try:
         # Import the new config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         # Get current config content
         content = await streamrip_config.get_current_config_content()
@@ -115,7 +123,9 @@ async def get_streamrip_config_status() -> dict:
     """
     try:
         # Import the new config helper
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         # Check if config file exists
         config_path = streamrip_config.get_config_file_path()
@@ -248,7 +258,9 @@ async def is_streamrip_properly_configured() -> tuple[bool, list[str]]:
             return False, issues
 
         # Check if config file exists
-        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            streamrip_config,
+        )
 
         config_path = streamrip_config.get_config_file_path()
 

@@ -4,6 +4,7 @@ Uses multiple helper bots for faster streaming like HyperDL
 """
 
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
@@ -12,7 +13,6 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
 from bot import LOGGER
-from bot.core.config_manager import Config
 
 from .client_manager import StreamClientManager
 from .file_processor import get_fsize, get_media
@@ -180,9 +180,8 @@ class ParallelByteStreamer:
                             f"Authentication error in chunk {chunk.index}: {e}"
                         )
                         raise ConnectionError(f"Telegram authentication failed: {e}")
-                    else:
-                        LOGGER.error(f"Error downloading chunk {chunk.index}: {e}")
-                        raise
+                    LOGGER.error(f"Error downloading chunk {chunk.index}: {e}")
+                    raise
 
             return chunk.index, chunk_data
 
@@ -271,10 +270,8 @@ class ParallelByteStreamer:
                 # Clean up
                 if not downloader_task.done():
                     downloader_task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await downloader_task
-                    except asyncio.CancelledError:
-                        pass
 
         except Exception as e:
             LOGGER.error(f"Error in parallel streaming: {e}")

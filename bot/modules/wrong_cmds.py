@@ -195,7 +195,6 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
         "contact",
         "ban",
         "unban",
-
     ]
 
     # Find the base command (without any suffix)

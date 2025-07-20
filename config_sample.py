@@ -387,10 +387,14 @@ VT_MAX_FILE_SIZE = (
 )
 
 # Phish Directory API Settings
-PHISH_DIRECTORY_API_URL = "https://api.phish.directory"  # Phish Directory API base URL
+PHISH_DIRECTORY_API_URL = (
+    "https://api.phish.directory"  # Phish Directory API base URL
+)
 PHISH_DIRECTORY_ENABLED = True  # Enable/disable Phish Directory functionality
 PHISH_DIRECTORY_TIMEOUT = 30  # Phish Directory API timeout in seconds
-PHISH_DIRECTORY_API_KEY = ""  # Phish Directory API key (optional, for authenticated endpoints)
+PHISH_DIRECTORY_API_KEY = (
+    ""  # Phish Directory API key (optional, for authenticated endpoints)
+)
 
 # WOT (Web of Trust) API Settings
 WOT_API_URL = "https://scorecard.api.mywot.com"  # WOT API base URL
@@ -458,7 +462,9 @@ TRUECALLER_API_URL = ""  # Truecaller API URL for phone number lookup
 TERABOX_PROXY = "https://teradlrobot.cheemsbackup.workers.dev/"  # Terabox proxy URL for bypassing restrictions
 
 # Pastebin API Settings
-PASTEBIN_API_KEY = ""  # Pastebin Developer API Key (get from https://pastebin.com/doc_api)
+PASTEBIN_API_KEY = (
+    ""  # Pastebin Developer API Key (get from https://pastebin.com/doc_api)
+)
 PASTEBIN_ENABLED = False  # Enable/disable Pastebin functionality
 
 # Custom template for IMDB results formatting.

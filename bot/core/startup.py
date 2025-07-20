@@ -54,7 +54,9 @@ async def start_web_server_early():
         # Use Config.BASE_URL_PORT instead of environment variable
         # Explicitly convert to string to avoid any type issues
         PORT = environ.get("PORT") or str(Config.BASE_URL_PORT) or "80"
-        LOGGER.info(f"Starting web server early on port {PORT} for Heroku compatibility")
+        LOGGER.info(
+            f"Starting web server early on port {PORT} for Heroku compatibility"
+        )
         await create_subprocess_shell(
             f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}",
         )
@@ -116,7 +118,9 @@ async def load_zotify_credentials_from_db():
     """Load Zotify credentials from database and recreate credentials file"""
     try:
         from bot import LOGGER
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            zotify_config,
+        )
 
         # Check if we have any users with Zotify credentials
         if database.db is not None:
@@ -354,7 +358,11 @@ async def load_settings():
             "FILE2LINK_ENABLED": getattr(Config, "FILE2LINK_ENABLED", True),
             "FILE2LINK_BIN_CHANNEL": getattr(Config, "FILE2LINK_BIN_CHANNEL", 0),
             "FILE2LINK_BASE_URL": getattr(Config, "FILE2LINK_BASE_URL", ""),
-            "FILE2LINK_ALLOWED_TYPES": getattr(Config, "FILE2LINK_ALLOWED_TYPES", "video,audio,document,photo,animation,voice,video_note"),
+            "FILE2LINK_ALLOWED_TYPES": getattr(
+                Config,
+                "FILE2LINK_ALLOWED_TYPES",
+                "video,audio,document,photo,animation,voice,video_note",
+            ),
             # Base URL for web server
             "BASE_URL": getattr(Config, "BASE_URL", ""),
             "BASE_URL_PORT": getattr(Config, "BASE_URL_PORT", 80),
@@ -366,7 +374,6 @@ async def load_settings():
         )
         with open(config_file_path, "w") as f:
             json.dump(shared_config, f)
-
 
     except Exception as e:
         LOGGER.warning(f"Failed to write shared configuration: {e}")
@@ -638,9 +645,7 @@ async def load_configurations():
     # Check if web server is already running (for Heroku early start)
     web_server_already_running = False
     try:
-        process = await create_subprocess_exec(
-            "pgrep", "-f", "gunicorn", stdout=-1
-        )
+        process = await create_subprocess_exec("pgrep", "-f", "gunicorn", stdout=-1)
         stdout, _ = await process.communicate()
         if stdout:
             web_server_already_running = True
@@ -652,7 +657,9 @@ async def load_configurations():
         # First, kill any running web server processes regardless of configuration
         try:
             LOGGER.info("Killing any existing web server processes...")
-            await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
+            await (
+                await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")
+            ).wait()
         except Exception as e:
             LOGGER.error(f"Error killing web server processes: {e}")
 

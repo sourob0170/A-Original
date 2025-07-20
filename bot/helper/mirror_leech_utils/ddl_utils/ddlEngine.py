@@ -23,8 +23,6 @@ from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.devuploads import DevUplo
 from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.gofile import Gofile
 from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.mediafire import MediaFire
 from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.streamtape import Streamtape
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.devuploads import DevUploads
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.mediafire import MediaFire
 
 
 class ProgressFileReader(BufferedReader):
@@ -56,8 +54,6 @@ class DDLUploader:
         self.__engine = "DDL v1"
         self.__asyncSession = None
         self.__user_id = self.__listener.message.from_user.id
-
-
 
     async def __user_settings(self):
         """Load DDL settings with user priority over owner settings"""

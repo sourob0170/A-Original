@@ -256,7 +256,6 @@ async def arg_usage(_, query):
         button = buttons.build_menu(2)
         await edit_message(message, OSINT_HELP_DICT[data[2]], button)
 
-
     try:
         await query.answer()
     except Exception:

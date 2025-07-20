@@ -13,6 +13,7 @@ Usage:
 
 import asyncio
 import re
+import sys
 from getpass import getpass
 
 try:
@@ -20,7 +21,7 @@ try:
 except ImportError:
     print("❌ Error: httpx library not found!")
     print("Please install it with: pip install httpx")
-    exit(1)
+    sys.exit(1)
 
 
 async def signup_user(client, headers):
@@ -65,7 +66,7 @@ async def signup_user(client, headers):
         "firstName": first_name,
         "lastName": last_name,
         "email": email,
-        "password": password
+        "password": password,
     }
 
     response = await client.post(
@@ -156,10 +157,9 @@ async def test_api_access(client, api_token):
     if response.status_code == 200:
         print("✅ API access confirmed!")
         return True
-    else:
-        print(f"⚠️  API test returned: {response.status_code}")
-        print("Your token should still work - this might be normal.")
-        return False
+    print(f"⚠️  API test returned: {response.status_code}")
+    print("Your token should still work - this might be normal.")
+    return False
 
 
 def display_success(email, login_result, api_token):
@@ -180,14 +180,14 @@ def display_success(email, login_result, api_token):
 
     # Ask if user wants to save to file
     save_choice = input("💾 Save API key to file? (y/n): ").strip().lower()
-    if save_choice in ['y', 'yes']:
+    if save_choice in ["y", "yes"]:
         try:
-            with open('phish_directory_api_key.txt', 'w') as f:
-                f.write(f"# Phish Directory API Key\n")
+            with open("phish_directory_api_key.txt", "w") as f:
+                f.write("# Phish Directory API Key\n")
                 f.write(f"# Generated for: {email}\n")
                 f.write(f"# UUID: {login_result.get('uuid', 'N/A')}\n")
                 f.write(f"# Date: {login_result.get('accountCreated', 'N/A')}\n")
-                f.write(f"\nPHISH_DIRECTORY_API_KEY = \"{api_token}\"\n")
+                f.write(f'\nPHISH_DIRECTORY_API_KEY = "{api_token}"\n')
             print("✅ API key saved to: phish_directory_api_key.txt")
         except Exception as e:
             print(f"❌ Failed to save file: {e}")
@@ -227,11 +227,11 @@ async def get_api_key():
 
     while True:
         choice = input("👉 Enter your choice (1-3): ").strip()
-        if choice in ['1', '2', '3']:
+        if choice in ["1", "2", "3"]:
             break
         print("❌ Please enter 1, 2, or 3")
 
-    if choice == '3':
+    if choice == "3":
         print("👋 Goodbye!")
         return
 
@@ -248,7 +248,7 @@ async def get_api_key():
             password = None
             login_result = None
 
-            if choice == '1':
+            if choice == "1":
                 # Signup flow
                 email, password, signup_result = await signup_user(client, headers)
                 if not email:
@@ -259,12 +259,12 @@ async def get_api_key():
                 if not login_result:
                     return
 
-            elif choice == '2':
+            elif choice == "2":
                 # Login flow
                 login_result = await login_user(client, headers)
                 if not login_result:
                     return
-                email = login_result.get('email', 'N/A')
+                email = login_result.get("email", "N/A")
 
             # Get API token
             api_token = login_result.get("token")

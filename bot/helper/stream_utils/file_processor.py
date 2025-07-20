@@ -3,7 +3,7 @@ File processing utilities for File2Link functionality
 """
 
 from datetime import datetime as dt
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pyrogram.client import Client
 from pyrogram.file_id import FileId
@@ -11,7 +11,6 @@ from pyrogram.types import Message
 
 from bot import LOGGER
 from bot.core.aeon_client import TgClient
-from bot.helper.ext_utils.bot_utils import sync_to_async
 from bot.helper.ext_utils.status_utils import get_readable_file_size
 
 
@@ -33,7 +32,7 @@ def get_media(message: Message) -> Any | None:
     return None
 
 
-def get_uniqid(message: Message) -> Optional[str]:
+def get_uniqid(message: Message) -> str | None:
     """Get unique file ID from message"""
     media = get_media(message)
     return getattr(media, "file_unique_id", None)
@@ -86,7 +85,7 @@ def get_fname(msg: Message) -> str:
     return fname
 
 
-def parse_fid(message: Message) -> Optional[FileId]:
+def parse_fid(message: Message) -> FileId | None:
     """Parse file ID from message"""
     media = get_media(message)
     if media and hasattr(media, "file_id"):
@@ -97,7 +96,7 @@ def parse_fid(message: Message) -> Optional[FileId]:
     return None
 
 
-def get_file_info(message: Message) -> Dict[str, Any]:
+def get_file_info(message: Message) -> dict[str, Any]:
     """Get comprehensive file information"""
     media = get_media(message)
     if not media:
@@ -119,7 +118,7 @@ def get_file_info(message: Message) -> Dict[str, Any]:
 
 async def get_file_from_storage(
     client: Client, chat_id: int, message_id: int
-) -> Optional[Message]:
+) -> Message | None:
     """Get file message from storage channel"""
     try:
         msg = await client.get_messages(chat_id, message_id)
@@ -276,18 +275,37 @@ def is_streamable_file(message: Message) -> bool:
             return False
 
         # Get file extension
-        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
+        ext = file_name.lower().split(".")[-1] if "." in file_name else ""
 
         # Streamable video extensions
         streamable_video_exts = {
-            'mp4', 'webm', 'ogg', 'ogv', 'avi', 'mov', 'mkv',
-            'm4v', '3gp', 'flv', 'wmv', 'mpg', 'mpeg'
+            "mp4",
+            "webm",
+            "ogg",
+            "ogv",
+            "avi",
+            "mov",
+            "mkv",
+            "m4v",
+            "3gp",
+            "flv",
+            "wmv",
+            "mpg",
+            "mpeg",
         }
 
         # Streamable audio extensions
         streamable_audio_exts = {
-            'mp3', 'ogg', 'oga', 'wav', 'flac', 'm4a', 'aac',
-            'opus', 'weba', 'webm'
+            "mp3",
+            "ogg",
+            "oga",
+            "wav",
+            "flac",
+            "m4a",
+            "aac",
+            "opus",
+            "weba",
+            "webm",
         }
 
         # Check if extension is streamable
@@ -295,15 +313,26 @@ def is_streamable_file(message: Message) -> bool:
             return True
 
         # Check MIME type if available
-        if hasattr(message.document, 'mime_type') and message.document.mime_type:
+        if hasattr(message.document, "mime_type") and message.document.mime_type:
             mime_type = message.document.mime_type.lower()
-            if mime_type.startswith(('video/', 'audio/')):
+            if mime_type.startswith(("video/", "audio/")):
                 # Additional check for common streamable formats
                 streamable_mimes = {
-                    'video/mp4', 'video/webm', 'video/ogg', 'video/avi',
-                    'video/quicktime', 'video/x-msvideo', 'video/3gpp',
-                    'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/flac',
-                    'audio/mp4', 'audio/aac', 'audio/opus', 'audio/webm'
+                    "video/mp4",
+                    "video/webm",
+                    "video/ogg",
+                    "video/avi",
+                    "video/quicktime",
+                    "video/x-msvideo",
+                    "video/3gpp",
+                    "audio/mpeg",
+                    "audio/ogg",
+                    "audio/wav",
+                    "audio/flac",
+                    "audio/mp4",
+                    "audio/aac",
+                    "audio/opus",
+                    "audio/webm",
                 }
                 return mime_type in streamable_mimes
 

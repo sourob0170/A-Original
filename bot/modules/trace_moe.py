@@ -8,15 +8,10 @@ import logging
 import os
 import re
 import tempfile
-import time
-from io import BytesIO
-from urllib.parse import quote_plus
 
 from aiohttp import ClientSession, ClientTimeout
-from pyrogram import filters
 from pyrogram.types import Message
 
-from bot import DOWNLOAD_DIR, LOGGER
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import is_privileged_user
 from bot.helper.ext_utils.status_utils import get_readable_file_size
@@ -40,23 +35,24 @@ SUPPORTED_MEDIA_TYPES = ["image", "video", "animated_image"]
 SUPPORTED_EXTENSIONS = {
     "image": [".jpg", ".jpeg", ".png", ".webp", ".bmp"],
     "video": [".mp4", ".mkv", ".avi", ".mov", ".webm", ".gif"],
-    "animated_image": [".gif", ".webp"]
+    "animated_image": [".gif", ".webp"],
 }
 
 
 class TraceMoeError(Exception):
     """Custom exception for trace.moe related errors"""
-    pass
 
 
 class TraceMoeClient:
     """Async client for trace.moe API"""
-    
+
     def __init__(self):
         self.api_key = Config.TRACE_MOE_API_KEY
         self.timeout = ClientTimeout(total=TRACE_MOE_TIMEOUT)
-        
-    async def search_anime_by_url(self, image_url: str, cut_borders: bool = True) -> dict:
+
+    async def search_anime_by_url(
+        self, image_url: str, cut_borders: bool = True
+    ) -> dict:
         """
         Search anime using trace.moe API with image URL
 
@@ -84,7 +80,9 @@ class TraceMoeClient:
 
         return await self._make_request("GET", params=params, headers=headers)
 
-    async def search_anime_by_file(self, file_path: str, cut_borders: bool = True) -> dict:
+    async def search_anime_by_file(
+        self, file_path: str, cut_borders: bool = True
+    ) -> dict:
         """
         Search anime using trace.moe API with direct file upload
 
@@ -111,14 +109,22 @@ class TraceMoeClient:
 
         # Read file content
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 file_data = f.read()
         except Exception as e:
-            raise TraceMoeError(f"Failed to read file: {str(e)}")
+            raise TraceMoeError(f"Failed to read file: {e!s}")
 
-        return await self._make_request("POST", params=params, headers=headers, data=file_data)
+        return await self._make_request(
+            "POST", params=params, headers=headers, data=file_data
+        )
 
-    async def _make_request(self, method: str, params: dict = None, headers: dict = None, data: bytes = None) -> dict:
+    async def _make_request(
+        self,
+        method: str,
+        params: dict | None = None,
+        headers: dict | None = None,
+        data: bytes | None = None,
+    ) -> dict:
         """
         Make HTTP request to trace.moe API with retry logic
 
@@ -134,16 +140,14 @@ class TraceMoeClient:
         Raises:
             TraceMoeError: If request fails
         """
-            
+
         retry_count = 0
         while retry_count < MAX_RETRIES:
             try:
                 async with ClientSession(timeout=self.timeout) as session:
                     if method == "GET":
                         async with session.get(
-                            TRACE_MOE_API_URL,
-                            params=params,
-                            headers=headers
+                            TRACE_MOE_API_URL, params=params, headers=headers
                         ) as response:
                             return await self._handle_response(response, retry_count)
                     else:  # POST
@@ -156,11 +160,11 @@ class TraceMoeClient:
                             TRACE_MOE_API_URL,
                             params=params,
                             headers=headers,
-                            data=data
+                            data=data,
                         ) as response:
                             return await self._handle_response(response, retry_count)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if retry_count < MAX_RETRIES - 1:
                     retry_count += 1
                     await asyncio.sleep(RETRY_DELAY * retry_count)
@@ -172,30 +176,29 @@ class TraceMoeClient:
                     retry_count += 1
                     await asyncio.sleep(RETRY_DELAY * retry_count)
                     continue
-                raise TraceMoeError(f"Network error: {str(e)}")
+                raise TraceMoeError(f"Network error: {e!s}")
 
         raise TraceMoeError("Maximum retries exceeded.")
 
     async def _handle_response(self, response, retry_count: int) -> dict:
         """Handle API response with proper error handling"""
         # Handle rate limiting and server errors with retry
-        if response.status in [503, 402]:
-            if retry_count < MAX_RETRIES - 1:
-                await asyncio.sleep(RETRY_DELAY * (retry_count + 1))
-                raise Exception("Retry needed")  # Will be caught by outer try-catch
+        if response.status in [503, 402] and retry_count < MAX_RETRIES - 1:
+            await asyncio.sleep(RETRY_DELAY * (retry_count + 1))
+            raise Exception("Retry needed")  # Will be caught by outer try-catch
 
         # Handle specific error codes
         if response.status == 429:
             raise TraceMoeError("Rate limit exceeded. Please try again later.")
-        elif response.status == 413:
+        if response.status == 413:
             raise TraceMoeError("File too large. Maximum size is 25MB.")
-        elif response.status == 403:
+        if response.status == 403:
             raise TraceMoeError("Invalid API key.")
-        elif response.status == 400:
+        if response.status == 400:
             raise TraceMoeError("Invalid image or request format.")
-        elif response.status in [502, 503, 504]:
+        if response.status in [502, 503, 504]:
             raise TraceMoeError("trace.moe server is busy. Please try again later.")
-        elif response.status >= 400:
+        if response.status >= 400:
             raise TraceMoeError(f"API error: HTTP {response.status}")
 
         # Parse JSON response
@@ -205,7 +208,7 @@ class TraceMoeClient:
             raise TraceMoeError("Invalid response format from trace.moe API.")
 
         # Check for API errors
-        if "error" in result and result["error"]:
+        if result.get("error"):
             raise TraceMoeError(f"API error: {result['error']}")
 
         # Check for empty results
@@ -238,7 +241,7 @@ def format_anime_result(result: dict) -> tuple[str, str | None, bool]:
             "The image doesn't match any anime in the database. "
             "Try a clearer screenshot or different frame.</blockquote>",
             None,
-            False
+            False,
         )
 
     match = result["result"][0]
@@ -271,23 +274,18 @@ def format_anime_result(result: dict) -> tuple[str, str | None, bool]:
     if similarity >= 0.95:
         sim_emoji = "🎯"
         sim_status = "Excellent"
-        confidence_level = "very_high"
     elif similarity >= 0.9:
         sim_emoji = "✅"
         sim_status = "Good"
-        confidence_level = "high"
     elif similarity >= 0.8:
         sim_emoji = "⚠️"
         sim_status = "Likely Incorrect"
-        confidence_level = "low"
     elif similarity >= 0.7:
         sim_emoji = "❌"
         sim_status = "Probably Wrong"
-        confidence_level = "very_low"
     else:
         sim_emoji = "🚫"
         sim_status = "Almost Certainly Wrong"
-        confidence_level = "extremely_low"
 
     # Format the beautiful response
     formatted_parts = []
@@ -322,20 +320,34 @@ def format_anime_result(result: dict) -> tuple[str, str | None, bool]:
 
     # Accuracy section
     formatted_parts.append("🎯 <b>Match Accuracy:</b>")
-    formatted_parts.append(f"   {sim_emoji} <b>{similarity * 100:.1f}%</b> ({sim_status})")
+    formatted_parts.append(
+        f"   {sim_emoji} <b>{similarity * 100:.1f}%</b> ({sim_status})"
+    )
 
     # Add confidence warnings based on trace.moe official guidelines
     if similarity < 0.9:
         formatted_parts.append("")
         if similarity >= 0.8:
-            formatted_parts.append("⚠️ <b>Warning:</b> <i>Below 90% - likely incorrect result</i>")
-            formatted_parts.append("💡 <i>According to trace.moe: results under 90% are usually wrong</i>")
+            formatted_parts.append(
+                "⚠️ <b>Warning:</b> <i>Below 90% - likely incorrect result</i>"
+            )
+            formatted_parts.append(
+                "💡 <i>According to trace.moe: results under 90% are usually wrong</i>"
+            )
         elif similarity >= 0.7:
-            formatted_parts.append("❌ <b>Caution:</b> <i>Very low confidence - probably wrong</i>")
-            formatted_parts.append("🔍 <i>Try a clearer image or different frame</i>")
+            formatted_parts.append(
+                "❌ <b>Caution:</b> <i>Very low confidence - probably wrong</i>"
+            )
+            formatted_parts.append(
+                "🔍 <i>Try a clearer image or different frame</i>"
+            )
         else:
-            formatted_parts.append("🚫 <b>Unreliable:</b> <i>Extremely low confidence</i>")
-            formatted_parts.append("❓ <i>This result is almost certainly incorrect</i>")
+            formatted_parts.append(
+                "🚫 <b>Unreliable:</b> <i>Extremely low confidence</i>"
+            )
+            formatted_parts.append(
+                "❓ <i>This result is almost certainly incorrect</i>"
+            )
 
     formatted_text = "\n".join(formatted_parts)
 
@@ -350,7 +362,9 @@ def format_anime_result(result: dict) -> tuple[str, str | None, bool]:
     return formatted_text, video_url, is_adult
 
 
-async def get_media_for_trace(message: Message) -> tuple[str | None, str | None, bool]:
+async def get_media_for_trace(
+    message: Message,
+) -> tuple[str | None, str | None, bool]:
     """
     Get media from message for trace.moe processing
 
@@ -366,18 +380,25 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
     # Check if message contains a URL to an image
     if message.text:
         # Look for image URLs in the text
-        url_pattern = r'https?://[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|mp4|mkv|avi|mov|webm)'
+        url_pattern = (
+            r"https?://[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|mp4|mkv|avi|mov|webm)"
+        )
         urls = re.findall(url_pattern, message.text, re.IGNORECASE)
 
         if urls:
             # Return the first found URL for direct API usage
             image_url = urls[0]
             url_lower = image_url.lower()
-            if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']):
+            if any(
+                ext in url_lower
+                for ext in [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+            ):
                 media_type = "image"
-            elif any(ext in url_lower for ext in ['.gif']):
+            elif any(ext in url_lower for ext in [".gif"]):
                 media_type = "animated_image"
-            elif any(ext in url_lower for ext in ['.mp4', '.mkv', '.avi', '.mov', '.webm']):
+            elif any(
+                ext in url_lower for ext in [".mp4", ".mkv", ".avi", ".mov", ".webm"]
+            ):
                 media_type = "video"
             else:
                 media_type = "image"
@@ -388,7 +409,9 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
     if message.photo:
         try:
             # Download photo to temporary file
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(
+                suffix=".jpg", delete=False
+            ) as temp_file:
                 await message.download(file_name=temp_file.name)
                 return temp_file.name, "image", False
         except Exception as e:
@@ -406,11 +429,17 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
             if file_ext in extensions:
                 # Check file size (trace.moe has limits)
                 if doc.file_size > Config.TRACE_MOE_MAX_FILE_SIZE:
-                    return None, f"file_too_large:{get_readable_file_size(doc.file_size)}", False
+                    return (
+                        None,
+                        f"file_too_large:{get_readable_file_size(doc.file_size)}",
+                        False,
+                    )
 
                 try:
                     # Download document to temporary file
-                    with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=file_ext, delete=False
+                    ) as temp_file:
                         await message.download(file_name=temp_file.name)
                         return temp_file.name, media_type, False
                 except Exception as e:
@@ -421,11 +450,17 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
     if message.video:
         video = message.video
         if video.file_size > Config.TRACE_MOE_MAX_FILE_SIZE:
-            return None, f"file_too_large:{get_readable_file_size(video.file_size)}", False
+            return (
+                None,
+                f"file_too_large:{get_readable_file_size(video.file_size)}",
+                False,
+            )
 
         try:
             # Download video to temporary file
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(
+                suffix=".mp4", delete=False
+            ) as temp_file:
                 await message.download(file_name=temp_file.name)
                 return temp_file.name, "video", False
         except Exception as e:
@@ -436,11 +471,17 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
     if message.animation:
         animation = message.animation
         if animation.file_size > Config.TRACE_MOE_MAX_FILE_SIZE:
-            return None, f"file_too_large:{get_readable_file_size(animation.file_size)}", False
+            return (
+                None,
+                f"file_too_large:{get_readable_file_size(animation.file_size)}",
+                False,
+            )
 
         try:
             # Download animation to temporary file
-            with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(
+                suffix=".gif", delete=False
+            ) as temp_file:
                 await message.download(file_name=temp_file.name)
                 return temp_file.name, "animated_image", False
         except Exception as e:
@@ -450,13 +491,10 @@ async def get_media_for_trace(message: Message) -> tuple[str | None, str | None,
     return None, None, False
 
 
-
-
-
 async def trace_command(client, message: Message):
     """
     Handle /trace command for anime scene identification
-    
+
     Args:
         client: Telegram client
         message: Message object
@@ -466,24 +504,26 @@ async def trace_command(client, message: Message):
             message,
             "<blockquote>🚫 <b>Service Unavailable</b>\n\n"
             "Trace.moe anime identification is currently disabled. "
-            "Please contact the administrator.</blockquote>"
+            "Please contact the administrator.</blockquote>",
         )
         return
-        
+
     user_id = message.from_user.id
-    
+
     # Check if user is authorized
     if not is_privileged_user(user_id):
         await send_message(
             message,
             "<blockquote>🔐 <b>Access Denied</b>\n\n"
             "You need authorization to use the anime identification feature. "
-            "Please contact an administrator to get access.</blockquote>"
+            "Please contact an administrator to get access.</blockquote>",
         )
         return
-    
+
     # Get the message to process (reply or current)
-    target_message = message.reply_to_message if message.reply_to_message else message
+    target_message = (
+        message.reply_to_message if message.reply_to_message else message
+    )
 
     # Get media from message
     file_path_or_url, media_type, is_url = await get_media_for_trace(target_message)
@@ -496,7 +536,7 @@ async def trace_command(client, message: Message):
                 f"<blockquote>📏 <b>File Size Limit Exceeded</b>\n\n"
                 f"📊 <b>Your file:</b> <code>{size}</code>\n"
                 f"📋 <b>Maximum allowed:</b> <code>{get_readable_file_size(Config.TRACE_MOE_MAX_FILE_SIZE)}</code>\n\n"
-                f"💡 <b>Tip:</b> Compress your file or try a smaller image/video.</blockquote>"
+                f"💡 <b>Tip:</b> Compress your file or try a smaller image/video.</blockquote>",
             )
         else:
             error_msg = await send_message(
@@ -507,18 +547,18 @@ async def trace_command(client, message: Message):
                 "🎥 <b>Videos:</b> MP4, MKV, AVI, MOV, WebM\n"
                 "🎞️ <b>Animations:</b> GIF, animated WebP\n"
                 "🔗 <b>URLs:</b> Direct links to media files\n\n"
-                "💡 <b>Tip:</b> Use clear anime screenshots for best results!</blockquote>"
+                "💡 <b>Tip:</b> Use clear anime screenshots for best results!</blockquote>",
             )
         await auto_delete_message(error_msg, time=10)
         return
-    
+
     # Send processing message
     status_msg = await send_message(
         message,
         "<blockquote>🔍 <b>Analyzing Anime Scene...</b>\n\n"
         "🤖 Processing your media through trace.moe AI\n"
         "⏳ This may take a few seconds...\n\n"
-        "🎯 Searching through millions of anime frames!</blockquote>"
+        "🎯 Searching through millions of anime frames!</blockquote>",
     )
 
     try:
@@ -528,21 +568,19 @@ async def trace_command(client, message: Message):
         # Search anime using appropriate method
         if is_url:
             result = await client_trace.search_anime_by_url(
-                file_path_or_url,
-                cut_borders=Config.TRACE_MOE_CUT_BORDERS
+                file_path_or_url, cut_borders=Config.TRACE_MOE_CUT_BORDERS
             )
         else:
             result = await client_trace.search_anime_by_file(
-                file_path_or_url,
-                cut_borders=Config.TRACE_MOE_CUT_BORDERS
+                file_path_or_url, cut_borders=Config.TRACE_MOE_CUT_BORDERS
             )
-        
+
         # Format result
         formatted_text, video_url, is_adult = format_anime_result(result)
-        
+
         # Delete status message
         await delete_message(status_msg)
-        
+
         # Check for adult content in groups
         if is_adult and message.chat.type in ["group", "supergroup"]:
             await send_message(
@@ -550,7 +588,7 @@ async def trace_command(client, message: Message):
                 "<blockquote>🔞 <b>Adult Content Detected</b>\n\n"
                 "🚫 This anime contains adult content and cannot be displayed in groups.\n\n"
                 "💬 <b>To see results:</b> Forward this media to me in a private chat.\n\n"
-                "🔒 <b>Privacy:</b> Results will only be shown privately.</blockquote>"
+                "🔒 <b>Privacy:</b> Results will only be shown privately.</blockquote>",
             )
             return
 
@@ -569,33 +607,34 @@ async def trace_command(client, message: Message):
                 "📋 <b>Showing result anyway for reference:</b></blockquote>\n\n"
             )
             formatted_text = warning_header + formatted_text
-        
+
         # Send result with video preview if available
-        if video_url and Config.TRACE_MOE_VIDEO_PREVIEW and not Config.TRACE_MOE_SKIP_PREVIEW:
+        if (
+            video_url
+            and Config.TRACE_MOE_VIDEO_PREVIEW
+            and not Config.TRACE_MOE_SKIP_PREVIEW
+        ):
             try:
                 # Add mute parameter if configured
                 if Config.TRACE_MOE_MUTE_PREVIEW:
                     video_url += "&mute"
-                
+
                 # Try to send video preview
                 await client.send_video(
                     chat_id=message.chat.id,
                     video=video_url,
                     caption=formatted_text,
-                    reply_to_message_id=target_message.id
+                    reply_to_message_id=target_message.id,
                 )
                 return
-                
+
             except Exception as e:
                 TRACE_LOGGER.warning(f"Failed to send video preview: {e}")
                 # Fall back to text message
-        
+
         # Send text result
-        await send_message(
-            target_message,
-            formatted_text
-        )
-        
+        await send_message(target_message, formatted_text)
+
     except TraceMoeError as e:
         await delete_message(status_msg)
 
@@ -641,7 +680,7 @@ async def trace_command(client, message: Message):
 
         error_msg = await send_message(message, formatted_error)
         await auto_delete_message(error_msg, time=15)
-        
+
     except Exception as e:
         await delete_message(status_msg)
         TRACE_LOGGER.error(f"Unexpected error in trace command: {e}")
@@ -650,7 +689,7 @@ async def trace_command(client, message: Message):
             "<blockquote>💥 <b>Unexpected Error</b>\n\n"
             "🔧 Something went wrong while processing your request\n"
             "⏳ Please try again in a moment\n\n"
-            "📞 <b>If this persists:</b> Contact the administrator</blockquote>"
+            "📞 <b>If this persists:</b> Contact the administrator</blockquote>",
         )
         await auto_delete_message(error_msg, time=10)
 
@@ -660,4 +699,6 @@ async def trace_command(client, message: Message):
             try:
                 os.unlink(file_path_or_url)
             except Exception as e:
-                TRACE_LOGGER.warning(f"Failed to delete temporary file {file_path_or_url}: {e}")
+                TRACE_LOGGER.warning(
+                    f"Failed to delete temporary file {file_path_or_url}: {e}"
+                )

@@ -19,7 +19,6 @@ from bot import (
     same_directory_lock,
     task_dict,
     task_dict_lock,
-    user_data,
 )
 from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
@@ -1571,7 +1570,10 @@ class TaskListener(TaskConfig):
                     # Send to the specified destination
                     await send_message(int(self.up_dest), msg, button)
                     # Also send to user's PM if it's not the same as the specified destination and BOT_PM is enabled
-                    if int(self.up_dest) != self.user_id and self._is_bot_pm_enabled():
+                    if (
+                        int(self.up_dest) != self.user_id
+                        and self._is_bot_pm_enabled()
+                    ):
                         await send_message(self.user_id, msg, button)
                 except Exception as e:
                     LOGGER.error(

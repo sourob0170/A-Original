@@ -13,17 +13,22 @@ from pyrogram.types import Message
 
 from bot import LOGGER
 from bot.core.config_manager import Config
+
 from .file_processor import get_media
 
 
 class ByteStreamer:
     """Handles file streaming from Telegram"""
-    
-    __slots__ = ('client', 'chat_id', 'client_id')
 
-    def __init__(self, client: Client, client_id: int = 0, chat_id: int = None) -> None:
+    __slots__ = ("chat_id", "client", "client_id")
+
+    def __init__(
+        self, client: Client, client_id: int = 0, chat_id: int | None = None
+    ) -> None:
         if client is None:
-            raise ValueError("Client cannot be None - bot may not be initialized yet")
+            raise ValueError(
+                "Client cannot be None - bot may not be initialized yet"
+            )
         self.client = client
         self.client_id = client_id
 
@@ -53,38 +58,55 @@ class ByteStreamer:
                 # Enhanced error handling for channel access issues
                 error_msg = str(e).lower()
                 if "invalid chat_id" in error_msg:
-                    LOGGER.error(f"Invalid chat_id {self.chat_id}. Bot may not have access to FILE2LINK_BIN_CHANNEL")
-                    raise FileNotFoundError(f"Bot cannot access storage channel {self.chat_id}. Please check if bot is added to the channel with proper permissions.") from e
-                elif "chat not found" in error_msg:
-                    LOGGER.error(f"Chat {self.chat_id} not found. FILE2LINK_BIN_CHANNEL may be incorrect")
-                    raise FileNotFoundError(f"Storage channel {self.chat_id} not found. Please verify FILE2LINK_BIN_CHANNEL configuration.") from e
-                elif "forbidden" in error_msg:
-                    LOGGER.error(f"Access forbidden to chat {self.chat_id}. Bot needs admin permissions")
-                    raise FileNotFoundError(f"Bot lacks permissions for storage channel {self.chat_id}. Please add bot as admin.") from e
-                else:
-                    LOGGER.error(f"Error fetching message {message_id} from chat {self.chat_id}: {e}")
-                    raise FileNotFoundError(f"Message {message_id} not found in storage channel") from e
+                    LOGGER.error(
+                        f"Invalid chat_id {self.chat_id}. Bot may not have access to FILE2LINK_BIN_CHANNEL"
+                    )
+                    raise FileNotFoundError(
+                        f"Bot cannot access storage channel {self.chat_id}. Please check if bot is added to the channel with proper permissions."
+                    ) from e
+                if "chat not found" in error_msg:
+                    LOGGER.error(
+                        f"Chat {self.chat_id} not found. FILE2LINK_BIN_CHANNEL may be incorrect"
+                    )
+                    raise FileNotFoundError(
+                        f"Storage channel {self.chat_id} not found. Please verify FILE2LINK_BIN_CHANNEL configuration."
+                    ) from e
+                if "forbidden" in error_msg:
+                    LOGGER.error(
+                        f"Access forbidden to chat {self.chat_id}. Bot needs admin permissions"
+                    )
+                    raise FileNotFoundError(
+                        f"Bot lacks permissions for storage channel {self.chat_id}. Please add bot as admin."
+                    ) from e
+                LOGGER.error(
+                    f"Error fetching message {message_id} from chat {self.chat_id}: {e}"
+                )
+                raise FileNotFoundError(
+                    f"Message {message_id} not found in storage channel"
+                ) from e
 
         if not message or not message.media:
-            raise FileNotFoundError(f"Message {message_id} not found or has no media")
+            raise FileNotFoundError(
+                f"Message {message_id} not found or has no media"
+            )
         return message
 
-    async def stream_file(self, message_id: int, offset: int = 0, limit: int = 0) -> AsyncGenerator[bytes, None]:
+    async def stream_file(
+        self, message_id: int, offset: int = 0, limit: int = 0
+    ) -> AsyncGenerator[bytes]:
         """Stream file content with range support"""
         try:
             message = await self.get_message(message_id)
-            
+
             if limit > 0:
                 # Calculate chunk parameters for range requests
                 chunk_offset = offset // (1024 * 1024)
                 chunk_limit = (limit + 1024 * 1024 - 1) // (1024 * 1024)
-                
+
                 while True:
                     try:
                         async for chunk in self.client.stream_media(
-                            message,
-                            offset=chunk_offset,
-                            limit=chunk_limit
+                            message, offset=chunk_offset, limit=chunk_limit
                         ):
                             yield chunk
                         break
@@ -95,7 +117,9 @@ class ByteStreamer:
                         error_msg = str(e).lower()
                         if "unauthorized" in error_msg or "auth" in error_msg:
                             LOGGER.error(f"Authentication error in streaming: {e}")
-                            raise ConnectionError(f"Telegram authentication failed: {e}")
+                            raise ConnectionError(
+                                f"Telegram authentication failed: {e}"
+                            )
                         else:
                             LOGGER.error(f"Streaming error: {e}")
                             raise
@@ -113,11 +137,13 @@ class ByteStreamer:
                         error_msg = str(e).lower()
                         if "unauthorized" in error_msg or "auth" in error_msg:
                             LOGGER.error(f"Authentication error in streaming: {e}")
-                            raise ConnectionError(f"Telegram authentication failed: {e}")
+                            raise ConnectionError(
+                                f"Telegram authentication failed: {e}"
+                            )
                         else:
                             LOGGER.error(f"Streaming error: {e}")
                             raise
-                        
+
         except Exception as e:
             LOGGER.error(f"Error streaming file {message_id}: {e}")
             raise
@@ -128,17 +154,17 @@ class ByteStreamer:
             media = get_media(message)
             if not media:
                 return {"message_id": message.id, "error": "No media"}
-            
+
             return {
                 "message_id": message.id,
-                "file_size": getattr(media, 'file_size', 0) or 0,
-                "file_name": getattr(media, 'file_name', None),
-                "mime_type": getattr(media, 'mime_type', None),
-                "unique_id": getattr(media, 'file_unique_id', None),
+                "file_size": getattr(media, "file_size", 0) or 0,
+                "file_name": getattr(media, "file_name", None),
+                "mime_type": getattr(media, "mime_type", None),
+                "unique_id": getattr(media, "file_unique_id", None),
                 "media_type": type(media).__name__.lower(),
-                "duration": getattr(media, 'duration', None),
-                "width": getattr(media, 'width', None),
-                "height": getattr(media, 'height', None)
+                "duration": getattr(media, "duration", None),
+                "width": getattr(media, "width", None),
+                "height": getattr(media, "height", None),
             }
         except Exception as e:
             LOGGER.error(f"Error getting file info: {e}")
@@ -156,17 +182,14 @@ class ByteStreamer:
 
 class StreamingException(Exception):
     """Custom exception for streaming errors"""
-    pass
 
 
 class FileNotFoundError(StreamingException):
     """Exception raised when file is not found"""
-    pass
 
 
 class InvalidHashError(StreamingException):
     """Exception raised when hash validation fails"""
-    pass
 
 
 def validate_stream_request(hash_id: str, message_id: int) -> bool:
@@ -175,15 +198,12 @@ def validate_stream_request(hash_id: str, message_id: int) -> bool:
         # Basic validation
         if not hash_id or len(hash_id) != 6:
             return False
-        
+
         if not message_id or message_id <= 0:
             return False
-        
+
         # Hash should contain only alphanumeric characters, hyphens, and underscores
-        if not hash_id.replace('-', '').replace('_', '').isalnum():
-            return False
-        
-        return True
+        return hash_id.replace("-", "").replace("_", "").isalnum()
     except Exception as e:
         LOGGER.error(f"Error validating stream request: {e}")
         return False
@@ -192,46 +212,43 @@ def validate_stream_request(hash_id: str, message_id: int) -> bool:
 def get_mime_type(filename: str) -> str:
     """Get MIME type based on file extension"""
     try:
-        extension = filename.lower().split('.')[-1] if '.' in filename else ''
-        
+        extension = filename.lower().split(".")[-1] if "." in filename else ""
+
         mime_types = {
             # Video formats
-            'mp4': 'video/mp4',
-            'avi': 'video/x-msvideo',
-            'mov': 'video/quicktime',
-            'wmv': 'video/x-ms-wmv',
-            'flv': 'video/x-flv',
-            'webm': 'video/webm',
-            'mkv': 'video/x-matroska',
-            '3gp': 'video/3gpp',
-            
+            "mp4": "video/mp4",
+            "avi": "video/x-msvideo",
+            "mov": "video/quicktime",
+            "wmv": "video/x-ms-wmv",
+            "flv": "video/x-flv",
+            "webm": "video/webm",
+            "mkv": "video/x-matroska",
+            "3gp": "video/3gpp",
             # Audio formats
-            'mp3': 'audio/mpeg',
-            'wav': 'audio/wav',
-            'flac': 'audio/flac',
-            'aac': 'audio/aac',
-            'ogg': 'audio/ogg',
-            'm4a': 'audio/mp4',
-            'wma': 'audio/x-ms-wma',
-            
+            "mp3": "audio/mpeg",
+            "wav": "audio/wav",
+            "flac": "audio/flac",
+            "aac": "audio/aac",
+            "ogg": "audio/ogg",
+            "m4a": "audio/mp4",
+            "wma": "audio/x-ms-wma",
             # Image formats
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'png': 'image/png',
-            'gif': 'image/gif',
-            'webp': 'image/webp',
-            'bmp': 'image/bmp',
-            'svg': 'image/svg+xml',
-            
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "webp": "image/webp",
+            "bmp": "image/bmp",
+            "svg": "image/svg+xml",
             # Document formats
-            'pdf': 'application/pdf',
-            'doc': 'application/msword',
-            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'txt': 'text/plain',
-            'zip': 'application/zip',
-            'rar': 'application/x-rar-compressed'
+            "pdf": "application/pdf",
+            "doc": "application/msword",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "txt": "text/plain",
+            "zip": "application/zip",
+            "rar": "application/x-rar-compressed",
         }
-        
-        return mime_types.get(extension, 'application/octet-stream')
+
+        return mime_types.get(extension, "application/octet-stream")
     except Exception:
-        return 'application/octet-stream'
+        return "application/octet-stream"

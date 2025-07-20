@@ -2192,7 +2192,9 @@ API Key: <code>{mediafire_api_key_display}</code> ({mediafire_api_key_source})
             bot_pm_source = "Owner"
         else:
             bot_pm_source = "User"
-        bot_pm_status = f"{'Enabled' if bot_pm_enabled else 'Disabled'} (Set by {bot_pm_source})"
+        bot_pm_status = (
+            f"{'Enabled' if bot_pm_enabled else 'Disabled'} (Set by {bot_pm_source})"
+        )
 
         # Get DDL status for display
         ddl_status = ""

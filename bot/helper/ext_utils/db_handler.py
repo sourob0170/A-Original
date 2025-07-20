@@ -1385,16 +1385,16 @@ class DatabaseManager(DbManager):
             return False
 
         try:
-            file_data.update({
-                "bot_id": TgClient.ID,
-                "created_at": time.time()
-            })
+            file_data.update({"bot_id": TgClient.ID, "created_at": time.time()})
 
             # Use upsert to avoid duplicates
             await self.db.stream_files.update_one(
-                {"message_id": file_data["message_id"], "file_hash": file_data["file_hash"]},
+                {
+                    "message_id": file_data["message_id"],
+                    "file_hash": file_data["file_hash"],
+                },
                 {"$set": file_data},
-                upsert=True
+                upsert=True,
             )
             return True
         except Exception as e:
@@ -1407,12 +1407,13 @@ class DatabaseManager(DbManager):
             return None
 
         try:
-            file_data = await self.db.stream_files.find_one({
-                "file_hash": hash_id,
-                "message_id": message_id,
-                "bot_id": TgClient.ID
-            })
-            return file_data
+            return await self.db.stream_files.find_one(
+                {
+                    "file_hash": hash_id,
+                    "message_id": message_id,
+                    "bot_id": TgClient.ID,
+                }
+            )
         except Exception as e:
             LOGGER.error(f"Error getting stream file: {e}")
             return None
@@ -1423,19 +1424,21 @@ class DatabaseManager(DbManager):
             return {}
 
         try:
-            total_files = await self.db.stream_files.count_documents({"bot_id": TgClient.ID})
+            total_files = await self.db.stream_files.count_documents(
+                {"bot_id": TgClient.ID}
+            )
 
             # Get files from last 7 days
             week_ago = time.time() - (7 * 24 * 60 * 60)
-            recent_files = await self.db.stream_files.count_documents({
-                "bot_id": TgClient.ID,
-                "created_at": {"$gte": week_ago}
-            })
+            recent_files = await self.db.stream_files.count_documents(
+                {"bot_id": TgClient.ID, "created_at": {"$gte": week_ago}}
+            )
 
             return {
                 "total_files": total_files,
                 "recent_files": recent_files,
-                "storage_channel": Config.FILE2LINK_BIN_CHANNEL or Config.BIN_CHANNEL
+                "storage_channel": Config.FILE2LINK_BIN_CHANNEL
+                or Config.BIN_CHANNEL,
             }
         except Exception as e:
             LOGGER.error(f"Error getting stream stats: {e}")
@@ -1449,7 +1452,7 @@ class DatabaseManager(DbManager):
         try:
             # Clean up files older than 30 days
             cutoff_time = time.time() - (30 * 24 * 60 * 60)
-            result = await self.db.stream_files.delete_many(
+            await self.db.stream_files.delete_many(
                 {"created_at": {"$lt": cutoff_time}}
             )
 

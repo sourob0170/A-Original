@@ -5,6 +5,7 @@ Based on deep understanding of TMDB API v3 documentation
 """
 
 import asyncio
+import contextlib
 import re
 from asyncio import create_task
 from datetime import datetime
@@ -47,7 +48,7 @@ class TMDBHelper:
 
     @classmethod
     async def _make_request(
-        cls, endpoint: str, params: dict = None, headers: dict = None
+        cls, endpoint: str, params: dict | None = None, headers: dict | None = None
     ) -> dict | None:
         """Make authenticated request to TMDB API v3 with proper error handling"""
         if not Config.TMDB_API_KEY:
@@ -73,7 +74,7 @@ class TMDBHelper:
         headers.update({"accept": "application/json", "User-Agent": "TMDB-Bot/1.0"})
 
         url = f"{cls.BASE_URL}/{endpoint}"
-        cache_key = f"{endpoint}_{str(sorted(params.items()))}"
+        cache_key = f"{endpoint}_{sorted(params.items())!s}"
 
         # Check cache first
         if cache_key in cls._cache:
@@ -146,7 +147,7 @@ class TMDBHelper:
                         )
                         return None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             LOGGER.error(f"TMDB API request timeout for {endpoint}")
             return None
         except aiohttp.ClientError as e:
@@ -201,8 +202,7 @@ class TMDBHelper:
             return None
 
         # Remove leading slash if present
-        if path.startswith("/"):
-            path = path[1:]
+        path = path.removeprefix("/")
 
         config = await cls.get_configuration()
         if config and "images" in config:
@@ -270,10 +270,10 @@ class TMDBHelper:
     async def search_movie(
         cls,
         query: str,
-        year: int = None,
+        year: int | None = None,
         page: int = 1,
-        region: str = None,
-        primary_release_year: int = None,
+        region: str | None = None,
+        primary_release_year: int | None = None,
     ) -> dict | None:
         """Search for movies with enhanced parameters
 
@@ -315,9 +315,9 @@ class TMDBHelper:
     async def search_tv(
         cls,
         query: str,
-        year: int = None,
+        year: int | None = None,
         page: int = 1,
-        first_air_date_year: int = None,
+        first_air_date_year: int | None = None,
     ) -> dict | None:
         """Search for TV shows with enhanced parameters
 
@@ -372,7 +372,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_movie_details(
-        cls, movie_id: int, append_to_response: str = None
+        cls, movie_id: int, append_to_response: str | None = None
     ) -> dict | None:
         """Get detailed movie information"""
         params = {}
@@ -383,7 +383,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_tv_details(
-        cls, tv_id: int, append_to_response: str = None
+        cls, tv_id: int, append_to_response: str | None = None
     ) -> dict | None:
         """Get detailed TV show information"""
         params = {}
@@ -394,7 +394,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_person_details(
-        cls, person_id: int, append_to_response: str = None
+        cls, person_id: int, append_to_response: str | None = None
     ) -> dict | None:
         """Get detailed person information"""
         params = {}
@@ -508,7 +508,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_movie_now_playing(
-        cls, page: int = 1, region: str = None
+        cls, page: int = 1, region: str | None = None
     ) -> dict | None:
         """Get movies currently in theaters"""
         params = {"page": page}
@@ -521,7 +521,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_movie_popular(
-        cls, page: int = 1, region: str = None
+        cls, page: int = 1, region: str | None = None
     ) -> dict | None:
         """Get popular movies"""
         params = {"page": page}
@@ -534,7 +534,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_movie_top_rated(
-        cls, page: int = 1, region: str = None
+        cls, page: int = 1, region: str | None = None
     ) -> dict | None:
         """Get top rated movies"""
         params = {"page": page}
@@ -547,7 +547,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_movie_upcoming(
-        cls, page: int = 1, region: str = None
+        cls, page: int = 1, region: str | None = None
     ) -> dict | None:
         """Get upcoming movies"""
         params = {"page": page}
@@ -668,7 +668,7 @@ class TMDBHelper:
 
     @classmethod
     async def get_tv_season_details(
-        cls, tv_id: int, season_number: int, append_to_response: str = None
+        cls, tv_id: int, season_number: int, append_to_response: str | None = None
     ) -> dict | None:
         """Get TV season details"""
         params = {}
@@ -683,7 +683,7 @@ class TMDBHelper:
         tv_id: int,
         season_number: int,
         episode_number: int,
-        append_to_response: str = None,
+        append_to_response: str | None = None,
     ) -> dict | None:
         """Get TV episode details"""
         params = {}
@@ -742,9 +742,13 @@ class TMDBHelper:
         return await cls._make_request(f"person/{person_id}/images")
 
     @classmethod
-    async def get_person_tagged_images(cls, person_id: int, page: int = 1) -> dict | None:
+    async def get_person_tagged_images(
+        cls, person_id: int, page: int = 1
+    ) -> dict | None:
         """Get images tagged with this person"""
-        return await cls._make_request(f"person/{person_id}/tagged_images", {"page": page})
+        return await cls._make_request(
+            f"person/{person_id}/tagged_images", {"page": page}
+        )
 
     @classmethod
     async def get_person_translations(cls, person_id: int) -> dict | None:
@@ -757,7 +761,9 @@ class TMDBHelper:
         return await cls._make_request("person/latest")
 
     @classmethod
-    async def get_collection_details(cls, collection_id: int, append_to_response: str = None) -> dict | None:
+    async def get_collection_details(
+        cls, collection_id: int, append_to_response: str | None = None
+    ) -> dict | None:
         """Get collection details"""
         params = {}
         if append_to_response:
@@ -826,7 +832,9 @@ class TMDBHelper:
     @classmethod
     async def get_keyword_movies(cls, keyword_id: int, page: int = 1) -> dict | None:
         """Get movies with this keyword"""
-        return await cls._make_request(f"keyword/{keyword_id}/movies", {"page": page})
+        return await cls._make_request(
+            f"keyword/{keyword_id}/movies", {"page": page}
+        )
 
     @classmethod
     async def get_network_details(cls, network_id: int) -> dict | None:
@@ -864,26 +872,26 @@ class TMDBHelper:
     async def discover_movies_advanced(
         cls,
         sort_by: str = "popularity.desc",
-        with_genres: str = None,
-        without_genres: str = None,
-        with_companies: str = None,
-        with_keywords: str = None,
-        without_keywords: str = None,
-        with_people: str = None,
-        with_cast: str = None,
-        with_crew: str = None,
-        with_runtime_gte: int = None,
-        with_runtime_lte: int = None,
-        primary_release_date_gte: str = None,
-        primary_release_date_lte: str = None,
-        vote_average_gte: float = None,
-        vote_average_lte: float = None,
-        vote_count_gte: int = None,
-        vote_count_lte: int = None,
-        with_original_language: str = None,
-        region: str = None,
+        with_genres: str | None = None,
+        without_genres: str | None = None,
+        with_companies: str | None = None,
+        with_keywords: str | None = None,
+        without_keywords: str | None = None,
+        with_people: str | None = None,
+        with_cast: str | None = None,
+        with_crew: str | None = None,
+        with_runtime_gte: int | None = None,
+        with_runtime_lte: int | None = None,
+        primary_release_date_gte: str | None = None,
+        primary_release_date_lte: str | None = None,
+        vote_average_gte: float | None = None,
+        vote_average_lte: float | None = None,
+        vote_count_gte: int | None = None,
+        vote_count_lte: int | None = None,
+        with_original_language: str | None = None,
+        region: str | None = None,
         page: int = 1,
-        **kwargs
+        **kwargs,
     ) -> dict | None:
         """Advanced movie discovery with comprehensive filters"""
         params = {
@@ -928,24 +936,24 @@ class TMDBHelper:
     async def discover_tv_advanced(
         cls,
         sort_by: str = "popularity.desc",
-        with_genres: str = None,
-        without_genres: str = None,
-        with_companies: str = None,
-        with_keywords: str = None,
-        without_keywords: str = None,
-        with_networks: str = None,
-        with_runtime_gte: int = None,
-        with_runtime_lte: int = None,
-        first_air_date_gte: str = None,
-        first_air_date_lte: str = None,
-        vote_average_gte: float = None,
-        vote_average_lte: float = None,
-        vote_count_gte: int = None,
-        vote_count_lte: int = None,
-        with_original_language: str = None,
-        timezone: str = None,
+        with_genres: str | None = None,
+        without_genres: str | None = None,
+        with_companies: str | None = None,
+        with_keywords: str | None = None,
+        without_keywords: str | None = None,
+        with_networks: str | None = None,
+        with_runtime_gte: int | None = None,
+        with_runtime_lte: int | None = None,
+        first_air_date_gte: str | None = None,
+        first_air_date_lte: str | None = None,
+        vote_average_gte: float | None = None,
+        vote_average_lte: float | None = None,
+        vote_count_gte: int | None = None,
+        vote_count_lte: int | None = None,
+        with_original_language: str | None = None,
+        timezone: str | None = None,
         page: int = 1,
-        **kwargs
+        **kwargs,
     ) -> dict | None:
         """Advanced TV discovery with comprehensive filters"""
         params = {
@@ -995,13 +1003,17 @@ class TMDBHelper:
         return await cls._make_request("certification/tv/list")
 
     @classmethod
-    async def get_movie_alternative_titles(cls, movie_id: int, country: str = None) -> dict | None:
+    async def get_movie_alternative_titles(
+        cls, movie_id: int, country: str | None = None
+    ) -> dict | None:
         """Get movie alternative titles"""
         params = {}
         if country:
             params["country"] = country
 
-        return await cls._make_request(f"movie/{movie_id}/alternative_titles", params)
+        return await cls._make_request(
+            f"movie/{movie_id}/alternative_titles", params
+        )
 
     @classmethod
     async def get_tv_alternative_titles(cls, tv_id: int) -> dict | None:
@@ -1009,7 +1021,9 @@ class TMDBHelper:
         return await cls._make_request(f"tv/{tv_id}/alternative_titles")
 
     @classmethod
-    async def get_movie_images(cls, movie_id: int, include_image_language: str = None) -> dict | None:
+    async def get_movie_images(
+        cls, movie_id: int, include_image_language: str | None = None
+    ) -> dict | None:
         """Get movie images"""
         params = {}
         if include_image_language:
@@ -1018,7 +1032,9 @@ class TMDBHelper:
         return await cls._make_request(f"movie/{movie_id}/images", params)
 
     @classmethod
-    async def get_tv_images(cls, tv_id: int, include_image_language: str = None) -> dict | None:
+    async def get_tv_images(
+        cls, tv_id: int, include_image_language: str | None = None
+    ) -> dict | None:
         """Get TV show images"""
         params = {}
         if include_image_language:
@@ -1027,22 +1043,38 @@ class TMDBHelper:
         return await cls._make_request(f"tv/{tv_id}/images", params)
 
     @classmethod
-    async def get_season_images(cls, tv_id: int, season_number: int, include_image_language: str = None) -> dict | None:
+    async def get_season_images(
+        cls,
+        tv_id: int,
+        season_number: int,
+        include_image_language: str | None = None,
+    ) -> dict | None:
         """Get TV season images"""
         params = {}
         if include_image_language:
             params["include_image_language"] = include_image_language
 
-        return await cls._make_request(f"tv/{tv_id}/season/{season_number}/images", params)
+        return await cls._make_request(
+            f"tv/{tv_id}/season/{season_number}/images", params
+        )
 
     @classmethod
-    async def get_episode_images(cls, tv_id: int, season_number: int, episode_number: int, include_image_language: str = None) -> dict | None:
+    async def get_episode_images(
+        cls,
+        tv_id: int,
+        season_number: int,
+        episode_number: int,
+        include_image_language: str | None = None,
+    ) -> dict | None:
         """Get TV episode images"""
         params = {}
         if include_image_language:
             params["include_image_language"] = include_image_language
 
-        return await cls._make_request(f"tv/{tv_id}/season/{season_number}/episode/{episode_number}/images", params)
+        return await cls._make_request(
+            f"tv/{tv_id}/season/{season_number}/episode/{episode_number}/images",
+            params,
+        )
 
 
 # TMDB Data Processing and Formatting Functions
@@ -1056,8 +1088,7 @@ def format_runtime(minutes: int) -> str:
 
     if hours > 0:
         return f"{hours}h {mins}m"
-    else:
-        return f"{mins}m"
+    return f"{mins}m"
 
 
 def format_date(date_str: str) -> str:
@@ -1079,12 +1110,11 @@ def format_money(amount: int) -> str:
 
     if amount >= 1_000_000_000:
         return f"${amount / 1_000_000_000:.1f}B"
-    elif amount >= 1_000_000:
+    if amount >= 1_000_000:
         return f"${amount / 1_000_000:.1f}M"
-    elif amount >= 1_000:
+    if amount >= 1_000:
         return f"${amount / 1_000:.1f}K"
-    else:
-        return f"${amount}"
+    return f"${amount}"
 
 
 def get_genre_names(genre_ids: list, genre_list: list) -> list:
@@ -1175,7 +1205,7 @@ async def process_movie_data(movie_data: dict) -> dict:
                 )
                 external_ids = None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             LOGGER.warning(f"Timeout fetching additional movie data for {movie_id}")
         except Exception as e:
             LOGGER.error(f"Error fetching additional movie data for {movie_id}: {e}")
@@ -1188,56 +1218,60 @@ async def process_movie_data(movie_data: dict) -> dict:
         "original_title": movie_data.get("original_title"),
         "overview": movie_data.get("overview", "No overview available"),
         "tagline": movie_data.get("tagline"),
-
         # Release and Status Information
         "release_date": movie_data.get("release_date"),
         "release_date_formatted": format_date(movie_data.get("release_date")),
-        "year": movie_data.get("release_date", "")[:4] if movie_data.get("release_date") else None,
+        "year": movie_data.get("release_date", "")[:4]
+        if movie_data.get("release_date")
+        else None,
         "status": movie_data.get("status"),  # Released, Post Production, etc.
-
         # Ratings and Metrics
         "vote_average": movie_data.get("vote_average", 0),
         "vote_count": movie_data.get("vote_count", 0),
         "popularity": movie_data.get("popularity", 0),
-
         # Technical Specifications
         "runtime": movie_data.get("runtime"),
         "runtime_formatted": format_runtime(movie_data.get("runtime", 0)),
         "original_language": movie_data.get("original_language"),
-
         # Financial Data
         "budget": movie_data.get("budget"),
         "budget_formatted": format_money(movie_data.get("budget", 0)),
         "revenue": movie_data.get("revenue"),
         "revenue_formatted": format_money(movie_data.get("revenue", 0)),
-
         # Content Classification
         "adult": movie_data.get("adult", False),
         "video": movie_data.get("video", False),  # True if it's a video/documentary
-
         # Collection Information
         "belongs_to_collection": movie_data.get("belongs_to_collection"),
-
         # Production Details
         "production_countries": movie_data.get("production_countries", []),
         "production_companies": movie_data.get("production_companies", []),
         "spoken_languages": movie_data.get("spoken_languages", []),
-
         # Genre Information
         "genres": movie_data.get("genres", []),
         "genre_names": [genre.get("name") for genre in movie_data.get("genres", [])],
-
         # Image Assets (multiple sizes for optimization)
         "poster_path": movie_data.get("poster_path"),
         "backdrop_path": movie_data.get("backdrop_path"),
-        "poster_url": await TMDBHelper.get_image_url(movie_data.get("poster_path"), "w500", "poster"),
-        "poster_url_small": await TMDBHelper.get_image_url(movie_data.get("poster_path"), "w342", "poster"),
-        "poster_url_large": await TMDBHelper.get_image_url(movie_data.get("poster_path"), "w780", "poster"),
-        "backdrop_url": await TMDBHelper.get_image_url(movie_data.get("backdrop_path"), "w1280", "backdrop"),
-        "backdrop_url_small": await TMDBHelper.get_image_url(movie_data.get("backdrop_path"), "w780", "backdrop"),
-
+        "poster_url": await TMDBHelper.get_image_url(
+            movie_data.get("poster_path"), "w500", "poster"
+        ),
+        "poster_url_small": await TMDBHelper.get_image_url(
+            movie_data.get("poster_path"), "w342", "poster"
+        ),
+        "poster_url_large": await TMDBHelper.get_image_url(
+            movie_data.get("poster_path"), "w780", "poster"
+        ),
+        "backdrop_url": await TMDBHelper.get_image_url(
+            movie_data.get("backdrop_path"), "w1280", "backdrop"
+        ),
+        "backdrop_url_small": await TMDBHelper.get_image_url(
+            movie_data.get("backdrop_path"), "w780", "backdrop"
+        ),
         # External Links
-        "tmdb_url": f"https://www.themoviedb.org/movie/{movie_data.get('id')}" if movie_data.get("id") else None,
+        "tmdb_url": f"https://www.themoviedb.org/movie/{movie_data.get('id')}"
+        if movie_data.get("id")
+        else None,
         "homepage": movie_data.get("homepage"),
     }
 
@@ -1433,10 +1467,10 @@ def _is_field_available(value: Any) -> bool:
     if value is None:
         return False
 
-    if isinstance(value, (list, dict, set, tuple)) and len(value) == 0:
+    if isinstance(value, list | dict | set | tuple) and len(value) == 0:
         return False
 
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return value > 0  # For TMDB, 0 usually means no data
 
     if isinstance(value, bool):
@@ -1481,7 +1515,9 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
 
     # Release date and status
     if _is_field_available(data.get("release_date_formatted")):
-        template_parts.append(f"<b>📅 Released:</b> {data['release_date_formatted']}")
+        template_parts.append(
+            f"<b>📅 Released:</b> {data['release_date_formatted']}"
+        )
 
     if _is_field_available(data.get("status")) and data.get("status") != "Released":
         template_parts.append(f"<b>📊 Status:</b> {data['status']}")
@@ -1503,7 +1539,7 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
         tagline = data["tagline"]
         if len(tagline) > 100:
             tagline = tagline[:100] + "..."
-        template_parts.append(f"<b>💭</b> <i>\"{tagline}\"</i>")
+        template_parts.append(f'<b>💭</b> <i>"{tagline}"</i>')
 
     # Overview (optimized length)
     if _is_field_available(data.get("overview")) and not compact_mode:
@@ -1511,9 +1547,11 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
         # Smart truncation - prefer sentence endings
         if len(overview) > 250:
             truncated = overview[:250]
-            last_sentence = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+            last_sentence = max(
+                truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?")
+            )
             if last_sentence > 150:
-                overview = overview[:last_sentence + 1]
+                overview = overview[: last_sentence + 1]
             else:
                 overview = truncated + "..."
         template_parts.append("")
@@ -1527,13 +1565,13 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
             crew_parts.append(f"👨‍💼 <b>Director:</b> {data['director']}")
 
         if _is_field_available(data.get("writer")):
-            writers = data['writer']
+            writers = data["writer"]
             if len(writers) > 50:
                 writers = writers[:50] + "..."
             crew_parts.append(f"✍️ <b>Writer:</b> {writers}")
 
         if _is_field_available(data.get("composer")):
-            composer = data['composer']
+            composer = data["composer"]
             if len(composer) > 40:
                 composer = composer[:40] + "..."
             crew_parts.append(f"🎵 <b>Music:</b> {composer}")
@@ -1543,14 +1581,16 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
 
     # Cast (top 3-4 actors)
     if _is_field_available(data.get("cast_formatted")) and not compact_mode:
-        cast = data['cast_formatted']
+        cast = data["cast_formatted"]
         if len(cast) > 80:
             cast = cast[:80] + "..."
         template_parts.append(f"<b>👥 Cast:</b> {cast}")
 
     # Production companies (major studios only)
     if _is_field_available(data.get("production_companies")) and not compact_mode:
-        companies = [comp.get("name", "") for comp in data["production_companies"][:2]]
+        companies = [
+            comp.get("name", "") for comp in data["production_companies"][:2]
+        ]
         if companies:
             companies_str = ", ".join(companies)
             if len(companies_str) > 60:
@@ -1560,10 +1600,16 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
     # Financial info (if significant)
     if not compact_mode:
         financial_parts = []
-        if _is_field_available(data.get("budget_formatted")) and data.get("budget", 0) > 1000000:
+        if (
+            _is_field_available(data.get("budget_formatted"))
+            and data.get("budget", 0) > 1000000
+        ):
             financial_parts.append(f"💰 {data['budget_formatted']}")
 
-        if _is_field_available(data.get("revenue_formatted")) and data.get("revenue", 0) > 1000000:
+        if (
+            _is_field_available(data.get("revenue_formatted"))
+            and data.get("revenue", 0) > 1000000
+        ):
             financial_parts.append(f"💵 {data['revenue_formatted']}")
 
         if financial_parts:
@@ -1580,13 +1626,19 @@ def _build_movie_template(data: dict, compact_mode: bool = False) -> str:
     # Links (TMDB only, no IMDB)
     template_parts.append("")
     if _is_field_available(data.get("tmdb_url")):
-        template_parts.append(f'<b>🔗 TMDB:</b> <a href="{data["tmdb_url"]}">View Details</a>')
+        template_parts.append(
+            f'<b>🔗 TMDB:</b> <a href="{data["tmdb_url"]}">View Details</a>'
+        )
 
     if _is_field_available(data.get("trailer_url")) and not compact_mode:
-        template_parts.append(f'<b>🎥 Trailer:</b> <a href="{data["trailer_url"]}">Watch</a>')
+        template_parts.append(
+            f'<b>🎥 Trailer:</b> <a href="{data["trailer_url"]}">Watch</a>'
+        )
 
     if _is_field_available(data.get("homepage")) and not compact_mode:
-        template_parts.append(f'<b>🏠 Official:</b> <a href="{data["homepage"]}">Website</a>')
+        template_parts.append(
+            f'<b>🏠 Official:</b> <a href="{data["homepage"]}">Website</a>'
+        )
 
     template_parts.append("")
     template_parts.append("<i>Powered by TMDB</i>")
@@ -1850,12 +1902,14 @@ async def tmdb_callback_handler(client, query: CallbackQuery):
                 try:
                     page = int(page_num)
                     # Perform new search with pagination
-                    response_text, buttons = await tmdb_search(search_query, user_id, page)
+                    response_text, buttons = await tmdb_search(
+                        search_query, user_id, page
+                    )
 
                     await query.edit_message_text(
                         text=response_text,
                         reply_markup=buttons,
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
                     )
                     await query.answer()
                     return
@@ -1908,9 +1962,9 @@ async def tmdb_callback_handler(client, query: CallbackQuery):
 
         # Add TMDB link only
         if tmdb_data.get("tmdb_url"):
-            buttons.append([
-                InlineKeyboardButton("🔗 TMDB Details", url=tmdb_data["tmdb_url"])
-            ])
+            buttons.append(
+                [InlineKeyboardButton("🔗 TMDB Details", url=tmdb_data["tmdb_url"])]
+            )
 
         # Add trailer link if available
         if tmdb_data.get("trailer_url"):
@@ -1942,10 +1996,8 @@ async def tmdb_callback_handler(client, query: CallbackQuery):
                 )
 
                 # Delete the original message
-                try:
+                with contextlib.suppress(Exception):
                     await message.delete()
-                except Exception:
-                    pass
 
             except Exception as e:
                 LOGGER.error(f"Error sending TMDB photo: {e}")
@@ -2019,18 +2071,24 @@ def create_tmdb_search_buttons(
         # Previous page button
         if page > 1:
             pagination_buttons.append(
-                InlineKeyboardButton("⬅️ Previous", callback_data=f"tmdb_page_{query}_{page-1}")
+                InlineKeyboardButton(
+                    "⬅️ Previous", callback_data=f"tmdb_page_{query}_{page - 1}"
+                )
             )
 
         # Page indicator
         pagination_buttons.append(
-            InlineKeyboardButton(f"📄 {page}/{total_pages}", callback_data="tmdb_noop")
+            InlineKeyboardButton(
+                f"📄 {page}/{total_pages}", callback_data="tmdb_noop"
+            )
         )
 
         # Next page button
         if page < total_pages:
             pagination_buttons.append(
-                InlineKeyboardButton("Next ➡️", callback_data=f"tmdb_page_{query}_{page+1}")
+                InlineKeyboardButton(
+                    "Next ➡️", callback_data=f"tmdb_page_{query}_{page + 1}"
+                )
             )
 
         buttons.append(pagination_buttons)
@@ -2040,7 +2098,7 @@ def create_tmdb_search_buttons(
 
 # Main search function for external use
 async def tmdb_search(
-    query: str, user_id: int = None, page: int = 1
+    query: str, user_id: int | None = None, page: int = 1
 ) -> tuple[str, InlineKeyboardMarkup | None]:
     """Enhanced TMDB search function with pagination support"""
     try:
@@ -2062,7 +2120,7 @@ async def tmdb_search(
         # Create response message with pagination info
         response_lines = [
             f"🔍 <b>TMDB Search Results for:</b> <code>{query}</code>",
-            f"📊 <b>Page {page} of {total_pages}</b> • <b>{total_results:,} total results</b>\n"
+            f"📊 <b>Page {page} of {total_pages}</b> • <b>{total_results:,} total results</b>\n",
         ]
 
         for i, result in enumerate(page_results, start_idx + 1):
@@ -2121,7 +2179,9 @@ async def tmdb_search(
         response_text = "\n".join(response_lines)
 
         # Create buttons with pagination support
-        buttons = create_tmdb_search_buttons(search_results, query, page, total_pages)
+        buttons = create_tmdb_search_buttons(
+            search_results, query, page, total_pages
+        )
 
         return response_text, buttons
 

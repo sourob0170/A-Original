@@ -56,7 +56,9 @@ async def ensure_zotify_initialized_on_demand():
     await setup_credentials_from_environment()
 
     try:
-        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import ensure_zotify_initialized
+        from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import (
+            ensure_zotify_initialized,
+        )
 
         # Add timeout for Zotify initialization to prevent hanging
         return await asyncio.wait_for(ensure_zotify_initialized(), timeout=30.0)
@@ -331,7 +333,9 @@ async def unified_inline_search_handler(client, inline_query: InlineQuery):
             modified_inline_query = ModifiedInlineQuery(inline_query, modified_query)
 
             # Import and call zotify inline search
-            from bot.helper.mirror_leech_utils.zotify_utils.search_handler import inline_zotify_search
+            from bot.helper.mirror_leech_utils.zotify_utils.search_handler import (
+                inline_zotify_search,
+            )
 
             await inline_zotify_search(client, modified_inline_query)
             return

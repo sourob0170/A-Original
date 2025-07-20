@@ -1,5 +1,6 @@
 from asyncio import sleep
 from time import time
+
 from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked
 from pyrogram.types import Message
 
@@ -49,7 +50,7 @@ async def handle_owner_contact(client, message: Message):
             "Usage:\n"
             "• `/contact user_id message`\n"
             "• `/contact @username message`\n\n"
-            "You can also reply to any message with `/contact user_id/@username message`"
+            "You can also reply to any message with `/contact user_id/@username message`",
         )
         return
 
@@ -59,7 +60,7 @@ async def handle_owner_contact(client, message: Message):
     # Parse target user (user_id or @username)
     target_user_id = None
 
-    if target_identifier.startswith('@'):
+    if target_identifier.startswith("@"):
         # Handle @username
         username = target_identifier[1:]  # Remove @
         try:
@@ -75,7 +76,7 @@ async def handle_owner_contact(client, message: Message):
         except ValueError:
             await send_message(
                 message,
-                "❌ Invalid user identifier. Use numeric user_id or @username"
+                "❌ Invalid user identifier. Use numeric user_id or @username",
             )
             return
 
@@ -83,35 +84,36 @@ async def handle_owner_contact(client, message: Message):
     if not await has_user_started_bot(target_user_id):
         await send_message(
             message,
-            f"❌ User {target_identifier} has not started the bot in private."
+            f"❌ User {target_identifier} has not started the bot in private.",
         )
         return
 
     # Handle reply to message case
     if message.reply_to_message:
-        await handle_owner_reply_contact(client, message, target_user_id, owner_message)
+        await handle_owner_reply_contact(
+            client, message, target_user_id, owner_message
+        )
         return
 
     # Send message to target user
     try:
         generic_message = f"📩 <b>Message from Owner</b>\n\n{owner_message}"
         await client.send_message(target_user_id, generic_message)
-        await send_message(
-            message,
-            f"✅ Message sent to user {target_identifier}"
-        )
+        await send_message(message, f"✅ Message sent to user {target_identifier}")
         LOGGER.info(f"Owner contacted user {target_user_id}")
     except (UserIsBlocked, InputUserDeactivated):
         await send_message(
             message,
-            f"❌ Cannot send message to {target_identifier}. User has blocked the bot or account is deactivated."
+            f"❌ Cannot send message to {target_identifier}. User has blocked the bot or account is deactivated.",
         )
     except Exception as e:
         await send_message(message, f"❌ Failed to send message: {e}")
         LOGGER.error(f"Failed to send owner message to user {target_user_id}: {e}")
 
 
-async def handle_owner_reply_contact(client, message: Message, target_user_id: int, owner_message: str):
+async def handle_owner_reply_contact(
+    client, message: Message, target_user_id: int, owner_message: str
+):
     """
     Handle owner replying to a message and forwarding it to target user
     """
@@ -133,14 +135,14 @@ async def handle_owner_reply_contact(client, message: Message, target_user_id: i
 
         await send_message(
             message,
-            f"✅ Replied message and your message sent to user {target_user_id}"
+            f"✅ Replied message and your message sent to user {target_user_id}",
         )
         LOGGER.info(f"Owner sent reply and message to user {target_user_id}")
 
     except (UserIsBlocked, InputUserDeactivated):
         await send_message(
             message,
-            f"❌ Cannot send message to user {target_user_id}. User has blocked the bot or account is deactivated."
+            f"❌ Cannot send message to user {target_user_id}. User has blocked the bot or account is deactivated.",
         )
     except Exception as e:
         await send_message(message, f"❌ Failed to send reply: {e}")
@@ -173,9 +175,7 @@ async def handle_user_contact(client, message: Message):
         # Check if the replied message has media
         if replied_msg.media:
             # Forward the media to owner with user info
-            await forward_media_to_owner(
-                replied_msg, user_id, username, first_name
-            )
+            await forward_media_to_owner(replied_msg, user_id, username, first_name)
 
             # If there's additional text with the command, send it too
             if len(command_parts) > 1:
@@ -190,18 +190,14 @@ async def handle_user_contact(client, message: Message):
             return
 
         # If replying to a text message, include both the original and new text
-        original_text = (
-            replied_msg.text or replied_msg.caption or "No text content"
-        )
+        original_text = replied_msg.text or replied_msg.caption or "No text content"
         if len(command_parts) > 1:
             combined_text = f"Original message: {original_text}\n\nAdditional message: {command_parts[1]}"
         else:
             combined_text = f"Forwarded message: {original_text}"
 
         await send_text_to_owner(combined_text, user_id, username, first_name)
-        await send_message(
-            message, "✅ Your message has been sent to the owner."
-        )
+        await send_message(message, "✅ Your message has been sent to the owner.")
         return
 
     # Handle regular text message

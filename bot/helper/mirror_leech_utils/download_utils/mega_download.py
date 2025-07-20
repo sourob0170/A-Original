@@ -49,7 +49,9 @@ async def add_mega_download(listener, path):
 
         # Import folder selector to access active sessions
         try:
-            from bot.helper.mirror_leech_utils.mega_utils.folder_selector import active_mega_selectors
+            from bot.helper.mirror_leech_utils.mega_utils.folder_selector import (
+                active_mega_selectors,
+            )
 
             if user_id and user_id in active_mega_selectors:
                 # Reuse existing authenticated session

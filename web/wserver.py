@@ -35,8 +35,6 @@ from bot.core.config_manager import Config
 
 # Load configuration for web server process
 try:
-
-
     # Force reload configuration to ensure fresh values
     Config.load()
     from bot.core.config_manager import SystemEnv
@@ -45,6 +43,7 @@ try:
 
     # Also try to reload Config class to get latest values
     import importlib
+
     from bot.core import config_manager
 
     importlib.reload(config_manager)
@@ -55,7 +54,6 @@ try:
         hasattr(ReloadedConfig, "FILE2LINK_BIN_CHANNEL")
         and ReloadedConfig.FILE2LINK_BIN_CHANNEL
     ):
-
         Config.FILE2LINK_BIN_CHANNEL = ReloadedConfig.FILE2LINK_BIN_CHANNEL
         Config.FILE2LINK_ENABLED = getattr(
             ReloadedConfig, "FILE2LINK_ENABLED", False
@@ -63,14 +61,13 @@ try:
 
     # Load database settings asynchronously when needed
     import asyncio
-    from bot.core.startup import load_settings
     import os
+
+    from bot.core.startup import load_settings
 
     async def load_web_server_config():
         try:
             # First, try to load shared configuration from main bot process
-
-            shared_config_loaded = False
 
             try:
                 import json
@@ -81,15 +78,13 @@ try:
                 )
 
                 if os.path.exists(config_file_path):
-                    with open(config_file_path, "r") as f:
+                    with open(config_file_path) as f:
                         shared_config = json.load(f)
 
                     # Apply shared configuration
                     for key, value in shared_config.items():
                         if hasattr(Config, key) and value:
                             setattr(Config, key, value)
-
-                    shared_config_loaded = True
 
                 else:
                     LOGGER.info("No shared configuration file found")
@@ -102,13 +97,12 @@ try:
 
             # Debug configuration values after database loading
             db_bin_channel = getattr(Config, "FILE2LINK_BIN_CHANNEL", 0)
-            db_enabled = getattr(Config, "FILE2LINK_ENABLED", False)
-            db_base_url = getattr(Config, "FILE2LINK_BASE_URL", "")
+            getattr(Config, "FILE2LINK_ENABLED", False)
+            getattr(Config, "FILE2LINK_BASE_URL", "")
 
             # If database doesn't have the value (still 0), try environment variable as fallback
             if db_bin_channel == 0:
                 env_bin_channel = os.getenv("FILE2LINK_BIN_CHANNEL")
-
 
                 if env_bin_channel and env_bin_channel != "0":
                     try:
@@ -154,15 +148,15 @@ except Exception as e:
 def get_stream_utils():
     """Lazy import of stream utilities to avoid startup delays"""
     from bot.helper.stream_utils import (
-        StreamClientManager,
         ByteStreamer,
         ParallelByteStreamer,
         ParallelDownloader,
-        get_hash,
+        StreamClientManager,
         get_fname,
-        validate_stream_request,
+        get_hash,
         get_mime_type,
         is_streamable_file,
+        validate_stream_request,
     )
 
     return (
@@ -194,8 +188,8 @@ async def get_file2link_bin_channel():
             return config_value
 
         # If Config doesn't have it, try database directly
-        from bot.helper.ext_utils.db_handler import database
         from bot.core.aeon_client import TgClient
+        from bot.helper.ext_utils.db_handler import database
 
         if not database._return and database.db is not None:
             db_config = await database.db.settings.config.find_one(
@@ -238,7 +232,6 @@ async def init_streaming_client(TgClient):
 
             # Use in-memory session for web server to avoid file conflicts and auth issues
             import tempfile
-            import os
 
             session_dir = tempfile.mkdtemp(prefix="web_sessions_")
 
@@ -271,8 +264,9 @@ async def init_streaming_client(TgClient):
 async def init_helper_bots_for_streaming(TgClient):
     """Initialize helper bots specifically for web server streaming"""
     try:
-        from pyrogram import Client, enums
         from asyncio import gather
+
+        from pyrogram import Client, enums
 
         # Initialize helper bot containers if not present
         if not hasattr(TgClient, "helper_bots"):
@@ -331,7 +325,7 @@ async def validate_channel_access(client, channel_id):
     """Validate if bot has access to the storage channel"""
     try:
         # Try to get chat info
-        chat = await client.get_chat(channel_id)
+        await client.get_chat(channel_id)
         # Skip message history check as it causes BOT_METHOD_INVALID error
         # Bot access to the channel is sufficient for File2Link functionality
         return True
@@ -382,7 +376,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize TgClient for File2Link functionality
     try:
-
         # Load database configuration first (primary source)
         if _config_loader:
             await _config_loader()
@@ -417,7 +410,7 @@ async def lifespan(app: FastAPI):
 
             else:
                 LOGGER.error(
-                    f"❌ FILE2LINK_BIN_CHANNEL not configured - File2Link streaming will not work"
+                    "❌ FILE2LINK_BIN_CHANNEL not configured - File2Link streaming will not work"
                 )
                 LOGGER.error(
                     f"Current FILE2LINK_BIN_CHANNEL: {getattr(Config, 'FILE2LINK_BIN_CHANNEL', 'NOT_SET')}"
@@ -903,7 +896,7 @@ async def health_check():
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Health check failed: {str(e)}",
+            "message": f"Health check failed: {e!s}",
             "streaming_ready": False,
         }
 
@@ -1037,7 +1030,6 @@ async def stream_preview(path: str, request: Request):
 
         if use_parallel:
             streamer = ParallelByteStreamer(chat_id=storage_channel)
-            is_parallel = True
         else:
             # Fallback to single client streaming
             client, client_id = StreamClientManager.get_optimal_client()
@@ -1047,7 +1039,6 @@ async def stream_preview(path: str, request: Request):
                     detail="Bot not initialized yet, please try again later",
                 )
             streamer = ByteStreamer(client, client_id, chat_id=storage_channel)
-            is_parallel = False
 
         # Get file info
         file_info = await streamer.get_file_info(message_id)
@@ -1244,7 +1235,7 @@ async def download_file(path: str, request: Request):
                 "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
                 "Access-Control-Allow-Headers": "Range, Content-Range, Content-Length",
                 "X-Download-Optimized": "true",  # Debug header
-                "Transfer-Encoding": "chunked"  # Enable chunked transfer
+                "Transfer-Encoding": "chunked",  # Enable chunked transfer
             }
 
             if range_header:
@@ -1419,11 +1410,9 @@ async def stream_file(path: str, request: Request):
             # Detect seeking vs initial loading based on start position
             is_seeking = range_header and start > 0
 
-
-
             # Ensure filename is a string and not None
             if filename is None:
-                LOGGER.error(f"Filename is None! Setting to fallback")
+                LOGGER.error("Filename is None! Setting to fallback")
                 filename = "Unknown File"
 
             # Prepare headers with optimized connection management
@@ -1448,11 +1437,19 @@ async def stream_file(path: str, request: Request):
                 # Seeking optimization: Add headers for better seeking performance
                 if is_seeking:
                     headers["X-Seeking-Optimized"] = "true"
-                    headers["Cache-Control"] = "no-cache"  # Don't cache seeking requests
+                    headers["Cache-Control"] = (
+                        "no-cache"  # Don't cache seeking requests
+                    )
                     # Optimize for seeking with immediate response
-                    headers["Keep-Alive"] = "timeout=5, max=1"  # Very short timeout for seeking
-                    headers["Accept-Ranges"] = "bytes"  # Ensure range support is explicit
-                    headers["Content-Encoding"] = "identity"  # No compression for seeking
+                    headers["Keep-Alive"] = (
+                        "timeout=5, max=1"  # Very short timeout for seeking
+                    )
+                    headers["Accept-Ranges"] = (
+                        "bytes"  # Ensure range support is explicit
+                    )
+                    headers["Content-Encoding"] = (
+                        "identity"  # No compression for seeking
+                    )
 
                 # Only add Transfer-Encoding header when not using range requests
                 if not range_header:
@@ -1545,12 +1542,8 @@ async def stream_file(path: str, request: Request):
                         )
                     chunk_count = 0
 
-
-
                     async for chunk in stream_method:
                         chunk_count += 1
-
-
 
                         # Check for timeout
                         current_time = asyncio.get_event_loop().time()
@@ -1656,8 +1649,6 @@ async def stream_file(path: str, request: Request):
                     ):
                         StreamClientManager.decrement_load(client_id)
 
-
-
             # Ensure mime_type is not None
             if mime_type is None:
                 LOGGER.error("mime_type is None! Using fallback")
@@ -1668,8 +1659,6 @@ async def stream_file(path: str, request: Request):
                 if value is None:
                     LOGGER.error(f"Header '{key}' has None value! Removing it.")
                     headers[key] = ""  # Replace None with empty string
-
-
 
             return StreamingResponse(
                 stream_generator(),

@@ -147,7 +147,9 @@ class StreamripDownloadHelper:
             self._codec = codec
             self._download_url = url
             # Parse URL to get platform and media info
-            from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import parse_streamrip_url
+            from bot.helper.mirror_leech_utils.streamrip_utils.url_parser import (
+                parse_streamrip_url,
+            )
 
             try:
                 parsed = await parse_streamrip_url(url)
@@ -202,7 +204,9 @@ class StreamripDownloadHelper:
     async def _initialize_client(self, platform: str):
         """Initialize the appropriate client for the platform"""
         try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             config = streamrip_config.get_config()
             if not config:
@@ -315,7 +319,9 @@ class StreamripDownloadHelper:
     async def _update_download_path(self):
         """Update streamrip config to use our download path"""
         try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             # Ensure streamrip is initialized
             await streamrip_config.lazy_initialize()
@@ -395,7 +401,9 @@ class StreamripDownloadHelper:
                     )  # Use --codec instead of -c
 
             # Add --no-db flag if database is disabled in bot settings OR if force download is enabled
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             force_download = getattr(self.listener, "force_download", False)
             db_enabled = streamrip_config.is_database_enabled()
@@ -870,7 +878,9 @@ class StreamripDownloadHelper:
     def _get_streamrip_config_path(self) -> str:
         """Get the path to the streamrip config file"""
         try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             return streamrip_config.get_config_path()
         except Exception:
@@ -882,7 +892,9 @@ class StreamripDownloadHelper:
     def _is_database_enabled(self) -> bool:
         """Check if streamrip database is enabled"""
         try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             return streamrip_config.is_database_enabled()
         except Exception:
@@ -998,7 +1010,9 @@ exec "{ffmpeg_path}" "${{args[@]}}"
     async def _reset_streamrip_config(self):
         """Reset streamrip config using centralized system"""
         try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import streamrip_config
+            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+                streamrip_config,
+            )
 
             # Use centralized config reset
             success = await streamrip_config.reset_to_default_config()

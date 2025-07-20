@@ -29,7 +29,9 @@ class CatAPIHelper:
     BASE_URL = "https://api.thecatapi.com/v1"
 
     # Cache for storing votes to prevent duplicate voting
-    _user_votes: ClassVar[dict[str, dict[str, int]]] = {}  # {user_id: {image_id: vote_value}}
+    _user_votes: ClassVar[
+        dict[str, dict[str, int]]
+    ] = {}  # {user_id: {image_id: vote_value}}
 
     # Counter for tracking kitty numbers per user
     _user_kitty_counters: ClassVar[dict[str, int]] = {}  # {user_id: counter}
@@ -52,9 +54,7 @@ class CatAPIHelper:
                     async with session.get(url, headers=headers) as response:
                         if response.status == 200:
                             return await response.json()
-                        LOGGER.error(
-                            f"Cat API request failed: {response.status}"
-                        )
+                        LOGGER.error(f"Cat API request failed: {response.status}")
                         return None
                 elif method == "POST":
                     headers["Content-Type"] = "application/json"
@@ -141,7 +141,9 @@ class CatAPIHelper:
         """Get a random cat fact from meowfacts API"""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://meowfacts.herokuapp.com/") as response:
+                async with session.get(
+                    "https://meowfacts.herokuapp.com/"
+                ) as response:
                     if response.status == 200:
                         data = await response.json()
                         if data and "data" in data and len(data["data"]) > 0:
@@ -277,7 +279,9 @@ async def neko_command(_, message: Message):
             # Add cat fact
             cat_fact = await CatAPIHelper.get_cat_fact()
             if cat_fact:
-                caption += f"\n\n<blockquote>🧠 <b>Cat Fact:</b>\n{cat_fact}</blockquote>"
+                caption += (
+                    f"\n\n<blockquote>🧠 <b>Cat Fact:</b>\n{cat_fact}</blockquote>"
+                )
 
             # Create voting buttons
             buttons = create_cat_buttons(image_id, user_id)
@@ -383,7 +387,7 @@ async def neko_callback_handler(_, query: CallbackQuery):
                 if not cats:
                     await query.message._client.send_message(
                         chat_id=query.message.chat.id,
-                        text="😿 <b>Sorry!</b> Couldn't fetch a new cat image right now.\nPlease try again later! 🐾"
+                        text="😿 <b>Sorry!</b> Couldn't fetch a new cat image right now.\nPlease try again later! 🐾",
                     )
                     return
 
@@ -426,14 +430,14 @@ async def neko_callback_handler(_, query: CallbackQuery):
                     chat_id=query.message.chat.id,
                     photo=image_url,
                     caption=caption,
-                    reply_markup=buttons
+                    reply_markup=buttons,
                 )
 
             except Exception as e:
                 LOGGER.error(f"Error fetching new cat: {e}")
                 await query.message._client.send_message(
                     chat_id=query.message.chat.id,
-                    text="😿 <b>Oops!</b> Something went wrong while fetching a new kitty.\nPlease try again later! 🐾"
+                    text="😿 <b>Oops!</b> Something went wrong while fetching a new kitty.\nPlease try again later! 🐾",
                 )
 
         elif action == "close":

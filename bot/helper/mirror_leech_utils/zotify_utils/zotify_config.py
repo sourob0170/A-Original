@@ -411,7 +411,9 @@ class ZotifyConfigManager:
         """Optimize Zotify settings based on account type (premium/free)"""
         try:
             # Detect account type
-            from bot.helper.mirror_leech_utils.zotify_utils.quality_selector import detect_account_type
+            from bot.helper.mirror_leech_utils.zotify_utils.quality_selector import (
+                detect_account_type,
+            )
 
             account_type = await detect_account_type()
 

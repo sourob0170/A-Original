@@ -6,7 +6,6 @@ from pyrogram.handlers import (
     MessageHandler,
 )
 
-from bot import LOGGER
 from bot.core.config_manager import Config
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
@@ -19,17 +18,12 @@ from bot.modules import (
     authorize,
     auto_forward_handler,
     ban_command,
-    cancel_forward_callback,
-    finish_pagination_callback,
-    forward_batch_callback,
-    mode_batch_callback,
-    mode_direct_callback,
-    next_batch_callback,
     bot_help,
     bot_stats,
     cancel,
     cancel_all_buttons,
     cancel_all_update,
+    cancel_forward_callback,
     cancel_multi,
     check_scheduled_deletions,
     clear,
@@ -49,8 +43,10 @@ from bot.modules import (
     encoding_callback,
     execute,
     file2link_command,
+    finish_pagination_callback,
     font_styles_cmd,
     force_delete_all_messages,
+    forward_batch_callback,
     forward_command,
     gdrive_search,
     gen_session,
@@ -71,8 +67,6 @@ from bot.modules import (
     hydra_search,
     imdb_callback,
     imdb_search,
-    tmdb_callback_handler,
-    tmdb_search_command,
     # index_command removed - media indexing functionality disabled
     jd_leech,
     jd_mirror,
@@ -86,8 +80,11 @@ from bot.modules import (
     media_tools_settings,
     mediainfo,
     mirror,
+    mode_batch_callback,
+    mode_direct_callback,
     neko_callback_handler,
     neko_command,
+    next_batch_callback,
     nzb_leech,
     nzb_mirror,
     osint_callback_handler,
@@ -113,13 +110,15 @@ from bot.modules import (
     start,
     status_pages,
     task_status,
+    tmdb_callback_handler,
+    tmdb_search_command,
     tool_command,
     torrent_search,
     torrent_search_update,
     trace_command,
     truecaller_lookup,
-    unban_command,
     unauthorize,
+    unban_command,
     virustotal_scan,
     whisper_callback,
     whisper_command,
@@ -705,12 +704,12 @@ def add_handlers():
 
     # Add MEGA callback handlers if enabled
     if Config.MEGA_ENABLED:
-        from bot.helper.mirror_leech_utils.mega_utils.folder_selector import mega_folder_callback
+        from bot.helper.mirror_leech_utils.mega_utils.folder_selector import (
+            mega_folder_callback,
+        )
 
         # MEGA search now uses Telegraph (no pagination callbacks needed)
         public_regex_filters["^mgq"] = mega_folder_callback
-
-
 
     # Add Gallery-dl callback handlers if enabled
     if Config.GALLERY_DL_ENABLED:
@@ -740,7 +739,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             cancel_forward_callback,
-            filters=regex(r"^cancel_forward_\d+$") & CustomFilters.sudo
+            filters=regex(r"^cancel_forward_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -748,7 +747,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             next_batch_callback,
-            filters=regex(r"^next_batch_\d+$") & CustomFilters.sudo
+            filters=regex(r"^next_batch_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -756,7 +755,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             forward_batch_callback,
-            filters=regex(r"^forward_batch_\d+$") & CustomFilters.sudo
+            filters=regex(r"^forward_batch_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -764,7 +763,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             finish_pagination_callback,
-            filters=regex(r"^finish_pagination_\d+$") & CustomFilters.sudo
+            filters=regex(r"^finish_pagination_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -773,7 +772,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             mode_batch_callback,
-            filters=regex(r"^mode_batch_\d+$") & CustomFilters.sudo
+            filters=regex(r"^mode_batch_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -781,7 +780,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         CallbackQueryHandler(
             mode_direct_callback,
-            filters=regex(r"^mode_direct_\d+$") & CustomFilters.sudo
+            filters=regex(r"^mode_direct_\d+$") & CustomFilters.sudo,
         ),
         group=0,
     )
@@ -1155,5 +1154,3 @@ def add_handlers():
             ),
             group=3,  # Lower priority to not interfere with commands
         )
-
-

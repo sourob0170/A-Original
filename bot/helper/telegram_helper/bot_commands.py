@@ -96,5 +96,3 @@ class BotCommands:
     ContactCommand = f"contact{i}"
     BanCommand = f"ban{i}"
     UnbanCommand = f"unban{i}"
-
-

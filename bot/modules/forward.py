@@ -1,8 +1,6 @@
 import asyncio
-import re
 from time import time
 
-from pyrogram import filters
 from pyrogram.errors import (
     ChannelPrivate,
     ChatAdminRequired,
@@ -19,7 +17,6 @@ from bot.core.aeon_client import TgClient
 from bot.core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import is_privileged_user, new_task
 from bot.helper.ext_utils.db_handler import database
-from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.message_utils import edit_message, send_message
 
 # Global dictionary to track active forwarding tasks for cancellation
@@ -104,7 +101,9 @@ async def resolve_chat_id(chat_identifier: str):
                 return chat.id
             except Exception as user_error:
                 if "PEER_ID_INVALID" not in str(user_error):
-                    LOGGER.warning(f"User client failed to resolve {chat_identifier}: {user_error}")
+                    LOGGER.warning(
+                        f"User client failed to resolve {chat_identifier}: {user_error}"
+                    )
 
         # Try bot client
         try:
@@ -112,7 +111,9 @@ async def resolve_chat_id(chat_identifier: str):
             return chat.id
         except Exception as bot_error:
             if "PEER_ID_INVALID" not in str(bot_error):
-                LOGGER.error(f"Bot client failed to resolve {chat_identifier}: {bot_error}")
+                LOGGER.error(
+                    f"Bot client failed to resolve {chat_identifier}: {bot_error}"
+                )
 
             # If it's a numeric ID, try to use it directly
             try:
@@ -120,8 +121,7 @@ async def resolve_chat_id(chat_identifier: str):
                 # Validate it's a reasonable chat ID format
                 if abs(chat_id) > 1000000000:  # Minimum valid chat ID
                     return chat_id
-                else:
-                    LOGGER.warning(f"Numeric ID {chat_id} appears invalid (too small)")
+                LOGGER.warning(f"Numeric ID {chat_id} appears invalid (too small)")
             except ValueError:
                 pass
 
@@ -129,7 +129,9 @@ async def resolve_chat_id(chat_identifier: str):
             return None
 
     except Exception as e:
-        LOGGER.error(f"Unexpected error resolving chat ID for {chat_identifier}: {e}")
+        LOGGER.error(
+            f"Unexpected error resolving chat ID for {chat_identifier}: {e}"
+        )
         return None
 
 
@@ -152,32 +154,48 @@ async def copy_message_safe(
             # because copy_message requires reading message content which bots often can't do
             if is_bot:
                 try:
-                    result = await client.forward_messages(
+                    return await client.forward_messages(
                         chat_id=destination_chat_id,
                         from_chat_id=source_chat_id,
                         message_ids=message_id,
                     )
-                    return result
-                except (FloodWait, FloodPremiumWait, FloodTestPhoneWait) as flood_error:
+                except (
+                    FloodWait,
+                    FloodPremiumWait,
+                    FloodTestPhoneWait,
+                ) as flood_error:
                     # Re-raise FloodWait to be handled by outer loop
                     raise flood_error
                 except Exception as forward_error:
                     # Check for fatal errors that indicate destination chat issues
-                    if hasattr(forward_error, 'ID') and forward_error.ID == "CHANNEL_INVALID":
-                        LOGGER.error(f"FATAL: Destination chat {destination_chat_id} is invalid or inaccessible")
+                    if (
+                        hasattr(forward_error, "ID")
+                        and forward_error.ID == "CHANNEL_INVALID"
+                    ):
+                        LOGGER.error(
+                            f"FATAL: Destination chat {destination_chat_id} is invalid or inaccessible"
+                        )
                         raise forward_error  # Re-raise to stop the entire batch
 
-                    LOGGER.error(f"forward_messages failed for message {message_id}: {forward_error}")
+                    LOGGER.error(
+                        f"forward_messages failed for message {message_id}: {forward_error}"
+                    )
                     return None
 
             # For user clients, verify we can access the source message first
             try:
-                source_message = await client.get_messages(source_chat_id, message_id)
+                source_message = await client.get_messages(
+                    source_chat_id, message_id
+                )
                 if not source_message:
-                    LOGGER.error(f"Cannot access source message {message_id} from chat {source_chat_id}")
+                    LOGGER.error(
+                        f"Cannot access source message {message_id} from chat {source_chat_id}"
+                    )
                     return None
             except Exception as access_error:
-                LOGGER.error(f"Cannot access source message {message_id}: {access_error}")
+                LOGGER.error(
+                    f"Cannot access source message {message_id}: {access_error}"
+                )
                 return None
 
             # Primary method: copy_message
@@ -190,7 +208,9 @@ async def copy_message_safe(
 
                 # Check if copy_message actually returned a valid result
                 if result is None:
-                    raise Exception("copy_message returned None - trying forward_messages fallback")
+                    raise Exception(
+                        "copy_message returned None - trying forward_messages fallback"
+                    )
 
                 return result
             except (FloodWait, FloodPremiumWait, FloodTestPhoneWait) as flood_error:
@@ -198,11 +218,15 @@ async def copy_message_safe(
                 raise flood_error
             except Exception as copy_error:
                 # Check for fatal errors that indicate destination chat issues
-                if hasattr(copy_error, 'ID') and copy_error.ID == "CHANNEL_INVALID":
-                    LOGGER.error(f"FATAL: Destination chat {destination_chat_id} is invalid or inaccessible")
+                if hasattr(copy_error, "ID") and copy_error.ID == "CHANNEL_INVALID":
+                    LOGGER.error(
+                        f"FATAL: Destination chat {destination_chat_id} is invalid or inaccessible"
+                    )
                     raise copy_error  # Re-raise to stop the entire batch
 
-                LOGGER.error(f"copy_message failed for message {message_id}: {copy_error}")
+                LOGGER.error(
+                    f"copy_message failed for message {message_id}: {copy_error}"
+                )
 
                 # Fallback method: forward_messages (creates a link to original)
                 try:
@@ -211,16 +235,27 @@ async def copy_message_safe(
                         from_chat_id=source_chat_id,
                         message_ids=message_id,
                     )
-                except (FloodWait, FloodPremiumWait, FloodTestPhoneWait) as flood_error:
+                except (
+                    FloodWait,
+                    FloodPremiumWait,
+                    FloodTestPhoneWait,
+                ) as flood_error:
                     # Re-raise FloodWait to be handled by outer loop
                     raise flood_error
                 except Exception as forward_error:
                     # Check for fatal errors in fallback method too
-                    if hasattr(forward_error, 'ID') and forward_error.ID == "CHANNEL_INVALID":
-                        LOGGER.error(f"FATAL: Destination chat {destination_chat_id} is invalid - both methods failed")
+                    if (
+                        hasattr(forward_error, "ID")
+                        and forward_error.ID == "CHANNEL_INVALID"
+                    ):
+                        LOGGER.error(
+                            f"FATAL: Destination chat {destination_chat_id} is invalid - both methods failed"
+                        )
                         raise forward_error  # Re-raise to stop the entire batch
 
-                    LOGGER.error(f"forward_messages fallback failed for message {message_id}: {forward_error}")
+                    LOGGER.error(
+                        f"forward_messages fallback failed for message {message_id}: {forward_error}"
+                    )
                     # If both methods fail, re-raise the original copy error
                     raise copy_error from None
 
@@ -231,7 +266,9 @@ async def copy_message_safe(
 
             # For long waits, don't add exponential backoff as it's already a penalty
             if wait_time < 10 and retry_count > 0:
-                wait_time += retry_count * 2  # Add 2, 4, 6 seconds only for short waits
+                wait_time += (
+                    retry_count * 2
+                )  # Add 2, 4, 6 seconds only for short waits
 
             LOGGER.warning(
                 f"FloodWait for message {message_id} (attempt {retry_count + 1}/{max_retries}): "
@@ -251,15 +288,22 @@ async def copy_message_safe(
 
         except Exception as e:
             # Check for fatal errors that should stop the entire batch
-            if hasattr(e, 'ID') and e.ID == "CHANNEL_INVALID":
-                LOGGER.error(f"FATAL: Destination chat {destination_chat_id} is invalid - stopping all forwarding")
+            if hasattr(e, "ID") and e.ID == "CHANNEL_INVALID":
+                LOGGER.error(
+                    f"FATAL: Destination chat {destination_chat_id} is invalid - stopping all forwarding"
+                )
                 raise e  # Re-raise to stop the entire batch
 
             LOGGER.error(f"Error copying message {message_id}: {e}")
 
             # For certain errors, don't retry
             error_type = type(e).__name__
-            if error_type in ["MessageIdInvalid", "MessageNotModified", "MessageEmpty", "ChannelInvalid"]:
+            if error_type in [
+                "MessageIdInvalid",
+                "MessageNotModified",
+                "MessageEmpty",
+                "ChannelInvalid",
+            ]:
                 return None
 
             retry_count += 1
@@ -292,8 +336,8 @@ async def get_messages_batch(
     chat_id: int,
     batch_size: int = 50,
     offset: int = 0,
-    range_start: int = None,
-    range_end: int = None,
+    range_start: int | None = None,
+    range_end: int | None = None,
 ):
     """Get a batch of messages with pagination support"""
     messages = []
@@ -310,9 +354,13 @@ async def get_messages_batch(
                 if start_id <= range_end:
                     message_ids = list(range(start_id, end_id))
                     try:
-                        batch_messages = await client.get_messages(chat_id, message_ids)
+                        batch_messages = await client.get_messages(
+                            chat_id, message_ids
+                        )
                         if isinstance(batch_messages, list):
-                            messages = [msg for msg in batch_messages if msg is not None]
+                            messages = [
+                                msg for msg in batch_messages if msg is not None
+                            ]
                         elif batch_messages is not None:
                             messages = [batch_messages]
                     except Exception as e:
@@ -332,10 +380,14 @@ async def get_messages_batch(
 
                     try:
                         chunk_ids = list(test_range)[: batch_size - len(messages)]
-                        chunk_messages = await client.get_messages(chat_id, chunk_ids)
+                        chunk_messages = await client.get_messages(
+                            chat_id, chunk_ids
+                        )
 
                         if isinstance(chunk_messages, list):
-                            valid_messages = [msg for msg in chunk_messages if msg is not None]
+                            valid_messages = [
+                                msg for msg in chunk_messages if msg is not None
+                            ]
                             messages.extend(valid_messages)
                         elif chunk_messages is not None:
                             messages.append(chunk_messages)
@@ -385,8 +437,8 @@ async def get_messages_safe(
     client,
     chat_id: int,
     limit: int = 100,
-    range_start: int = None,
-    range_end: int = None,
+    range_start: int | None = None,
+    range_end: int | None = None,
 ):
     """Legacy function - use get_messages_batch instead"""
     return await get_messages_batch(
@@ -419,8 +471,13 @@ async def mode_batch_callback(_client, callback_query):
 
     # Start batch mode processing
     await start_batch_mode(
-        callback_query.message, user_id, source_chat_id, destination_chat_id,
-        skip_count, range_start, range_end
+        callback_query.message,
+        user_id,
+        source_chat_id,
+        destination_chat_id,
+        skip_count,
+        range_start,
+        range_end,
     )
 
 
@@ -443,15 +500,28 @@ async def mode_direct_callback(_client, callback_query):
     await callback_query.answer("🚀 Direct mode selected!")
 
     # Create cancel button
-    cancel_button = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛑 Cancel", callback_data=f"cancel_forward_{user_id}")]
-    ])
+    cancel_button = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "🛑 Cancel", callback_data=f"cancel_forward_{user_id}"
+                )
+            ]
+        ]
+    )
 
     # Start direct mode processing
     client_to_use = TgClient.user or TgClient.bot
     await handle_direct_mode(
-        callback_query.message, user_id, client_to_use, source_chat_id, destination_chat_id,
-        skip_count, range_start, range_end, cancel_button
+        callback_query.message,
+        user_id,
+        client_to_use,
+        source_chat_id,
+        destination_chat_id,
+        skip_count,
+        range_start,
+        range_end,
+        cancel_button,
     )
 
 
@@ -479,10 +549,12 @@ async def cancel_forward_callback(_client, callback_query):
         callback_query.message,
         "🛑 <b>Operation Cancelled</b>\n\n"
         "✅ All forwarding operations have been stopped.\n"
-        "💡 You can start a new forwarding operation anytime."
+        "💡 You can start a new forwarding operation anytime.",
     )
 
-    await callback_query.answer("🛑 Operation cancelled successfully!", show_alert=True)
+    await callback_query.answer(
+        "🛑 Operation cancelled successfully!", show_alert=True
+    )
 
 
 def create_pagination_buttons(
@@ -615,16 +687,29 @@ async def forward_batch_callback(_client, callback_query):
 
 
 async def start_batch_mode(
-    status_msg, user_id, source_chat_id, destination_chat_id,
-    skip_count, range_start, range_end
+    status_msg,
+    user_id,
+    source_chat_id,
+    destination_chat_id,
+    skip_count,
+    range_start,
+    range_end,
 ):
     """Start batch mode processing"""
     # Create cancel button
-    cancel_button = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛑 Cancel", callback_data=f"cancel_forward_{user_id}")]
-    ])
+    cancel_button = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "🛑 Cancel", callback_data=f"cancel_forward_{user_id}"
+                )
+            ]
+        ]
+    )
 
-    await edit_message(status_msg, "🔄 Batch Mode: Initializing...", buttons=cancel_button)
+    await edit_message(
+        status_msg, "🔄 Batch Mode: Initializing...", buttons=cancel_button
+    )
 
     try:
         # Choose the best client
@@ -670,7 +755,11 @@ async def start_batch_mode(
         buttons = create_pagination_buttons(user_id, has_more, 1)
 
         # Show first batch info
-        range_info = f" from range {range_start}-{range_end}" if range_start and range_end else ""
+        range_info = (
+            f" from range {range_start}-{range_end}"
+            if range_start and range_end
+            else ""
+        )
         status_text = (
             f"📦 <b>Batch Mode - First Batch Retrieved</b>\n\n"
             f"📊 <b>This batch:</b> {len(messages)} messages{range_info}\n"
@@ -741,10 +830,12 @@ async def forward_messages_batch(
         # Update status every 3 messages (more frequent updates) - only if show_progress is True
         if show_progress and i % 3 == 0:
             remaining_messages = len(messages) - i
-            estimated_time = (remaining_messages * 10) // 60  # 10 seconds per message
+            estimated_time = (
+                remaining_messages * 10
+            ) // 60  # 10 seconds per message
             await edit_message(
                 status_msg,
-                f"🔄 Processing batch... {i+1}/{len(messages)}\n"
+                f"🔄 Processing batch... {i + 1}/{len(messages)}\n"
                 f"✅ Forwarded: {forwarded_count}\n"
                 f"⏭️ Skipped: {skipped_count}\n"
                 f"❌ Failed: {failed_count}\n"
@@ -773,7 +864,7 @@ async def forward_messages_batch(
             processed_count += 1
         except Exception as fatal_error:
             # Handle fatal errors that should stop the entire batch
-            if hasattr(fatal_error, 'ID') and fatal_error.ID == "CHANNEL_INVALID":
+            if hasattr(fatal_error, "ID") and fatal_error.ID == "CHANNEL_INVALID":
                 await edit_message(
                     status_msg,
                     f"❌ <b>Batch Forwarding Stopped - Fatal Error</b>\n\n"
@@ -833,7 +924,9 @@ async def forward_messages_batch(
             base_delay = 10.0
             if recent_flood_wait_time > 0:
                 # If we've had recent FloodWait, increase delay proportionally
-                adaptive_delay = min(base_delay + (recent_flood_wait_time * 0.2), 30.0)
+                adaptive_delay = min(
+                    base_delay + (recent_flood_wait_time * 0.2), 30.0
+                )
             else:
                 adaptive_delay = base_delay
             await asyncio.sleep(adaptive_delay)
@@ -930,8 +1023,13 @@ async def finish_pagination_callback(_client, callback_query):
 
 
 async def show_mode_selection(
-    status_msg, user_id, source_chat_id, destination_chat_id,
-    skip_count, range_start, range_end
+    status_msg,
+    user_id,
+    source_chat_id,
+    destination_chat_id,
+    skip_count,
+    range_start,
+    range_end,
 ):
     """Show mode selection buttons"""
     # Store parameters for later use
@@ -944,18 +1042,28 @@ async def show_mode_selection(
         "mode_selection": True,
     }
 
-    range_info = f" (range {range_start}-{range_end})" if range_start and range_end else ""
+    range_info = (
+        f" (range {range_start}-{range_end})" if range_start and range_end else ""
+    )
     skip_info = f" (skip {skip_count})" if skip_count > 0 else ""
 
-    mode_buttons = InlineKeyboardMarkup([
+    mode_buttons = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("📦 Batch Mode", callback_data=f"mode_batch_{user_id}"),
-            InlineKeyboardButton("🚀 Direct Mode", callback_data=f"mode_direct_{user_id}")
-        ],
-        [
-            InlineKeyboardButton("🛑 Cancel", callback_data=f"cancel_forward_{user_id}")
+            [
+                InlineKeyboardButton(
+                    "📦 Batch Mode", callback_data=f"mode_batch_{user_id}"
+                ),
+                InlineKeyboardButton(
+                    "🚀 Direct Mode", callback_data=f"mode_direct_{user_id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🛑 Cancel", callback_data=f"cancel_forward_{user_id}"
+                )
+            ],
         ]
-    ])
+    )
 
     await edit_message(
         status_msg,
@@ -972,16 +1080,27 @@ async def show_mode_selection(
         f"• 10-second delay between messages\n"
         f"• Continues until all messages processed\n\n"
         f"Choose your preferred mode:",
-        buttons=mode_buttons
+        buttons=mode_buttons,
     )
 
 
 async def handle_direct_mode(
-    status_msg, user_id, client, source_chat_id, destination_chat_id,
-    skip_count, range_start, range_end, cancel_button
+    status_msg,
+    user_id,
+    client,
+    source_chat_id,
+    destination_chat_id,
+    skip_count,
+    range_start,
+    range_end,
+    cancel_button,
 ):
     """Handle direct mode: process messages in 500-message chunks automatically"""
-    await edit_message(status_msg, "🚀 Direct Mode: Starting automatic processing...", buttons=cancel_button)
+    await edit_message(
+        status_msg,
+        "🚀 Direct Mode: Starting automatic processing...",
+        buttons=cancel_button,
+    )
 
     try:
         # Initialize tracking
@@ -990,7 +1109,7 @@ async def handle_direct_mode(
         total_failed = 0
         total_skipped = 0
         chunk_size = 500
-        current_offset = skip_count if skip_count > 0 else 0
+        current_offset = max(0, skip_count)
 
         # Set up pagination state for direct mode
         pagination_state[user_id] = {
@@ -1029,13 +1148,17 @@ async def handle_direct_mode(
             await edit_message(
                 status_msg,
                 f"🔄 Direct Mode: Getting chunk starting from message {current_offset + 1}...",
-                buttons=cancel_button
+                buttons=cancel_button,
             )
 
             try:
                 messages = await get_messages_batch(
-                    client, source_chat_id, batch_size=chunk_size,
-                    offset=current_offset, range_start=range_start, range_end=range_end
+                    client,
+                    source_chat_id,
+                    batch_size=chunk_size,
+                    offset=current_offset,
+                    range_start=range_start,
+                    range_end=range_end,
                 )
             except Exception as retrieval_error:
                 LOGGER.error(f"Error retrieving messages: {retrieval_error}")
@@ -1048,7 +1171,7 @@ async def handle_direct_mode(
                     f"• Successfully forwarded: {total_forwarded}\n"
                     f"• Skipped: {total_skipped}\n"
                     f"• Failed: {total_failed}\n\n"
-                    f"⚠️ Stopped due to retrieval error: {retrieval_error}"
+                    f"⚠️ Stopped due to retrieval error: {retrieval_error}",
                 )
                 active_forward_tasks.pop(user_id, None)
                 pagination_state.pop(user_id, None)
@@ -1064,7 +1187,7 @@ async def handle_direct_mode(
                     f"• Successfully forwarded: {total_forwarded}\n"
                     f"• Skipped: {total_skipped}\n"
                     f"• Failed: {total_failed}\n\n"
-                    f"🎉 All available messages have been processed!"
+                    f"🎉 All available messages have been processed!",
                 )
                 active_forward_tasks.pop(user_id, None)
                 pagination_state.pop(user_id, None)
@@ -1077,12 +1200,16 @@ async def handle_direct_mode(
                 f"📦 Found {len(messages)} messages to process\n"
                 f"📊 Total so far: {total_processed} processed, {total_forwarded} forwarded\n"
                 f"🔄 Starting to forward messages with 10s delays...",
-                buttons=cancel_button
+                buttons=cancel_button,
             )
 
             # Forward this chunk (skip_count is 0 because we already applied offset during retrieval)
             try:
-                chunk_forwarded, chunk_failed, chunk_skipped = await forward_messages_batch(
+                (
+                    chunk_forwarded,
+                    chunk_failed,
+                    chunk_skipped,
+                ) = await forward_messages_batch(
                     status_msg,
                     messages,
                     source_chat_id,
@@ -1092,7 +1219,7 @@ async def handle_direct_mode(
                     range_start,
                     range_end,
                     show_progress=False,  # Don't show individual progress for direct mode
-                    from_direct_mode=True  # Indicate this is called from direct mode
+                    from_direct_mode=True,  # Indicate this is called from direct mode
                 )
             except Exception as batch_error:
                 LOGGER.error(f"Error in forward_messages_batch: {batch_error}")
@@ -1125,12 +1252,16 @@ async def handle_direct_mode(
             # Update pagination state (with safety check)
             if user_id in pagination_state:
                 pagination_state[user_id]["current_offset"] = current_offset
-                pagination_state[user_id]["total_retrieved"] = total_processed  # Same as processed in direct mode
+                pagination_state[user_id]["total_retrieved"] = (
+                    total_processed  # Same as processed in direct mode
+                )
                 pagination_state[user_id]["total_processed"] = total_processed
                 pagination_state[user_id]["total_forwarded"] = total_forwarded
                 pagination_state[user_id]["total_failed"] = total_failed
             else:
-                LOGGER.warning(f"Pagination state missing for user {user_id}, recreating...")
+                LOGGER.warning(
+                    f"Pagination state missing for user {user_id}, recreating..."
+                )
                 # Recreate the pagination state if it's missing
                 pagination_state[user_id] = {
                     "source_chat_id": source_chat_id,
@@ -1155,7 +1286,7 @@ async def handle_direct_mode(
                 f"📊 Chunk results: {chunk_forwarded} forwarded, {chunk_failed} failed\n"
                 f"📈 Total progress: {total_processed} processed, {total_forwarded} forwarded\n"
                 f"🔄 Continuing to next chunk...",
-                buttons=cancel_button
+                buttons=cancel_button,
             )
 
             # Small delay between chunks
@@ -1163,6 +1294,7 @@ async def handle_direct_mode(
 
     except Exception as e:
         import traceback
+
         LOGGER.error(f"Error in direct mode: {e}")
         LOGGER.error(f"Error type: {type(e)}")
         LOGGER.error(f"Source chat ID: {source_chat_id}")
@@ -1296,7 +1428,7 @@ async def forward_command(_client, message: Message):
         client_to_use = TgClient.user if TgClient.user else TgClient.bot
         await client_to_use.resolve_peer(destination_chat_id)
     except Exception as dest_error:
-        if hasattr(dest_error, 'ID') and dest_error.ID == "CHANNEL_INVALID":
+        if hasattr(dest_error, "ID") and dest_error.ID == "CHANNEL_INVALID":
             await edit_message(
                 status_msg,
                 f"❌ <b>Destination Chat Invalid</b>\n\n"
@@ -1306,11 +1438,13 @@ async def forward_command(_client, message: Message):
                 f"• Check if the chat ID is correct\n"
                 f"• Ensure the bot is added to the destination chat\n"
                 f"• Verify the bot has proper permissions\n"
-                f"• For private chats, the bot needs to be started by the user first"
+                f"• For private chats, the bot needs to be started by the user first",
             )
             active_forward_tasks.pop(user_id, None)  # Clean up
             return
-        LOGGER.warning(f"Could not validate destination chat {destination_chat_id}: {dest_error}")
+        LOGGER.warning(
+            f"Could not validate destination chat {destination_chat_id}: {dest_error}"
+        )
         # Continue anyway - might work during actual forwarding
 
     await edit_message(
@@ -1335,7 +1469,9 @@ async def forward_command(_client, message: Message):
                 # Delete the test message immediately
                 await client_to_use.delete_messages(destination_chat_id, test_msg.id)
             except Exception as send_test_error:
-                LOGGER.error(f"Bot cannot send messages to private chat: {send_test_error}")
+                LOGGER.error(
+                    f"Bot cannot send messages to private chat: {send_test_error}"
+                )
 
                 await edit_message(
                     status_msg,
@@ -1371,17 +1507,32 @@ async def forward_command(_client, message: Message):
     if mode != "batch":  # mode was explicitly set to "direct"
         # Direct mode: Get all messages and forward immediately
         await handle_direct_mode(
-            status_msg, user_id, client_to_use, source_chat_id, destination_chat_id,
-            skip_count, range_start, range_end, cancel_button
+            status_msg,
+            user_id,
+            client_to_use,
+            source_chat_id,
+            destination_chat_id,
+            skip_count,
+            range_start,
+            range_end,
+            cancel_button,
         )
         return
 
     # If no mode specified or batch mode, show mode selection
-    if mode == "batch" and len([arg for arg in message.text.split() if arg == "-mode"]) == 0:
+    if (
+        mode == "batch"
+        and len([arg for arg in message.text.split() if arg == "-mode"]) == 0
+    ):
         # Show mode selection buttons
         await show_mode_selection(
-            status_msg, user_id, source_chat_id, destination_chat_id,
-            skip_count, range_start, range_end
+            status_msg,
+            user_id,
+            source_chat_id,
+            destination_chat_id,
+            skip_count,
+            range_start,
+            range_end,
         )
         return
 
@@ -1513,14 +1664,14 @@ async def auto_forward_handler(_client, message: Message):
 
     # Send completion message to owner if any messages were processed
     if (forwarded_count > 0 or failed_count > 0) and Config.OWNER_ID:
-            try:
-                client_to_use = TgClient.user if TgClient.user else TgClient.bot
-                await client_to_use.send_message(
-                    Config.OWNER_ID,
-                    f"🔄 <b>Auto Forward Completed</b>\n\n"
-                    f"📤 <b>Source:</b> {message.chat.title or message.chat.first_name} ({source_chat_id})\n"
-                    f"📨 <b>Message ID:</b> {message.id}\n"
-                    f"📊 <b>Results:</b> {forwarded_count} forwarded, {failed_count} failed",
-                )
-            except Exception as e:
-                LOGGER.error(f"Error sending auto-forward completion message: {e}")
+        try:
+            client_to_use = TgClient.user if TgClient.user else TgClient.bot
+            await client_to_use.send_message(
+                Config.OWNER_ID,
+                f"🔄 <b>Auto Forward Completed</b>\n\n"
+                f"📤 <b>Source:</b> {message.chat.title or message.chat.first_name} ({source_chat_id})\n"
+                f"📨 <b>Message ID:</b> {message.id}\n"
+                f"📊 <b>Results:</b> {forwarded_count} forwarded, {failed_count} failed",
+            )
+        except Exception as e:
+            LOGGER.error(f"Error sending auto-forward completion message: {e}")

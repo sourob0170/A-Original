@@ -91,9 +91,11 @@ async def pastebin_paste(content: str, title: str = "Aim Paste") -> str:
         return await katbin_paste(content)
 
     # Check content size (Pastebin has limits)
-    content_size = len(content.encode('utf-8'))
+    content_size = len(content.encode("utf-8"))
     if content_size > 512000:  # 512KB limit for free accounts
-        LOGGER.warning(f"Content too large for Pastebin ({content_size} bytes), falling back to katbin")
+        LOGGER.warning(
+            f"Content too large for Pastebin ({content_size} bytes), falling back to katbin"
+        )
         return await katbin_paste(content)
 
     pastebin_url = "https://pastebin.com/api/api_post.php"
@@ -119,7 +121,7 @@ async def pastebin_paste(content: str, title: str = "Aim Paste") -> str:
             pastebin_url,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=30.0
+            timeout=30.0,
         )
         response_text = response.text.strip()
 
@@ -150,36 +152,45 @@ def _detect_paste_format(title: str, content: str) -> str:
 
     # File extension based detection (most reliable)
     extension_map = {
-        '.py': 'python', '.python': 'python',
-        '.js': 'javascript', '.javascript': 'javascript',
-        '.json': 'json',
-        '.xml': 'xml',
-        '.html': 'html5', '.htm': 'html5',
-        '.css': 'css',
-        '.sh': 'bash', '.bash': 'bash',
-        '.sql': 'sql',
-        '.php': 'php',
-        '.java': 'java',
-        '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp',
-        '.c': 'c',
-        '.cs': 'csharp',
-        '.rb': 'ruby',
-        '.go': 'go',
-        '.rs': 'rust',
-        '.ts': 'typescript',
-        '.swift': 'swift',
-        '.kt': 'kotlin',
-        '.scala': 'scala',
-        '.r': 'rsplus',
-        '.pl': 'perl',
-        '.lua': 'lua',
-        '.yaml': 'yaml', '.yml': 'yaml',
-        '.ini': 'ini', '.conf': 'ini', '.config': 'ini',
-        '.md': 'markdown',
-        '.tex': 'latex',
-        '.dockerfile': 'bash',
-        '.log': 'text',
-        '.txt': 'text',
+        ".py": "python",
+        ".python": "python",
+        ".js": "javascript",
+        ".javascript": "javascript",
+        ".json": "json",
+        ".xml": "xml",
+        ".html": "html5",
+        ".htm": "html5",
+        ".css": "css",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".sql": "sql",
+        ".php": "php",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".c": "c",
+        ".cs": "csharp",
+        ".rb": "ruby",
+        ".go": "go",
+        ".rs": "rust",
+        ".ts": "typescript",
+        ".swift": "swift",
+        ".kt": "kotlin",
+        ".scala": "scala",
+        ".r": "rsplus",
+        ".pl": "perl",
+        ".lua": "lua",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".ini": "ini",
+        ".conf": "ini",
+        ".config": "ini",
+        ".md": "markdown",
+        ".tex": "latex",
+        ".dockerfile": "bash",
+        ".log": "text",
+        ".txt": "text",
     }
 
     for ext, format_name in extension_map.items():
@@ -187,28 +198,47 @@ def _detect_paste_format(title: str, content: str) -> str:
             return format_name
 
     # Content-based detection for files without clear extensions
-    if any(keyword in content_sample for keyword in ['import ', 'def ', 'class ', 'print(', 'if __name__']):
-        return 'python'
-    if any(keyword in content_sample for keyword in ['function', 'var ', 'const ', 'let ', 'console.log']):
-        return 'javascript'
-    if content_sample.strip().startswith(('{', '[')):
-        return 'json'
-    if content_sample.strip().startswith(('<', '<!doctype', '<!DOCTYPE')):
-        return 'html5'
-    if any(keyword in content_sample for keyword in ['select ', 'insert ', 'update ', 'delete ', 'create table']):
-        return 'sql'
-    if any(keyword in content_sample for keyword in ['<?php', 'echo ', '$_']):
-        return 'php'
-    if any(keyword in content_sample for keyword in ['public class', 'import java', 'system.out']):
-        return 'java'
-    if any(keyword in content_sample for keyword in ['#include', 'int main', 'printf']):
-        return 'c'
-    if any(keyword in content_sample for keyword in ['using namespace', 'std::', 'cout']):
-        return 'cpp'
-    if any(keyword in content_sample for keyword in ['#!/bin/bash', '#!/bin/sh', 'echo ', 'if [', 'fi']):
-        return 'bash'
+    if any(
+        keyword in content_sample
+        for keyword in ["import ", "def ", "class ", "print(", "if __name__"]
+    ):
+        return "python"
+    if any(
+        keyword in content_sample
+        for keyword in ["function", "var ", "const ", "let ", "console.log"]
+    ):
+        return "javascript"
+    if content_sample.strip().startswith(("{", "[")):
+        return "json"
+    if content_sample.strip().startswith(("<", "<!doctype", "<!DOCTYPE")):
+        return "html5"
+    if any(
+        keyword in content_sample
+        for keyword in ["select ", "insert ", "update ", "delete ", "create table"]
+    ):
+        return "sql"
+    if any(keyword in content_sample for keyword in ["<?php", "echo ", "$_"]):
+        return "php"
+    if any(
+        keyword in content_sample
+        for keyword in ["public class", "import java", "system.out"]
+    ):
+        return "java"
+    if any(
+        keyword in content_sample for keyword in ["#include", "int main", "printf"]
+    ):
+        return "c"
+    if any(
+        keyword in content_sample for keyword in ["using namespace", "std::", "cout"]
+    ):
+        return "cpp"
+    if any(
+        keyword in content_sample
+        for keyword in ["#!/bin/bash", "#!/bin/sh", "echo ", "if [", "fi"]
+    ):
+        return "bash"
 
-    return 'text'  # Default fallback
+    return "text"  # Default fallback
 
 
 def _handle_pastebin_error(error_response: str) -> str:
@@ -218,23 +248,27 @@ def _handle_pastebin_error(error_response: str) -> str:
     """
     error_lower = error_response.lower()
 
-    if 'invalid api_dev_key' in error_lower:
+    if "invalid api_dev_key" in error_lower:
         return "Invalid Pastebin API key. Please check your configuration."
-    if 'api_paste_code was empty' in error_lower:
+    if "api_paste_code was empty" in error_lower:
         return "Content is empty or invalid."
-    if 'maximum paste file size exceeded' in error_lower:
+    if "maximum paste file size exceeded" in error_lower:
         return "File size exceeds Pastebin limits."
-    if 'maximum number of 25 unlisted pastes' in error_lower:
-        return "Pastebin account limit reached (25 unlisted pastes for free accounts)."
-    if 'maximum number of 10 private pastes' in error_lower:
-        return "Pastebin account limit reached (10 private pastes for free accounts)."
-    if 'invalid api_paste_expire_date' in error_lower:
+    if "maximum number of 25 unlisted pastes" in error_lower:
+        return (
+            "Pastebin account limit reached (25 unlisted pastes for free accounts)."
+        )
+    if "maximum number of 10 private pastes" in error_lower:
+        return (
+            "Pastebin account limit reached (10 private pastes for free accounts)."
+        )
+    if "invalid api_paste_expire_date" in error_lower:
         return "Invalid expiration date format."
-    if 'invalid api_paste_private' in error_lower:
+    if "invalid api_paste_private" in error_lower:
         return "Invalid privacy setting."
-    if 'invalid api_paste_format' in error_lower:
+    if "invalid api_paste_format" in error_lower:
         return "Invalid format/syntax highlighting option."
-    if 'invalid api_option' in error_lower:
+    if "invalid api_option" in error_lower:
         return "Invalid API option parameter."
 
     return f"Unknown Pastebin API error: {error_response}"
@@ -252,7 +286,9 @@ async def smart_paste(content: str, title: str = "Aim Paste") -> tuple[str, str]
     content_size = len(content)
 
     # For very large content, prefer Pastebin (if available) as it handles large files better
-    if content_size > 500000 and Config.PASTEBIN_ENABLED and Config.PASTEBIN_API_KEY:  # > 500KB
+    if (
+        content_size > 500000 and Config.PASTEBIN_ENABLED and Config.PASTEBIN_API_KEY
+    ):  # > 500KB
         try:
             url = await pastebin_paste(content, title)
             if url.startswith("https://pastebin.com/"):
@@ -453,14 +489,24 @@ async def paste_text(_client, message: Message):
 
         # Determine paste title from file name or content type
         paste_title = "Aim Paste"
-        if replied_message and replied_message.document and replied_message.document.file_name:
+        if (
+            replied_message
+            and replied_message.document
+            and replied_message.document.file_name
+        ):
             paste_title = replied_message.document.file_name
         elif len(content) > 0:
             # Try to detect content type from first few lines
             first_lines = content[:200].lower()
-            if any(keyword in first_lines for keyword in ["import ", "def ", "class ", "print("]):
+            if any(
+                keyword in first_lines
+                for keyword in ["import ", "def ", "class ", "print("]
+            ):
                 paste_title = "Python Code"
-            elif any(keyword in first_lines for keyword in ["function", "var ", "const ", "let "]):
+            elif any(
+                keyword in first_lines
+                for keyword in ["function", "var ", "const ", "let "]
+            ):
                 paste_title = "JavaScript Code"
             elif first_lines.strip().startswith(("{", "[")):
                 paste_title = "JSON Data"
@@ -485,11 +531,13 @@ async def paste_text(_client, message: Message):
             "Pastebin": "📋",
             "Telegraph": "📰",
             "Katbin": "📝",
-            "None": "❌"
+            "None": "❌",
         }.get(service_used, "📄")
 
         if paste_url.startswith("http"):
-            response = f"<b>{service_emoji} Successfully pasted to {service_used}</b>\n\n"
+            response = (
+                f"<b>{service_emoji} Successfully pasted to {service_used}</b>\n\n"
+            )
             response += f"• <b>URL:</b> <blockquote>{paste_url}</blockquote>\n"
             response += f"• <b>Title:</b> <pre><code>{paste_title}</code></pre>\n"
             response += f"• <b>Size:</b> <pre><code>{size_str}</code></pre>\n"

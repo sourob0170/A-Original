@@ -188,8 +188,12 @@ class Config:
     BOT_PM: bool = True  # Enable/disable sending media to user's bot PM
 
     # Forwarding Settings
-    FORWARD_SOURCE: ClassVar[list[str]] = []  # Source chat IDs/usernames for automatic forwarding (comma-separated)
-    FORWARD_DESTINATION: ClassVar[list[str]] = []  # Destination chat IDs/usernames for automatic forwarding (comma-separated)
+    FORWARD_SOURCE: ClassVar[
+        list[str]
+    ] = []  # Source chat IDs/usernames for automatic forwarding (comma-separated)
+    FORWARD_DESTINATION: ClassVar[
+        list[str]
+    ] = []  # Destination chat IDs/usernames for automatic forwarding (comma-separated)
 
     LEECH_FILENAME_PREFIX: str = ""
     LEECH_SUFFIX: str = ""
@@ -1218,8 +1222,12 @@ class Config:
     # File2Link Settings
     FILE2LINK_ENABLED: bool = True
     FILE2LINK_BIN_CHANNEL: int = 0  # Channel to store files for File2Link streaming
-    FILE2LINK_BASE_URL: str = ""  # Base URL for File2Link streaming (separate from main BASE_URL)
-    FILE2LINK_ALLOWED_TYPES: str = "video,audio,document,photo,animation,voice,video_note"
+    FILE2LINK_BASE_URL: str = (
+        ""  # Base URL for File2Link streaming (separate from main BASE_URL)
+    )
+    FILE2LINK_ALLOWED_TYPES: str = (
+        "video,audio,document,photo,animation,voice,video_note"
+    )
 
     # Command Suffix Settings
     CORRECT_CMD_SUFFIX: str = ""  # Comma-separated list of allowed command suffixes
@@ -1272,7 +1280,9 @@ class Config:
     TRACE_MOE_VIDEO_PREVIEW: bool = True  # Enable video preview in results
     TRACE_MOE_MUTE_PREVIEW: bool = False  # Mute video previews by default
     TRACE_MOE_SKIP_PREVIEW: bool = False  # Skip video preview entirely
-    TRACE_MOE_MAX_FILE_SIZE: int = 25 * 1024 * 1024  # 25MB max file size for trace.moe (API limit)
+    TRACE_MOE_MAX_FILE_SIZE: int = (
+        25 * 1024 * 1024
+    )  # 25MB max file size for trace.moe (API limit)
 
     # Enhanced NSFW Detection Settings
     NSFW_DETECTION_ENABLED: bool = True  # Master toggle for NSFW detection
@@ -1465,7 +1475,11 @@ class Config:
                 raise TypeError
             except (ValueError, SyntaxError, TypeError) as e:
                 # For list-type configs, return an empty list on error
-                if key in ("LEECH_DUMP_CHAT", "FORWARD_SOURCE", "FORWARD_DESTINATION"):
+                if key in (
+                    "LEECH_DUMP_CHAT",
+                    "FORWARD_SOURCE",
+                    "FORWARD_DESTINATION",
+                ):
                     return []
                 raise TypeError(
                     f"{key} should be {expected_type.__name__}, got invalid string: {value}"
