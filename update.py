@@ -112,7 +112,7 @@ UPSTREAM_REPO = (
 UPSTREAM_BRANCH = (
     config_file.get("UPSTREAM_BRANCH", "")
     or os.getenv("UPSTREAM_BRANCH", "")
-    or "main"
+    or "extended"
 )
 
 if UPSTREAM_REPO:
