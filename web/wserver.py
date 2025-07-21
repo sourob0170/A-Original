@@ -408,7 +408,6 @@ async def lifespan(app: FastAPI):
                     LOGGER.error("2. Bot is added to the channel")
                     LOGGER.error("3. Bot has admin permissions in the channel")
 
-
     except Exception as e:
         LOGGER.error(f"Failed to initialize TgClient for web server: {e}")
         LOGGER.warning(
@@ -1583,7 +1582,9 @@ async def stream_file(path: str, request: Request):
                     LOGGER.error(f"Connection error in streaming: {e}")
                     # Check if it's an authentication error
                     if "AUTH_KEY_UNREGISTERED" in str(e) or "401" in str(e):
-                        LOGGER.error("Telegram session expired - authentication required")
+                        LOGGER.error(
+                            "Telegram session expired - authentication required"
+                        )
                         raise HTTPException(
                             status_code=401,
                             detail="Telegram session expired. Bot needs to re-authenticate.",

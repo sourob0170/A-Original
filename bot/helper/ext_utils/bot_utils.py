@@ -586,12 +586,16 @@ async def rebuild_sudo_users_from_database():
 
         if sudo_users_from_db:
             from bot import LOGGER
-            LOGGER.info(f"Restored {len(sudo_users_from_db)} sudo users from database: {sudo_users_from_db}")
+
+            LOGGER.info(
+                f"Restored {len(sudo_users_from_db)} sudo users from database: {sudo_users_from_db}"
+            )
 
         return len(sudo_users_from_db)
 
     except Exception as e:
         from bot import LOGGER
+
         LOGGER.error(f"Error rebuilding sudo users from database: {e}")
         return 0
 
@@ -621,12 +625,16 @@ async def ensure_auth_users_from_database():
 
         if auth_users_from_db:
             from bot import LOGGER
-            LOGGER.info(f"Restored {len(auth_users_from_db)} auth users from database: {auth_users_from_db}")
+
+            LOGGER.info(
+                f"Restored {len(auth_users_from_db)} auth users from database: {auth_users_from_db}"
+            )
 
         return len(auth_users_from_db)
 
     except Exception as e:
         from bot import LOGGER
+
         LOGGER.error(f"Error ensuring auth users from database: {e}")
         return 0
 
@@ -892,7 +900,7 @@ async def _load_user_data():
                         if user_dict.get("AUTH") or user_dict.get("SUDO"):
                             existing_auth_data[user_id] = {
                                 "AUTH": user_dict.get("AUTH", False),
-                                "SUDO": user_dict.get("SUDO", False)
+                                "SUDO": user_dict.get("SUDO", False),
                             }
 
                     # Process data in chunks to reduce memory usage
@@ -912,8 +920,12 @@ async def _load_user_data():
 
                             # Restore AUTH and SUDO flags from database if they existed
                             if user_id in existing_auth_data:
-                                user_data[user_id]["AUTH"] = existing_auth_data[user_id]["AUTH"]
-                                user_data[user_id]["SUDO"] = existing_auth_data[user_id]["SUDO"]
+                                user_data[user_id]["AUTH"] = existing_auth_data[
+                                    user_id
+                                ]["AUTH"]
+                                user_data[user_id]["SUDO"] = existing_auth_data[
+                                    user_id
+                                ]["SUDO"]
 
                         # Force garbage collection after each batch
                         if (i + batch_size) < len(keys):
@@ -935,8 +947,11 @@ async def _load_user_data():
 
                     # Data loaded successfully
                     from bot import LOGGER
+
                     if existing_auth_data:
-                        LOGGER.info(f"Preserved AUTH/SUDO flags for {len(existing_auth_data)} users during user data merge")
+                        LOGGER.info(
+                            f"Preserved AUTH/SUDO flags for {len(existing_auth_data)} users during user data merge"
+                        )
 
                     # Clear the loaded_data variable to free memory
                     del loaded_data

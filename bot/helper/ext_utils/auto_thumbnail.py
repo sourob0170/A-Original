@@ -1242,39 +1242,36 @@ class TMDBHelper:
                 ).lower(),
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
                     f"{cls.BASE_URL}/search/multi", params=params
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("results"):
-                            # Filter and score results
-                            for result in data["results"]:
-                                media_type = result.get("media_type")
-                                if media_type in ["movie", "tv"]:
-                                    # Check year match if provided
-                                    if year:
-                                        result_year = None
-                                        if media_type == "movie":
-                                            release_date = result.get("release_date")
-                                            if release_date:
-                                                result_year = int(release_date[:4])
-                                        elif media_type == "tv":
-                                            first_air_date = result.get(
-                                                "first_air_date"
-                                            )
-                                            if first_air_date:
-                                                result_year = int(first_air_date[:4])
+                ) as response,
+            ):
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("results"):
+                        # Filter and score results
+                        for result in data["results"]:
+                            media_type = result.get("media_type")
+                            if media_type in ["movie", "tv"]:
+                                # Check year match if provided
+                                if year:
+                                    result_year = None
+                                    if media_type == "movie":
+                                        release_date = result.get("release_date")
+                                        if release_date:
+                                            result_year = int(release_date[:4])
+                                    elif media_type == "tv":
+                                        first_air_date = result.get("first_air_date")
+                                        if first_air_date:
+                                            result_year = int(first_air_date[:4])
 
-                                        # Allow ±2 years tolerance
-                                        if (
-                                            result_year
-                                            and abs(result_year - year) <= 2
-                                        ):
-                                            return result
-                                    else:
+                                    # Allow ±2 years tolerance
+                                    if result_year and abs(result_year - year) <= 2:
                                         return result
+                                else:
+                                    return result
 
             return None
 
