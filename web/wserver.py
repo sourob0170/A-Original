@@ -408,25 +408,6 @@ async def lifespan(app: FastAPI):
                     LOGGER.error("2. Bot is added to the channel")
                     LOGGER.error("3. Bot has admin permissions in the channel")
 
-            else:
-                LOGGER.error(
-                    "❌ FILE2LINK_BIN_CHANNEL not configured - File2Link streaming will not work"
-                )
-                LOGGER.error(
-                    f"Current FILE2LINK_BIN_CHANNEL: {getattr(Config, 'FILE2LINK_BIN_CHANNEL', 'NOT_SET')}"
-                )
-                LOGGER.error(
-                    "Please set FILE2LINK_BIN_CHANNEL to a valid channel ID (negative integer)"
-                )
-                LOGGER.error("Example: FILE2LINK_BIN_CHANNEL=-1001234567890")
-                LOGGER.error("You can set this via:")
-                LOGGER.error(
-                    "1. Environment variable: FILE2LINK_BIN_CHANNEL=-1001234567890"
-                )
-                LOGGER.error("2. Database configuration through bot commands")
-                LOGGER.error(
-                    "3. config.py file: FILE2LINK_BIN_CHANNEL = -1001234567890"
-                )
 
     except Exception as e:
         LOGGER.error(f"Failed to initialize TgClient for web server: {e}")
@@ -1004,15 +985,6 @@ async def stream_preview(path: str, request: Request):
                     f"Using Config fallback for FILE2LINK_BIN_CHANNEL: {storage_channel}"
                 )
             else:
-                LOGGER.error("FILE2LINK_BIN_CHANNEL not configured for streaming")
-                LOGGER.error("To fix this issue:")
-                LOGGER.error(
-                    "1. Set FILE2LINK_BIN_CHANNEL environment variable: FILE2LINK_BIN_CHANNEL=-1001234567890"
-                )
-                LOGGER.error("2. Or configure via bot settings command")
-                LOGGER.error(
-                    "3. Make sure the channel ID is negative (private channel)"
-                )
                 raise HTTPException(
                     status_code=503,
                     detail="FILE2LINK_BIN_CHANNEL not configured. Please set a storage channel for File2Link streaming.",
@@ -1343,17 +1315,6 @@ async def stream_file(path: str, request: Request):
                     f"Using Config fallback for FILE2LINK_BIN_CHANNEL: {storage_channel}"
                 )
             else:
-                LOGGER.error(
-                    "FILE2LINK_BIN_CHANNEL not configured for file streaming"
-                )
-                LOGGER.error("To fix this issue:")
-                LOGGER.error(
-                    "1. Set FILE2LINK_BIN_CHANNEL environment variable: FILE2LINK_BIN_CHANNEL=-1001234567890"
-                )
-                LOGGER.error("2. Or configure via bot settings command")
-                LOGGER.error(
-                    "3. Make sure the channel ID is negative (private channel)"
-                )
                 raise HTTPException(
                     status_code=503,
                     detail="FILE2LINK_BIN_CHANNEL not configured. Please set a storage channel for File2Link streaming.",
@@ -1620,6 +1581,13 @@ async def stream_file(path: str, request: Request):
 
                 except ConnectionError as e:
                     LOGGER.error(f"Connection error in streaming: {e}")
+                    # Check if it's an authentication error
+                    if "AUTH_KEY_UNREGISTERED" in str(e) or "401" in str(e):
+                        LOGGER.error("Telegram session expired - authentication required")
+                        raise HTTPException(
+                            status_code=401,
+                            detail="Telegram session expired. Bot needs to re-authenticate.",
+                        )
                     # If we haven't sent any data yet, we can still raise an exception
                     if bytes_sent == 0:
                         raise HTTPException(
@@ -1632,6 +1600,14 @@ async def stream_file(path: str, request: Request):
                     )
                 except Exception as e:
                     LOGGER.error(f"Stream generator error: {e}")
+                    # Check if it's an authentication error
+                    if "AUTH_KEY_UNREGISTERED" in str(e) or "401" in str(e):
+                        LOGGER.error("Telegram session expired during streaming")
+                        if bytes_sent == 0:
+                            raise HTTPException(
+                                status_code=401,
+                                detail="Telegram session expired. Bot needs to re-authenticate.",
+                            )
                     # If we haven't sent any data yet, we can still raise an exception
                     if bytes_sent == 0:
                         raise

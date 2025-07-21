@@ -175,10 +175,11 @@ class ParallelByteStreamer:
                     await asyncio.sleep(e.value)
                 except Exception as e:
                     error_msg = str(e).lower()
-                    if "unauthorized" in error_msg or "auth" in error_msg:
+                    if "unauthorized" in error_msg or "auth" in error_msg or "auth_key_unregistered" in error_msg:
                         LOGGER.error(
                             f"Authentication error in chunk {chunk.index}: {e}"
                         )
+                        LOGGER.error("Telegram session expired - bot needs to re-authenticate")
                         raise ConnectionError(f"Telegram authentication failed: {e}")
                     LOGGER.error(f"Error downloading chunk {chunk.index}: {e}")
                     raise

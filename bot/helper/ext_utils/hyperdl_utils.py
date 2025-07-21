@@ -595,7 +595,6 @@ class HyperTGDownload:
                         await remove(part_file_path)
 
                     except Exception as e:
-                        LOGGER.error(f"❌ Error combining part {part_index}: {e!s}")
                         raise
 
             if prog_task and not prog_task.done():
@@ -621,7 +620,6 @@ class HyperTGDownload:
             LOGGER.info("Download cancelled by user")
             return None
         except Exception as e:
-            LOGGER.error(f"HyperDL download failed: {e!s}")
             return None
         finally:
             self._cancel_event.set()

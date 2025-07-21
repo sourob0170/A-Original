@@ -562,16 +562,91 @@ def update_user_ldata(id_, key, value):
     user_data[id_][key] = value
 
 
+async def rebuild_sudo_users_from_database():
+    """
+    Rebuild the sudo_users list from users in the database who have SUDO: True.
+    This ensures sudo users persist across bot restarts.
+    """
+    from bot import sudo_users
+    from bot.helper.ext_utils.db_handler import database
+
+    if not hasattr(database, "db") or database.db is None:
+        return 0
+
+    try:
+        # Find all users with SUDO: True in the database
+        sudo_users_from_db = []
+        async for user_doc in database.db.users.find({"SUDO": True}, {"_id": 1}):
+            user_id = user_doc["_id"]
+            sudo_users_from_db.append(user_id)
+
+            # Add to global sudo_users list if not already there
+            if user_id not in sudo_users:
+                sudo_users.append(user_id)
+
+        if sudo_users_from_db:
+            from bot import LOGGER
+            LOGGER.info(f"Restored {len(sudo_users_from_db)} sudo users from database: {sudo_users_from_db}")
+
+        return len(sudo_users_from_db)
+
+    except Exception as e:
+        from bot import LOGGER
+        LOGGER.error(f"Error rebuilding sudo users from database: {e}")
+        return 0
+
+
+async def ensure_auth_users_from_database():
+    """
+    Ensure all users with AUTH: True in database are properly restored to user_data.
+    This ensures auth users persist across bot restarts.
+    """
+    from bot.helper.ext_utils.db_handler import database
+
+    if not hasattr(database, "db") or database.db is None:
+        return 0
+
+    try:
+        # Find all users with AUTH: True in the database
+        auth_users_from_db = []
+        async for user_doc in database.db.users.find({"AUTH": True}, {"_id": 1}):
+            user_id = user_doc["_id"]
+            auth_users_from_db.append(user_id)
+
+            # Ensure user exists in user_data with AUTH flag
+            if user_id not in user_data:
+                user_data[user_id] = {"AUTH": True}
+            elif not user_data[user_id].get("AUTH", False):
+                user_data[user_id]["AUTH"] = True
+
+        if auth_users_from_db:
+            from bot import LOGGER
+            LOGGER.info(f"Restored {len(auth_users_from_db)} auth users from database: {auth_users_from_db}")
+
+        return len(auth_users_from_db)
+
+    except Exception as e:
+        from bot import LOGGER
+        LOGGER.error(f"Error ensuring auth users from database: {e}")
+        return 0
+
+
 async def ensure_authorized_users():
     """
     Unified function to ensure OWNER_ID and SUDO_USERS are properly authorized.
-    This consolidates all authorization logic into one place.
+    This consolidates all authorization logic into one place and restores sudo users from database.
     """
     from bot import sudo_users
     from bot.core.config_manager import Config
     from bot.helper.ext_utils.db_handler import database
 
     authorized_count = 0
+
+    # First, rebuild sudo_users list from database (for users added via /addsudo)
+    db_sudo_count = await rebuild_sudo_users_from_database()
+
+    # Also ensure all auth users from database are restored
+    db_auth_count = await ensure_auth_users_from_database()
 
     # Authorize OWNER_ID
     if Config.OWNER_ID:
@@ -587,7 +662,7 @@ async def ensure_authorized_users():
         if hasattr(database, "db") and database.db is not None:
             await database.update_user_data(owner_id)
 
-    # Authorize SUDO_USERS
+    # Authorize SUDO_USERS from config
     if Config.SUDO_USERS:
         aid = Config.SUDO_USERS.split()
         for id_ in aid:
@@ -610,11 +685,24 @@ async def ensure_authorized_users():
             if hasattr(database, "db") and database.db is not None:
                 await database.update_user_data(user_id)
 
-    if authorized_count > 0:
+    # Also ensure all database sudo users are properly authorized in user_data
+    for user_id in sudo_users:
+        if user_id not in user_data:
+            user_data[user_id] = {"AUTH": True, "SUDO": True}
+            authorized_count += 1
+        else:
+            if not user_data[user_id].get("AUTH", False):
+                user_data[user_id]["AUTH"] = True
+                authorized_count += 1
+            if not user_data[user_id].get("SUDO", False):
+                user_data[user_id]["SUDO"] = True
+
+    if authorized_count > 0 or db_sudo_count > 0 or db_auth_count > 0:
         from bot import LOGGER
 
         LOGGER.info(
-            f"Ensured authorization for {authorized_count} privileged users (Owner + Sudo)"
+            f"Ensured authorization for {authorized_count} privileged users (Owner + Config Sudo) "
+            f"+ {db_sudo_count} database sudo users + {db_auth_count} database auth users"
         )
 
     return authorized_count
@@ -778,9 +866,10 @@ async def _save_user_data():
 
 
 async def _load_user_data():
-    """Load user data from persistent file.
+    """Load user data from persistent file and merge with existing database data.
 
     This function is called during bot startup to load saved user data.
+    It preserves AUTH and SUDO flags from database while loading other user settings.
     """
     import json
 
@@ -797,6 +886,15 @@ async def _load_user_data():
                     # Parse JSON with optimized memory usage
                     loaded_data = json.loads(content)
 
+                    # Store existing database data (AUTH, SUDO flags) before merging
+                    existing_auth_data = {}
+                    for user_id, user_dict in user_data.items():
+                        if user_dict.get("AUTH") or user_dict.get("SUDO"):
+                            existing_auth_data[user_id] = {
+                                "AUTH": user_dict.get("AUTH", False),
+                                "SUDO": user_dict.get("SUDO", False)
+                            }
+
                     # Process data in chunks to reduce memory usage
                     # Clear existing data first
                     user_data.clear()
@@ -809,7 +907,13 @@ async def _load_user_data():
                         batch_keys = keys[i : i + batch_size]
                         for k in batch_keys:
                             # Convert string keys back to integers
-                            user_data[int(k)] = loaded_data[k]
+                            user_id = int(k)
+                            user_data[user_id] = loaded_data[k]
+
+                            # Restore AUTH and SUDO flags from database if they existed
+                            if user_id in existing_auth_data:
+                                user_data[user_id]["AUTH"] = existing_auth_data[user_id]["AUTH"]
+                                user_data[user_id]["SUDO"] = existing_auth_data[user_id]["SUDO"]
 
                         # Force garbage collection after each batch
                         if (i + batch_size) < len(keys):
@@ -824,7 +928,15 @@ async def _load_user_data():
 
                                 gc.collect()
 
+                    # Restore any users that were only in database (not in JSON file)
+                    for user_id, auth_data in existing_auth_data.items():
+                        if user_id not in user_data:
+                            user_data[user_id] = auth_data
+
                     # Data loaded successfully
+                    from bot import LOGGER
+                    if existing_auth_data:
+                        LOGGER.info(f"Preserved AUTH/SUDO flags for {len(existing_auth_data)} users during user data merge")
 
                     # Clear the loaded_data variable to free memory
                     del loaded_data
@@ -841,7 +953,7 @@ async def _load_user_data():
 
                         gc.collect()
     except Exception:
-        # Keep using the empty user_data dictionary
+        # Keep using the existing user_data dictionary (don't clear it on error)
         pass
 
 

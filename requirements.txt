@@ -13,6 +13,7 @@ cryptography>=41.0.0
 codext>=1.15.6
 dnspython
 fastapi
+speedtest-cloudflare-cli
 feedparser
 google-api-python-client
 google-auth-httplib2

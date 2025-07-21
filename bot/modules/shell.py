@@ -34,7 +34,7 @@ async def run_shell(_, message):
             output += f"\n\n{stderr}"
         else:
             output += f"{stderr}"
-        LOGGER.error(f"Shell - {cmd} - {stderr}")
+        LOGGER.warning(f"Shell - {cmd} - {stderr}")
 
     # Format the complete reply
     if output:
