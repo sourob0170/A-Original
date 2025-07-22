@@ -119,6 +119,7 @@ class Mirror(TaskListener):
             "-ca": "",
             "-cv": "",
             "-ns": "",
+            "-np": "",
             "-md": "",
             "-tl": "",
             "-ff": set(),

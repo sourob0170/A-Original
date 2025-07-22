@@ -333,6 +333,7 @@ class YtDlp(TaskListener):
             "-ca": "",
             "-cv": "",
             "-ns": "",
+            "-np": "",
             "-md": "",
             "-tl": "",
             "-ff": set(),
