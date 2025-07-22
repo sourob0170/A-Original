@@ -201,11 +201,7 @@ class TaskConfig:
         self.name_prefix = (
             self.name_prefix
             or self.user_dict.get("NAME_PREFIX", False)
-            or (
-                Config.NAME_PREFIX
-                if "NAME_PREFIX" not in self.user_dict
-                else ""
-            )
+            or (Config.NAME_PREFIX if "NAME_PREFIX" not in self.user_dict else "")
         )
         self.metadata = (
             self.metadata
@@ -1046,7 +1042,7 @@ class TaskConfig:
             if name.startswith(self.name_prefix):
                 return name
             return f"{self.name_prefix}{name}"
-    
+
         if self.is_file:
             up_dir, name = dl_path.rsplit("/", 1)
             new_name = add_prefix(name)
@@ -1056,7 +1052,7 @@ class TaskConfig:
             with contextlib.suppress(Exception):
                 await move(dl_path, new_path)
             return new_path
-    
+
         for dirpath, _, files in await sync_to_async(walk, dl_path, topdown=False):
             for file_ in files:
                 f_path = ospath.join(dirpath, file_)
@@ -1065,7 +1061,7 @@ class TaskConfig:
                     continue
                 with contextlib.suppress(Exception):
                     await move(f_path, ospath.join(dirpath, new_name))
-    
+
         return dl_path
 
     async def generate_screenshots(self, dl_path):

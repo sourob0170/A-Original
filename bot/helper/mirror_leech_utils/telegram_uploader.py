@@ -4,7 +4,6 @@ from logging import getLogger
 from os import path as ospath
 from os import walk
 from re import match as re_match
-from re import sub as re_sub
 from time import time
 
 from aiofiles.os import (

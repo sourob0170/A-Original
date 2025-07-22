@@ -261,7 +261,7 @@ class TaskListener(TaskConfig):
                 return
             self.is_file = await aiopath.isfile(up_path)
             self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
-        
+
         if self.name_prefix:
             up_path = await self.proceed_name_prefix(up_path)
             if self.is_cancelled:
