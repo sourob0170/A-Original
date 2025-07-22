@@ -401,6 +401,7 @@ class YtDlp(TaskListener):
         self.convert_audio = args["-ca"]
         self.convert_video = args["-cv"]
         self.name_sub = args["-ns"]
+        self.name_prefix = args["-np"]
         self.hybrid_leech = args["-hl"]
         self.thumbnail_layout = args["-tl"]
         self.as_doc = args["-doc"]
