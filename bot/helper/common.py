@@ -1041,7 +1041,7 @@ class TaskConfig:
         def add_prefix(name):
             if name.startswith(self.name_prefix):
                 return name
-            return f"{self.name_prefix}{name}"
+            return f"{self.name_prefix} {name}"
 
         if self.is_file:
             up_dir, name = dl_path.rsplit("/", 1)
