@@ -1,7 +1,7 @@
 from typing import ClassVar
 
-from truelink.resolvers.base import BaseResolver
 from truelink.exceptions import ExtractionFailedException
+from truelink.resolvers.base import BaseResolver
 from truelink.types import FolderResult, LinkResult
 
 from bot.core.config_manager import Config
