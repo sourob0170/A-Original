@@ -312,7 +312,11 @@ async def load_configurations():
         "uv pip install -U truelink",
     )
     await process.wait()
-
+    from truelink import TrueLinkResolver
+    from bot.helper.mirror_leech_utils.download_utils.insta_resolver import InstagramResolver
+    
+    TrueLinkResolver.register_resolver("instagram.com", InstagramResolver)
+    
     if not await aiopath.exists(".netrc"):
         async with aiopen(".netrc", "w"):
             pass
