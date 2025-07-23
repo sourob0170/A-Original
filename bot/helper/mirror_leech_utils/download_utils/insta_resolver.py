@@ -1,9 +1,8 @@
 from typing import ClassVar
 
-import aiohttp
 from truelink.base import BaseResolver
-from truelink.types import LinkResult, FolderResult
 from truelink.exceptions import ExtractionFailedException
+from truelink.types import FolderResult, LinkResult
 
 from bot.core.config_manager import Config
 
@@ -36,7 +35,9 @@ class InstagramResolver(BaseResolver):
             )
 
             if not video_url:
-                raise ExtractionFailedException("No video URL found in API response.")
+                raise ExtractionFailedException(
+                    "No video URL found in API response."
+                )
 
             filename, size, mime_type = await self._fetch_file_details(video_url)
 
