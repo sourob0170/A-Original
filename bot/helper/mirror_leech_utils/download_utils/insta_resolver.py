@@ -1,6 +1,6 @@
 from typing import ClassVar
 
-from truelink.base import BaseResolver
+from truelink.resolvers.base import BaseResolver
 from truelink.exceptions import ExtractionFailedException
 from truelink.types import FolderResult, LinkResult
 
