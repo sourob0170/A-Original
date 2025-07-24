@@ -318,6 +318,7 @@ async def load_configurations():
         InstagramResolver,
     )
 
+    _ = TrueLinkResolver()
     TrueLinkResolver.register_resolver("instagram.com", InstagramResolver)
 
     if not await aiopath.exists(".netrc"):
