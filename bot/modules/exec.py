@@ -94,8 +94,10 @@ def cleanup_code(code):
 async def do(func, message):
     log_input(message)
     if not message.text:
-        await send_message(message, "❌ No code provided. Please provide code to execute.")
-        return
+        await send_message(
+            message, "❌ No code provided. Please provide code to execute."
+        )
+        return None
     content = message.text.split(maxsplit=1)[-1]
     body = cleanup_code(content)
     env = namespace_of(message)

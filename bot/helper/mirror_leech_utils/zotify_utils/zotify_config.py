@@ -359,8 +359,7 @@ class ZotifyConfigManager:
             # Fallback to file if database doesn't have credentials
             if self._credentials_path.exists():
                 # Wrap file I/O in thread to prevent blocking
-                credentials = await asyncio.to_thread(self._read_credentials_file)
-                return credentials
+                return await asyncio.to_thread(self._read_credentials_file)
 
         except Exception as e:
             LOGGER.error(f"❌ Failed to load Zotify credentials: {e}")
@@ -422,8 +421,10 @@ class ZotifyConfigManager:
             s.lower() for s in Config.ZOTIFY_SUPPORTED_ARTWORK_SIZES
         ]
 
+
 # Global instance
 zotify_config = ZotifyConfigManager()
+
 
 # Convenience functions
 def get_zotify_config() -> ZotifyConfigManager:

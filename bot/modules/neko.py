@@ -140,14 +140,14 @@ class CatAPIHelper:
     async def get_cat_fact(cls) -> str | None:
         """Get a random cat fact from meowfacts API"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "https://meowfacts.herokuapp.com/"
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data and "data" in data and len(data["data"]) > 0:
-                            return data["data"][0]
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get("https://meowfacts.herokuapp.com/") as response,
+            ):
+                if response.status == 200:
+                    data = await response.json()
+                    if data and "data" in data and len(data["data"]) > 0:
+                        return data["data"][0]
         except Exception as e:
             LOGGER.error(f"Error fetching cat fact: {e}")
         return None

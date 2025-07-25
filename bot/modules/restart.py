@@ -61,7 +61,9 @@ async def send_incomplete_task_message(cid, msg_id, msg):
     except Exception as e:
         # Handle client not started errors gracefully
         if "Client has not been started yet" in str(e):
-            LOGGER.warning(f"Client not started for incomplete task message. This is normal during restart: {e}")
+            LOGGER.warning(
+                f"Client not started for incomplete task message. This is normal during restart: {e}"
+            )
         else:
             LOGGER.error(e)
 

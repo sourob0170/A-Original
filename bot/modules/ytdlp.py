@@ -709,7 +709,7 @@ class YtDlp(TaskListener):
             await delete_links(self.message)
             error_msg = await send_message(
                 self.message,
-                "❌ This command requires text input. Please send a text message with the command and URL."
+                "❌ This command requires text input. Please send a text message with the command and URL.",
             )
             create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
             return
@@ -1169,7 +1169,9 @@ class YtDlp(TaskListener):
                 self.link = reply_to.text.split("\n", 1)[0].strip()
             else:
                 # Handle case where replied message has no text (e.g., media message)
-                LOGGER.warning("Replied message has no text content, cannot extract link")
+                LOGGER.warning(
+                    "Replied message has no text content, cannot extract link"
+                )
                 self.link = ""
 
         if not is_url(self.link):

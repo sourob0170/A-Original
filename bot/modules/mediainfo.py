@@ -1150,7 +1150,9 @@ async def gen_mediainfo(
                                 f"Error creating directory with absolute path {abs_path}: {e2}"
                             )
                             # Fall back to a different directory using absolute path
-                            temp_download_path = ospath.join(current_dir, "downloads", "Mediainfo")
+                            temp_download_path = ospath.join(
+                                current_dir, "downloads", "Mediainfo"
+                            )
                             if not await aiopath.isdir(temp_download_path):
                                 try:
                                     await mkdir(temp_download_path)
@@ -3049,11 +3051,7 @@ async def gen_mediainfo(
         LOGGER.error(f"MediaInfo error: {error_message}")
 
         # Clean up any temporary files on error
-        if (
-            des_path
-            and isinstance(des_path, str)
-            and ("Mediainfo" in des_path)
-        ):
+        if des_path and isinstance(des_path, str) and ("Mediainfo" in des_path):
             try:
                 if await aiopath.exists(des_path):
                     await aioremove(des_path)

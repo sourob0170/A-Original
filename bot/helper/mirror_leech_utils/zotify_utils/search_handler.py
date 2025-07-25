@@ -95,8 +95,12 @@ class ZotifySearchHandler:
         self._session = None
         self._search_cache = {}
         self._session_cache_time = 0
-        self._session_cache_expiry = 300  # Reduced to 5 minutes to prevent thread buildup
-        self._session_creation_lock = asyncio.Lock()  # Prevent concurrent session creation
+        self._session_cache_expiry = (
+            300  # Reduced to 5 minutes to prevent thread buildup
+        )
+        self._session_creation_lock = (
+            asyncio.Lock()
+        )  # Prevent concurrent session creation
 
     async def get_session(self) -> Session | None:
         """Get or create Zotify session with thread-safe caching and cleanup"""
@@ -122,7 +126,8 @@ class ZotifySearchHandler:
             # Double-check after acquiring lock
             if (
                 self._session
-                and current_time - self._session_cache_time < self._session_cache_expiry
+                and current_time - self._session_cache_time
+                < self._session_cache_expiry
             ):
                 return self._session
 
@@ -135,7 +140,9 @@ class ZotifySearchHandler:
 
                     librespot_logger = logging.getLogger("librespot.core")
                     original_level = librespot_logger.level
-                    librespot_logger.setLevel(logging.ERROR)  # More aggressive suppression
+                    librespot_logger.setLevel(
+                        logging.ERROR
+                    )  # More aggressive suppression
 
                     try:
                         # Add small delay to prevent rapid session creation
@@ -171,7 +178,7 @@ class ZotifySearchHandler:
         if self._session:
             try:
                 # Try to close session gracefully
-                if hasattr(self._session, 'close'):
+                if hasattr(self._session, "close"):
                     self._session.close()
             except Exception:
                 pass  # Ignore cleanup errors
@@ -476,6 +483,7 @@ class ZotifySearchHandler:
 # Global instance with session limit
 zotify_search = ZotifySearchHandler()
 
+
 # Global session cleanup to prevent thread buildup
 async def cleanup_all_sessions():
     """Clean up all Zotify sessions to prevent thread leaks"""
@@ -484,7 +492,10 @@ async def cleanup_all_sessions():
             await zotify_search._cleanup_session()
 
         # Also cleanup the improved session manager
-        from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import improved_session_manager
+        from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import (
+            improved_session_manager,
+        )
+
         if improved_session_manager._session:
             with contextlib.suppress(Exception):
                 improved_session_manager._session.close()
@@ -494,9 +505,11 @@ async def cleanup_all_sessions():
     except Exception as e:
         LOGGER.warning(f"Session cleanup error: {e}")
 
+
 # Cleanup sessions periodically
 _cleanup_interval = 600  # 10 minutes
 _last_cleanup = 0
+
 
 async def periodic_session_cleanup():
     """Periodic cleanup to prevent thread exhaustion"""

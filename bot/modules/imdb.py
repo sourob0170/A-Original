@@ -52,7 +52,9 @@ def _cleanup_cache():
             del _imdb_cache[key]
 
 
-def _safe_extract_list_content(content_list: list | None, max_items: int = 3) -> str | None:
+def _safe_extract_list_content(
+    content_list: list | None, max_items: int = 3
+) -> str | None:
     """Safely extract and format list content with error handling"""
     if not content_list or not isinstance(content_list, list):
         return None
@@ -203,7 +205,9 @@ async def _async_get_movie(movie_id: str | int) -> Any | None:
         return None
 
 
-async def _async_update_movie(movie: Any, info_sets: list[str], max_retries: int = 1) -> None:
+async def _async_update_movie(
+    movie: Any, info_sets: list[str], max_retries: int = 1
+) -> None:
     """Async wrapper for IMDB movie update with multiple info sets and timeout"""
     loop = get_event_loop()
 
@@ -215,21 +219,31 @@ async def _async_update_movie(movie: Any, info_sets: list[str], max_retries: int
                     loop.run_in_executor(None, imdb.update, movie, [info_set]),
                     timeout=8.0,  # 8 second timeout per info set
                 )
-                LOGGER.debug(f"Successfully updated {info_set} info (attempt {attempt + 1})")
+                LOGGER.debug(
+                    f"Successfully updated {info_set} info (attempt {attempt + 1})"
+                )
                 return  # Success, exit retry loop
             except TimeoutError:
                 if attempt < max_retries:
-                    LOGGER.warning(f"Timeout updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                    LOGGER.warning(
+                        f"Timeout updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying..."
+                    )
                     await asyncio.sleep(1)  # Brief delay before retry
                 else:
-                    LOGGER.warning(f"Final timeout updating {info_set} info after {max_retries + 1} attempts")
+                    LOGGER.warning(
+                        f"Final timeout updating {info_set} info after {max_retries + 1} attempts"
+                    )
             except IMDbDataAccessError as e:
                 # Handle specific IMDb data access errors (like HTTP 500 from IMDb servers)
                 if attempt < max_retries and "500" in str(e):
-                    LOGGER.warning(f"IMDb server error updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                    LOGGER.warning(
+                        f"IMDb server error updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying..."
+                    )
                     await asyncio.sleep(2)  # Longer delay for server errors
                 else:
-                    LOGGER.warning(f"IMDb data access error updating {info_set} info: {e}")
+                    LOGGER.warning(
+                        f"IMDb data access error updating {info_set} info: {e}"
+                    )
                     break  # Don't retry for non-server errors
             except IMDbError as e:
                 LOGGER.warning(f"IMDb error updating {info_set} info: {e}")
@@ -793,7 +807,8 @@ async def imdb_search(_, message: Message):
         except IMDbDataAccessError as e:
             LOGGER.warning(f"IMDb data access error fetching movie details: {e}")
             error_msg = await edit_message(
-                k, "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>"
+                k,
+                "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>",
             )
             create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
             return
@@ -1347,7 +1362,8 @@ async def imdb_callback(_, query):
         except IMDbDataAccessError as e:
             LOGGER.warning(f"IMDb data access error in callback: {e}")
             await edit_message(
-                message, "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>"
+                message,
+                "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>",
             )
             create_task(auto_delete_message(message, time=300))  # noqa: RUF006
         except IMDbError as e:

@@ -479,18 +479,25 @@ class TaskListener(TaskConfig):
                 try:
                     files = await listdir(self.dir)
                     if files:
-                        LOGGER.info(f"Download directory {self.dir} contains {len(files)} files: {files}")
+                        LOGGER.info(
+                            f"Download directory {self.dir} contains {len(files)} files: {files}"
+                        )
                         break
-                    else:
-                        LOGGER.warning(f"Download directory {self.dir} is empty (attempt {attempt + 1}/{max_retries})")
-                        if attempt < max_retries - 1:
-                            await sleep(retry_delay)
+                    LOGGER.warning(
+                        f"Download directory {self.dir} is empty (attempt {attempt + 1}/{max_retries})"
+                    )
+                    if attempt < max_retries - 1:
+                        await sleep(retry_delay)
                 except Exception as e:
-                    LOGGER.error(f"Error listing download directory (attempt {attempt + 1}/{max_retries}): {e}")
+                    LOGGER.error(
+                        f"Error listing download directory (attempt {attempt + 1}/{max_retries}): {e}"
+                    )
                     if attempt < max_retries - 1:
                         await sleep(retry_delay)
             else:
-                LOGGER.error(f"Download directory does not exist (attempt {attempt + 1}/{max_retries}): {self.dir}")
+                LOGGER.error(
+                    f"Download directory does not exist (attempt {attempt + 1}/{max_retries}): {self.dir}"
+                )
                 if attempt < max_retries - 1:
                     await sleep(retry_delay)
 
@@ -606,21 +613,32 @@ class TaskListener(TaskConfig):
                     files = await listdir(self.dir)
                     if not files:
                         # Try waiting a bit more and check again before giving up
-                        LOGGER.warning(f"Directory appears empty, waiting and retrying: {self.dir}")
+                        LOGGER.warning(
+                            f"Directory appears empty, waiting and retrying: {self.dir}"
+                        )
                         await sleep(5)
 
                         # Retry listing files
                         try:
                             files = await listdir(self.dir)
                             if not files:
-                                LOGGER.error(f"Directory is empty after retry: {self.dir}")
-                                await self.on_upload_error(f"Directory is empty: {self.dir}")
+                                LOGGER.error(
+                                    f"Directory is empty after retry: {self.dir}"
+                                )
+                                await self.on_upload_error(
+                                    f"Directory is empty: {self.dir}"
+                                )
                                 return
-                            else:
-                                LOGGER.info(f"Found {len(files)} files after retry: {files}")
+                            LOGGER.info(
+                                f"Found {len(files)} files after retry: {files}"
+                            )
                         except Exception as retry_error:
-                            LOGGER.error(f"Error during retry listing: {retry_error}")
-                            await self.on_upload_error(f"Directory is empty: {self.dir}")
+                            LOGGER.error(
+                                f"Error during retry listing: {retry_error}"
+                            )
+                            await self.on_upload_error(
+                                f"Directory is empty: {self.dir}"
+                            )
                             return
 
                     self.name = files[-1]

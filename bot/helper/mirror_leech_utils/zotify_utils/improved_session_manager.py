@@ -28,7 +28,9 @@ class ImprovedZotifySessionManager:
     def __init__(self):
         self._session: Session | None = None
         self._session_created_at = 0
-        self._session_max_age = 900  # Reduced to 15 minutes to prevent thread buildup
+        self._session_max_age = (
+            900  # Reduced to 15 minutes to prevent thread buildup
+        )
         self._last_api_call = 0
         self._last_activity = 0
         self._inactivity_timeout = 180  # Reduced to 3 minutes for faster cleanup
@@ -106,7 +108,8 @@ class ImprovedZotifySessionManager:
 
         # Clean expired entries
         expired_keys = [
-            key for key, timestamp in _cache_timestamps.items()
+            key
+            for key, timestamp in _cache_timestamps.items()
             if current_time - timestamp > CACHE_TTL
         ]
         for key in expired_keys:
@@ -166,7 +169,9 @@ class ImprovedZotifySessionManager:
                     # Add delay to prevent rapid session creation and thread exhaustion
                     await asyncio.sleep(1.0)  # Increased delay
                     # Wrap blocking Session.from_file in thread
-                    self._session = await asyncio.to_thread(Session.from_file, credentials_path, language)
+                    self._session = await asyncio.to_thread(
+                        Session.from_file, credentials_path, language
+                    )
                     # Add another delay after session creation
                     await asyncio.sleep(0.5)
                 finally:
@@ -186,7 +191,9 @@ class ImprovedZotifySessionManager:
                 error_msg = str(e)
                 # Handle thread exhaustion specifically
                 if "can't start new thread" in error_msg:
-                    LOGGER.error("Thread exhaustion detected - delaying session creation")
+                    LOGGER.error(
+                        "Thread exhaustion detected - delaying session creation"
+                    )
                     await asyncio.sleep(5.0)  # Wait longer for thread cleanup
                 else:
                     LOGGER.error(f"Session creation failed: {error_msg}")
@@ -477,6 +484,7 @@ improved_session_manager = ImprovedZotifySessionManager()
 # Global cleanup task to prevent thread buildup
 _cleanup_task = None
 
+
 async def _periodic_cleanup():
     """Periodic cleanup to prevent thread and memory buildup"""
     while True:
@@ -486,7 +494,8 @@ async def _periodic_cleanup():
             # Clean up expired cache entries
             current_time = time.time()
             expired_keys = [
-                key for key, timestamp in _cache_timestamps.items()
+                key
+                for key, timestamp in _cache_timestamps.items()
                 if current_time - timestamp > CACHE_TTL
             ]
             for key in expired_keys:
@@ -495,7 +504,9 @@ async def _periodic_cleanup():
 
             # Force session cleanup if too old
             if improved_session_manager._session:
-                session_age = current_time - improved_session_manager._session_created_at
+                session_age = (
+                    current_time - improved_session_manager._session_created_at
+                )
                 if session_age > improved_session_manager._session_max_age:
                     LOGGER.info("Forcing session cleanup due to age")
                     with contextlib.suppress(Exception):
@@ -506,11 +517,13 @@ async def _periodic_cleanup():
         except Exception as e:
             LOGGER.warning(f"Cleanup task error: {e}")
 
+
 def start_cleanup_task():
     """Start the periodic cleanup task"""
     global _cleanup_task
     if _cleanup_task is None or _cleanup_task.done():
         _cleanup_task = asyncio.create_task(_periodic_cleanup())
+
 
 # Start cleanup task when module is imported
 try:

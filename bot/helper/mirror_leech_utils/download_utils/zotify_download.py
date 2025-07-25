@@ -92,7 +92,15 @@ class ZotifyDownloadHelper:
             return None
         except Exception as e:
             error_msg = str(e)
-            if any(err in error_msg for err in ["packet", "Connection", "session-packet-receiver", "descriptor"]):
+            if any(
+                err in error_msg
+                for err in [
+                    "packet",
+                    "Connection",
+                    "session-packet-receiver",
+                    "descriptor",
+                ]
+            ):
                 LOGGER.warning(f"Connection issue: {error_msg}")
             else:
                 LOGGER.error(f"Failed to get Zotify session: {error_msg}")
@@ -269,7 +277,9 @@ class ZotifyDownloadHelper:
             elif content_type == "album":
                 config_obj = await self.get_zotify_config()
                 # Wrap blocking Album initialization in thread
-                album = await asyncio.to_thread(Album, spotify_id, session.api(), config_obj)
+                album = await asyncio.to_thread(
+                    Album, spotify_id, session.api(), config_obj
+                )
                 self._total_tracks = len(album.playables)
                 self._estimate_total_size()
                 # Yield control before starting collection download
@@ -278,7 +288,9 @@ class ZotifyDownloadHelper:
             elif content_type == "playlist":
                 config_obj = await self.get_zotify_config()
                 # Wrap blocking Playlist initialization in thread
-                playlist = await asyncio.to_thread(Playlist, spotify_id, session.api(), config_obj)
+                playlist = await asyncio.to_thread(
+                    Playlist, spotify_id, session.api(), config_obj
+                )
                 self._total_tracks = len(playlist.playables)
                 self._estimate_total_size()
                 # Yield control before starting collection download
@@ -287,7 +299,9 @@ class ZotifyDownloadHelper:
             elif content_type == "artist":
                 config_obj = await self.get_zotify_config()
                 # Wrap blocking Artist initialization in thread
-                artist = await asyncio.to_thread(Artist, spotify_id, session.api(), config_obj)
+                artist = await asyncio.to_thread(
+                    Artist, spotify_id, session.api(), config_obj
+                )
                 self._total_tracks = len(artist.playables)
                 self._estimate_total_size()
                 # Yield control before starting collection download
@@ -467,6 +481,7 @@ class ZotifyDownloadHelper:
 
             # Get output template from config
             from bot.core.config_manager import Config
+
             output_template = getattr(
                 Config,
                 "ZOTIFY_OUTPUT_ALBUM",
@@ -570,7 +585,9 @@ class ZotifyDownloadHelper:
 
                     for size in artwork_sizes:
                         try:
-                            cover_art = await asyncio.to_thread(track.get_cover_art, size)
+                            cover_art = await asyncio.to_thread(
+                                track.get_cover_art, size
+                            )
                             if cover_art:
                                 break
                         except Exception:
@@ -582,7 +599,9 @@ class ZotifyDownloadHelper:
                     else:
                         LOGGER.warning(f"No cover art available for: {track.name}")
                 except Exception as e:
-                    LOGGER.warning(f"Failed to write cover art for {track.name}: {e}")
+                    LOGGER.warning(
+                        f"Failed to write cover art for {track.name}: {e}"
+                    )
 
             # Download lyrics with free account handling
             if config_obj.lyrics_file:
@@ -605,22 +624,34 @@ class ZotifyDownloadHelper:
                             # Wrap lyrics operations in threads
                             lyrics = await asyncio.to_thread(track.get_lyrics)
                             if lyrics:
-                                await asyncio.to_thread(lyrics.save, output, prefer_synced=True)
+                                await asyncio.to_thread(
+                                    lyrics.save, output, prefer_synced=True
+                                )
                                 LOGGER.info(f"Lyrics downloaded for: {track.name}")
                             else:
-                                LOGGER.warning(f"No lyrics content for: {track.name}")
+                                LOGGER.warning(
+                                    f"No lyrics content for: {track.name}"
+                                )
                         except Exception as e:
                             # Check if it's a free account limitation - wrap API calls in threads
                             try:
                                 api = session.api()
-                                user_info = await asyncio.to_thread(api.invoke_url, "me")
+                                user_info = await asyncio.to_thread(
+                                    api.invoke_url, "me"
+                                )
                                 account_type = user_info.get("product", "unknown")
                                 if account_type == "free":
-                                    LOGGER.info(f"Lyrics not available for free account: {track.name}")
+                                    LOGGER.info(
+                                        f"Lyrics not available for free account: {track.name}"
+                                    )
                                 else:
-                                    LOGGER.warning(f"Failed to download lyrics for {track.name}: {e}")
+                                    LOGGER.warning(
+                                        f"Failed to download lyrics for {track.name}: {e}"
+                                    )
                             except Exception:
-                                LOGGER.warning(f"Failed to download lyrics for {track.name}: {e}")
+                                LOGGER.warning(
+                                    f"Failed to download lyrics for {track.name}: {e}"
+                                )
                 except Exception as e:
                     LOGGER.warning(f"Lyrics check failed for {track.name}: {e}")
 
@@ -684,10 +715,14 @@ class ZotifyDownloadHelper:
             config_obj = await self.get_zotify_config()
 
             # Wrap blocking Album initialization in thread
-            album = await asyncio.to_thread(Album, album_id, session.api(), config_obj)
+            album = await asyncio.to_thread(
+                Album, album_id, session.api(), config_obj
+            )
 
             self._total_tracks = len(album.playables)
-            self._current_track = f"Downloading album ({self._total_tracks} tracks)..."
+            self._current_track = (
+                f"Downloading album ({self._total_tracks} tracks)..."
+            )
 
             # Process tracks in smaller batches to maintain responsiveness
             batch_size = 3  # Process 3 tracks then yield
@@ -695,7 +730,7 @@ class ZotifyDownloadHelper:
                 if self.listener.is_cancelled:
                     return False
 
-                batch = album.playables[i:i + batch_size]
+                batch = album.playables[i : i + batch_size]
                 for j, playable_data in enumerate(batch):
                     if self.listener.is_cancelled:
                         LOGGER.info("Album download cancelled by user")
@@ -728,10 +763,14 @@ class ZotifyDownloadHelper:
             config_obj = await self.get_zotify_config()
 
             # Wrap blocking Playlist initialization in thread
-            playlist = await asyncio.to_thread(Playlist, playlist_id, session.api(), config_obj)
+            playlist = await asyncio.to_thread(
+                Playlist, playlist_id, session.api(), config_obj
+            )
 
             self._total_tracks = len(playlist.playables)
-            self._current_track = f"Downloading playlist ({self._total_tracks} tracks)..."
+            self._current_track = (
+                f"Downloading playlist ({self._total_tracks} tracks)..."
+            )
 
             # Process tracks in smaller batches to maintain responsiveness
             batch_size = 3  # Process 3 tracks then yield
@@ -739,7 +778,7 @@ class ZotifyDownloadHelper:
                 if self.listener.is_cancelled:
                     return False
 
-                batch = playlist.playables[i:i + batch_size]
+                batch = playlist.playables[i : i + batch_size]
                 for j, playable_data in enumerate(batch):
                     if self.listener.is_cancelled:
                         LOGGER.info("Playlist download cancelled by user")
@@ -751,12 +790,18 @@ class ZotifyDownloadHelper:
                     # Download based on playable type and check for cancellation
                     success = False
                     if playable_data.type.name == "TRACK":
-                        success = await self._download_track(session, playable_data.id)
+                        success = await self._download_track(
+                            session, playable_data.id
+                        )
                     elif playable_data.type.name == "EPISODE":
-                        success = await self._download_episode(session, playable_data.id)
+                        success = await self._download_episode(
+                            session, playable_data.id
+                        )
 
                     if not success and self.listener.is_cancelled:
-                        LOGGER.info("Playlist download cancelled during item download")
+                        LOGGER.info(
+                            "Playlist download cancelled during item download"
+                        )
                         return False
 
                 # Yield control after each batch and check cancellation
@@ -777,10 +822,14 @@ class ZotifyDownloadHelper:
             config_obj = await self.get_zotify_config()
 
             # Wrap blocking Artist initialization in thread
-            artist = await asyncio.to_thread(Artist, artist_id, session.api(), config_obj)
+            artist = await asyncio.to_thread(
+                Artist, artist_id, session.api(), config_obj
+            )
 
             self._total_tracks = len(artist.playables)
-            self._current_track = f"Downloading artist tracks ({self._total_tracks} tracks)..."
+            self._current_track = (
+                f"Downloading artist tracks ({self._total_tracks} tracks)..."
+            )
 
             # Process tracks in smaller batches to maintain responsiveness
             batch_size = 3  # Process 3 tracks then yield
@@ -788,7 +837,7 @@ class ZotifyDownloadHelper:
                 if self.listener.is_cancelled:
                     return False
 
-                batch = artist.playables[i:i + batch_size]
+                batch = artist.playables[i : i + batch_size]
                 for j, playable_data in enumerate(batch):
                     if self.listener.is_cancelled:
                         LOGGER.info("Artist download cancelled by user")
@@ -800,7 +849,9 @@ class ZotifyDownloadHelper:
                     # Download track and check for cancellation
                     success = await self._download_track(session, playable_data.id)
                     if not success and self.listener.is_cancelled:
-                        LOGGER.info("Artist download cancelled during track download")
+                        LOGGER.info(
+                            "Artist download cancelled during track download"
+                        )
                         return False
 
                 # Yield control after each batch and check cancellation
@@ -822,7 +873,9 @@ class ZotifyDownloadHelper:
             show = Show(show_id, session.api(), config_obj)
 
             self._total_tracks = len(show.playables)
-            self._current_track = f"Downloading show ({self._total_tracks} episodes)..."
+            self._current_track = (
+                f"Downloading show ({self._total_tracks} episodes)..."
+            )
 
             # Download episodes with async yields for responsiveness
             for i, playable_data in enumerate(show.playables):
@@ -929,7 +982,9 @@ class ZotifyDownloadHelper:
             # Write metadata and cover art using Zotify's exact methods - wrap in threads
             if config_obj.save_metadata:
                 await asyncio.to_thread(file.write_metadata, episode.metadata)
-                cover_art = await asyncio.to_thread(episode.get_cover_art, config_obj.artwork_size)
+                cover_art = await asyncio.to_thread(
+                    episode.get_cover_art, config_obj.artwork_size
+                )
                 await asyncio.to_thread(file.write_cover_art, cover_art)
 
             # Handle transcoding if needed using Zotify's exact method
@@ -1031,13 +1086,18 @@ class ZotifyDownloadHelper:
 
         try:
             from tqdm import tqdm
+
             dummy_pbar = tqdm(disable=True)
 
             # Start download and progress monitoring concurrently
             download_task = asyncio.create_task(
-                asyncio.to_thread(track.write_audio_stream, output, dummy_pbar, real_time)
+                asyncio.to_thread(
+                    track.write_audio_stream, output, dummy_pbar, real_time
+                )
             )
-            progress_task = asyncio.create_task(self._monitor_download_progress(output))
+            progress_task = asyncio.create_task(
+                self._monitor_download_progress(output)
+            )
 
             # Track tasks for cancellation
             self._download_tasks.add(download_task)
@@ -1045,8 +1105,7 @@ class ZotifyDownloadHelper:
 
             try:
                 # Wait for download completion with cancellation check
-                file = await download_task
-                return file
+                return await download_task
             except asyncio.CancelledError:
                 LOGGER.info("Track download cancelled by user")
                 return None
@@ -1062,7 +1121,7 @@ class ZotifyDownloadHelper:
 
         except Exception as e:
             # Clean up on error
-            if 'progress_task' in locals():
+            if "progress_task" in locals():
                 progress_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await progress_task
@@ -1101,7 +1160,9 @@ class ZotifyDownloadHelper:
         except Exception as e:
             LOGGER.warning(f"Progress monitoring failed: {e}")
 
-    async def _download_episode_with_progress(self, episode, output, real_time=False):
+    async def _download_episode_with_progress(
+        self, episode, output, real_time=False
+    ):
         """Download episode with optimized progress tracking"""
         # Validate inputs
         if isinstance(output, bool) or not output:
@@ -1109,13 +1170,18 @@ class ZotifyDownloadHelper:
 
         try:
             from tqdm import tqdm
+
             dummy_pbar = tqdm(disable=True)
 
             # Start download and progress monitoring concurrently
             download_task = asyncio.create_task(
-                asyncio.to_thread(episode.write_audio_stream, output, dummy_pbar, real_time)
+                asyncio.to_thread(
+                    episode.write_audio_stream, output, dummy_pbar, real_time
+                )
             )
-            progress_task = asyncio.create_task(self._monitor_download_progress(output))
+            progress_task = asyncio.create_task(
+                self._monitor_download_progress(output)
+            )
 
             # Track tasks for cancellation
             self._download_tasks.add(download_task)
@@ -1123,8 +1189,7 @@ class ZotifyDownloadHelper:
 
             try:
                 # Wait for download completion with cancellation check
-                file = await download_task
-                return file
+                return await download_task
             except asyncio.CancelledError:
                 LOGGER.info("Episode download cancelled by user")
                 return None
@@ -1140,7 +1205,7 @@ class ZotifyDownloadHelper:
 
         except Exception as e:
             # Clean up on error
-            if 'progress_task' in locals():
+            if "progress_task" in locals():
                 progress_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await progress_task

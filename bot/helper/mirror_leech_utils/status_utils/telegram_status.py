@@ -70,10 +70,9 @@ class TelegramStatus:
         self.listener.is_cancelled = True
         if hasattr(self._obj, "cancel_task"):
             await self._obj.cancel_task()
-        else:
-            # Fallback for older implementations
-            if hasattr(self._obj, "_listener"):
-                self._obj._listener.is_cancelled = True
+        # Fallback for older implementations
+        elif hasattr(self._obj, "_listener"):
+            self._obj._listener.is_cancelled = True
 
         LOGGER.info(f"Cancelling Telegram Upload: {self.name()}")
         await self.listener.on_upload_error("Upload stopped by user!")

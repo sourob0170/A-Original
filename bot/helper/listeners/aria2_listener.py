@@ -177,51 +177,77 @@ async def _on_download_complete(api, data):
 
                     # Ensure the task listener directory exists
                     if not await aiopath.exists(task.listener.dir):
-                        LOGGER.info(f"Creating task listener directory: {task.listener.dir}")
+                        LOGGER.info(
+                            f"Creating task listener directory: {task.listener.dir}"
+                        )
                         await makedirs(task.listener.dir, exist_ok=True)
 
                     # Check if files need to be moved from aria2 download location to task directory
                     if download_path and download_path != task.listener.dir:
-                        LOGGER.info(f"Moving files from {download_path} to {task.listener.dir}")
+                        LOGGER.info(
+                            f"Moving files from {download_path} to {task.listener.dir}"
+                        )
 
                         # Check if the aria2 download directory exists and has files
                         if await aiopath.exists(download_path):
                             try:
-                                from bot.helper.ext_utils.aiofiles_compat import listdir
+                                from bot.helper.ext_utils.aiofiles_compat import (
+                                    listdir,
+                                )
+
                                 aria2_files = await listdir(download_path)
 
                                 if aria2_files:
                                     # Move files from aria2 download location to task directory
                                     from aioshutil import move
+
                                     for file_name in aria2_files:
                                         src_path = f"{download_path}/{file_name}"
                                         dst_path = f"{task.listener.dir}/{file_name}"
 
                                         if await aiopath.exists(src_path):
-                                            LOGGER.info(f"Moving {src_path} to {dst_path}")
+                                            LOGGER.info(
+                                                f"Moving {src_path} to {dst_path}"
+                                            )
                                             await move(src_path, dst_path)
 
                                     # Clean up empty aria2 download directory
                                     try:
                                         from aioshutil import rmtree
-                                        await rmtree(download_path, ignore_errors=True)
+
+                                        await rmtree(
+                                            download_path, ignore_errors=True
+                                        )
                                     except Exception as cleanup_error:
-                                        LOGGER.warning(f"Could not clean up aria2 directory {download_path}: {cleanup_error}")
+                                        LOGGER.warning(
+                                            f"Could not clean up aria2 directory {download_path}: {cleanup_error}"
+                                        )
                                 else:
-                                    LOGGER.warning(f"Aria2 download directory {download_path} is empty")
+                                    LOGGER.warning(
+                                        f"Aria2 download directory {download_path} is empty"
+                                    )
                             except Exception as move_error:
-                                LOGGER.error(f"Error moving files from aria2 directory: {move_error}")
+                                LOGGER.error(
+                                    f"Error moving files from aria2 directory: {move_error}"
+                                )
                         else:
-                            LOGGER.warning(f"Aria2 download directory {download_path} does not exist")
+                            LOGGER.warning(
+                                f"Aria2 download directory {download_path} does not exist"
+                            )
 
                     # Verify that the task directory now has files
                     if await aiopath.exists(task.listener.dir):
                         try:
                             from bot.helper.ext_utils.aiofiles_compat import listdir
+
                             task_files = await listdir(task.listener.dir)
-                            LOGGER.info(f"Task directory {task.listener.dir} contains {len(task_files)} files: {task_files}")
+                            LOGGER.info(
+                                f"Task directory {task.listener.dir} contains {len(task_files)} files: {task_files}"
+                            )
                         except Exception as list_error:
-                            LOGGER.error(f"Error listing task directory: {list_error}")
+                            LOGGER.error(
+                                f"Error listing task directory: {list_error}"
+                            )
 
                     await task.listener.on_download_complete()
                 except Exception as e:
@@ -284,7 +310,9 @@ async def _on_bt_download_complete(api, data):
 
         # Ensure the task listener directory exists
         if not await aiopath.exists(task.listener.dir):
-            LOGGER.info(f"Creating task listener directory for BT: {task.listener.dir}")
+            LOGGER.info(
+                f"Creating task listener directory for BT: {task.listener.dir}"
+            )
             await makedirs(task.listener.dir, exist_ok=True)
 
         # Handle file selection if enabled
@@ -301,37 +329,52 @@ async def _on_bt_download_complete(api, data):
 
         # Check if files need to be moved from aria2 download location to task directory for BT
         if download_path and download_path != task.listener.dir:
-            LOGGER.info(f"Moving BT files from {download_path} to {task.listener.dir}")
+            LOGGER.info(
+                f"Moving BT files from {download_path} to {task.listener.dir}"
+            )
 
             # Check if the aria2 download directory exists and has files
             if await aiopath.exists(download_path):
                 try:
                     from bot.helper.ext_utils.aiofiles_compat import listdir
+
                     aria2_files = await listdir(download_path)
 
                     if aria2_files:
                         # Move files from aria2 download location to task directory
                         from aioshutil import move
+
                         for file_name in aria2_files:
                             src_path = f"{download_path}/{file_name}"
                             dst_path = f"{task.listener.dir}/{file_name}"
 
                             if await aiopath.exists(src_path):
-                                LOGGER.info(f"Moving BT file {src_path} to {dst_path}")
+                                LOGGER.info(
+                                    f"Moving BT file {src_path} to {dst_path}"
+                                )
                                 await move(src_path, dst_path)
 
                         # Clean up empty aria2 download directory
                         try:
                             from aioshutil import rmtree
+
                             await rmtree(download_path, ignore_errors=True)
                         except Exception as cleanup_error:
-                            LOGGER.warning(f"Could not clean up BT aria2 directory {download_path}: {cleanup_error}")
+                            LOGGER.warning(
+                                f"Could not clean up BT aria2 directory {download_path}: {cleanup_error}"
+                            )
                     else:
-                        LOGGER.warning(f"BT aria2 download directory {download_path} is empty")
+                        LOGGER.warning(
+                            f"BT aria2 download directory {download_path} is empty"
+                        )
                 except Exception as move_error:
-                    LOGGER.error(f"Error moving BT files from aria2 directory: {move_error}")
+                    LOGGER.error(
+                        f"Error moving BT files from aria2 directory: {move_error}"
+                    )
             else:
-                LOGGER.warning(f"BT aria2 download directory {download_path} does not exist")
+                LOGGER.warning(
+                    f"BT aria2 download directory {download_path} does not exist"
+                )
 
         # Handle seeding options
         if task.listener.seed:

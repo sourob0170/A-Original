@@ -613,7 +613,11 @@ async def detect_account_type() -> str:
                 user_info = await improved_session_manager.robust_api_call("me")
                 if user_info and isinstance(user_info, dict):
                     product = user_info.get("product", "free").lower()
-                    return "premium" if product in ["premium", "family", "student"] else "free"
+                    return (
+                        "premium"
+                        if product in ["premium", "family", "student"]
+                        else "free"
+                    )
             except Exception:
                 pass
         return "free"

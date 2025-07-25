@@ -115,7 +115,9 @@ async def send_message(
 
     # Check if client is available
     if not client:
-        LOGGER.warning("No client available for sending message. This is normal during restart.")
+        LOGGER.warning(
+            "No client available for sending message. This is normal during restart."
+        )
         return "Client not available"
 
     # Handle None message object
@@ -253,7 +255,9 @@ async def edit_message(
                 client_available = message._client.is_connected
             except AttributeError:
                 # Fallback: check if TgClient instances are available
-                client_available = TgClient.bot is not None or TgClient.user is not None
+                client_available = (
+                    TgClient.bot is not None or TgClient.user is not None
+                )
         else:
             # Fallback: check if TgClient instances are available
             client_available = TgClient.bot is not None or TgClient.user is not None
@@ -460,10 +464,14 @@ async def delete_message(*args):
                     client_available = msg._client.is_connected
                 except AttributeError:
                     # Fallback: check if TgClient instances are available
-                    client_available = TgClient.bot is not None or TgClient.user is not None
+                    client_available = (
+                        TgClient.bot is not None or TgClient.user is not None
+                    )
             else:
                 # Fallback: check if TgClient instances are available
-                client_available = TgClient.bot is not None or TgClient.user is not None
+                client_available = (
+                    TgClient.bot is not None or TgClient.user is not None
+                )
 
             if not client_available:
                 LOGGER.warning(
