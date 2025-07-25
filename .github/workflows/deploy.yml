@@ -236,12 +236,12 @@ jobs:
             fi
           done
 
-          # Delete aria.sh if it exists
-          if [ -f "./aria.sh" ]; then
-            echo "Deleting file: aria.sh"
-            rm -f ./aria.sh
+          # Delete aria-nox-nzb.sh if it exists
+          if [ -f "./aria-nox-nzb.sh" ]; then
+            echo "Deleting file: aria-nox-nzb.sh"
+            rm -f ./aria-nox-nzb.sh
           else
-            echo "File not found: aria.sh"
+            echo "File not found: aria-nox-nzb.sh"
           fi
 
       - name: Deploy to Heroku

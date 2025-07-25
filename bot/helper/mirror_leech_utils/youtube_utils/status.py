@@ -77,11 +77,12 @@ class YouTubeStatus:
     def listener(self):
         return self._listener
 
-    def cancel_task(self):
+    async def cancel_task(self):
         LOGGER.info(f"Cancelling YouTube Upload: {self.name()}")
         self._listener.is_cancelled = True
         if self._youtube_upload:
             self._youtube_upload.cancel()
+        await self._listener.on_upload_error("YouTube upload stopped by user!")
 
     def task(self):
         return self

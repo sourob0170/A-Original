@@ -577,7 +577,7 @@ class HyperTGDownload:
             total_bytes_combined = 0
 
             async with aiopen(temp_file_path, "wb") as temp_file:
-                for _part_index, part_file_path in sorted(
+                for part_index, part_file_path in sorted(
                     results, key=lambda x: x[0]
                 ):
                     try:
@@ -594,7 +594,7 @@ class HyperTGDownload:
 
                         await remove(part_file_path)
 
-                    except Exception:
+                    except Exception as e:
                         raise
 
             if prog_task and not prog_task.done():
@@ -619,7 +619,7 @@ class HyperTGDownload:
         except (CancelledError, StopTransmission):
             LOGGER.info("Download cancelled by user")
             return None
-        except Exception:
+        except Exception as e:
             return None
         finally:
             self._cancel_event.set()

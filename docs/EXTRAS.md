@@ -71,7 +71,7 @@ NOTE: Don't change MaxRatioAction.
 
 #### Aria2c
 
-Global options: --seed-ratio (0 means no limit) and --seed-time (0 means no seed) in aria.sh.
+Global options: --seed-ratio (0 means no limit) and --seed-time (0 means no seed) in aria-nox-nzb.sh.
 
 ### Using Service Accounts for uploading to avoid user rate limit
 

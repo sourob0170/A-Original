@@ -2,6 +2,7 @@
 Zotify configuration management
 """
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -27,22 +28,9 @@ class ZotifyConfigManager:
 
         self._initialization_attempted = True
 
-        # Check if Zotify is properly configured
-        has_creds = await self.has_credentials(user_id)
-        if has_creds and self.is_enabled():
-            # Enable zotify if properly configured
-            Config.ZOTIFY_ENABLED = True
-
-            # Optimize settings for account type
-            await self._optimize_for_account_type()
-
-            return True
-        # Disable zotify if not properly configured
-        Config.ZOTIFY_ENABLED = False
-        LOGGER.warning(
-            "❌ Zotify disabled due to missing credentials or configuration"
-        )
-        return False
+        # Zotify enabled/disabled status is controlled only by configuration
+        # Don't auto-disable based on credentials - let users handle missing credentials
+        return Config.ZOTIFY_ENABLED
 
     def get_quality(self) -> Quality:
         """Get configured quality setting"""
@@ -112,6 +100,19 @@ class ZotifyConfigManager:
                 if database.db is not None:
                     user_data = await database.db.users.find_one({"_id": user_id})
                     if user_data and "ZOTIFY_CREDENTIALS" in user_data:
+                        return True
+
+            # If no user_id provided or user doesn't have credentials, check for any credentials
+            # This handles cases where OWNER_ID is not set or credentials were uploaded by different user
+            if not user_id or user_id == 0:
+                from bot.helper.ext_utils.db_handler import database
+
+                if database.db is not None:
+                    # Check if any user has credentials
+                    any_user_data = await database.db.users.find_one(
+                        {"ZOTIFY_CREDENTIALS": {"$exists": True}}
+                    )
+                    if any_user_data:
                         return True
 
             # Fallback to file check
@@ -299,8 +300,8 @@ class ZotifyConfigManager:
 
             # Also save to file for immediate use (will be recreated from DB on restart)
             self._credentials_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._credentials_path, "w") as f:
-                json.dump(credentials, f, indent=2)
+            # Wrap file I/O in thread to prevent blocking
+            await asyncio.to_thread(self._write_credentials_file, credentials)
 
             # Clear any cached sessions to force reload
             try:
@@ -323,8 +324,6 @@ class ZotifyConfigManager:
     ) -> dict[str, Any] | None:
         """Load credentials from database first, then file as fallback with enhanced debugging"""
         try:
-            LOGGER.debug(f"🔍 Loading Zotify credentials for user {user_id}")
-
             # Try to load from database first (persistent across restarts)
             if user_id:
                 from bot.helper.ext_utils.db_handler import database
@@ -338,23 +337,30 @@ class ZotifyConfigManager:
                         # Also save to file for immediate use
                         self.save_credentials_to_file(credentials)
                         return credentials
-                    LOGGER.debug(
-                        f"🔍 No credentials found in database for user {user_id}"
+
+            # If no user_id provided or user doesn't have credentials, check for any credentials
+            # This handles cases where OWNER_ID is not set or credentials were uploaded by different user
+            if not user_id or user_id == 0:
+                from bot.helper.ext_utils.db_handler import database
+
+                if database.db is not None:
+                    # Check if any user has credentials
+                    any_user_data = await database.db.users.find_one(
+                        {"ZOTIFY_CREDENTIALS": {"$exists": True}}
                     )
-                else:
-                    LOGGER.debug("🔍 Database not available")
+                    if any_user_data:
+                        credentials = any_user_data["ZOTIFY_CREDENTIALS"]
+                        credentials.get("username", "unknown")
+
+                        # Also save to file for immediate use
+                        self.save_credentials_to_file(credentials)
+                        return credentials
 
             # Fallback to file if database doesn't have credentials
             if self._credentials_path.exists():
-                with open(self._credentials_path) as f:
-                    credentials = json.load(f)
-                    credentials.get("username", "unknown")
-
-                    return credentials
-            else:
-                LOGGER.debug(
-                    f"🔍 No credentials file found at {self._credentials_path}"
-                )
+                # Wrap file I/O in thread to prevent blocking
+                credentials = await asyncio.to_thread(self._read_credentials_file)
+                return credentials
 
         except Exception as e:
             LOGGER.error(f"❌ Failed to load Zotify credentials: {e}")
@@ -362,12 +368,21 @@ class ZotifyConfigManager:
         LOGGER.warning(f"⚠️ No Zotify credentials found for user {user_id}")
         return None
 
+    def _write_credentials_file(self, credentials: dict[str, Any]) -> None:
+        """Helper method for writing credentials file (synchronous for thread use)"""
+        with open(self._credentials_path, "w") as f:
+            json.dump(credentials, f, indent=2)
+
+    def _read_credentials_file(self) -> dict[str, Any]:
+        """Helper method for reading credentials file (synchronous for thread use)"""
+        with open(self._credentials_path) as f:
+            return json.load(f)
+
     def save_credentials_to_file(self, credentials: dict[str, Any]) -> bool:
         """Save credentials to file only (helper method)"""
         try:
             self._credentials_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._credentials_path, "w") as f:
-                json.dump(credentials, f, indent=2)
+            self._write_credentials_file(credentials)
             return True
         except Exception as e:
             LOGGER.error(f"Failed to save Zotify credentials to file: {e}")
@@ -407,68 +422,8 @@ class ZotifyConfigManager:
             s.lower() for s in Config.ZOTIFY_SUPPORTED_ARTWORK_SIZES
         ]
 
-    async def _optimize_for_account_type(self):
-        """Optimize Zotify settings based on account type (premium/free)"""
-        try:
-            # Detect account type
-            from bot.helper.mirror_leech_utils.zotify_utils.quality_selector import (
-                detect_account_type,
-            )
-
-            account_type = await detect_account_type()
-
-            if account_type == "premium":
-                LOGGER.info(
-                    "🎵 Premium account detected - optimizing settings for premium features"
-                )
-
-                # Set premium-optimized defaults
-                Config.ZOTIFY_DOWNLOAD_QUALITY = "very_high"  # 320kbps for premium
-                Config.ZOTIFY_AUDIO_FORMAT = (
-                    "vorbis"  # Native format for best quality
-                )
-                Config.ZOTIFY_ARTWORK_SIZE = "large"  # High quality artwork
-                Config.ZOTIFY_LYRICS_FILE = (
-                    True  # Enable synced lyrics (premium feature)
-                )
-                Config.ZOTIFY_SAVE_METADATA = True  # Full metadata
-                Config.ZOTIFY_SAVE_GENRE = True  # Enhanced metadata
-                Config.ZOTIFY_ALL_ARTISTS = True  # All artist info
-
-                LOGGER.info("✨ Premium features enabled:")
-                LOGGER.info("   • 320kbps quality (very_high)")
-                LOGGER.info("   • Native OGG Vorbis format")
-                LOGGER.info("   • Large artwork size")
-                LOGGER.info("   • Synced lyrics enabled")
-                LOGGER.info("   • Enhanced metadata")
-
-            else:
-                LOGGER.info(
-                    "🆓 Free account detected - using optimized settings for free accounts"
-                )
-
-                # Keep free-optimized defaults
-                Config.ZOTIFY_DOWNLOAD_QUALITY = "high"  # 160kbps max for free
-                Config.ZOTIFY_AUDIO_FORMAT = "mp3"  # Most compatible format
-                Config.ZOTIFY_ARTWORK_SIZE = "medium"  # Balanced size
-                Config.ZOTIFY_LYRICS_FILE = False  # Synced lyrics require premium
-                Config.ZOTIFY_SAVE_METADATA = True  # Basic metadata
-                Config.ZOTIFY_SAVE_GENRE = False  # Reduced metadata for speed
-
-                LOGGER.info("⚠️ Free account limitations:")
-                LOGGER.info("   • 160kbps max quality (high)")
-                LOGGER.info("   • MP3 format for compatibility")
-                LOGGER.info("   • Medium artwork size")
-                LOGGER.info("   • Synced lyrics not available")
-
-        except Exception as e:
-            LOGGER.warning(f"Failed to optimize settings for account type: {e}")
-            # Keep default settings if optimization fails
-
-
 # Global instance
 zotify_config = ZotifyConfigManager()
-
 
 # Convenience functions
 def get_zotify_config() -> ZotifyConfigManager:

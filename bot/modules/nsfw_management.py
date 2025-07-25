@@ -90,9 +90,10 @@ async def nsfw_test_command(client, message: Message):
         test_file = None
 
         # Check for command arguments
-        args = message.text.split(maxsplit=1)
-        if len(args) > 1:
-            test_text = args[1]
+        if message.text:
+            args = message.text.split(maxsplit=1)
+            if len(args) > 1:
+                test_text = args[1]
 
         # Check for replied message
         elif message.reply_to_message:

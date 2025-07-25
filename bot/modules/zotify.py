@@ -2,6 +2,7 @@
 Zotify command handlers
 """
 
+import asyncio
 import os
 
 from bot import LOGGER
@@ -83,6 +84,11 @@ class ZotifyCommands:
             return
 
         # Parse arguments with Zotify-specific flags
+        if not message.text:
+            reply = await send_message(message, "❌ No command text provided.")
+            await auto_delete_message(reply, time=300)
+            return
+
         text = message.text.split()
         args = ZotifyCommands._get_zotify_args()
         arg_parser(text[1:], args)
@@ -106,7 +112,7 @@ class ZotifyCommands:
                     await auto_delete_message(reply, time=300)
                     return
             else:
-                input_data = reply_to.text.strip()
+                input_data = reply_to.text.strip() if reply_to.text else ""
         else:
             input_data = args.get("link", "").strip()
 
@@ -430,13 +436,15 @@ async def _extract_zotify_metadata_name(url: str) -> str | None:
         if auth_method != "file":
             return None  # Only support file-based auth for metadata extraction
 
-        session = Session.from_file(
+        # Wrap blocking operations in threads
+        session = await asyncio.to_thread(
+            Session.from_file,
             zotify_config.get_credentials_path(),
             zotify_config.get_download_config()["language"],
         )
 
-        # Get API client
-        api = session.api()
+        # Get API client - wrap in thread
+        api = await asyncio.to_thread(session.api)
 
         # Get metadata based on content type using Collection classes
         if content_type == "album":

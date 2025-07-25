@@ -102,6 +102,11 @@ class StreamripCommands:
             return
 
         # Parse arguments with streamrip-specific flags only
+        if not message.text:
+            reply = await send_message(message, "❌ No command text provided.")
+            await auto_delete_message(reply, time=300)
+            return
+
         text = message.text.split()
         args = StreamripCommands._get_streamrip_args()
         arg_parser(text[1:], args)
@@ -125,7 +130,7 @@ class StreamripCommands:
                     await auto_delete_message(reply, time=300)
                     return
             else:
-                input_data = reply_to.text.strip()
+                input_data = reply_to.text.strip() if reply_to.text else ""
         else:
             input_data = args.get("link", "").strip()
 
@@ -346,6 +351,11 @@ class StreamripCommands:
             return
 
         # Parse arguments using custom search parser
+        if not message.text:
+            reply = await send_message(message, "❌ No command text provided.")
+            await auto_delete_message(reply, time=300)
+            return
+
         text = message.text.split()
         args = StreamripCommands._parse_search_args(text[1:])
 

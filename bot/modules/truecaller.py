@@ -63,7 +63,7 @@ async def truecaller_lookup(_, message):
             phone = phone_match.group(0)
 
     # If no phone found in reply, check the command itself
-    if not phone:
+    if not phone and message.text:
         cmd_parts = message.text.split(maxsplit=1)
         if len(cmd_parts) >= 2:
             phone = cmd_parts[1].strip()

@@ -1,10 +1,10 @@
 """
-Zotify quality selector with streamrip-style UI but exact Zotify API compliance
+Simplified Zotify quality selector
 """
 
 import asyncio
 import contextlib
-from time import time
+import time
 from typing import Any
 
 from zotify.utils import AudioFormat, Quality
@@ -19,7 +19,7 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-# Global registry for active quality selectors
+# Simplified registry
 _active_zotify_quality_selectors = {}
 
 
@@ -144,7 +144,7 @@ class ZotifyQualitySelector:
         self.media_type = media_type
         self.account_type = account_type.lower()  # "free" or "premium"
         self._reply_to = None
-        self._time = time()
+        self._time = time.time()
         self._timeout = 120
         self.event = asyncio.Event()
         self.selected_quality = None
@@ -419,7 +419,7 @@ class ZotifyQualitySelector:
         msg += "<i>💎 = Highest quality available</i>\n"
         msg += "<i>📝 Note: Qualities sorted from low to high</i>\n"
         msg += "<i>📝 Note: Spotify streams in OGG Vorbis format natively</i>\n\n"
-        msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time() - self._time))}</code>"
+        msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time.time() - self._time))}</code>"
 
         # Send or edit message
         try:
@@ -515,7 +515,7 @@ class ZotifyQualitySelector:
         msg += "<i>⚡ = Native format (fastest, no transcoding)</i>\n"
         msg += "<i>💿 = Lossless quality (larger files)</i>\n"
         msg += "<i>🔄 = Transcoded format (slower processing)</i>\n\n"
-        msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time() - self._time))}</code>"
+        msg += f"<b>⏱️ Timeout:</b> <code>{get_readable_time(self._timeout - (time.time() - self._time))}</code>"
 
         # Only edit if it's a valid message object
         if self._reply_to and hasattr(self._reply_to, "edit"):
@@ -601,76 +601,30 @@ class ZotifyQualitySelector:
 
 
 async def detect_account_type() -> str:
-    """Detect Spotify account type (free/premium) with enhanced detection and debugging"""
-    from bot import LOGGER
-
+    """Simplified account type detection"""
     try:
         from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import (
             improved_session_manager,
         )
 
-        # Try to get session and check premium status directly
         session = await improved_session_manager.get_session()
         if session:
-            # Method 1: Check via API call (most reliable)
             try:
                 user_info = await improved_session_manager.robust_api_call("me")
                 if user_info and isinstance(user_info, dict):
-                    product = user_info.get("product", "unknown").lower()
-                    if product in ["premium", "family", "student"]:
-                        return "premium"
-                    if product == "free":
-                        return "free"
-                    LOGGER.warning(
-                        f"Unknown product type: {product}, treating as free"
-                    )
-                    return "free"
-                LOGGER.warning("Failed to get user info from API")
-            except Exception as e:
-                LOGGER.warning(f"API account type detection failed: {e}")
-
-            # Method 2: Try to detect based on available features (fallback)
-            try:
-                # Test if we can access premium features
-                api = session.api()
-                # Try a search with high limit (premium feature)
-                test_result = api.invoke_url("search?q=test&type=track&limit=50")
-                if test_result and "tracks" in test_result:
-                    tracks = test_result["tracks"]["items"]
-                    if (
-                        len(tracks) > 20
-                    ):  # If we get more than 20 results, likely premium
-                        return "premium"
-                    return "free"
-            except Exception as e:
-                LOGGER.warning(f"Feature-based detection failed: {e}")
-
-            # Method 3: Try direct premium check (least reliable, known to be buggy)
-            try:
-                is_premium_direct = session.is_premium()
-                if is_premium_direct:
-                    return "premium"
-            except Exception as e:
-                LOGGER.warning(f"Direct premium check failed: {e}")
-
-            # If we reach here, assume free account
-
-            return "free"
-
-        LOGGER.warning("❌ No session available for account type detection")
+                    product = user_info.get("product", "free").lower()
+                    return "premium" if product in ["premium", "family", "student"] else "free"
+            except Exception:
+                pass
         return "free"
-
-    except Exception as e:
-        LOGGER.error(f"Account type detection failed completely: {e}")
+    except Exception:
         return "free"
 
 
 async def show_zotify_quality_selector(
     listener, media_type: str, account_type: str | None = None
 ) -> dict[str, Any] | None:
-    """Show Zotify quality selection interface with StreamRip-style UI"""
-
-    # Auto-detect account type if not provided (like StreamRip)
+    """Show Zotify quality selection interface"""
     if account_type is None:
         account_type = await detect_account_type()
 

@@ -6,6 +6,7 @@ from time import time
 from typing import Any
 
 from imdb import Cinemagoer
+from imdb._exceptions import IMDbDataAccessError, IMDbError
 from pycountry import countries as conn
 from pyrogram.errors import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from pyrogram.types import Message
@@ -49,6 +50,20 @@ def _cleanup_cache():
         # Keep only the newest entries
         for key, _ in sorted_items[:-_max_cache_size]:
             del _imdb_cache[key]
+
+
+def _safe_extract_list_content(content_list: list | None, max_items: int = 3) -> str | None:
+    """Safely extract and format list content with error handling"""
+    if not content_list or not isinstance(content_list, list):
+        return None
+
+    try:
+        # Take only the first max_items and convert to string
+        limited_content = content_list[:max_items]
+        return list_to_str(limited_content) if limited_content else None
+    except Exception as e:
+        LOGGER.warning(f"Error extracting list content: {e}")
+        return None
 
 
 IMDB_GENRE_EMOJI = {
@@ -154,8 +169,14 @@ async def _async_search_movie(title: str, results: int = 10) -> list[Any]:
     except TimeoutError:
         LOGGER.error(f"Timeout searching movie '{title}'")
         return []
+    except IMDbDataAccessError as e:
+        LOGGER.warning(f"IMDb data access error searching movie '{title}': {e}")
+        return []
+    except IMDbError as e:
+        LOGGER.warning(f"IMDb error searching movie '{title}': {e}")
+        return []
     except Exception as e:
-        LOGGER.error(f"Error searching movie '{title}': {e}")
+        LOGGER.error(f"Unexpected error searching movie '{title}': {e}")
         return []
 
 
@@ -171,26 +192,51 @@ async def _async_get_movie(movie_id: str | int) -> Any | None:
     except TimeoutError:
         LOGGER.error(f"Timeout getting movie '{movie_id}'")
         return None
+    except IMDbDataAccessError as e:
+        LOGGER.warning(f"IMDb data access error getting movie '{movie_id}': {e}")
+        return None
+    except IMDbError as e:
+        LOGGER.warning(f"IMDb error getting movie '{movie_id}': {e}")
+        return None
     except Exception as e:
-        LOGGER.error(f"Error getting movie '{movie_id}': {e}")
+        LOGGER.error(f"Unexpected error getting movie '{movie_id}': {e}")
         return None
 
 
-async def _async_update_movie(movie: Any, info_sets: list[str]) -> None:
+async def _async_update_movie(movie: Any, info_sets: list[str], max_retries: int = 1) -> None:
     """Async wrapper for IMDB movie update with multiple info sets and timeout"""
     loop = get_event_loop()
 
     async def update_single_info(info_set: str):
-        try:
-            # Add timeout for each info set update
-            await asyncio.wait_for(
-                loop.run_in_executor(None, imdb.update, movie, [info_set]),
-                timeout=8.0,  # 8 second timeout per info set
-            )
-        except TimeoutError:
-            LOGGER.warning(f"Timeout updating {info_set} info")
-        except Exception as e:
-            LOGGER.warning(f"Could not update with {info_set} info: {e}")
+        for attempt in range(max_retries + 1):
+            try:
+                # Add timeout for each info set update
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, imdb.update, movie, [info_set]),
+                    timeout=8.0,  # 8 second timeout per info set
+                )
+                LOGGER.debug(f"Successfully updated {info_set} info (attempt {attempt + 1})")
+                return  # Success, exit retry loop
+            except TimeoutError:
+                if attempt < max_retries:
+                    LOGGER.warning(f"Timeout updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                    await asyncio.sleep(1)  # Brief delay before retry
+                else:
+                    LOGGER.warning(f"Final timeout updating {info_set} info after {max_retries + 1} attempts")
+            except IMDbDataAccessError as e:
+                # Handle specific IMDb data access errors (like HTTP 500 from IMDb servers)
+                if attempt < max_retries and "500" in str(e):
+                    LOGGER.warning(f"IMDb server error updating {info_set} info (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                    await asyncio.sleep(2)  # Longer delay for server errors
+                else:
+                    LOGGER.warning(f"IMDb data access error updating {info_set} info: {e}")
+                    break  # Don't retry for non-server errors
+            except IMDbError as e:
+                LOGGER.warning(f"IMDb error updating {info_set} info: {e}")
+                break  # Don't retry for IMDb errors
+            except Exception as e:
+                LOGGER.warning(f"Unexpected error updating {info_set} info: {e}")
+                break  # Don't retry for unexpected errors
 
     # Run all updates concurrently for better performance
     tasks = [update_single_info(info_set) for info_set in info_sets]
@@ -744,10 +790,24 @@ async def imdb_search(_, message: Message):
             error_msg = await edit_message(k, "<i>No Results Found</i>")
             create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
             return
-        except Exception as e:
-            LOGGER.error(f"Error fetching IMDB data: {e}")
+        except IMDbDataAccessError as e:
+            LOGGER.warning(f"IMDb data access error fetching movie details: {e}")
             error_msg = await edit_message(
-                k, "<i>Error fetching movie details. Please try again.</i>"
+                k, "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>"
+            )
+            create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
+            return
+        except IMDbError as e:
+            LOGGER.warning(f"IMDb error fetching movie details: {e}")
+            error_msg = await edit_message(
+                k, "<i>❌ IMDb service error. Please try again.</i>"
+            )
+            create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
+            return
+        except Exception as e:
+            LOGGER.error(f"Unexpected error fetching IMDB data: {e}")
+            error_msg = await edit_message(
+                k, "<i>❌ Error fetching movie details. Please try again.</i>"
             )
             create_task(auto_delete_message(error_msg, message, time=300))  # noqa: RUF006
             return
@@ -826,22 +886,32 @@ async def _extract_comprehensive_movie_data(movie_id: str) -> dict[str, Any]:
 
     # Try to get additional info using working info sets
     # Based on testing, these are the info sets that actually work:
-    working_info_sets = [
+    # Prioritize essential info sets first
+    essential_info_sets = [
         "technical",  # Provides runtime, sound mix, color info
         "keywords",  # Provides keywords and relevant keywords
         "plot",  # Already included in basic data
-        "quotes",  # Provides movie quotes
-        "trivia",  # Provides trivia information
-        "taglines",  # Provides taglines
         "release info",  # Provides release information
-        "connections",  # Provides movie connections
         "awards",  # Provides awards information
+    ]
+
+    # Optional info sets that may fail due to IMDb server issues
+    optional_info_sets = [
+        "quotes",  # Provides movie quotes
+        "taglines",  # Provides taglines
+        "connections",  # Provides movie connections
         "locations",  # Provides filming locations
         "soundtrack",  # Provides soundtrack information
     ]
 
-    # Update movie with working info sets
-    await _async_update_movie(movie, working_info_sets)
+    # Note: "trivia" info set is excluded as it frequently fails with HTTP 500 errors
+    # from IMDb servers, causing unnecessary error logs and potential instability
+
+    # Update movie with essential info sets first (with retries)
+    await _async_update_movie(movie, essential_info_sets, max_retries=2)
+
+    # Then try optional info sets (no retries to avoid delays)
+    await _async_update_movie(movie, optional_info_sets, max_retries=0)
 
     # Try to extract genres from keywords as a fallback
     # Since genres are not directly available, we'll extract them from keywords
@@ -1061,13 +1131,9 @@ async def _process_movie_data(movie: Any, movie_id: str) -> dict[str, Any]:
         if movie.get("distributors")
         else None,
         # Additional Content
-        "trivia": list_to_str(movie.get("trivia")[:3])
-        if movie.get("trivia")
-        else None,
-        "quotes": list_to_str(movie.get("quotes")[:3])
-        if movie.get("quotes")
-        else None,
-        "taglines": list_to_str(movie.get("taglines")[:3])
+        "trivia": _safe_extract_list_content(movie.get("trivia"), 3),
+        "quotes": _safe_extract_list_content(movie.get("quotes"), 3),
+        "taglines": _safe_extract_list_content(movie.get("taglines"), 3)
         if movie.get("taglines")
         else None,
         "goofs": list_to_str(movie.get("goofs")[:3]) if movie.get("goofs") else None,
@@ -1278,8 +1344,20 @@ async def imdb_callback(_, query):
                     "https://telegra.ph/file/5af8d90a479b0d11df298.jpg",
                 )
 
+        except IMDbDataAccessError as e:
+            LOGGER.warning(f"IMDb data access error in callback: {e}")
+            await edit_message(
+                message, "<i>⚠️ IMDb servers are experiencing issues. Please try again later.</i>"
+            )
+            create_task(auto_delete_message(message, time=300))  # noqa: RUF006
+        except IMDbError as e:
+            LOGGER.warning(f"IMDb error in callback: {e}")
+            await edit_message(
+                message, "<i>❌ IMDb service error. Please try again.</i>"
+            )
+            create_task(auto_delete_message(message, time=300))  # noqa: RUF006
         except Exception as e:
-            LOGGER.error(f"Error in IMDB callback: {e}")
+            LOGGER.error(f"Unexpected error in IMDB callback: {e}")
             await edit_message(
                 message, "<i>❌ Error fetching movie details. Please try again.</i>"
             )

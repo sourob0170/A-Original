@@ -210,9 +210,10 @@ async def get_text_from_message(message: Message) -> str | None:
                     return content
 
         # Get text from command arguments
-        command_parts = message.text.split(maxsplit=2)
-        if len(command_parts) > 2:
-            return command_parts[2]
+        if message.text:
+            command_parts = message.text.split(maxsplit=2)
+            if len(command_parts) > 2:
+                return command_parts[2]
 
         await send_message(
             message,

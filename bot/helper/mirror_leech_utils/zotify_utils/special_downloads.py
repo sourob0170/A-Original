@@ -1,6 +1,5 @@
 """
-Zotify special downloads handler for aimleechbot
-Handles liked tracks, followed artists, saved playlists, and liked episodes
+Optimized Zotify special downloads handler
 """
 
 import asyncio
@@ -37,7 +36,9 @@ class ZotifySpecialDownloads:
                 )  # Only show warnings and errors
 
                 try:
-                    self._session = Session.from_file(
+                    # Wrap blocking Session.from_file in thread
+                    self._session = await asyncio.to_thread(
+                        Session.from_file,
                         zotify_config.get_credentials_path(),
                         zotify_config.get_download_config()["language"],
                     )

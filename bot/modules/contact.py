@@ -41,6 +41,10 @@ async def handle_owner_contact(client, message: Message):
     """
     Handle owner contacting users via /contact user-id/@username msg
     """
+    if not message.text:
+        await send_message(message, "❌ No command text provided.")
+        return
+
     command_parts = message.text.split(maxsplit=2)
 
     if len(command_parts) < 3:
@@ -166,6 +170,10 @@ async def handle_user_contact(client, message: Message):
         return
 
     # Get the message text after /contact command
+    if not message.text:
+        await send_message(message, "❌ No message text provided.")
+        return
+
     command_parts = message.text.split(maxsplit=1)
 
     # Check if this is a reply to media with /contact
@@ -278,6 +286,10 @@ async def ban_command(client, message: Message):
         return
 
     user_id_to_ban = None
+    if not message.text:
+        await send_message(message, "❌ No command text provided.")
+        return
+
     command_parts = message.text.split()
 
     # Check if replying to a message
@@ -387,6 +399,10 @@ async def unban_command(client, message: Message):
         return
 
     user_id_to_unban = None
+    if not message.text:
+        await send_message(message, "❌ No command text provided.")
+        return
+
     command_parts = message.text.split()
 
     # Check if replying to a message

@@ -113,6 +113,11 @@ async def send_message(
     # Use the specified bot client or default to the main bot
     client = bot_client or TgClient.bot
 
+    # Check if client is available
+    if not client:
+        LOGGER.warning("No client available for sending message. This is normal during restart.")
+        return "Client not available"
+
     # Handle None message object
     if message is None:
         return "Cannot send message: message object is None"
@@ -183,8 +188,13 @@ async def send_message(
         )
     except Exception as e:
         error_str = str(e)
+        # Handle client not started errors gracefully (during restart)
+        if "Client has not been started yet" in error_str:
+            LOGGER.warning(
+                f"Client not started for sending message. This is normal during restart: {error_str}"
+            )
         # Don't log UserIsBlocked and InputUserDeactivated as errors since they're handled by callers
-        if not (
+        elif not (
             "USER_IS_BLOCKED" in error_str or "INPUT_USER_DEACTIVATED" in error_str
         ):
             LOGGER.error(error_str)
@@ -234,6 +244,25 @@ async def edit_message(
 
         if not chat_id or not message_id:
             return "Message has invalid chat_id or message_id"
+
+        # Check if the client is still available before attempting edit
+        client_available = False
+        if hasattr(message, "_client") and message._client:
+            # Check if the client is still started
+            try:
+                client_available = message._client.is_connected
+            except AttributeError:
+                # Fallback: check if TgClient instances are available
+                client_available = TgClient.bot is not None or TgClient.user is not None
+        else:
+            # Fallback: check if TgClient instances are available
+            client_available = TgClient.bot is not None or TgClient.user is not None
+
+        if not client_available:
+            LOGGER.warning(
+                f"Client not available for editing message {message_id} in chat {chat_id}. Skipping edit."
+            )
+            return "Client not available"
 
         # Handle case where buttons is None (could happen if build_menu returns None)
         if buttons is None:
@@ -300,6 +329,11 @@ async def edit_message(
                 return message
             except Exception as e2:
                 LOGGER.error(f"Failed to edit message without buttons: {e2!s}")
+        # Handle client not started errors gracefully (during restart)
+        elif "Client has not been started yet" in error_str:
+            LOGGER.warning(
+                f"Client not started for editing message. This is normal during restart: {error_str}"
+            )
         # Only log at debug level for common Telegram API errors
         elif (
             "MESSAGE_ID_INVALID" in error_str
@@ -418,6 +452,30 @@ async def delete_message(*args):
                     )
                 continue
 
+            # Check if the client is still available before attempting deletion
+            client_available = False
+            if hasattr(msg, "_client") and msg._client:
+                # Check if the client is still started
+                try:
+                    client_available = msg._client.is_connected
+                except AttributeError:
+                    # Fallback: check if TgClient instances are available
+                    client_available = TgClient.bot is not None or TgClient.user is not None
+            else:
+                # Fallback: check if TgClient instances are available
+                client_available = TgClient.bot is not None or TgClient.user is not None
+
+            if not client_available:
+                LOGGER.warning(
+                    f"Client not available for deleting message {msg.id} in chat {msg.chat.id}. Skipping deletion."
+                )
+                # Remove from database since we can't delete it
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(f"Error removing scheduled deletion: {e}")
+                continue
+
             msgs.append(create_task(msg.delete()))
             # Remove from database if it exists
             try:
@@ -442,8 +500,20 @@ async def delete_message(*args):
                 continue
 
             error_str = str(result)
+            # Handle client not started errors gracefully (during restart)
+            if "Client has not been started yet" in error_str:
+                LOGGER.warning(
+                    f"Client not started for deleting message {msg.id} in chat {msg.chat.id}. This is normal during restart."
+                )
+                # Remove from database since we can't delete it
+                try:
+                    await database.remove_scheduled_deletion(msg.chat.id, msg.id)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error removing scheduled deletion for client not started: {e}"
+                    )
             # Handle permission-related errors more gracefully
-            if "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
+            elif "MESSAGE_DELETE_FORBIDDEN" in error_str or "403" in error_str:
                 LOGGER.warning(
                     f"Cannot delete message {msg.id} in chat {msg.chat.id}: {error_str}"
                 )

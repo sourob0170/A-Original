@@ -9837,8 +9837,8 @@ async def update_private_file(_, message, pre_message):
 
                 # Check file size (5MB limit)
                 if await aiopath.exists(file_name):
-                    file_stat = await aiopath.stat(file_name)
-                    if file_stat.st_size > 5 * 1024 * 1024:
+                    file_size = await aiopath.getsize(file_name)
+                    if file_size > 5 * 1024 * 1024:
                         LOGGER.error("Streamrip config file too large (>5MB)")
                         await remove(file_name)
                         return
@@ -9875,8 +9875,8 @@ async def update_private_file(_, message, pre_message):
 
                 # Check file size (5MB limit)
                 if await aiopath.exists(file_name):
-                    file_stat = await aiopath.stat(file_name)
-                    if file_stat.st_size > 5 * 1024 * 1024:
+                    file_size = await aiopath.getsize(file_name)
+                    if file_size > 5 * 1024 * 1024:
                         LOGGER.error("Zotify credentials file too large (>5MB)")
                         await remove(file_name)
                         return

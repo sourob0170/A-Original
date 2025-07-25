@@ -115,15 +115,9 @@ class ByteStreamer:
                     except Exception as e:
                         # Handle authentication and other errors
                         error_msg = str(e).lower()
-                        if (
-                            "unauthorized" in error_msg
-                            or "auth" in error_msg
-                            or "auth_key_unregistered" in error_msg
-                        ):
+                        if "unauthorized" in error_msg or "auth" in error_msg or "auth_key_unregistered" in error_msg:
                             LOGGER.error(f"Authentication error in streaming: {e}")
-                            LOGGER.error(
-                                "Telegram session expired - bot needs to re-authenticate"
-                            )
+                            LOGGER.error("Telegram session expired - bot needs to re-authenticate")
                             raise ConnectionError(
                                 f"Telegram authentication failed: {e}"
                             )
@@ -142,15 +136,9 @@ class ByteStreamer:
                     except Exception as e:
                         # Handle authentication and other errors
                         error_msg = str(e).lower()
-                        if (
-                            "unauthorized" in error_msg
-                            or "auth" in error_msg
-                            or "auth_key_unregistered" in error_msg
-                        ):
+                        if "unauthorized" in error_msg or "auth" in error_msg or "auth_key_unregistered" in error_msg:
                             LOGGER.error(f"Authentication error in streaming: {e}")
-                            LOGGER.error(
-                                "Telegram session expired - bot needs to re-authenticate"
-                            )
+                            LOGGER.error("Telegram session expired - bot needs to re-authenticate")
                             raise ConnectionError(
                                 f"Telegram authentication failed: {e}"
                             )

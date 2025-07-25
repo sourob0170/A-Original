@@ -1,3 +1,4 @@
+from bot import LOGGER
 from bot.helper.ext_utils.status_utils import (
     MirrorStatus,
     get_readable_file_size,
@@ -53,4 +54,18 @@ class GoogleDriveStatus:
             return "-"
 
     def task(self):
-        return self._obj
+        return self
+
+    async def cancel_task(self):
+        """Cancel the Google Drive upload task"""
+        self.listener.is_cancelled = True
+        if hasattr(self._obj, "cancel_task"):
+            await self._obj.cancel_task()
+        elif hasattr(self._obj, "cancel"):
+            self._obj.cancel()
+        elif hasattr(self._obj, "_listener"):
+            # Fallback for older implementations
+            self._obj._listener.is_cancelled = True
+
+        LOGGER.info(f"Cancelling Google Drive Upload: {self.name()}")
+        await self.listener.on_upload_error("Upload stopped by user!")

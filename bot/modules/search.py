@@ -267,6 +267,12 @@ async def torrent_search(_, message):
         return
 
     user_id = message.from_user.id
+
+    if not message.text:
+        error_msg = await send_message(message, "❌ No command text provided.")
+        create_task(auto_delete_message(error_msg, message, time=300))
+        return
+
     msg_parts = message.text.split(maxsplit=1)
 
     if len(msg_parts) == 1:

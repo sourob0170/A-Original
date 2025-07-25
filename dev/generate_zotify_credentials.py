@@ -182,7 +182,7 @@ class ZotifyCredentialsGenerator:
         print(f"📊 File size: {file_size} bytes")
         print()
         print("📋 Next steps:")
-        print("1. Upload this file to your aimleechbot:")
+        print("1. Upload this file to your bot:")
         print(
             "   • Method 1: Bot Settings → Zotify → Authentication → Upload Credentials"
         )

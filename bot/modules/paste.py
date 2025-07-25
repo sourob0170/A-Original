@@ -358,7 +358,7 @@ async def paste_text(_client, message: Message):
 
     try:
         # Get content from command arguments
-        if len(message.command) > 1:
+        if len(message.command) > 1 and message.text:
             content = message.text.split(None, 1)[1]
 
         # Get content from replied message text

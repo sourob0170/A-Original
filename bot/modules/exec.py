@@ -31,8 +31,9 @@ def namespace_of(message):
 
 
 def log_input(message):
+    text = message.text if message.text else "[No text content]"
     LOGGER.info(
-        f"IN: {message.text} (user={message.from_user.id if message.from_user else message.sender_chat.id}, chat={message.chat.id})",
+        f"IN: {text} (user={message.from_user.id if message.from_user else message.sender_chat.id}, chat={message.chat.id})",
     )
 
 
@@ -92,6 +93,9 @@ def cleanup_code(code):
 
 async def do(func, message):
     log_input(message)
+    if not message.text:
+        await send_message(message, "❌ No code provided. Please provide code to execute.")
+        return
     content = message.text.split(maxsplit=1)[-1]
     body = cleanup_code(content)
     env = namespace_of(message)

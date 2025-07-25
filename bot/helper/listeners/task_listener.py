@@ -372,7 +372,8 @@ class TaskListener(TaskConfig):
             )
 
     async def on_download_complete(self):
-        await sleep(2)
+        # Give a bit more time for file operations to complete
+        await sleep(3)
         if self.is_cancelled:
             LOGGER.info("Download was cancelled, skipping upload")
             return
@@ -469,16 +470,29 @@ class TaskListener(TaskConfig):
                 gid = download.gid()
             else:
                 return
-        # Check directory contents immediately after download completion
-        if await aiopath.exists(self.dir):
-            try:
-                files = await listdir(self.dir)
-            except Exception as e:
-                LOGGER.error(f"Error listing download directory: {e}")
-        else:
-            LOGGER.error(
-                f"Download directory does not exist immediately after completion: {self.dir}"
-            )
+        # Check directory contents immediately after download completion with retry logic
+        max_retries = 3
+        retry_delay = 2
+
+        for attempt in range(max_retries):
+            if await aiopath.exists(self.dir):
+                try:
+                    files = await listdir(self.dir)
+                    if files:
+                        LOGGER.info(f"Download directory {self.dir} contains {len(files)} files: {files}")
+                        break
+                    else:
+                        LOGGER.warning(f"Download directory {self.dir} is empty (attempt {attempt + 1}/{max_retries})")
+                        if attempt < max_retries - 1:
+                            await sleep(retry_delay)
+                except Exception as e:
+                    LOGGER.error(f"Error listing download directory (attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        await sleep(retry_delay)
+            else:
+                LOGGER.error(f"Download directory does not exist (attempt {attempt + 1}/{max_retries}): {self.dir}")
+                if attempt < max_retries - 1:
+                    await sleep(retry_delay)
 
         if not (self.is_torrent or self.is_qbit):
             self.seed = False
@@ -591,9 +605,23 @@ class TaskListener(TaskConfig):
 
                     files = await listdir(self.dir)
                     if not files:
-                        LOGGER.error(f"Directory is empty: {self.dir}")
-                        await self.on_upload_error(f"Directory is empty: {self.dir}")
-                        return
+                        # Try waiting a bit more and check again before giving up
+                        LOGGER.warning(f"Directory appears empty, waiting and retrying: {self.dir}")
+                        await sleep(5)
+
+                        # Retry listing files
+                        try:
+                            files = await listdir(self.dir)
+                            if not files:
+                                LOGGER.error(f"Directory is empty after retry: {self.dir}")
+                                await self.on_upload_error(f"Directory is empty: {self.dir}")
+                                return
+                            else:
+                                LOGGER.info(f"Found {len(files)} files after retry: {files}")
+                        except Exception as retry_error:
+                            LOGGER.error(f"Error during retry listing: {retry_error}")
+                            await self.on_upload_error(f"Directory is empty: {self.dir}")
+                            return
 
                     self.name = files[-1]
                     if self.name == "yt-dlp-thumb":
@@ -913,6 +941,11 @@ class TaskListener(TaskConfig):
                 pass
 
         if self.is_leech:
+            # Check cancellation before starting Telegram upload
+            if self.is_cancelled:
+                LOGGER.info("Task cancelled before Telegram upload, aborting")
+                return
+
             LOGGER.info(f"Leech Name: {self.name}")
             tg = TelegramUploader(self, up_dir)
             # Store a reference to the telegram uploader for later use (e.g., during cancellation)
@@ -987,6 +1020,11 @@ class TaskListener(TaskConfig):
             # Don't delete the tg reference as we need it for cancellation
             # We'll keep the reference in self.telegram_uploader
         elif self.up_dest == "yt" or self.up_dest.startswith("yt:"):
+            # Check cancellation before starting YouTube upload
+            if self.is_cancelled:
+                LOGGER.info("Task cancelled before YouTube upload, aborting")
+                return
+
             # YouTube upload
             if not getattr(Config, "YOUTUBE_UPLOAD_ENABLED", False):
                 await self.on_upload_error(
@@ -1035,6 +1073,11 @@ class TaskListener(TaskConfig):
             )
             del youtube_upload
         elif self.up_dest == "mg":
+            # Check cancellation before starting MEGA upload
+            if self.is_cancelled:
+                LOGGER.info("Task cancelled before MEGA upload, aborting")
+                return
+
             # Import here to avoid circular imports
             from bot.helper.mirror_leech_utils.mega_utils.upload import (
                 add_mega_upload,

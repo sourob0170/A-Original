@@ -1,11 +1,10 @@
 """
-Improved Zotify Session Manager
-Handles connection stability, rate limiting, and free account optimizations
+Optimized Zotify Session Manager
+Lightweight session management with minimal memory footprint
 """
 
 import asyncio
 import contextlib
-import gc
 import time
 import weakref
 from typing import Any
@@ -15,122 +14,66 @@ from zotify import Session
 from bot import LOGGER
 from bot.helper.mirror_leech_utils.zotify_utils.zotify_config import zotify_config
 
-# Memory optimization: Track active objects for cleanup
+# Reduced memory footprint - smaller caches
 _active_sessions: set[weakref.ref] = set()
 _api_call_cache = {}
 _cache_timestamps = {}
-MAX_CACHE_SIZE = 100
-CACHE_TTL = 300  # 5 minutes
+MAX_CACHE_SIZE = 50  # Reduced from 100
+CACHE_TTL = 180  # Reduced from 300 to 3 minutes
 
 
 class ImprovedZotifySessionManager:
-    """Enhanced session manager with stability improvements for free accounts"""
+    """Optimized session manager with minimal resource usage"""
 
     def __init__(self):
         self._session: Session | None = None
         self._session_created_at = 0
-        self._session_max_age = (
-            3600  # 1 hour max age - but will be cleaned based on inactivity
-        )
+        self._session_max_age = 900  # Reduced to 15 minutes to prevent thread buildup
         self._last_api_call = 0
-        self._last_activity = 0  # Track last activity for inactivity cleanup
-        self._inactivity_timeout = 60  # 1 minute of inactivity before cleanup
-        self._last_inline_search = 0  # Track last inline search activity
-        self._inline_search_timeout = (
-            60  # 1 minute of inactivity for inline searches
-        )
-        self._api_call_interval = 1.0  # Minimum 1 second between API calls
+        self._last_activity = 0
+        self._inactivity_timeout = 180  # Reduced to 3 minutes for faster cleanup
+        self._api_call_interval = 0.5  # Reduced interval for better performance
         self._consecutive_failures = 0
-        self._max_consecutive_failures = 3
-        self._backoff_time = 5.0
-        # Memory optimization
-        self._memory_cleanup_interval = 300  # 5 minutes
+        self._max_consecutive_failures = 2  # Reduced for faster recovery
+        # Simplified memory management
+        self._memory_cleanup_interval = 300  # Reduced to 5 minutes
         self._last_memory_cleanup = 0
+        # Thread safety
+        self._session_lock = asyncio.Lock()
         # Register for cleanup tracking
         _active_sessions.add(weakref.ref(self, self._cleanup_callback))
 
     async def get_session(self) -> Session | None:
-        """Get a healthy session with automatic refresh and inactivity cleanup"""
+        """Get a healthy session with optimized refresh logic"""
         current_time = time.time()
 
-        # Check if session needs refresh due to age, failures, inactivity, or connection issues
+        # Simplified session health check - only check essential conditions
         if (
             not self._session
             or current_time - self._session_created_at > self._session_max_age
-            or current_time - self._last_activity > self._inactivity_timeout
             or self._consecutive_failures >= self._max_consecutive_failures
-            or await self._is_session_unhealthy()
         ):
             await self._create_new_session()
 
         # Update activity timestamp
         self._last_activity = current_time
 
-        # Periodic memory cleanup
+        # Less frequent memory cleanup
         if current_time - self._last_memory_cleanup > self._memory_cleanup_interval:
-            await self._cleanup_memory()
+            self._cleanup_memory_sync()
             self._last_memory_cleanup = current_time
 
         return self._session
 
     def mark_inline_search_activity(self):
-        """Mark inline search activity to prevent connection cleanup"""
-        current_time = time.time()
-        self._last_inline_search = current_time
-        self._last_activity = current_time
-        LOGGER.debug("Marked inline search activity")
+        """Mark inline search activity"""
+        self._last_activity = time.time()
 
     def should_cleanup_for_inactivity(self) -> bool:
         """Check if session should be cleaned up due to inactivity"""
-        current_time = time.time()
-
-        # Check inline search activity first
-        if self._last_inline_search > 0:
-            inline_inactive_time = current_time - self._last_inline_search
-            if inline_inactive_time < self._inline_search_timeout:
-                return False
-
-        # Check general activity
         if self._last_activity > 0:
-            inactive_time = current_time - self._last_activity
-            return inactive_time > self._inactivity_timeout
-
+            return time.time() - self._last_activity > self._inactivity_timeout
         return False
-
-    async def _is_session_unhealthy(self) -> bool:
-        """Check if the session has connection issues that require recreation"""
-        if not self._session:
-            return False
-
-        try:
-            # Quick health check - try to access session properties
-            # If the session has background thread failures, this might fail
-            if hasattr(self._session, "connection") and self._session.connection:
-                # Check if connection is still valid
-                return False
-            LOGGER.debug("Session connection appears to be invalid")
-            return True
-        except Exception as e:
-            error_msg = str(e)
-            # Check for specific connection-related errors
-            if any(
-                keyword in error_msg
-                for keyword in [
-                    "Failed reading packet",
-                    "Failed to receive packet",
-                    "Connection reset by peer",
-                    "ConnectionResetError",
-                    "ConnectionRefusedError",
-                    "Connection refused",
-                    "session-packet-receiver",
-                    "RuntimeError",
-                ]
-            ):
-                LOGGER.warning(
-                    f"Session health check detected connection issue: {error_msg}"
-                )
-                return True
-            return False
 
     @staticmethod
     def _cleanup_callback(weak_ref):
@@ -140,7 +83,6 @@ class ImprovedZotifySessionManager:
     async def clear_session_cache(self):
         """Clear session and API cache to force credential reload"""
         try:
-            # Clear current session
             if self._session:
                 with contextlib.suppress(Exception):
                     self._session.close()
@@ -155,218 +97,102 @@ class ImprovedZotifySessionManager:
             _api_call_cache.clear()
             _cache_timestamps.clear()
 
-            # Force garbage collection
-            gc.collect()
-
         except Exception as e:
             LOGGER.warning(f"Error clearing session cache: {e}")
 
-    async def _cleanup_memory(self):
-        """Perform memory cleanup operations"""
-        try:
-            # Clean API call cache
-            current_time = time.time()
-            expired_keys = [
-                key
-                for key, timestamp in _cache_timestamps.items()
-                if current_time - timestamp > CACHE_TTL
-            ]
-            for key in expired_keys:
+    def _cleanup_memory_sync(self):
+        """Synchronous memory cleanup - more efficient"""
+        current_time = time.time()
+
+        # Clean expired entries
+        expired_keys = [
+            key for key, timestamp in _cache_timestamps.items()
+            if current_time - timestamp > CACHE_TTL
+        ]
+        for key in expired_keys:
+            _api_call_cache.pop(key, None)
+            _cache_timestamps.pop(key, None)
+
+        # Limit cache size
+        if len(_api_call_cache) > MAX_CACHE_SIZE:
+            # Remove oldest entries
+            sorted_items = sorted(_cache_timestamps.items(), key=lambda x: x[1])
+            to_remove = len(_api_call_cache) - MAX_CACHE_SIZE
+            for key, _ in sorted_items[:to_remove]:
                 _api_call_cache.pop(key, None)
                 _cache_timestamps.pop(key, None)
 
-            # Limit cache size
-            if len(_api_call_cache) > MAX_CACHE_SIZE:
-                # Remove oldest entries
-                sorted_items = sorted(_cache_timestamps.items(), key=lambda x: x[1])
-                to_remove = len(_api_call_cache) - MAX_CACHE_SIZE
-                for key, _ in sorted_items[:to_remove]:
-                    _api_call_cache.pop(key, None)
-                    _cache_timestamps.pop(key, None)
-
-            # Force garbage collection
-            gc.collect()
-
-            LOGGER.debug(
-                f"Memory cleanup completed. Cache size: {len(_api_call_cache)}"
-            )
-        except Exception as e:
-            LOGGER.warning(f"Memory cleanup error: {e}")
-
     async def _create_new_session(self) -> bool:
-        """Create a new session with retry logic"""
-        max_retries = 3
-
-        for attempt in range(max_retries):
+        """Create a new session with thread-safe optimized stability"""
+        async with self._session_lock:  # Prevent concurrent session creation
             try:
-                LOGGER.info(
-                    f"Creating Zotify session (attempt {attempt + 1}/{max_retries})"
-                )
+                LOGGER.info("Creating Zotify session...")
 
                 # Close existing session if any
                 if self._session:
-                    try:
+                    with contextlib.suppress(Exception):
                         self._session.close()
-                    except Exception as e:
-                        LOGGER.warning(f"Error closing old session: {e}")
+                    self._session = None
 
                 # Create new session with fresh credentials from database
                 auth_method = zotify_config.get_auth_method()
 
-                if auth_method == "file":
-                    # CRITICAL: Load fresh credentials from database first
+                if auth_method != "file":
+                    LOGGER.error("Only file-based authentication is supported")
+                    return False
 
-                    # Get owner ID for credential loading
-                    from bot.core.config_manager import Config
+                # Get owner ID for credential loading
+                from bot.core.config_manager import Config
 
-                    owner_id = getattr(Config, "OWNER_ID", None)
+                owner_id = getattr(Config, "OWNER_ID", None)
 
-                    # Load credentials from database (this will also update the file)
-                    fresh_credentials = await zotify_config.load_credentials(
-                        owner_id
-                    )
+                # Load credentials from database (this will also update the file)
+                fresh_credentials = await zotify_config.load_credentials(owner_id)
 
-                    if not fresh_credentials:
-                        raise Exception(
-                            "No credentials available for session creation"
-                        )
+                if not fresh_credentials:
+                    raise Exception("No credentials available for session creation")
 
-                    fresh_credentials.get("username", "unknown")
+                credentials_path = zotify_config.get_credentials_path()
+                language = zotify_config.get_language()
 
-                    credentials_path = zotify_config.get_credentials_path()
-                    language = zotify_config.get_language()
+                # Suppress librespot core logs for cleaner output
+                import logging
 
-                    # Suppress librespot core logs for cleaner output
-                    import logging
+                librespot_logger = logging.getLogger("librespot.core")
+                original_level = librespot_logger.level
+                librespot_logger.setLevel(logging.ERROR)  # Suppress more logs
 
-                    librespot_logger = logging.getLogger("librespot.core")
-                    original_level = librespot_logger.level
-                    librespot_logger.setLevel(
-                        logging.WARNING
-                    )  # Only show warnings and errors
+                try:
+                    # Add delay to prevent rapid session creation and thread exhaustion
+                    await asyncio.sleep(1.0)  # Increased delay
+                    # Wrap blocking Session.from_file in thread
+                    self._session = await asyncio.to_thread(Session.from_file, credentials_path, language)
+                    # Add another delay after session creation
+                    await asyncio.sleep(0.5)
+                finally:
+                    # Restore original logging level
+                    librespot_logger.setLevel(original_level)
 
-                    try:
-                        self._session = Session.from_file(credentials_path, language)
-                    finally:
-                        # Restore original logging level
-                        librespot_logger.setLevel(original_level)
-
-                    # Test the session with a simple API call
-                    await self._test_session()
-
+                if self._session:
                     current_time = time.time()
                     self._session_created_at = current_time
-                    self._last_activity = (
-                        current_time  # Initialize activity tracking
-                    )
+                    self._last_activity = current_time
                     self._consecutive_failures = 0
-
                     return True
-                LOGGER.error("Only file-based authentication is supported")
-                return False
+
+                raise Exception("Session creation failed")
 
             except Exception as e:
                 error_msg = str(e)
-                LOGGER.error(
-                    f"Session creation attempt {attempt + 1} failed: {error_msg}"
-                )
+                # Handle thread exhaustion specifically
+                if "can't start new thread" in error_msg:
+                    LOGGER.error("Thread exhaustion detected - delaying session creation")
+                    await asyncio.sleep(5.0)  # Wait longer for thread cleanup
+                else:
+                    LOGGER.error(f"Session creation failed: {error_msg}")
 
-                # Handle specific errors with better user feedback
-                if (
-                    "BadCredentials" in error_msg
-                    or "error_code: BadCredentials" in error_msg
-                ):
-                    LOGGER.error(
-                        "❌ Zotify authentication failed - Invalid or missing Spotify credentials"
-                    )
-                    LOGGER.error(
-                        "Please check your Spotify credentials configuration:"
-                    )
-                    LOGGER.error(
-                        "1. Ensure you have valid Spotify Premium account credentials"
-                    )
-                    LOGGER.error(
-                        "2. Check that credentials file exists and is properly formatted"
-                    )
-                    LOGGER.error(
-                        "3. Verify ZOTIFY_CREDENTIALS_PATH is set correctly"
-                    )
-                    # Don't retry for credential errors - they won't fix themselves
-                    break
-                if (
-                    "Failed reading packet" in error_msg
-                    or "Failed to receive packet" in error_msg
-                ):
-                    LOGGER.info(
-                        "Connection packet error - librespot connection issue, retrying..."
-                    )
-                elif (
-                    "Connection reset by peer" in error_msg
-                    or "ConnectionResetError" in error_msg
-                ):
-                    LOGGER.info(
-                        "Connection reset by Spotify servers - retrying with longer delay..."
-                    )
-                elif (
-                    "ConnectionRefusedError" in error_msg
-                    or "Connection refused" in error_msg
-                ):
-                    LOGGER.info(
-                        "Connection refused by Spotify servers - retrying with backoff..."
-                    )
-                elif "session-packet-receiver" in error_msg:
-                    LOGGER.info(
-                        "Session packet receiver thread error - recreating session..."
-                    )
-                elif "Bad file descriptor" in error_msg:
-                    LOGGER.info(
-                        "Connection descriptor error - retrying with longer delay..."
-                    )
-                elif "Connection lost" in error_msg or "SSL" in error_msg:
-                    LOGGER.info("Network connection error - retrying...")
-                elif "RuntimeError" in error_msg and "packet" in error_msg.lower():
-                    LOGGER.info(
-                        "Runtime packet error - librespot internal issue, retrying..."
-                    )
-
-                if attempt < max_retries - 1:
-                    # Don't retry for credential errors
-                    if "BadCredentials" in error_msg:
-                        break
-
-                    # Adaptive delay based on error type
-                    if (
-                        "Connection reset by peer" in error_msg
-                        or "ConnectionResetError" in error_msg
-                    ):
-                        delay = min(
-                            (attempt + 1) * 2, 8
-                        )  # Longer delay for connection resets
-                    elif (
-                        "ConnectionRefusedError" in error_msg
-                        or "Connection refused" in error_msg
-                    ):
-                        delay = min(
-                            (attempt + 1) * 3, 12
-                        )  # Even longer delay for refused connections
-                    elif (
-                        "session-packet-receiver" in error_msg
-                        or "RuntimeError" in error_msg
-                    ):
-                        delay = min(
-                            (attempt + 1) * 2, 8
-                        )  # Longer delay for thread/runtime errors
-                    else:
-                        delay = min(
-                            attempt + 1, 3
-                        )  # Standard delay for other errors
-
-                    LOGGER.info(f"Retrying in {delay} seconds...")
-                    await asyncio.sleep(delay)
-
-        self._consecutive_failures = self._max_consecutive_failures
-        LOGGER.error("Failed to create Zotify session after all retries")
-        return False
+                self._consecutive_failures += 1
+                return False
 
     async def _test_session(self):
         """Test session with a simple API call and enhanced error handling"""
@@ -374,22 +200,19 @@ class ImprovedZotifySessionManager:
             raise Exception("No session available")
 
         try:
-            # Apply rate limiting before test
-            self._session.rate_limiter.apply_limit()
+            # Apply rate limiting before test - wrap in thread
+            await asyncio.to_thread(self._session.rate_limiter.apply_limit)
 
-            api = self._session.api()
+            # Wrap API operations in threads
+            api = await asyncio.to_thread(self._session.api)
             # Simple test call - get current user profile
-            result = api.invoke_url("me")
+            result = await asyncio.to_thread(api.invoke_url, "me")
             if not result:
                 raise Exception("Session test failed - no response")
 
             # Verify we got valid user data
             if not isinstance(result, dict) or "id" not in result:
                 raise Exception("Session test failed - invalid response format")
-
-            LOGGER.debug(
-                f"Session test successful for user: {result.get('display_name', 'Unknown')}"
-            )
 
         except Exception as e:
             error_msg = str(e)
@@ -439,7 +262,6 @@ class ImprovedZotifySessionManager:
             cache_key = f"api_{endpoint}"
             if cache_key in _api_call_cache and cache_key in _cache_timestamps:
                 if current_time - _cache_timestamps[cache_key] < CACHE_TTL:
-                    LOGGER.debug(f"Using cached API result for: {endpoint}")
                     return _api_call_cache[cache_key]
 
         # Enforce rate limiting
@@ -453,8 +275,9 @@ class ImprovedZotifySessionManager:
                 if not session:
                     raise Exception("No healthy session available")
 
-                api = session.api()
-                result = api.invoke_url(endpoint)
+                # Wrap API operations in threads
+                api = await asyncio.to_thread(session.api)
+                result = await asyncio.to_thread(api.invoke_url, endpoint)
 
                 # Update success tracking and activity
                 current_time = time.time()
@@ -572,11 +395,11 @@ class ImprovedZotifySessionManager:
             if not session:
                 return None
 
-            # Apply rate limiting
-            session.rate_limiter.apply_limit()
+            # Apply rate limiting - wrap in thread
+            await asyncio.to_thread(session.rate_limiter.apply_limit)
 
-            # Get track - use session.get_track() directly (no quality parameter needed)
-            return session.get_track(track_id)
+            # Get track - wrap in thread
+            return await asyncio.to_thread(session.get_track, track_id)
 
         except Exception as e:
             LOGGER.error(f"Failed to get track {track_id}: {e}")
@@ -589,10 +412,11 @@ class ImprovedZotifySessionManager:
             if not session:
                 return None
 
-            # Apply rate limiting
-            session.rate_limiter.apply_limit()
+            # Apply rate limiting - wrap in thread
+            await asyncio.to_thread(session.rate_limiter.apply_limit)
 
-            return session.get_episode(episode_id)
+            # Get episode - wrap in thread
+            return await asyncio.to_thread(session.get_episode, episode_id)
 
         except Exception as e:
             LOGGER.error(f"Failed to get episode {episode_id}: {e}")
@@ -649,6 +473,50 @@ class ImprovedZotifySessionManager:
 
 # Global instance
 improved_session_manager = ImprovedZotifySessionManager()
+
+# Global cleanup task to prevent thread buildup
+_cleanup_task = None
+
+async def _periodic_cleanup():
+    """Periodic cleanup to prevent thread and memory buildup"""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+
+            # Clean up expired cache entries
+            current_time = time.time()
+            expired_keys = [
+                key for key, timestamp in _cache_timestamps.items()
+                if current_time - timestamp > CACHE_TTL
+            ]
+            for key in expired_keys:
+                _api_call_cache.pop(key, None)
+                _cache_timestamps.pop(key, None)
+
+            # Force session cleanup if too old
+            if improved_session_manager._session:
+                session_age = current_time - improved_session_manager._session_created_at
+                if session_age > improved_session_manager._session_max_age:
+                    LOGGER.info("Forcing session cleanup due to age")
+                    with contextlib.suppress(Exception):
+                        improved_session_manager._session.close()
+                    improved_session_manager._session = None
+                    improved_session_manager._session_created_at = 0
+
+        except Exception as e:
+            LOGGER.warning(f"Cleanup task error: {e}")
+
+def start_cleanup_task():
+    """Start the periodic cleanup task"""
+    global _cleanup_task
+    if _cleanup_task is None or _cleanup_task.done():
+        _cleanup_task = asyncio.create_task(_periodic_cleanup())
+
+# Start cleanup task when module is imported
+try:
+    start_cleanup_task()
+except Exception:
+    pass  # Ignore if event loop not running
 
 
 # Convenience functions

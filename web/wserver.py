@@ -110,11 +110,11 @@ try:
 
                     except ValueError:
                         LOGGER.error(
-                            f"❌ Invalid environment value: {env_bin_channel}"
+                            f"Invalid environment value: {env_bin_channel}"
                         )
                 else:
                     LOGGER.warning(
-                        "❌ No valid FILE2LINK_BIN_CHANNEL found in database or environment"
+                        "No valid FILE2LINK_BIN_CHANNEL found in database or environment"
                     )
             else:
                 # Update Config object with database value
@@ -131,7 +131,7 @@ try:
 
                 except ValueError:
                     LOGGER.error(
-                        f"❌ Invalid emergency fallback value: {env_bin_channel}"
+                        f"Invalid emergency fallback value: {env_bin_channel}"
                     )
 
     # Store the config loading function for later use
@@ -399,7 +399,7 @@ async def lifespan(app: FastAPI):
                 )
                 if not channel_access:
                     LOGGER.error(
-                        "❌ Storage channel access validation failed - File2Link streaming may not work"
+                        "Storage channel access validation failed - File2Link streaming may not work"
                     )
                     LOGGER.error("Please ensure:")
                     LOGGER.error(
@@ -407,6 +407,7 @@ async def lifespan(app: FastAPI):
                     )
                     LOGGER.error("2. Bot is added to the channel")
                     LOGGER.error("3. Bot has admin permissions in the channel")
+
 
     except Exception as e:
         LOGGER.error(f"Failed to initialize TgClient for web server: {e}")
@@ -1582,9 +1583,7 @@ async def stream_file(path: str, request: Request):
                     LOGGER.error(f"Connection error in streaming: {e}")
                     # Check if it's an authentication error
                     if "AUTH_KEY_UNREGISTERED" in str(e) or "401" in str(e):
-                        LOGGER.error(
-                            "Telegram session expired - authentication required"
-                        )
+                        LOGGER.error("Telegram session expired - authentication required")
                         raise HTTPException(
                             status_code=401,
                             detail="Telegram session expired. Bot needs to re-authenticate.",

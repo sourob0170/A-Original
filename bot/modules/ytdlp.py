@@ -704,6 +704,16 @@ class YtDlp(TaskListener):
         self.is_leech = is_leech
 
     async def new_event(self):
+        # Check if message has text content
+        if not self.message.text:
+            await delete_links(self.message)
+            error_msg = await send_message(
+                self.message,
+                "❌ This command requires text input. Please send a text message with the command and URL."
+            )
+            create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
+            return
+
         text = self.message.text.split("\n")
         input_list = text[0].split(" ")
         qual = ""
@@ -1154,7 +1164,13 @@ class YtDlp(TaskListener):
         opt = opt or self.user_dict.get("YT_DLP_OPTIONS") or Config.YT_DLP_OPTIONS
 
         if not self.link and (reply_to := self.message.reply_to_message):
-            self.link = reply_to.text.split("\n", 1)[0].strip()
+            # Check if the replied message has text content
+            if reply_to.text:
+                self.link = reply_to.text.split("\n", 1)[0].strip()
+            else:
+                # Handle case where replied message has no text (e.g., media message)
+                LOGGER.warning("Replied message has no text content, cannot extract link")
+                self.link = ""
 
         if not is_url(self.link):
             await delete_links(self.message)

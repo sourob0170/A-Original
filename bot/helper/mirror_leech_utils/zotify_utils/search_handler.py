@@ -6,10 +6,8 @@ import asyncio
 import contextlib
 import time as time_module
 
-# Optimized in-memory cache for search results with LRU eviction
-from collections import OrderedDict
+# Lightweight cache for search results
 from functools import partial
-from time import time
 from typing import Any
 
 from pyrogram import filters as pyrogram_filters
@@ -36,19 +34,19 @@ from bot.helper.telegram_helper.message_utils import (
     send_message,
 )
 
-_search_cache = OrderedDict()
+# Reduced cache sizes for memory optimization
+_search_cache = {}
 _cache_timestamps = {}
-CACHE_DURATION = 300  # 5 minutes cache
-MAX_CACHE_ENTRIES = 100  # Increased for better hit rate
+CACHE_DURATION = 180  # Reduced to 3 minutes
+MAX_CACHE_ENTRIES = 30  # Significantly reduced
 _thumbnail_cache = {}  # Separate cache for thumbnails
+MAX_THUMBNAIL_CACHE = 15  # Limit thumbnail cache
 
 
 def _get_search_cache(key: str):
-    """Get cached search result if still valid with LRU update"""
+    """Get cached search result if still valid"""
     if key in _search_cache and key in _cache_timestamps:
         if time_module.time() - _cache_timestamps[key] < CACHE_DURATION:
-            # Move to end (most recently used)
-            _search_cache.move_to_end(key)
             return _search_cache[key]
         # Remove expired cache
         del _search_cache[key]
@@ -81,7 +79,7 @@ def _get_thumbnail_cache(key: str):
 def _set_thumbnail_cache(key: str, url: str):
     """Set thumbnail URL in cache"""
     # Limit thumbnail cache size
-    if len(_thumbnail_cache) > 200:
+    if len(_thumbnail_cache) >= MAX_THUMBNAIL_CACHE:
         # Remove oldest 50 entries
         sorted_items = sorted(_thumbnail_cache.items(), key=lambda x: x[1][0])
         for old_key, _ in sorted_items[:50]:
@@ -97,10 +95,11 @@ class ZotifySearchHandler:
         self._session = None
         self._search_cache = {}
         self._session_cache_time = 0
-        self._session_cache_expiry = 600  # 10 minutes - same as streamrip
+        self._session_cache_expiry = 300  # Reduced to 5 minutes to prevent thread buildup
+        self._session_creation_lock = asyncio.Lock()  # Prevent concurrent session creation
 
     async def get_session(self) -> Session | None:
-        """Get or create Zotify session with caching"""
+        """Get or create Zotify session with thread-safe caching and cleanup"""
         current_time = time_module.time()
 
         # Check if cached session is still valid
@@ -108,53 +107,77 @@ class ZotifySearchHandler:
             self._session
             and current_time - self._session_cache_time < self._session_cache_expiry
         ):
-            # Validate session is still working
+            # Quick validation without expensive operations
             try:
-                # Quick validation - try to access session properties
-                if hasattr(self._session, "api") and self._session.api:
+                if hasattr(self._session, "api"):
                     return self._session
-                LOGGER.warning("Cached session appears invalid, recreating...")
-                self._session = None
+            except Exception:
+                pass
+
+            # Session appears invalid, clear it
+            await self._cleanup_session()
+
+        # Use lock to prevent concurrent session creation (which causes thread issues)
+        async with self._session_creation_lock:
+            # Double-check after acquiring lock
+            if (
+                self._session
+                and current_time - self._session_cache_time < self._session_cache_expiry
+            ):
+                return self._session
+
+            try:
+                auth_method = zotify_config.get_auth_method()
+
+                if auth_method == "file":
+                    # Suppress librespot core logs for cleaner output
+                    import logging
+
+                    librespot_logger = logging.getLogger("librespot.core")
+                    original_level = librespot_logger.level
+                    librespot_logger.setLevel(logging.ERROR)  # More aggressive suppression
+
+                    try:
+                        # Add small delay to prevent rapid session creation
+                        await asyncio.sleep(0.1)
+
+                        # Wrap blocking Session.from_file in thread
+                        self._session = await asyncio.to_thread(
+                            Session.from_file,
+                            zotify_config.get_credentials_path(),
+                            zotify_config.get_download_config()["language"],
+                        )
+
+                        # Cache the session creation time
+                        self._session_cache_time = current_time
+
+                    finally:
+                        # Restore original logging level
+                        librespot_logger.setLevel(original_level)
+
+                else:
+                    # Interactive authentication not supported
+                    return None
+
+                return self._session
+
             except Exception as e:
-                LOGGER.warning(f"Session validation failed, recreating: {e}")
-                self._session = None
-
-        try:
-            auth_method = zotify_config.get_auth_method()
-
-            if auth_method == "file":
-                # Suppress librespot core logs for cleaner output
-                import logging
-
-                librespot_logger = logging.getLogger("librespot.core")
-                original_level = librespot_logger.level
-                librespot_logger.setLevel(
-                    logging.WARNING
-                )  # Only show warnings and errors
-
-                try:
-                    self._session = Session.from_file(
-                        zotify_config.get_credentials_path(),
-                        zotify_config.get_download_config()["language"],
-                    )
-                finally:
-                    # Restore original logging level
-                    librespot_logger.setLevel(original_level)
-                # Cache the session creation time
-                self._session_cache_time = current_time
-
-            else:
-                # Interactive authentication - will need to be handled separately
-                # For now, return None to indicate authentication is needed
+                LOGGER.error(f"Failed to create Zotify session: {e}")
+                await self._cleanup_session()
                 return None
 
-            return self._session
-
-        except Exception as e:
-            LOGGER.error(f"Failed to create Zotify session: {e}")
-            # Clear any invalid session
-            self._session = None
-            return None
+    async def _cleanup_session(self):
+        """Clean up session resources to prevent thread leaks"""
+        if self._session:
+            try:
+                # Try to close session gracefully
+                if hasattr(self._session, 'close'):
+                    self._session.close()
+            except Exception:
+                pass  # Ignore cleanup errors
+            finally:
+                self._session = None
+                self._session_cache_time = 0
 
     async def search_music(
         self, query: str, categories: list[str] | None = None
@@ -177,12 +200,12 @@ class ZotifySearchHandler:
             return {}
 
         try:
-            # Use Zotify's ApiClient for search via Spotify Web API
-            api = session.api()
+            # Use Zotify's ApiClient for search via Spotify Web API - wrap in thread
+            api = await asyncio.to_thread(session.api)
 
-            # Check account type for optimization
+            # Check account type for optimization - wrap API call in thread
             try:
-                user_info = api.invoke_url("me")
+                user_info = await asyncio.to_thread(api.invoke_url, "me")
                 account_type = user_info.get("product", "unknown")
                 is_free_account = account_type == "free"
             except Exception:
@@ -196,9 +219,9 @@ class ZotifySearchHandler:
 
             for category in categories:
                 try:
-                    # Apply rate limiting for free accounts
+                    # Apply rate limiting for free accounts - wrap in thread
                     if is_free_account:
-                        session.rate_limiter.apply_limit()
+                        await asyncio.to_thread(session.rate_limiter.apply_limit)
 
                     # Use Zotify's exact API method for search
                     search_endpoint = (
@@ -211,14 +234,9 @@ class ZotifySearchHandler:
 
                     for attempt in range(max_retries):
                         try:
-                            # Remove timeout - let search complete naturally
-                            category_results = (
-                                await asyncio.get_event_loop().run_in_executor(
-                                    None,
-                                    lambda endpoint=search_endpoint: api.invoke_url(
-                                        endpoint
-                                    ),
-                                )
+                            # Use asyncio.to_thread for better performance
+                            category_results = await asyncio.to_thread(
+                                api.invoke_url, search_endpoint
                             )
                             break  # Success, exit retry loop
                         except Exception as e:
@@ -455,8 +473,39 @@ class ZotifySearchHandler:
         return message
 
 
-# Global instance
+# Global instance with session limit
 zotify_search = ZotifySearchHandler()
+
+# Global session cleanup to prevent thread buildup
+async def cleanup_all_sessions():
+    """Clean up all Zotify sessions to prevent thread leaks"""
+    try:
+        if zotify_search._session:
+            await zotify_search._cleanup_session()
+
+        # Also cleanup the improved session manager
+        from bot.helper.mirror_leech_utils.zotify_utils.improved_session_manager import improved_session_manager
+        if improved_session_manager._session:
+            with contextlib.suppress(Exception):
+                improved_session_manager._session.close()
+            improved_session_manager._session = None
+            improved_session_manager._session_created_at = 0
+
+    except Exception as e:
+        LOGGER.warning(f"Session cleanup error: {e}")
+
+# Cleanup sessions periodically
+_cleanup_interval = 600  # 10 minutes
+_last_cleanup = 0
+
+async def periodic_session_cleanup():
+    """Periodic cleanup to prevent thread exhaustion"""
+    global _last_cleanup
+    current_time = time_module.time()
+
+    if current_time - _last_cleanup > _cleanup_interval:
+        await cleanup_all_sessions()
+        _last_cleanup = current_time
 
 
 class ZotifySearchInterface:
@@ -482,7 +531,7 @@ class ZotifySearchInterface:
         self.current_page = 0
         self.results_per_page = 5  # Same as StreamRip
         self._reply_to = None
-        self._time = time()
+        self._time = time_module.time()
         self._timeout = 300  # 5 minutes for search
         self.event = asyncio.Event()
         self.selected_result = None
@@ -793,7 +842,7 @@ class ZotifySearchInterface:
         # Add cancel button
         buttons.data_button("❌ Cancel", "zs cancel", "footer")
 
-        msg += f"⏱️ <b>Timeout:</b> <code>{get_readable_time(self._timeout - (time() - self._time))}</code>"
+        msg += f"⏱️ <b>Timeout:</b> <code>{get_readable_time(self._timeout - (time_module.time() - self._time))}</code>"
 
         # Send or edit message
         if self._reply_to:
@@ -920,8 +969,27 @@ class ZotifySearchInterface:
 async def search_music(
     query: str, categories: list[str] | None = None
 ) -> dict[str, list[dict]]:
-    """Search for music using Zotify"""
-    return await zotify_search.search_music(query, categories)
+    """Search for music using Zotify with thread safety"""
+    try:
+        # Perform periodic cleanup to prevent thread exhaustion
+        await periodic_session_cleanup()
+
+        return await zotify_search.search_music(query, categories)
+    except Exception as e:
+        error_msg = str(e)
+        if "can't start new thread" in error_msg:
+            LOGGER.error("Thread exhaustion in Zotify search - forcing cleanup")
+            await cleanup_all_sessions()
+            # Wait a bit and retry once
+            await asyncio.sleep(2)
+            try:
+                return await zotify_search.search_music(query, categories)
+            except Exception as retry_e:
+                LOGGER.error(f"Zotify search retry failed: {retry_e}")
+                return {}
+        else:
+            LOGGER.error(f"Zotify search failed: {e}")
+            return {}
 
 
 async def search_music_auto_first(query: str) -> str | None:
@@ -952,14 +1020,13 @@ async def perform_inline_zotify_search(
     query: str, media_type: str | None = None, user_id: int | None = None
 ) -> list[dict]:
     """Perform Zotify search for inline queries with optimized performance and no timeouts"""
-    time_module.time()
+    # Performance tracking removed for optimization
 
     try:
         # Check cache first for faster responses
         cache_key = f"zotify_search_{query}_{media_type}"
         cached_result = _get_search_cache(cache_key)
         if cached_result is not None:
-            LOGGER.debug(f"Using cached Zotify search result for: {query}")
             return cached_result
 
         # Initialize Zotify on-demand

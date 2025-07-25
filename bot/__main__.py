@@ -170,6 +170,14 @@ async def main():
     await gather(
         TgClient.start_bot(), TgClient.start_user(), TgClient.start_helper_bots()
     )
+
+    # Load Zotify credentials from database after bot clients are started
+    from .core.startup import load_zotify_credentials_from_db
+    try:
+        await load_zotify_credentials_from_db()
+    except Exception as e:
+        LOGGER.error(f"Failed to restore Zotify credentials: {e}")
+
     await gather(load_configurations(), update_variables())
     from .core.torrent_manager import TorrentManager
 

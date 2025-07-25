@@ -96,6 +96,14 @@ async def whisper_command(client, message: Message):
             return
 
         # Parse the command text
+        if not message.text:
+            await send_message(
+                message,
+                "❌ <b>No Message Provided</b>\n\n"
+                "Please provide a message with the whisper command.",
+            )
+            return
+
         command_parts = message.text.split(None, 1)[1]  # Everything after /whisper
 
         # Check if -to flag is used

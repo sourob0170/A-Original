@@ -1,3 +1,4 @@
+from bot import LOGGER
 from bot.helper.ext_utils.status_utils import (
     MirrorStatus,
     get_readable_file_size,
@@ -62,4 +63,17 @@ class TelegramStatus:
         return self._gid
 
     def task(self):
-        return self._obj
+        return self
+
+    async def cancel_task(self):
+        """Cancel the telegram upload task"""
+        self.listener.is_cancelled = True
+        if hasattr(self._obj, "cancel_task"):
+            await self._obj.cancel_task()
+        else:
+            # Fallback for older implementations
+            if hasattr(self._obj, "_listener"):
+                self._obj._listener.is_cancelled = True
+
+        LOGGER.info(f"Cancelling Telegram Upload: {self.name()}")
+        await self.listener.on_upload_error("Upload stopped by user!")

@@ -1431,6 +1431,10 @@ async def scrap_command(_, message):
     """
     try:
         # Extract command arguments
+        if not message.text:
+            await send_message(message, "❌ No command text provided.")
+            return
+
         command_parts = message.text.split(maxsplit=1)
         argument = None
 

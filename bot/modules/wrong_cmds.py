@@ -20,6 +20,8 @@ async def handle_qb_commands(_, message):
     if not Config.WRONG_CMD_WARNINGS_ENABLED:
         return
 
+    if not message.text:
+        return
     command = message.text.split()[0].lower()
 
     if "qbleech" in command:
@@ -55,6 +57,10 @@ async def handle_no_suffix_commands(client, message):  # noqa: ARG001
     """
     # Check if command warnings are enabled
     if not Config.WRONG_CMD_WARNINGS_ENABLED:
+        return
+
+    # Check if message has text
+    if not message.text:
         return
 
     # Get the full command text (including any suffix)
