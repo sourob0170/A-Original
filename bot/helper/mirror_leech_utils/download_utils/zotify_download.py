@@ -80,31 +80,53 @@ class ZotifyDownloadHelper:
         self._download_tasks = set()  # Track active download tasks
         self._progress_tasks = set()  # Track progress monitoring tasks
 
-    async def get_session(self) -> Session | None:
-        """Get or create Zotify session with optimized error handling"""
-        try:
-            session = await improved_session_manager.get_session()
-            if session:
-                return session
+    async def ensure_valid_session(self, session: Session | None) -> Session | None:
+        """Ensure we have a valid session, recreate if necessary"""
+        if not session or not hasattr(session, 'api') or not hasattr(session, 'rate_limiter'):
+            LOGGER.warning("Session is invalid, creating new session")
+            return await self.get_session()
+        return session
 
-            health_info = improved_session_manager.get_session_health()
-            LOGGER.warning(f"Session creation failed. Health: {health_info}")
-            return None
-        except Exception as e:
-            error_msg = str(e)
-            if any(
-                err in error_msg
-                for err in [
-                    "packet",
-                    "Connection",
-                    "session-packet-receiver",
-                    "descriptor",
-                ]
-            ):
-                LOGGER.warning(f"Connection issue: {error_msg}")
-            else:
-                LOGGER.error(f"Failed to get Zotify session: {error_msg}")
-            return None
+    async def get_session(self) -> Session | None:
+        """Get or create Zotify session with enhanced error handling and retries"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                session = await improved_session_manager.get_session()
+                if session:
+                    return session
+
+                health_info = improved_session_manager.get_session_health()
+                LOGGER.warning(f"Session creation failed. Health: {health_info}")
+
+                # Wait before retry
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    LOGGER.info(f"Retrying session creation in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+
+            except Exception as e:
+                error_msg = str(e)
+                if any(
+                    err in error_msg
+                    for err in [
+                        "packet",
+                        "Connection",
+                        "session-packet-receiver",
+                        "descriptor",
+                    ]
+                ):
+                    LOGGER.warning(f"Connection issue (attempt {attempt + 1}): {error_msg}")
+                else:
+                    LOGGER.error(f"Failed to get Zotify session (attempt {attempt + 1}): {error_msg}")
+
+                # Wait before retry
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    await asyncio.sleep(wait_time)
+
+        LOGGER.error("Failed to create session after all retries")
+        return None
 
     async def get_zotify_config(self):
         """Get Zotify config object with validation"""
@@ -265,8 +287,9 @@ class ZotifyDownloadHelper:
             self._download_path = Path(DOWNLOAD_DIR) / f"zotify_{self.listener.mid}"
             self._download_path.mkdir(parents=True, exist_ok=True)
 
-            # Set downloading flag
+            # Set downloading flag and mark session as active
             self._is_downloading = True
+            improved_session_manager.mark_download_start()
 
             # Start download based on content type with optimized flow
             success = False
@@ -343,14 +366,23 @@ class ZotifyDownloadHelper:
                     "Connection refused",
                     "session-packet-receiver",
                     "RuntimeError",
+                    "'NoneType' object has no attribute 'send'",
+                    "NoneType",
                 ]
             ):
                 LOGGER.error(f"Zotify connection error: {error_msg}")
                 # Force session recreation for next attempt
-                await improved_session_manager.force_session_recreation()
+                try:
+                    await improved_session_manager.force_session_recreation()
+                except Exception as recreation_error:
+                    LOGGER.error(f"Failed to recreate session: {recreation_error}")
             else:
                 LOGGER.error(f"Zotify download error: {error_msg}")
             return False
+        finally:
+            # Always mark download as ended to restore normal session timeout
+            improved_session_manager.mark_download_end()
+            self._is_downloading = False
 
     async def _download_special(self) -> bool:
         """Download special content (liked tracks, followed artists, etc.)"""
@@ -445,6 +477,11 @@ class ZotifyDownloadHelper:
     async def _download_track(self, session: Session, track_id: str) -> bool:
         """Download a single track with optimized performance"""
         try:
+            # Validate session before use
+            if not session or not hasattr(session, 'api') or not hasattr(session, 'rate_limiter'):
+                LOGGER.error("Invalid session provided to _download_track")
+                return False
+
             # Check cancellation at start
             if self.listener.is_cancelled:
                 return False
@@ -458,8 +495,12 @@ class ZotifyDownloadHelper:
             if self.listener.is_cancelled:
                 return False
 
-            # Wrap blocking rate limiter in thread
-            await asyncio.to_thread(session.rate_limiter.apply_limit)
+            # Wrap blocking rate limiter in thread with error handling
+            try:
+                await asyncio.to_thread(session.rate_limiter.apply_limit)
+            except Exception as e:
+                LOGGER.error(f"Rate limiter error: {e}")
+                return False
 
             # Check cancellation before track fetch
             if self.listener.is_cancelled:
@@ -706,12 +747,24 @@ class ZotifyDownloadHelper:
                 LOGGER.error(
                     "Error creating output path - check file permissions and path validity"
                 )
+            elif "Cannot get alternative track" in error_msg:
+                LOGGER.warning(f"Track {track_id} is not available in your region or requires premium")
+            elif "'NoneType' object has no attribute 'send'" in error_msg:
+                LOGGER.error("Session connection lost during download - will retry with new session")
+                # Force session recreation for next track
+                with contextlib.suppress(Exception):
+                    await improved_session_manager.force_session_recreation()
 
             return False
 
     async def _download_album(self, session: Session, album_id: str) -> bool:
         """Download an album with fully async operations"""
         try:
+            # Validate session before use
+            if not session or not hasattr(session, 'api'):
+                LOGGER.error("Invalid session provided to _download_album")
+                return False
+
             config_obj = await self.get_zotify_config()
 
             # Wrap blocking Album initialization in thread
@@ -739,6 +792,12 @@ class ZotifyDownloadHelper:
                     track_num = i + j + 1
                     self._current_track = f"Track {track_num}/{self._total_tracks}"
 
+                    # Ensure session is valid before each track
+                    session = await self.ensure_valid_session(session)
+                    if not session:
+                        LOGGER.error("Failed to maintain valid session during album download")
+                        return False
+
                     # Download track and check for cancellation
                     success = await self._download_track(session, playable_data.id)
                     if not success and self.listener.is_cancelled:
@@ -760,6 +819,11 @@ class ZotifyDownloadHelper:
     async def _download_playlist(self, session: Session, playlist_id: str) -> bool:
         """Download a playlist with fully async operations"""
         try:
+            # Validate session before use
+            if not session or not hasattr(session, 'api'):
+                LOGGER.error("Invalid session provided to _download_playlist")
+                return False
+
             config_obj = await self.get_zotify_config()
 
             # Wrap blocking Playlist initialization in thread
@@ -786,6 +850,12 @@ class ZotifyDownloadHelper:
 
                     track_num = i + j + 1
                     self._current_track = f"Track {track_num}/{self._total_tracks}"
+
+                    # Ensure session is valid before each item
+                    session = await self.ensure_valid_session(session)
+                    if not session:
+                        LOGGER.error("Failed to maintain valid session during playlist download")
+                        return False
 
                     # Download based on playable type and check for cancellation
                     success = False

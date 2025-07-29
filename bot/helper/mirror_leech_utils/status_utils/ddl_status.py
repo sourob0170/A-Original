@@ -62,6 +62,8 @@ class DDLStatus:
         """Cancel the DDL upload task"""
         if self.listener:
             self.listener.is_cancelled = True
-            await self.listener.on_upload_error("DDL upload cancelled by user!")
         if hasattr(self.__obj, "is_cancelled"):
             self.__obj.is_cancelled = True
+        # DDL upload doesn't have its own error handling, so we handle it here
+        if self.listener:
+            await self.listener.on_upload_error("DDL upload cancelled by user!")

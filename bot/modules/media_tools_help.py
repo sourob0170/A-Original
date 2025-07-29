@@ -1148,73 +1148,57 @@ def get_priority_guide_page():
 
 def get_metadata_guide_page():
     msg = "<b>Metadata Feature Guide (29/30)</b>\n\n"
-    msg += "<b>Metadata Feature</b>\n"
-    msg += "Add custom metadata to media files (videos, audio, images, documents) to enhance organization and information.\n\n"
+    msg += "Add custom metadata to media files using command flags or user settings.\n\n"
 
-    msg += "<b>How to Use</b>:\n"
-    msg += "Add metadata using these command flags:\n"
-    msg += "• <code>-metadata-title 'Title'</code>: Set global title\n"
-    msg += "• <code>-metadata-author 'Author'</code>: Set global author/artist\n"
-    msg += "• <code>-metadata-comment 'Comment'</code>: Set global comment\n"
-    msg += "• <code>-metadata-all 'Text'</code>: Apply to all fields\n"
-    msg += "• <code>-metadata 'Text'</code>: Legacy method\n\n"
+    msg += "<b>Command Flags:</b>\n"
+    msg += "• <code>-metadata-title 'Title'</code>\n"
+    msg += "• <code>-metadata-author 'Author'</code>\n"
+    msg += "• <code>-metadata-comment 'Comment'</code>\n"
+    msg += "• <code>-metadata-all 'Text'</code>\n\n"
 
-    msg += "<b>Track-Specific Metadata</b>:\n"
-    msg += "• <code>-metadata-video-title 'Title'</code>: Video track title\n"
-    msg += "• <code>-metadata-audio-author 'Author'</code>: Audio track author\n"
-    msg += "• <code>-metadata-subtitle-comment 'Notes'</code>: Subtitle comment\n\n"
+    msg += "<b>Template Variables:</b>\n"
+    msg += "Use <code>{variable}</code> format in metadata:\n"
+    msg += "• <code>{filename}</code>, <code>{size}</code>, <code>{duration}</code>, <code>{ext}</code>\n"
+    msg += "• <code>{quality}</code>, <code>{codec}</code>, <code>{year}</code>\n"
+    msg += "• <code>{season}</code>, <code>{episode}</code> (TV shows)\n"
+    msg += "• <code>{audios}</code>, <code>{subtitles}</code>, <code>{NumAudios}</code>\n\n"
 
-    msg += "<b>Metadata Fields</b>:\n"
-    msg += "• <b>Title</b>: Media title (shown in players/file managers)\n"
-    msg += "• <b>Author</b>: Creator/artist information\n"
-    msg += "• <b>Comment</b>: Additional notes or information\n\n"
+    msg += "<b>Examples:</b>\n"
+    msg += "• Movie: <code>{filename} - {quality}</code>\n"
+    msg += "• TV: <code>S{season}E{episode} - {filename}</code>\n"
+    msg += "• Detail: <code>{filename} | {size} | {codec}</code>\n\n"
 
-    msg += "<b>Priority Order</b>:\n"
-    msg += "1. Command flags (highest priority)\n"
-    msg += "2. User settings (/usettings)\n"
-    msg += "3. Bot owner settings\n"
-    msg += "4. Default values\n\n"
-
-    msg += '<blockquote expandable="expandable"><b>Supported File Types</b>:\n'
-    msg += "• <b>Video</b>: MP4, MKV, WebM, AVI, MOV, etc.\n"
-    msg += "• <b>Audio</b>: MP3, M4A, FLAC, OGG, WAV, etc.\n"
-    msg += "• <b>Documents</b>: PDF, EPUB, MOBI, Office files\n"
-    msg += "• <b>Images</b>: JPG, PNG (limited support)\n\n"
-
-    msg += "<b>Implementation Details</b>:\n"
-    msg += "• Videos/Audio: Uses FFmpeg for metadata embedding\n"
-    msg += "• E-books: Uses ebook-meta (Calibre) when available\n"
-    msg += "• PDF: Uses PyMuPDF for fast and reliable processing\n"
-    msg += "• Other files: Uses exiftool as fallback\n\n"
-
-    msg += "Different formats support different metadata fields. Some may have limitations on which metadata can be modified.</blockquote>\n\n"
-
-    msg += '<blockquote expandable="expandable"><b>Examples</b>:\n'
-    msg += "• <code>/leech https://example.com/music.zip -metadata-title 'Album Name'</code>\n"
-    msg += "  Adds title metadata to all audio files\n\n"
-    msg += "• <code>/mirror https://example.com/video.mp4 -metadata-author 'Channel Name'</code>\n"
-    msg += "  Sets the author/artist metadata field\n\n"
-    msg += "• <code>/leech https://example.com/podcast.mp3 -metadata-all 'My Podcast'</code>\n"
-    msg += "  Sets all metadata fields to 'My Podcast'\n\n"
-    msg += "• <code>/mirror https://example.com/video.mp4 -metadata-video-title 'Episode 1' -metadata-audio-author 'My Channel'</code>\n"
-    msg += "  Sets different metadata for video and audio tracks</blockquote>\n\n"
-
-    msg += '<blockquote expandable="expandable"><b>Tips for Using Metadata</b>:\n'
-    msg += "• Use quotes around values with spaces\n"
-    msg += "• Keep metadata concise for better compatibility\n"
-    msg += "• Use -metadata-all for quick application to all fields\n"
-    msg += "• Individual fields override -metadata-all\n"
-    msg += "• Track-specific settings override global settings\n"
-    msg += "• Some players may only display certain metadata fields\n"
+    msg += '<blockquote expandable="expandable"><b>All Template Variables:</b>\n'
+    msg += "<b>Basic:</b> filename, size, duration, ext, md5_hash, id\n"
     msg += (
-        "• Metadata is preserved during file transfers and uploads</blockquote>\n\n"
+        "<b>Media:</b> quality, codec, framerate, audios, audio_codecs, subtitles\n"
     )
+    msg += "<b>Tracks:</b> NumVideos, NumAudios, NumSubtitles, formate, format\n"
+    msg += "<b>TV Shows:</b> season, episode, year\n\n"
 
-    msg += "<b>Managing Metadata</b>:\n"
-    msg += "• Configure default metadata in /usettings > Leech > Metadata\n"
-    msg += "• Set different values for different fields and tracks\n"
-    msg += "• Reset all metadata settings with 'Reset All' button\n"
-    msg += "• Use with other media tools for complete file processing\n"
+    msg += "<b>Track-Specific:</b>\n"
+    msg += "• <code>-metadata-video-title</code>\n"
+    msg += "• <code>-metadata-audio-author</code>\n"
+    msg += "• <code>-metadata-subtitle-comment</code>\n\n"
+
+    msg += "<b>Supported Files:</b>\n"
+    msg += "Video (MP4, MKV), Audio (MP3, M4A), Documents (PDF, EPUB), Images\n\n"
+
+    msg += "<b>Priority:</b> Command flags > User settings > Bot defaults</blockquote>\n\n"
+
+    msg += '<blockquote expandable="expandable"><b>Usage Examples:</b>\n'
+    msg += "• <code>/leech url -metadata-title 'Album Name'</code>\n"
+    msg += "• <code>/mirror url -metadata-author 'Channel'</code>\n"
+    msg += "• <code>/leech url -metadata-all 'My Collection'</code>\n"
+    msg += "• <code>/mirror url -metadata-comment '{filename} - {year}'</code>\n\n"
+
+    msg += "<b>Tips:</b>\n"
+    msg += "• Use quotes for values with spaces\n"
+    msg += "• Configure defaults in /usettings > Metadata\n"
+    msg += "• Template variables work in all metadata fields\n"
+    msg += "• Individual fields override -metadata-all</blockquote>\n\n"
+
+    msg += "Configure default metadata in <b>/usettings > Leech > Metadata</b> for automatic application to all files."
 
     return msg
 

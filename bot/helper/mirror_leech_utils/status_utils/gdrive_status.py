@@ -59,13 +59,18 @@ class GoogleDriveStatus:
     async def cancel_task(self):
         """Cancel the Google Drive upload task"""
         self.listener.is_cancelled = True
+
+        # Let the actual uploader handle the cancellation and error messages
+        # This prevents duplicate error messages
         if hasattr(self._obj, "cancel_task"):
             await self._obj.cancel_task()
         elif hasattr(self._obj, "cancel"):
             self._obj.cancel()
+            # For non-async cancel methods, we need to handle the error message
+            LOGGER.info(f"Cancelling Google Drive Upload: {self.name()}")
+            await self.listener.on_upload_error("Upload stopped by user!")
         elif hasattr(self._obj, "_listener"):
             # Fallback for older implementations
             self._obj._listener.is_cancelled = True
-
-        LOGGER.info(f"Cancelling Google Drive Upload: {self.name()}")
-        await self.listener.on_upload_error("Upload stopped by user!")
+            LOGGER.info(f"Cancelling Google Drive Upload: {self.name()}")
+            await self.listener.on_upload_error("Upload stopped by user!")

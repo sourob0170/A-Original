@@ -369,11 +369,12 @@ async def get_user_settings(from_user, stype="main"):
     token_pickle = f"tokens/{user_id}.pickle"
     thumbpath = f"thumbnails/{user_id}.jpg"
     user_dict = user_data.get(user_id, {})
+
     # Only show thumbnail if user has one or if owner thumbnail is configured
     thumbnail = thumbpath if await aiopath.exists(thumbpath) else no_thumb
 
     # Helper function to get MEGA settings with user priority
-    def get_mega_setting(setting_name, default_value=None, is_bool=False):
+    def get_mega_setting(setting_name, default_value=None):
         user_value = user_dict.get(setting_name, None)
         if user_value is not None:
             return user_value, "User"
@@ -959,13 +960,9 @@ Please contact the administrator to enable MEGA functionality.
         # Link Expiry, Upload Password, Encryption Key buttons removed - not supported by MEGA SDK v4.8.0
 
         # Toggle buttons for boolean settings
-        public_links, public_links_source = get_mega_setting(
-            "MEGA_UPLOAD_PUBLIC", False, True
-        )
+        public_links, _ = get_mega_setting("MEGA_UPLOAD_PUBLIC", False)
         # private_links, unlisted_links removed - not supported by MEGA SDK v4.8.0
-        thumbnails, thumbnails_source = get_mega_setting(
-            "MEGA_UPLOAD_THUMBNAIL", False, True
-        )
+        thumbnails, _ = get_mega_setting("MEGA_UPLOAD_THUMBNAIL", False)
         # delete_after removed - always delete after upload
 
         buttons.data_button(
@@ -984,13 +981,9 @@ Please contact the administrator to enable MEGA functionality.
 
         # Upload settings
         # upload_folder removed - using folder selector instead
-        public_links, public_links_source = get_mega_setting(
-            "MEGA_UPLOAD_PUBLIC", False, True
-        )
+        public_links, _ = get_mega_setting("MEGA_UPLOAD_PUBLIC", False)
         # private_links, unlisted_links, expiry_days, upload_password, encryption_key removed - not supported by MEGA SDK v4.8.0
-        thumbnails, thumbnails_source = get_mega_setting(
-            "MEGA_UPLOAD_THUMBNAIL", False, True
-        )
+        thumbnails, _ = get_mega_setting("MEGA_UPLOAD_THUMBNAIL", False)
         # delete_after removed - always delete after upload
 
         # Format display values
@@ -1362,28 +1355,21 @@ Configure credentials for accessing private content and higher quality downloads
         # metadata_key = user_dict.get("METADATA_KEY", "None")
 
         text = f"""<u><b>Metadata Settings for {name}</b></u>
-<b>Global Settings:</b>
--> Metadata All: <code>{metadata_all}</code>
--> Global Title: <code>{metadata_title}</code>
--> Global Author: <code>{metadata_author}</code>
--> Global Comment: <code>{metadata_comment}</code>
+<b>Global:</b> All: <code>{metadata_all}</code> | Title: <code>{metadata_title}</code>
+Author: <code>{metadata_author}</code> | Comment: <code>{metadata_comment}</code>
 
-<b>Video Track Settings:</b>
--> Video Title: <code>{metadata_video_title}</code>
--> Video Author: <code>{metadata_video_author}</code>
--> Video Comment: <code>{metadata_video_comment}</code>
+<b>Video:</b> Title: <code>{metadata_video_title}</code> | Author: <code>{metadata_video_author}</code>
+Comment: <code>{metadata_video_comment}</code>
 
-<b>Audio Track Settings:</b>
--> Audio Title: <code>{metadata_audio_title}</code>
--> Audio Author: <code>{metadata_audio_author}</code>
--> Audio Comment: <code>{metadata_audio_comment}</code>
+<b>Audio:</b> Title: <code>{metadata_audio_title}</code> | Author: <code>{metadata_audio_author}</code>
+Comment: <code>{metadata_audio_comment}</code>
 
-<b>Subtitle Track Settings:</b>
--> Subtitle Title: <code>{metadata_subtitle_title}</code>
--> Subtitle Author: <code>{metadata_subtitle_author}</code>
--> Subtitle Comment: <code>{metadata_subtitle_comment}</code>
+<b>Subtitle:</b> Title: <code>{metadata_subtitle_title}</code> | Author: <code>{metadata_subtitle_author}</code>
+Comment: <code>{metadata_subtitle_comment}</code>
 
-<b>Note:</b> 'Metadata All' takes priority over all other settings when set."""
+<b>Variables:</b> Use <code>{{filename}}</code>, <code>{{quality}}</code>, <code>{{year}}</code>, <code>{{season}}</code>, <code>{{episode}}</code>
+<b>Example:</b> <code>{{filename}} - {{quality}}</code>
+See /mediahelp for full list."""
 
     elif stype == "ddl":
         # DDL Settings - only show if DDL is enabled
@@ -2564,44 +2550,73 @@ async def set_option(_, message, option):
             # Try to convert the value to an integer
             value = int(value) if value.isdigit() else get_size_bytes(value)
 
-            # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
-            # USER_TRANSMISSION is owner setting only, not user-specific
-            # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
-            max_split_size = (
-                TgClient.MAX_SPLIT_SIZE
-                if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
-                else 2097152000
+            # IMPORTANT: Never allow LEECH_SPLIT_SIZE to be 0 or negative
+            if value <= 0:
+                await send_message(
+                    message,
+                    "❌ <b>Invalid split size!</b>\n\n"
+                    "Split size cannot be 0 or negative. Splitting is always enabled to ensure files can be uploaded.\n\n"
+                    "Please enter a valid size (e.g., 1.9GB, 1900MB, etc.)",
+                )
+                return
+
+            # Determine client type and appropriate limits
+            will_use_user_client = (
+                Config.USER_TRANSMISSION and TgClient.user is not None
             )
 
-            # Ensure split size never exceeds Telegram's limit (based on premium status)
-            # Add a safety margin to ensure we never exceed Telegram's limit
-            safety_margin = 50 * 1024 * 1024  # 50 MiB
-
-            # For non-premium accounts, use a more conservative limit
-            if not TgClient.IS_PREMIUM_USER:
-                # Use 2000 MiB (slightly less than 2 GiB) for non-premium accounts
-                telegram_limit = 2000 * 1024 * 1024
+            if will_use_user_client:
+                if TgClient.IS_PREMIUM_USER:
+                    # Premium user client limits
+                    max_split_size = int(
+                        3.91 * 1024 * 1024 * 1024
+                    )  # 3.91GB max for premium user client
+                    client_type = "premium user client"
+                    recommended_max = "3.9GB"
+                else:
+                    # Non-premium user client limits (same as bot client)
+                    max_split_size = int(
+                        1.95 * 1024 * 1024 * 1024
+                    )  # 1.95GB max for non-premium user client
+                    client_type = "non-premium user client"
+                    recommended_max = "1.9GB"
             else:
-                # Use 4000 MiB (slightly less than 4 GiB) for premium accounts
-                telegram_limit = 4000 * 1024 * 1024
+                # Bot client limits
+                max_split_size = int(
+                    1.95 * 1024 * 1024 * 1024
+                )  # 1.95GB max for bot client
+                client_type = "bot client"
+                recommended_max = "1.9GB"
 
-            safe_telegram_limit = telegram_limit - safety_margin
+            # Enforce client-specific limits
+            if value > max_split_size:
+                await send_message(
+                    message,
+                    f"❌ <b>Split size too large!</b>\n\n"
+                    f"Your current setup uses <b>{client_type}</b>, which has a maximum split size of <b>{recommended_max}</b>.\n\n"
+                    f"You entered: <b>{get_readable_file_size(value)}</b>\n"
+                    f"Maximum allowed: <b>{get_readable_file_size(max_split_size)}</b>\n\n"
+                    f"Please enter a smaller size (e.g., {recommended_max} or less).",
+                )
+                return
 
-            # Ensure the value doesn't exceed the safe telegram limit
-            value = min(value, safe_telegram_limit)
-
-            # Also ensure it doesn't exceed the maximum allowed split size
-            value = min(int(value), max_split_size)
-        except (ValueError, TypeError):
-            # If conversion fails, set to default max split size
-            # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
-            # USER_TRANSMISSION is owner setting only, not user-specific
-            max_split_size = (
-                TgClient.MAX_SPLIT_SIZE
-                if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
-                else 2097152000
+            # Value is valid - use it as is
+            LOGGER.info(
+                f"User {user_id} set LEECH_SPLIT_SIZE to {get_readable_file_size(value)} ({client_type})"
             )
-            value = max_split_size
+
+        except (ValueError, TypeError):
+            # If conversion fails, provide helpful error message
+            await send_message(
+                message,
+                "❌ <b>Invalid format!</b>\n\n"
+                "Please enter a valid size format:\n"
+                "• <code>1900MB</code> (for bot client)\n"
+                "• <code>3.9GB</code> (for premium user client)\n"
+                "• <code>2000000000</code> (bytes)\n\n"
+                "Splitting is always enabled - you cannot disable it.",
+            )
+            return
     elif option == "EXCLUDED_EXTENSIONS":
         fx = value.split()
         value = ["aria2", "!qB"]
@@ -2848,6 +2863,8 @@ async def event_handler(client, query, pfunc, photo=False, document=False):
 
 @new_task
 async def edit_user_settings(client, query):
+    from bot import LOGGER  # Ensure LOGGER is available in this function
+
     from_user = query.from_user
     user_id = from_user.id
     name = from_user.mention

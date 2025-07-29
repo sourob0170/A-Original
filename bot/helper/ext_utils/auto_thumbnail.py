@@ -957,6 +957,13 @@ class AutoThumbnailHelper:
     ) -> str | None:
         """Enhanced TMDB thumbnail search with better result selection"""
         try:
+            # Convert year to int if it's a string
+            if year is not None and isinstance(year, str):
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
+
             if is_tv_show:
                 result = await TMDBHelper.search_tv_show_enhanced(title, year)
             else:
@@ -1110,6 +1117,13 @@ class TMDBHelper:
     ) -> dict | None:
         """Enhanced movie search with better result selection"""
         try:
+            # Convert year to int if it's a string
+            if year is not None and isinstance(year, str):
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
+
             # Try multiple search approaches
             search_results = []
 
@@ -1172,6 +1186,13 @@ class TMDBHelper:
     ) -> dict | None:
         """Enhanced TV show search with better result selection"""
         try:
+            # Convert year to int if it's a string
+            if year is not None and isinstance(year, str):
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
+
             # Try multiple search approaches
             search_results = []
 
@@ -1233,6 +1254,13 @@ class TMDBHelper:
             if not Config.TMDB_API_KEY:
                 return None
 
+            # Convert year to int if it's a string
+            if year is not None and isinstance(year, str):
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
+
             params = {
                 "api_key": Config.TMDB_API_KEY,
                 "query": title,
@@ -1260,12 +1288,21 @@ class TMDBHelper:
                                     result_year = None
                                     if media_type == "movie":
                                         release_date = result.get("release_date")
-                                        if release_date:
-                                            result_year = int(release_date[:4])
+                                        if release_date and len(release_date) >= 4:
+                                            try:
+                                                result_year = int(release_date[:4])
+                                            except (ValueError, TypeError):
+                                                continue
                                     elif media_type == "tv":
                                         first_air_date = result.get("first_air_date")
-                                        if first_air_date:
-                                            result_year = int(first_air_date[:4])
+                                        if (
+                                            first_air_date
+                                            and len(first_air_date) >= 4
+                                        ):
+                                            try:
+                                                result_year = int(first_air_date[:4])
+                                            except (ValueError, TypeError):
+                                                continue
 
                                     # Allow ±2 years tolerance
                                     if result_year and abs(result_year - year) <= 2:

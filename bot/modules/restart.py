@@ -192,6 +192,15 @@ async def confirm_restart(_, query):
             # Close torrent managers
             await TorrentManager.close_all()
 
+            # Stop database heartbeat and disconnect before restart
+            try:
+                await database.stop_heartbeat()
+                await database.disconnect()
+            except Exception as e:
+                # Handle database cleanup errors gracefully during restart
+                if "closed" not in str(e).lower():
+                    LOGGER.error(f"Error during database cleanup in restart: {e}")
+
             # Force garbage collection before closing other services
             if gc_available:
                 smart_garbage_collection(

@@ -5358,6 +5358,20 @@ class TaskConfig:
         return dl_path
 
     async def substitute(self, dl_path):
+        def validate_regex_pattern(pattern):
+            """Validate and fix regex patterns to prevent FutureWarnings"""
+            try:
+                import re
+
+                # Test compile the pattern to check for issues
+                re.compile(pattern)
+                return pattern
+            except re.error:
+                return re.escape(pattern)
+            except Exception:
+                # For any other issues, escape the pattern
+                return re.escape(pattern)
+
         def perform_substitution(name, substitutions):
             for substitution in substitutions:
                 sen = False
@@ -5372,13 +5386,26 @@ class TaskConfig:
                         res = substitution[1]
                 else:
                     res = ""
+
+                # Validate and fix the regex pattern
+                pattern = validate_regex_pattern(pattern)
+
                 try:
-                    name = sub(
-                        rf"{pattern}",
-                        res,
-                        name,
-                        flags=IGNORECASE if sen else 0,
-                    )
+                    import warnings
+
+                    # Suppress FutureWarning for nested sets in regex patterns
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            category=FutureWarning,
+                            message=".*nested set.*",
+                        )
+                        name = sub(
+                            rf"{pattern}",
+                            res,
+                            name,
+                            flags=IGNORECASE if sen else 0,
+                        )
                 except Exception:
                     return False
                 if len(name.encode()) > 255:

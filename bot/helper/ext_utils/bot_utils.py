@@ -269,83 +269,87 @@ def arg_parser(items, arg_base):
 
     while i < total:
         part = items[i]
-        if part in arg_base:
+        if part and part in arg_base:
             if arg_start == -1:
                 arg_start = i
-            if (i + 1 == total and part in bool_arg_set) or part in [
-                "-s",
-                "-j",
-                "-f",
-                "-fd",
-                "-fu",
-                "-sync",
-                "-hl",
-                "-doc",
-                "-med",
-                "-ut",
-                "-bt",
-                "-es",
-                "-compress",
-                "-comp-video",
-                "-comp-audio",
-                "-comp-image",
-                "-comp-document",
-                "-comp-subtitle",
-                "-comp-archive",
-                "-video-fast",
-                "-video-medium",
-                "-video-slow",
-                "-audio-fast",
-                "-audio-medium",
-                "-audio-slow",
-                "-image-fast",
-                "-image-medium",
-                "-image-slow",
-                "-document-fast",
-                "-document-medium",
-                "-document-slow",
-                "-subtitle-fast",
-                "-subtitle-medium",
-                "-subtitle-slow",
-                "-archive-fast",
-                "-archive-medium",
-                "-archive-slow",
-                "-extract",
-                "-extract-video",
-                "-extract-audio",
-                "-extract-subtitle",
-                "-extract-attachment",
-                "-remove",
-                "-remove-video",
-                "-remove-audio",
-                "-remove-subtitle",
-                "-remove-attachment",
-                "-remove-metadata",
-                "-add",
-                "-add-video",
-                "-add-audio",
-                "-add-subtitle",
-                "-add-subtitle-hardsub",
-                "-add-attachment",
-                "-swap",
-                "-swap-audio",
-                "-swap-video",
-                "-swap-subtitle",
-                "-del",
-                "-preserve",
-                "-replace",
-                "-mt",
-                "-hl",
-                "-bt",
-                "-ut",
-                "-es",
-                # Gallery-dl flags
-                "--archive",
-                "--no-archive",
-                "--metadata",
-                "--no-metadata",
-                "--write-info-json",
-            ]:
+            if (i + 1 == total and part and part in bool_arg_set) or (
+                part
+                and part
+                in [
+                    "-s",
+                    "-j",
+                    "-f",
+                    "-fd",
+                    "-fu",
+                    "-sync",
+                    "-hl",
+                    "-doc",
+                    "-med",
+                    "-ut",
+                    "-bt",
+                    "-es",
+                    "-compress",
+                    "-comp-video",
+                    "-comp-audio",
+                    "-comp-image",
+                    "-comp-document",
+                    "-comp-subtitle",
+                    "-comp-archive",
+                    "-video-fast",
+                    "-video-medium",
+                    "-video-slow",
+                    "-audio-fast",
+                    "-audio-medium",
+                    "-audio-slow",
+                    "-image-fast",
+                    "-image-medium",
+                    "-image-slow",
+                    "-document-fast",
+                    "-document-medium",
+                    "-document-slow",
+                    "-subtitle-fast",
+                    "-subtitle-medium",
+                    "-subtitle-slow",
+                    "-archive-fast",
+                    "-archive-medium",
+                    "-archive-slow",
+                    "-extract",
+                    "-extract-video",
+                    "-extract-audio",
+                    "-extract-subtitle",
+                    "-extract-attachment",
+                    "-remove",
+                    "-remove-video",
+                    "-remove-audio",
+                    "-remove-subtitle",
+                    "-remove-attachment",
+                    "-remove-metadata",
+                    "-add",
+                    "-add-video",
+                    "-add-audio",
+                    "-add-subtitle",
+                    "-add-subtitle-hardsub",
+                    "-add-attachment",
+                    "-swap",
+                    "-swap-audio",
+                    "-swap-video",
+                    "-swap-subtitle",
+                    "-del",
+                    "-preserve",
+                    "-replace",
+                    "-mt",
+                    "-hl",
+                    "-bt",
+                    "-ut",
+                    "-es",
+                    # Gallery-dl flags
+                    "--archive",
+                    "--no-archive",
+                    "--metadata",
+                    "--no-metadata",
+                    "--write-info-json",
+                ]
+            ):
                 arg_base[part] = True
             else:
                 sub_list = []
@@ -413,8 +417,8 @@ async def get_content_type(url):
 def get_user_split_size(user_id, args, file_size, equal_splits=False):
     """
     Calculate the split size based on user settings, command arguments, and file size.
-    User settings take priority over owner bot settings.
-    Equal splits uses the configured leech split size as target but ensures equal parts.
+    IMPORTANT: Splitting is ALWAYS enabled - never returns skip_splitting=True for large files.
+    Smart defaults are applied based on client type (bot vs user) with appropriate limits.
 
     Args:
         user_id: User ID for retrieving user settings
@@ -424,22 +428,35 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
 
     Returns:
         int: Calculated split size in bytes
-        bool: Whether to skip splitting
+        bool: Whether to skip splitting (only True for files smaller than split size)
     """
-    from bot import user_data
+
+    from bot import LOGGER, user_data
     from bot.core.aeon_client import TgClient
     from bot.core.config_manager import Config
 
     user_dict = user_data.get(user_id, {})
 
-    # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
-    # USER_TRANSMISSION is owner setting only, not user-specific
-    # If owner has USER_TRANSMISSION enabled and premium session, use 4GB limit, otherwise 2GB
-    max_split_size = (
-        TgClient.MAX_SPLIT_SIZE
-        if Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
-        else 2097152000
-    )
+    # Determine client type and set appropriate limits
+    # Check if user session is available and user transmission is enabled
+    will_use_user_client = Config.USER_TRANSMISSION and TgClient.user is not None
+
+    if will_use_user_client:
+        if TgClient.IS_PREMIUM_USER:
+            # Premium user client limits
+            max_split_size = 4194304000  # 4GB absolute max
+            default_split_size = int(3.91 * 1024 * 1024 * 1024)  # 3.91GB default
+            client_type = "premium user"
+        else:
+            # Non-premium user client limits (same as bot client)
+            max_split_size = 2097152000  # 2GB absolute max
+            default_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB default
+            client_type = "non-premium user"
+    else:
+        # Bot client limits
+        max_split_size = 2097152000  # 2GB absolute max
+        default_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB default
+        client_type = "bot"
 
     # Get the target split size from settings (respecting priority order)
     target_split_size = 0
@@ -451,24 +468,40 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
             target_split_size = int(split_arg)
         else:
             target_split_size = get_size_bytes(split_arg)
+        LOGGER.info(
+            f"Using split size from command args: {target_split_size / (1024 * 1024 * 1024):.2f} GB"
+        )
     # User settings have second priority
-    elif user_dict.get("LEECH_SPLIT_SIZE"):
+    elif user_dict.get("LEECH_SPLIT_SIZE") and user_dict.get("LEECH_SPLIT_SIZE") > 0:
         target_split_size = user_dict.get("LEECH_SPLIT_SIZE")
+        LOGGER.info(
+            f"Using split size from user settings: {target_split_size / (1024 * 1024 * 1024):.2f} GB"
+        )
     # Owner settings have third priority
-    elif Config.LEECH_SPLIT_SIZE and max_split_size != Config.LEECH_SPLIT_SIZE:
+    elif Config.LEECH_SPLIT_SIZE and Config.LEECH_SPLIT_SIZE > 0:
         target_split_size = Config.LEECH_SPLIT_SIZE
-    # Default to max split size if no custom size is set
+    # Smart default based on client type
     else:
-        target_split_size = max_split_size
+        target_split_size = default_split_size
+        LOGGER.info(
+            f"Using smart default split size for {client_type} client: {target_split_size / (1024 * 1024 * 1024):.2f} GB"
+        )
 
-    # Ensure target split size doesn't exceed maximum allowed
-    target_split_size = min(target_split_size, max_split_size)
+    # CRITICAL: Enforce client-specific limits - never allow exceeding client capabilities
+    if target_split_size > max_split_size:
+        LOGGER.warning(
+            f"Split size {target_split_size / (1024 * 1024 * 1024):.2f} GB exceeds {client_type} client limit "
+            f"of {max_split_size / (1024 * 1024 * 1024):.2f} GB. Capping to safe limit."
+        )
+        target_split_size = max_split_size
 
     # If equal splits is enabled, calculate equal parts based on target split size
     if equal_splits:
-        # For equal splits, always split if file is larger than target split size
+        # For equal splits, only skip if file is smaller than target split size
         if file_size <= target_split_size:
-            # File is smaller than or equal to target split size, no need to split
+            LOGGER.info(
+                f"File {file_size / (1024 * 1024 * 1024):.2f} GB is smaller than split size, no splitting needed"
+            )
             return file_size, True
 
         # Calculate how many parts we need based on target split size
@@ -477,89 +510,58 @@ def get_user_split_size(user_id, args, file_size, equal_splits=False):
         # Calculate equal split size
         equal_split_size = math.ceil(file_size / parts)
 
-        # Ensure each part doesn't exceed max split size
-        while equal_split_size > max_split_size:
+        # Ensure each part doesn't exceed max split size (with safety margin)
+        safety_margin = 50 * 1024 * 1024  # 50 MiB safety margin
+        safe_max_size = max_split_size - safety_margin
+
+        while equal_split_size > safe_max_size:
             parts += 1
             equal_split_size = math.ceil(file_size / parts)
-
-        # Add extra safety check - if we're close to the limit, add one more part
-        safety_margin = 10 * 1024 * 1024  # 10 MiB
-        if equal_split_size > (max_split_size - safety_margin):
-            parts += 1
-            equal_split_size = math.ceil(file_size / parts)
-
-        # Log the equal split calculation
-        from bot import LOGGER
 
         LOGGER.info(
-            f"Equal splits: Target size: {target_split_size / (1024 * 1024):.1f} MiB, "
-            f"File size: {file_size / (1024 * 1024):.2f} MiB, "
-            f"Parts: {parts}, Equal split size: {equal_split_size / (1024 * 1024):.1f} MiB"
+            f"Equal splits ({client_type} client): Target: {target_split_size / (1024 * 1024):.1f} MiB, "
+            f"File: {file_size / (1024 * 1024):.2f} MiB, "
+            f"Parts: {parts}, Equal size: {equal_split_size / (1024 * 1024):.1f} MiB"
         )
 
-        # Ensure the calculated equal split size is never greater than max split size
-        equal_split_size = min(equal_split_size, max_split_size)
-
-        # Always split when equal splits is enabled and file > target size
+        # Final safety check
+        equal_split_size = min(equal_split_size, safe_max_size)
         return equal_split_size, False
 
     # For regular splitting (not equal splits):
-    # Get split size from command args, user settings, or bot config (in that order)
-    # This ensures custom split sizes set by user or owner get priority
-    split_size = 0
+    # Use the target_split_size we already calculated above
+    split_size = target_split_size
 
-    # Command args have highest priority (if args is provided)
-    if args is not None and args.get("-sp"):
-        split_arg = args.get("-sp")
-        if split_arg.isdigit():
-            split_size = int(split_arg)
-        else:
-            split_size = get_size_bytes(split_arg)
-    # User settings have second priority
-    elif user_dict.get("LEECH_SPLIT_SIZE"):
-        split_size = user_dict.get("LEECH_SPLIT_SIZE")
-    # Owner settings have third priority
-    elif Config.LEECH_SPLIT_SIZE and max_split_size != Config.LEECH_SPLIT_SIZE:
-        split_size = Config.LEECH_SPLIT_SIZE
-    # Default to max split size if no custom size is set
-    else:
-        split_size = max_split_size
+    # Apply safety margin to ensure we never exceed client limits
+    safety_margin = 50 * 1024 * 1024  # 50 MiB safety margin
+    safe_split_size = min(split_size, max_split_size - safety_margin)
 
-    # Ensure split size never exceeds Telegram's limit (based on premium status)
-    # TgClient.MAX_SPLIT_SIZE is already set based on premium status
-    # This will be 4000 MiB for premium users and 2000 MiB for regular users
-    telegram_limit = TgClient.MAX_SPLIT_SIZE
-
-    # Add a larger safety margin to ensure we never exceed Telegram's limit
-    # Use a 50 MiB safety margin to account for any overhead or rounding issues
-    safety_margin = 50 * 1024 * 1024  # 50 MiB
-
-    # For non-premium accounts, use a more conservative limit
-    if not TgClient.IS_PREMIUM_USER:
-        # Use 2000 MiB (slightly less than 2 GiB) for non-premium accounts
-        telegram_limit = 2000 * 1024 * 1024
-    else:
-        # Use 4000 MiB (slightly less than 4 GiB) for premium accounts
-        telegram_limit = 4000 * 1024 * 1024
-
-    safe_telegram_limit = telegram_limit - safety_margin
-
-    split_size = min(split_size, safe_telegram_limit)
-
-    # Ensure split size doesn't exceed maximum allowed
-    split_size = min(split_size, max_split_size)
-
-    # Skip splitting if file size is less than the split size
-    if file_size <= split_size:
+    # Reduced logging to prevent spam - only log when actually splitting
+    if file_size <= safe_split_size:
         return file_size, True
-    # Always split the file if it's larger than split_size, regardless of max_split_size
-    # This ensures files larger than max_split_size still get split when equal_splits is off
-    return split_size, False
+
+    # Only log when file will actually be split
+    LOGGER.info(
+        f"File {file_size / (1024 * 1024 * 1024):.2f} GB will be split into {safe_split_size / (1024 * 1024):.1f} MiB parts"
+    )
+    return safe_split_size, False
 
 
 def update_user_ldata(id_, key, value):
+    """Update user data in memory and schedule a save to persistent storage."""
     user_data.setdefault(id_, {})
     user_data[id_][key] = value
+
+    # Schedule a save to JSON file for persistence across restarts
+    # This is done asynchronously to avoid blocking the current operation
+    try:
+        from asyncio import create_task
+
+        create_task(_save_user_data())
+    except Exception:
+        # If we can't schedule the save, continue anyway
+        # The data is still updated in memory and will be saved by database.update_user_data()
+        pass
 
 
 async def rebuild_sudo_users_from_database():
@@ -598,6 +600,7 @@ async def ensure_auth_users_from_database():
     Ensure all users with AUTH: True in database are properly restored to user_data.
     This ensures auth users persist across bot restarts.
     """
+    from bot import LOGGER
     from bot.helper.ext_utils.db_handler import database
 
     if not hasattr(database, "db") or database.db is None:
@@ -610,10 +613,11 @@ async def ensure_auth_users_from_database():
             user_id = user_doc["_id"]
             auth_users_from_db.append(user_id)
 
-            # Ensure user exists in user_data with AUTH flag
+            # Ensure user exists in user_data with AUTH flag (preserve existing data)
             if user_id not in user_data:
                 user_data[user_id] = {"AUTH": True}
             elif not user_data[user_id].get("AUTH", False):
+                # Only add AUTH flag, don't overwrite existing data
                 user_data[user_id]["AUTH"] = True
 
         return len(auth_users_from_db)
@@ -861,74 +865,96 @@ async def _load_user_data():
 
     import aiofiles
 
+    from bot import LOGGER
+
     global user_data
+
+    LOGGER.info(
+        f"_load_user_data called - current user_data has {len(user_data)} users"
+    )
 
     try:
         # Check if data file exists
         if os.path.exists("data/user_data.json"):
+            LOGGER.info("Found data/user_data.json file, attempting to load...")
             async with aiofiles.open("data/user_data.json") as f:
                 content = await f.read()
                 if content.strip():  # Check if file is not empty
                     # Parse JSON with optimized memory usage
                     loaded_data = json.loads(content)
 
-                    # Store existing database data (AUTH, SUDO flags) before merging
-                    existing_auth_data = {}
+                    # Store existing database data (AUTH, SUDO flags, and all other data) before merging
+                    existing_database_data = {}
                     for user_id, user_dict in user_data.items():
-                        if user_dict.get("AUTH") or user_dict.get("SUDO"):
-                            existing_auth_data[user_id] = {
-                                "AUTH": user_dict.get("AUTH", False),
-                                "SUDO": user_dict.get("SUDO", False),
-                            }
+                        # Preserve ALL existing data from database, not just AUTH/SUDO
+                        existing_database_data[user_id] = user_dict.copy()
 
-                    # Process data in chunks to reduce memory usage
-                    # Clear existing data first
-                    user_data.clear()
+                    # Check if we have significant database data that shouldn't be overwritten
+                    has_database_data = len(user_data) > 0
 
-                    # Process in batches of 100 users
-                    batch_size = 100
-                    keys = list(loaded_data.keys())
+                    if has_database_data:
+                        # Database data exists - merge JSON data with database data (database takes priority)
+                        LOGGER.info(
+                            f"Merging JSON file data with existing database data for {len(user_data)} users"
+                        )
 
-                    for i in range(0, len(keys), batch_size):
-                        batch_keys = keys[i : i + batch_size]
-                        for k in batch_keys:
-                            # Convert string keys back to integers
+                        # Don't clear existing data - merge instead
+                        for k, v in loaded_data.items():
                             user_id = int(k)
-                            user_data[user_id] = loaded_data[k]
+                            if user_id in existing_database_data:
+                                # User exists in database - merge JSON data but keep database priority
+                                # Only add JSON keys that don't exist in database
+                                for json_key, json_value in v.items():
+                                    if (
+                                        json_key
+                                        not in existing_database_data[user_id]
+                                    ):
+                                        existing_database_data[user_id][json_key] = (
+                                            json_value
+                                        )
+                            else:
+                                # User doesn't exist in database - add from JSON
+                                existing_database_data[user_id] = v
 
-                            # Restore AUTH and SUDO flags from database if they existed
-                            if user_id in existing_auth_data:
-                                user_data[user_id]["AUTH"] = existing_auth_data[
-                                    user_id
-                                ]["AUTH"]
-                                user_data[user_id]["SUDO"] = existing_auth_data[
-                                    user_id
-                                ]["SUDO"]
+                        # Update user_data with merged data
+                        user_data.clear()
+                        user_data.update(existing_database_data)
+                    else:
+                        # No database data - use JSON data as primary source
+                        user_data.clear()
 
-                        # Force garbage collection after each batch
-                        if (i + batch_size) < len(keys):
-                            try:
-                                from bot.helper.ext_utils.gc_utils import (
-                                    smart_garbage_collection,
-                                )
+                        # Process in batches of 100 users
+                        batch_size = 100
+                        keys = list(loaded_data.keys())
 
-                                smart_garbage_collection(aggressive=False)
-                            except ImportError:
-                                import gc
+                        for i in range(0, len(keys), batch_size):
+                            batch_keys = keys[i : i + batch_size]
+                            for k in batch_keys:
+                                # Convert string keys back to integers
+                                user_id = int(k)
+                                user_data[user_id] = loaded_data[k]
 
-                                gc.collect()
+                            # Force garbage collection after each batch
+                            if (i + batch_size) < len(keys):
+                                try:
+                                    from bot.helper.ext_utils.gc_utils import (
+                                        smart_garbage_collection,
+                                    )
 
-                    # Restore any users that were only in database (not in JSON file)
-                    for user_id, auth_data in existing_auth_data.items():
-                        if user_id not in user_data:
-                            user_data[user_id] = auth_data
+                                    smart_garbage_collection(aggressive=False)
+                                except ImportError:
+                                    import gc
+
+                                    gc.collect()
 
                     # Data loaded successfully
-                    from bot import LOGGER
-
-                    if existing_auth_data:
+                    if has_database_data:
                         LOGGER.info(
-                            f"Preserved AUTH/SUDO flags for {len(existing_auth_data)} users during user data merge"
+                            f"Successfully merged user data - database data preserved for {len(user_data)} users"
+                        )
+                    else:
+                        LOGGER.info(
+                            f"Loaded user data from JSON file for {len(user_data)} users"
                         )
 
                     # Clear the loaded_data variable to free memory
@@ -945,9 +971,13 @@ async def _load_user_data():
                         import gc
 
                         gc.collect()
-    except Exception:
+        else:
+            LOGGER.info(
+                "data/user_data.json file not found - keeping existing user_data from database"
+            )
+    except Exception as e:
         # Keep using the existing user_data dictionary (don't clear it on error)
-        pass
+        LOGGER.error(f"Error loading user data from JSON file: {e}")
 
 
 async def timeval_check(user_id):
@@ -1579,3 +1609,4 @@ def check_storage_threshold(size, threshold, arch=False):
         LOGGER.error(f"Error checking storage threshold: {e}")
         # Default to allowing the download if we can't check the space
         return True
+

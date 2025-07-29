@@ -63,7 +63,6 @@ try:
     import asyncio
     import os
 
-    from bot.core.startup import load_settings
 
     async def load_web_server_config():
         try:
@@ -92,8 +91,8 @@ try:
             except Exception as e:
                 LOGGER.warning(f"Failed to load shared configuration: {e}")
 
-            # Then, try to load from database (primary source for runtime configs)
-            await load_settings()
+            # Database settings are already loaded in the main bot process
+            # Web server doesn't need to reload user data
 
             # Debug configuration values after database loading
             db_bin_channel = getattr(Config, "FILE2LINK_BIN_CHANNEL", 0)

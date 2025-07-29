@@ -29,19 +29,22 @@ class ImprovedZotifySessionManager:
         self._session: Session | None = None
         self._session_created_at = 0
         self._session_max_age = (
-            900  # Reduced to 15 minutes to prevent thread buildup
+            3600  # Increased to 1 hour to prevent session timeout during downloads
         )
         self._last_api_call = 0
         self._last_activity = 0
-        self._inactivity_timeout = 180  # Reduced to 3 minutes for faster cleanup
+        self._inactivity_timeout = 600  # Increased to 10 minutes for active downloads
         self._api_call_interval = 0.5  # Reduced interval for better performance
         self._consecutive_failures = 0
-        self._max_consecutive_failures = 2  # Reduced for faster recovery
+        self._max_consecutive_failures = 5  # Increased for better resilience
         # Simplified memory management
-        self._memory_cleanup_interval = 300  # Reduced to 5 minutes
+        self._memory_cleanup_interval = 600  # Increased to 10 minutes
         self._last_memory_cleanup = 0
         # Thread safety
         self._session_lock = asyncio.Lock()
+        # Download state tracking
+        self._is_downloading = False
+        self._download_start_time = 0
         # Register for cleanup tracking
         _active_sessions.add(weakref.ref(self, self._cleanup_callback))
 
@@ -49,19 +52,24 @@ class ImprovedZotifySessionManager:
         """Get a healthy session with optimized refresh logic"""
         current_time = time.time()
 
-        # Simplified session health check - only check essential conditions
-        if (
+        # Enhanced session health check - don't recreate during active downloads
+        session_age = current_time - self._session_created_at
+        should_recreate = (
             not self._session
-            or current_time - self._session_created_at > self._session_max_age
+            or (not self._is_downloading and session_age > self._session_max_age)
+            or (self._is_downloading and session_age > self._session_max_age * 2)  # Double timeout during downloads
             or self._consecutive_failures >= self._max_consecutive_failures
-        ):
+        )
+
+        if should_recreate:
             await self._create_new_session()
 
         # Update activity timestamp
         self._last_activity = current_time
 
-        # Less frequent memory cleanup
-        if current_time - self._last_memory_cleanup > self._memory_cleanup_interval:
+        # Less frequent memory cleanup, skip during downloads
+        if (not self._is_downloading and
+            current_time - self._last_memory_cleanup > self._memory_cleanup_interval):
             self._cleanup_memory_sync()
             self._last_memory_cleanup = current_time
 
@@ -70,6 +78,20 @@ class ImprovedZotifySessionManager:
     def mark_inline_search_activity(self):
         """Mark inline search activity"""
         self._last_activity = time.time()
+
+    def mark_download_start(self):
+        """Mark the start of a download to prevent session timeout"""
+        self._is_downloading = True
+        self._download_start_time = time.time()
+        self._last_activity = time.time()
+        LOGGER.info("Download started - session timeout protection enabled")
+
+    def mark_download_end(self):
+        """Mark the end of a download"""
+        self._is_downloading = False
+        self._download_start_time = 0
+        self._last_activity = time.time()
+        LOGGER.info("Download ended - normal session timeout restored")
 
     def should_cleanup_for_inactivity(self) -> bool:
         """Check if session should be cleaned up due to inactivity"""
@@ -168,10 +190,24 @@ class ImprovedZotifySessionManager:
                 try:
                     # Add delay to prevent rapid session creation and thread exhaustion
                     await asyncio.sleep(1.0)  # Increased delay
-                    # Wrap blocking Session.from_file in thread
-                    self._session = await asyncio.to_thread(
-                        Session.from_file, credentials_path, language
-                    )
+
+                    # Retry session creation with exponential backoff
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            # Wrap blocking Session.from_file in thread
+                            self._session = await asyncio.to_thread(
+                                Session.from_file, credentials_path, language
+                            )
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                wait_time = 2 ** attempt
+                                LOGGER.warning(f"Session creation attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
+                                await asyncio.sleep(wait_time)
+                            else:
+                                raise
+
                     # Add another delay after session creation
                     await asyncio.sleep(0.5)
                 finally:
@@ -502,17 +538,26 @@ async def _periodic_cleanup():
                 _api_call_cache.pop(key, None)
                 _cache_timestamps.pop(key, None)
 
-            # Force session cleanup if too old
+            # Force session cleanup if too old, but respect download state
             if improved_session_manager._session:
                 session_age = (
                     current_time - improved_session_manager._session_created_at
                 )
-                if session_age > improved_session_manager._session_max_age:
-                    LOGGER.info("Forcing session cleanup due to age")
-                    with contextlib.suppress(Exception):
-                        improved_session_manager._session.close()
-                    improved_session_manager._session = None
-                    improved_session_manager._session_created_at = 0
+                max_age = improved_session_manager._session_max_age
+
+                # Don't cleanup during active downloads
+                if improved_session_manager._is_downloading:
+                    max_age *= 2  # Double the timeout during downloads
+
+                if session_age > max_age:
+                    if improved_session_manager._is_downloading:
+                        LOGGER.info(f"Session aged {session_age}s but download is active, extending timeout")
+                    else:
+                        LOGGER.info("Forcing session cleanup due to age")
+                        with contextlib.suppress(Exception):
+                            improved_session_manager._session.close()
+                        improved_session_manager._session = None
+                        improved_session_manager._session_created_at = 0
 
         except Exception as e:
             LOGGER.warning(f"Cleanup task error: {e}")

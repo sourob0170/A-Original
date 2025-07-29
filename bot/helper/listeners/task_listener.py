@@ -132,10 +132,14 @@ class TaskListener(TaskConfig):
                             user_dump_int != int(self.up_dest)
                             and user_dump_int != self.user_id
                         ):
-                            await send_message(
-                                user_dump_int,
-                                f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                            )
+                            # For USER_DUMP: Skip leech completion messages, only send mirror cloud links
+                            if self.is_leech:
+                                # For leech operations, don't send completion messages to USER_DUMP
+                                # Files are already copied by telegram_uploader
+                                pass
+                            else:
+                                # For mirror operations, send only cloud link message without the expandable log
+                                await send_message(user_dump_int, msg)
                     except Exception as e:
                         LOGGER.error(
                             f"Failed to send task details message to user's dump {user_dump}: {e}"
@@ -337,10 +341,22 @@ class TaskListener(TaskConfig):
                 if dest == self.user_id and not self._is_bot_pm_enabled():
                     continue
                 try:
-                    await send_message(
-                        dest,
-                        f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                    )
+                    # Check if this destination is USER_DUMP
+                    if user_dump and dest == int(user_dump):
+                        # For USER_DUMP: Skip leech completion messages, only send mirror cloud links
+                        if self.is_leech:
+                            # For leech operations, don't send completion messages to USER_DUMP
+                            # Files are already copied by telegram_uploader
+                            pass
+                        else:
+                            # For mirror operations, send only cloud link message without the expandable log
+                            await send_message(dest, msg)
+                    else:
+                        # For other destinations, send the full message with expandable log
+                        await send_message(
+                            dest,
+                            f"{msg}<blockquote expandable>{fmsg}</blockquote>",
+                        )
                 except Exception as e:
                     LOGGER.error(
                         f"Failed to send leech log to destination {dest}: {e}"
@@ -1124,9 +1140,7 @@ class TaskListener(TaskConfig):
             await add_mega_upload(self, up_path)
         elif self.up_dest == "ddl" or self.up_dest.startswith("ddl:"):
             # DDL upload using DDL engine
-            from bot.helper.common import (
-                validate_ddl_config,
-            )
+            from bot.helper.common import validate_ddl_config
             from bot.helper.mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
             from bot.helper.mirror_leech_utils.status_utils.ddl_status import (
                 DDLStatus,
@@ -1636,6 +1650,23 @@ class TaskListener(TaskConfig):
                         and self._is_bot_pm_enabled()
                     ):
                         await send_message(self.user_id, msg, button)
+
+                    # Send to user's dump if it's set and not the same as up_dest or user's PM
+                    user_dump = self.user_dict.get("USER_DUMP")
+                    if user_dump:
+                        try:
+                            user_dump_int = int(user_dump)
+                            # Skip if this is the up_dest or user's PM (already sent there)
+                            if (
+                                user_dump_int != int(self.up_dest)
+                                and user_dump_int != self.user_id
+                            ):
+                                # For USER_DUMP: Send only cloud link message without log messages
+                                await send_message(user_dump_int, msg, button)
+                        except Exception as e:
+                            LOGGER.error(
+                                f"Failed to send mirror message to user's dump {user_dump}: {e}"
+                            )
                 except Exception as e:
                     LOGGER.error(
                         f"Failed to send mirror log to specified destination {self.up_dest}: {e}"
@@ -1684,7 +1715,13 @@ class TaskListener(TaskConfig):
                     if dest == self.user_id and not self._is_bot_pm_enabled():
                         continue
                     try:
-                        await send_message(dest, msg, button)
+                        # Check if this destination is USER_DUMP
+                        if user_dump and dest == int(user_dump):
+                            # For USER_DUMP: Send only cloud link message without log messages
+                            await send_message(dest, msg, button)
+                        else:
+                            # For other destinations, send the full message
+                            await send_message(dest, msg, button)
                     except Exception as e:
                         LOGGER.error(
                             f"Failed to send mirror log to destination {dest}: {e}"

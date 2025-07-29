@@ -145,7 +145,7 @@ class ZotifyQualitySelector:
         self.account_type = account_type.lower()  # "free" or "premium"
         self._reply_to = None
         self._time = time.time()
-        self._timeout = 120
+        self._timeout = 300  # Increased to 5 minutes for better user experience
         self.event = asyncio.Event()
         self.selected_quality = None
         self.selected_format = None

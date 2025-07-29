@@ -1976,28 +1976,188 @@ async def get_metadata_cmd(
     subtitle_author=None,
     subtitle_comment=None,
 ):
-    """Processes a single file to update metadata.
+    """Processes a single file to update metadata with template variable support.
 
     Args:
         file_path: Path to the file to process
         key: Legacy metadata key (for backward compatibility)
-        title: Global title metadata value
-        author: Global author metadata value
-        comment: Global comment metadata value
-        metadata_all: Value to use for all metadata fields (takes priority over all)
-        video_title: Video track title metadata value
-        video_author: Video track author metadata value
-        video_comment: Video track comment metadata value
-        audio_title: Audio track title metadata value
-        audio_author: Audio track author metadata value
-        audio_comment: Audio track comment metadata value
-        subtitle_title: Subtitle track title metadata value
-        subtitle_author: Subtitle track author metadata value
-        subtitle_comment: Subtitle track comment metadata value
+        title: Global title metadata value (supports template variables)
+        author: Global author metadata value (supports template variables)
+        comment: Global comment metadata value (supports template variables)
+        metadata_all: Value to use for all metadata fields (takes priority over all, supports template variables)
+        video_title: Video track title metadata value (supports template variables)
+        video_author: Video track author metadata value (supports template variables)
+        video_comment: Video track comment metadata value (supports template variables)
+        audio_title: Audio track title metadata value (supports template variables)
+        audio_author: Audio track author metadata value (supports template variables)
+        audio_comment: Audio track comment metadata value (supports template variables)
+        subtitle_title: Subtitle track title metadata value (supports template variables)
+        subtitle_author: Subtitle track author metadata value (supports template variables)
+        subtitle_comment: Subtitle track comment metadata value (supports template variables)
 
     Returns:
         tuple: FFmpeg command and temporary output file path, or None, None if not supported
     """
+    # Import template processing function
+    from bot.helper.ext_utils.template_processor import (
+        extract_metadata_from_filename,
+    )
+
+    # Extract file metadata for template variables
+    filename_without_ext = os.path.splitext(os.path.basename(file_path))[0]
+    file_metadata = await extract_metadata_from_filename(filename_without_ext)
+
+    # Add basic file information to metadata
+    file_metadata.update(
+        {
+            "filename": filename_without_ext,
+            "ext": os.path.splitext(file_path)[1][1:]
+            if os.path.splitext(file_path)[1]
+            else "",
+            "filepath": file_path,
+            "basename": os.path.basename(file_path),
+        }
+    )
+
+    # Add additional template variables for comprehensive support
+    try:
+        import hashlib
+        import os
+
+        from bot.helper.ext_utils.media_utils import get_media_info
+
+        # Get file size
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size >= 1024**3:  # GB
+                size_str = f"{file_size / (1024**3):.2f}GB"
+            elif file_size >= 1024**2:  # MB
+                size_str = f"{file_size / (1024**2):.2f}MB"
+            elif file_size >= 1024:  # KB
+                size_str = f"{file_size / 1024:.2f}KB"
+            else:
+                size_str = f"{file_size}B"
+            file_metadata["size"] = size_str
+        except:
+            file_metadata["size"] = "Unknown"
+
+        # Get MD5 hash (first 8 characters for performance)
+        try:
+            with open(file_path, "rb") as f:
+                file_hash = hashlib.md5(f.read(8192)).hexdigest()[
+                    :8
+                ]  # Quick hash of first 8KB
+            file_metadata["md5_hash"] = file_hash
+            file_metadata["id"] = file_hash
+        except:
+            file_metadata["md5_hash"] = "Unknown"
+            file_metadata["id"] = "Unknown"
+
+        # Get media information if it's a media file
+        try:
+            duration, artist, title = await get_media_info(file_path)
+            if duration and duration > 0:
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                seconds = duration % 60
+                if hours > 0:
+                    duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                else:
+                    duration_str = f"{minutes:02d}:{seconds:02d}"
+                file_metadata["duration"] = duration_str
+            else:
+                file_metadata["duration"] = ""
+        except:
+            file_metadata["duration"] = ""
+
+        # Set default values for media-specific variables
+        file_metadata.update(
+            {
+                "audios": "",
+                "audio_codecs": "",
+                "subtitles": "",
+                "NumVideos": "00",
+                "NumAudios": "00",
+                "NumSubtitles": "00",
+                "formate": file_metadata["ext"].upper()
+                if file_metadata["ext"]
+                else "",
+                "format": "Unknown",
+            }
+        )
+
+    except Exception as e:
+        LOGGER.warning(f"Error extracting additional metadata for {file_path}: {e}")
+        # Set default values if extraction fails
+        file_metadata.update(
+            {
+                "size": "Unknown",
+                "duration": "",
+                "audios": "",
+                "audio_codecs": "",
+                "subtitles": "",
+                "md5_hash": "Unknown",
+                "NumVideos": "00",
+                "NumAudios": "00",
+                "NumSubtitles": "00",
+                "formate": file_metadata["ext"].upper()
+                if file_metadata["ext"]
+                else "",
+                "format": "Unknown",
+                "id": "Unknown",
+            }
+        )
+
+    # Process template variables in all metadata fields (simple substitution only)
+    async def process_metadata_template(template_value):
+        """Process template variables in metadata values - simple substitution only"""
+        if not template_value:
+            return template_value
+        try:
+            result = str(template_value)
+            # Simple template variable substitution using {variable} format
+            for key, value in file_metadata.items():
+                if value is not None:
+                    result = result.replace(f"{{{key}}}", str(value))
+            return result
+        except Exception as e:
+            LOGGER.warning(
+                f"Error processing metadata template '{template_value}': {e}"
+            )
+            return str(
+                template_value
+            )  # Return original value if template processing fails
+
+    # Process all metadata values through template processor
+    if metadata_all:
+        metadata_all = await process_metadata_template(metadata_all)
+    if title:
+        title = await process_metadata_template(title)
+    if author:
+        author = await process_metadata_template(author)
+    if comment:
+        comment = await process_metadata_template(comment)
+    if video_title:
+        video_title = await process_metadata_template(video_title)
+    if video_author:
+        video_author = await process_metadata_template(video_author)
+    if video_comment:
+        video_comment = await process_metadata_template(video_comment)
+    if audio_title:
+        audio_title = await process_metadata_template(audio_title)
+    if audio_author:
+        audio_author = await process_metadata_template(audio_author)
+    if audio_comment:
+        audio_comment = await process_metadata_template(audio_comment)
+    if subtitle_title:
+        subtitle_title = await process_metadata_template(subtitle_title)
+    if subtitle_author:
+        subtitle_author = await process_metadata_template(subtitle_author)
+    if subtitle_comment:
+        subtitle_comment = await process_metadata_template(subtitle_comment)
+    if key:
+        key = await process_metadata_template(key)
+
     # Resource manager removed
 
     # Get file extension
@@ -9516,13 +9676,9 @@ async def get_add_cmd(
     if delete_original:
         cmd.append("-del")
 
-    # Add -preserve flag if preserve_tracks is True
-    if preserve_tracks:
-        cmd.append("-preserve")
-
-    # Add -replace flag if replace_tracks is True
-    if replace_tracks:
-        cmd.append("-replace")
+    # Note: preserve_tracks and replace_tracks are internal flags used for mapping logic
+    # They should NOT be passed as command line arguments to FFmpeg
+    # The preserve/replace behavior is already handled in the mapping logic above
 
     return cmd, temp_file
 

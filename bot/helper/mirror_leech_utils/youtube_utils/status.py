@@ -82,6 +82,7 @@ class YouTubeStatus:
         self._listener.is_cancelled = True
         if self._youtube_upload:
             self._youtube_upload.cancel()
+        # YouTube upload doesn't have its own error handling, so we handle it here
         await self._listener.on_upload_error("YouTube upload stopped by user!")
 
     def task(self):

@@ -1,7 +1,6 @@
 import gc
 import json
 import os
-import re
 from hashlib import md5
 
 from langcodes import Language
@@ -197,9 +196,6 @@ async def generate_caption(
                     abs_path,
                 ]
             )
-
-            if result[1]:
-                LOGGER.info(f"ffprobe command output: {result[1]}")
 
             if not result[0]:
                 LOGGER.error(f"ffprobe returned empty output for: {abs_path}")
@@ -426,44 +422,96 @@ async def generate_caption(
         # Format extension in uppercase
         format_upper = os.path.splitext(filename)[1][1:].upper()
 
-        # Create HTML-formatted filename if prefix/suffix with HTML exists
-        base_filename = os.path.splitext(filename)[0]
+        # Create HTML-formatted filename with proper prefix/suffix spacing for captions
+        os.path.splitext(filename)[0]
+        os.path.splitext(filename)[1]  # Include the dot
 
-        def create_html_filename_local(
+        def create_html_filename_for_caption(
             clean_filename, html_prefix=None, html_suffix=None
         ):
-            """Local helper function to create HTML-formatted filename."""
+            """
+            Create HTML-formatted filename for captions with proper spacing.
+            - Space after prefix
+            - Space before suffix
+            - Suffix applied before extension (handles split files correctly)
+            """
             import re
 
-            html_filename = clean_filename
+            # Handle split files correctly (.ext.001, .part001.ext)
+            if re.match(r"(.+)(\.\w+)(\.\d{3})$", clean_filename):
+                # For .ext.001 files: name.ext.001 -> name, .ext.001
+                match = re.match(r"(.+)(\.\w+)(\.\d{3})$", clean_filename)
+                name_without_ext, ext, split_num = match.groups()
+                full_ext = f"{ext}{split_num}"
+            elif re.match(r"(.+)(\.part\d+)(\..+)$", clean_filename):
+                # For .part001.ext files: name.part001.ext -> name, .part001.ext
+                match = re.match(r"(.+)(\.part\d+)(\..+)$", clean_filename)
+                name_without_ext, part_num, ext = match.groups()
+                full_ext = f"{part_num}{ext}"
+            else:
+                # Regular files: name.ext -> name, .ext
+                name_without_ext = os.path.splitext(clean_filename)[0]
+                full_ext = os.path.splitext(clean_filename)[1]
 
+            # Build the caption filename with proper spacing
+            caption_filename = name_without_ext
+
+            # Add HTML prefix with space after it (for captions)
             if html_prefix:
-                # Extract clean text from HTML prefix for comparison
-                clean_prefix = re.sub(r"<.*?>", "", html_prefix)
-                # If the filename starts with the clean prefix, replace it with HTML version
-                if clean_filename.startswith(clean_prefix):
-                    html_filename = clean_filename.replace(
-                        clean_prefix, html_prefix, 1
-                    )
+                caption_filename = f"{html_prefix} {caption_filename}"
 
+            # Add HTML suffix with space before it and before extension (for captions)
             if html_suffix:
-                # Extract clean text from HTML suffix for comparison
-                clean_suffix = re.sub(r"<.*?>", "", html_suffix)
-                # If the filename ends with the clean suffix, replace it with HTML version
-                if html_filename.endswith(clean_suffix):
-                    html_filename = html_filename[: -len(clean_suffix)] + html_suffix
+                caption_filename = f"{caption_filename} {html_suffix}"
 
-            return html_filename
+            # Add extension back
+            return f"{caption_filename}{full_ext}"
 
-        html_filename = create_html_filename_local(
-            base_filename, html_prefix, html_suffix
+        html_filename = create_html_filename_for_caption(
+            filename, html_prefix, html_suffix
         )
+
+        # Create filename with prefix/suffix applied (for templates using {filename}.{ext})
+        # The suffix should be applied before the extension, so we modify the filename
+        # to include the suffix, and keep the extension separate
+        import re
+
+        # Handle split files correctly for template variables
+        if re.match(r"(.+)(\.\w+)(\.\d{3})$", filename):
+            # For .ext.001 files: name.ext.001 -> name, ext (without dot), 001
+            match = re.match(r"(.+)(\.\w+)(\.\d{3})$", filename)
+            base_name, ext_with_dot, split_num = match.groups()
+            filename_with_prefix_suffix = base_name
+            ext_without_dot = ext_with_dot[1:]  # Remove dot from extension
+        elif re.match(r"(.+)(\.part\d+)(\..+)$", filename):
+            # For .part001.ext files: name.part001.ext -> name, ext (without dot)
+            match = re.match(r"(.+)(\.part\d+)(\..+)$", filename)
+            base_name, part_num, ext_with_dot = match.groups()
+            filename_with_prefix_suffix = base_name
+            ext_without_dot = ext_with_dot[1:]  # Remove dot from extension
+        else:
+            # Regular files: name.ext -> name, ext (without dot)
+            filename_with_prefix_suffix = os.path.splitext(filename)[0]
+            ext_without_dot = os.path.splitext(filename)[1][
+                1:
+            ]  # Extension without dot
+
+        if html_prefix or html_suffix:
+            if html_prefix:
+                filename_with_prefix_suffix = (
+                    f"{html_prefix} {filename_with_prefix_suffix}"
+                )
+            if html_suffix:
+                # Apply suffix to the filename part (before extension)
+                filename_with_prefix_suffix = (
+                    f"{filename_with_prefix_suffix} {html_suffix}"
+                )
 
         # Create caption data dictionary
         caption_data = DefaultDict(
             # Basic variables
-            filename=base_filename,  # Clean filename for file operations
-            html_filename=html_filename,  # HTML-formatted filename for captions
+            filename=filename_with_prefix_suffix,  # Filename with prefix/suffix applied (without extension)
+            html_filename=html_filename,  # HTML-formatted filename for captions (with prefix/suffix and proper spacing)
             size=readable_size,
             duration=get_readable_time(video_duration, True),
             quality=video_quality or filename_metadata.get("quality", ""),
@@ -471,7 +519,7 @@ async def generate_caption(
             audio_codecs=audio_codecs_str,
             subtitles=subtitle_languages_str,
             md5_hash=file_md5_hash,
-            ext=os.path.splitext(filename)[1][1:],  # Extension without dot
+            ext=ext_without_dot,  # Extension without dot (suffix is applied to filename)
             # TV Show variables
             season=filename_metadata.get("season", ""),
             episode=filename_metadata.get("episode", ""),
@@ -503,11 +551,7 @@ async def generate_caption(
             )
             # Clean up empty lines and format the caption
             processed_caption = clean_caption(processed_caption)
-            # Log successful caption generation at INFO level only if this is not a metadata extraction call
-            if caption_template != "Extracting metadata for {filename}":
-                LOGGER.info(
-                    f"Successfully applied leech caption template for: {filename}"
-                )
+
             # Force garbage collection after processing media info
             # This can create large objects in memory
             if smart_garbage_collection:
@@ -528,9 +572,8 @@ async def generate_caption(
                 processed_caption = await process_template(
                     simplified_template, cleaned_caption_data
                 )
-                processed_caption = clean_caption(processed_caption)
-                LOGGER.info(f"Recovered with simplified template for: {filename}")
-                return processed_caption
+                return clean_caption(processed_caption)
+
             except Exception as e2:
                 LOGGER.error(f"Error recovering with simplified template: {e2}")
                 # Fall back to the simple format_map method if advanced processing fails
@@ -552,11 +595,8 @@ async def generate_caption(
                     # Format the template with the data
                     processed_caption = custom_template.format_map(caption_data)
                     # Clean up empty lines and format the caption
-                    processed_caption = clean_caption(processed_caption)
-                    LOGGER.info(
-                        f"Successfully applied simple caption template for: {filename}"
-                    )
-                    return processed_caption
+                    return clean_caption(processed_caption)
+
                 except Exception as e:
                     LOGGER.error(
                         f"Error processing template with simple processor: {e}"

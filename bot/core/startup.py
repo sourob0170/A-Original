@@ -176,98 +176,96 @@ async def load_settings():
     if database.db is not None:
         # Process any pending message deletions
         await process_pending_deletions()
+    else:
+        return
 
-        BOT_ID = Config.BOT_TOKEN.split(":", 1)[0]
-        current_deploy_config = Config.get_all()
-        old_deploy_config = await database.db.settings.deployConfig.find_one(
+    BOT_ID = Config.BOT_TOKEN.split(":", 1)[0]
+    current_deploy_config = Config.get_all()
+    old_deploy_config = await database.db.settings.deployConfig.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    )
+
+    if old_deploy_config is None:
+        # First time setup - create both deploy and runtime configs from config.py
+        from bot.core.config_manager import Config as ConfigClass
+
+        valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+        # Filter out invalid keys from current config
+        filtered_config = {
+            k: v for k, v in current_deploy_config.items() if k in valid_config_keys
+        }
+
+        # Create deploy config (source of truth for config.py)
+        await database.db.settings.deployConfig.replace_one(
             {"_id": BOT_ID},
-            {"_id": 0},
+            filtered_config,
+            upsert=True,
         )
 
-        if old_deploy_config is None:
-            # First time setup - create both deploy and runtime configs from config.py
-            from bot.core.config_manager import Config as ConfigClass
+        # Create runtime config (initially same as deploy config)
+        await database.db.settings.config.replace_one(
+            {"_id": BOT_ID},
+            filtered_config,
+            upsert=True,
+        )
 
-            valid_config_keys = set(ConfigClass.__annotations__.keys())
+        LOGGER.info(
+            "First time setup - created both deploy and runtime configs from config.py"
+        )
+    else:
+        # Not first time - check if config.py has changed
+        from bot.core.config_manager import Config as ConfigClass
 
-            # Filter out invalid keys from current config
-            filtered_config = {
+        valid_config_keys = set(ConfigClass.__annotations__.keys())
+
+        # Compare current config.py vs stored deploy config (source of truth)
+        old_deploy_content = {
+            k: v for k, v in old_deploy_config.items() if k in valid_config_keys
+        }
+        current_deploy_content = {
+            k: v for k, v in current_deploy_config.items() if k in valid_config_keys
+        }
+
+        # Simple comparison - has config.py actually changed?
+        config_py_changed = old_deploy_content != current_deploy_content
+
+        if config_py_changed:
+            # config.py has changed - update BOTH deploy and runtime configs
+            LOGGER.info(
+                "Config.py changes detected - updating both deploy and runtime configs"
+            )
+
+            # Filter new config.py values
+            filtered_deploy_config = {
                 k: v
                 for k, v in current_deploy_config.items()
                 if k in valid_config_keys
             }
 
-            # Create deploy config (source of truth for config.py)
+            # Step 1: Update deploy config with new config.py values
             await database.db.settings.deployConfig.replace_one(
                 {"_id": BOT_ID},
-                filtered_config,
+                filtered_deploy_config,
                 upsert=True,
             )
 
-            # Create runtime config (initially same as deploy config)
+            # Step 2: Update runtime config with new config.py values (override user changes)
             await database.db.settings.config.replace_one(
                 {"_id": BOT_ID},
-                filtered_config,
+                filtered_deploy_config,
                 upsert=True,
             )
 
             LOGGER.info(
-                "First time setup - created both deploy and runtime configs from config.py"
+                "Both deploy and runtime configs updated with new config.py values"
             )
         else:
-            # Not first time - check if config.py has changed
-            from bot.core.config_manager import Config as ConfigClass
-
-            valid_config_keys = set(ConfigClass.__annotations__.keys())
-
-            # Compare current config.py vs stored deploy config (source of truth)
-            old_deploy_content = {
-                k: v for k, v in old_deploy_config.items() if k in valid_config_keys
-            }
-            current_deploy_content = {
-                k: v
-                for k, v in current_deploy_config.items()
-                if k in valid_config_keys
-            }
-
-            # Simple comparison - has config.py actually changed?
-            config_py_changed = old_deploy_content != current_deploy_content
-
-            if config_py_changed:
-                # config.py has changed - update BOTH deploy and runtime configs
-                LOGGER.info(
-                    "Config.py changes detected - updating both deploy and runtime configs"
-                )
-
-                # Filter new config.py values
-                filtered_deploy_config = {
-                    k: v
-                    for k, v in current_deploy_config.items()
-                    if k in valid_config_keys
-                }
-
-                # Step 1: Update deploy config with new config.py values
-                await database.db.settings.deployConfig.replace_one(
-                    {"_id": BOT_ID},
-                    filtered_deploy_config,
-                    upsert=True,
-                )
-
-                # Step 2: Update runtime config with new config.py values (override user changes)
-                await database.db.settings.config.replace_one(
-                    {"_id": BOT_ID},
-                    filtered_deploy_config,
-                    upsert=True,
-                )
-
-                LOGGER.info(
-                    "Both deploy and runtime configs updated with new config.py values"
-                )
-            else:
-                # No changes in config.py - keep both configs unchanged
-                LOGGER.info(
-                    "No changes detected in config.py - preserving existing configs"
-                )
+            # No changes in config.py - keep both configs unchanged
+            LOGGER.info(
+                "No changes detected in config.py - preserving existing configs"
+            )
 
         # Re-fetch runtime config after cleanup to ensure deprecated keys are gone
         runtime_config = await database.db.settings.config.find_one(
@@ -380,123 +378,128 @@ async def load_settings():
     except Exception as e:
         LOGGER.warning(f"Failed to write shared configuration: {e}")
 
-        if pf_dict := await database.db.settings.files.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            for key, value in pf_dict.items():
-                if value:
-                    file_ = key.replace("__", ".")
-                    async with aiopen(file_, "wb+") as f:
-                        await f.write(value)
+    if pf_dict := await database.db.settings.files.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    ):
+        for key, value in pf_dict.items():
+            if value:
+                file_ = key.replace("__", ".")
+                async with aiopen(file_, "wb+") as f:
+                    await f.write(value)
 
-        if a2c_options := await database.db.settings.aria2c.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            aria2_options.update(a2c_options)
+    if a2c_options := await database.db.settings.aria2c.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    ):
+        aria2_options.update(a2c_options)
 
-        if qbit_opt := await database.db.settings.qbittorrent.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            qbit_options.update(qbit_opt)
+    if qbit_opt := await database.db.settings.qbittorrent.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    ):
+        qbit_options.update(qbit_opt)
 
-        if nzb_opt := await database.db.settings.nzb.find_one(
-            {"_id": BOT_ID},
-            {"_id": 0},
-        ):
-            if await aiopath.exists("sabnzbd/SABnzbd.ini.bak"):
-                await remove("sabnzbd/SABnzbd.ini.bak")
-            ((key, value),) = nzb_opt.items()
-            file_ = key.replace("__", ".")
-            async with aiopen(f"sabnzbd/{file_}", "wb+") as f:
-                await f.write(value)
+    if nzb_opt := await database.db.settings.nzb.find_one(
+        {"_id": BOT_ID},
+        {"_id": 0},
+    ):
+        if await aiopath.exists("sabnzbd/SABnzbd.ini.bak"):
+            await remove("sabnzbd/SABnzbd.ini.bak")
+        ((key, value),) = nzb_opt.items()
+        file_ = key.replace("__", ".")
+        async with aiopen(f"sabnzbd/{file_}", "wb+") as f:
+            await f.write(value)
 
-        # Load Zotify credentials from database if available (MOVED OUTSIDE USER CHECK)
-        try:
-            await load_zotify_credentials_from_db()
-        except Exception as e:
-            LOGGER.error(f"Failed to restore Zotify credentials: {e}")
+    # Load Zotify credentials from database if available (MOVED OUTSIDE USER CHECK)
+    try:
+        await load_zotify_credentials_from_db()
+    except Exception as e:
+        LOGGER.error(f"Failed to restore Zotify credentials: {e}")
 
-        if await database.db.users.find_one():
-            for p in ["thumbnails", "tokens", "rclone", "cookies"]:
-                if not await aiopath.exists(p):
-                    await makedirs(p)
+    # Check if there are any users in the database
+    user_count = await database.db.users.count_documents({})
+    LOGGER.info(f"Found {user_count} users in database during startup")
 
-            # Set secure permissions for cookies directory
-            if await aiopath.exists("cookies"):
-                await create_subprocess_exec("chmod", "700", "cookies")
-            rows = database.db.users.find({})
-            async for row in rows:
-                uid = row["_id"]
-                del row["_id"]
-                thumb_path = f"thumbnails/{uid}.jpg"
-                rclone_config_path = f"rclone/{uid}.conf"
-                token_path = f"tokens/{uid}.pickle"
-                youtube_token_path = f"tokens/{uid}_youtube.pickle"
-                if row.get("THUMBNAIL"):
-                    async with aiopen(thumb_path, "wb+") as f:
-                        await f.write(row["THUMBNAIL"])
-                    row["THUMBNAIL"] = thumb_path
-                if row.get("RCLONE_CONFIG"):
-                    async with aiopen(rclone_config_path, "wb+") as f:
-                        await f.write(row["RCLONE_CONFIG"])
-                    row["RCLONE_CONFIG"] = rclone_config_path
-                if row.get("TOKEN_PICKLE"):
-                    async with aiopen(token_path, "wb+") as f:
-                        await f.write(row["TOKEN_PICKLE"])
-                    row["TOKEN_PICKLE"] = token_path
-                # Load YouTube token pickle if available
-                if row.get("YOUTUBE_TOKEN_PICKLE"):
-                    try:
-                        async with aiopen(youtube_token_path, "wb+") as f:
-                            await f.write(row["YOUTUBE_TOKEN_PICKLE"])
-                        row["YOUTUBE_TOKEN_PICKLE"] = youtube_token_path
-                    except Exception as e:
-                        LOGGER.error(
-                            f"Failed to write YouTube token for user {uid}: {e}"
-                        )
-                        # Remove corrupted token data from user data
-                        row.pop("YOUTUBE_TOKEN_PICKLE", None)
-                # Load user cookies if available
-                cookies_path = f"cookies/{uid}.txt"
-                if row.get("USER_COOKIES"):
-                    async with aiopen(cookies_path, "wb+") as f:
-                        await f.write(row["USER_COOKIES"])
-                    row["USER_COOKIES"] = cookies_path
-                    # Set secure permissions for individual cookie files
-                    await create_subprocess_exec("chmod", "600", cookies_path)
-                    # Silently load user cookies without logging
-                user_data[uid] = row
+    if await database.db.users.find_one():
+        LOGGER.info("Loading user data from database...")
+        for p in ["thumbnails", "tokens", "rclone", "cookies"]:
+            if not await aiopath.exists(p):
+                await makedirs(p)
 
-            LOGGER.info("Users data has been imported from Database")
+        # Set secure permissions for cookies directory
+        if await aiopath.exists("cookies"):
+            await create_subprocess_exec("chmod", "700", "cookies")
 
-        # CRITICAL FIX: Always ensure OWNER_ID and SUDO_USERS are authorized,
-        # even for new deployments with empty database
-        from bot.helper.ext_utils.bot_utils import ensure_authorized_users
+        rows = database.db.users.find({})
+        async for row in rows:
+            uid = row["_id"]
+            del row["_id"]
 
-        await ensure_authorized_users()
+            thumb_path = f"thumbnails/{uid}.jpg"
+            rclone_config_path = f"rclone/{uid}.conf"
+            token_path = f"tokens/{uid}.pickle"
+            youtube_token_path = f"tokens/{uid}_youtube.pickle"
+            if row.get("THUMBNAIL"):
+                async with aiopen(thumb_path, "wb+") as f:
+                    await f.write(row["THUMBNAIL"])
+                row["THUMBNAIL"] = thumb_path
+            if row.get("RCLONE_CONFIG"):
+                async with aiopen(rclone_config_path, "wb+") as f:
+                    await f.write(row["RCLONE_CONFIG"])
+                row["RCLONE_CONFIG"] = rclone_config_path
+            if row.get("TOKEN_PICKLE"):
+                async with aiopen(token_path, "wb+") as f:
+                    await f.write(row["TOKEN_PICKLE"])
+                row["TOKEN_PICKLE"] = token_path
+            # Load YouTube token pickle if available
+            if row.get("YOUTUBE_TOKEN_PICKLE"):
+                try:
+                    async with aiopen(youtube_token_path, "wb+") as f:
+                        await f.write(row["YOUTUBE_TOKEN_PICKLE"])
+                    row["YOUTUBE_TOKEN_PICKLE"] = youtube_token_path
+                except Exception as e:
+                    LOGGER.error(
+                        f"Failed to write YouTube token for user {uid}: {e}"
+                    )
+                    # Remove corrupted token data from user data
+                    row.pop("YOUTUBE_TOKEN_PICKLE", None)
+            # Load user cookies if available
+            cookies_path = f"cookies/{uid}.txt"
+            if row.get("USER_COOKIES"):
+                async with aiopen(cookies_path, "wb+") as f:
+                    await f.write(row["USER_COOKIES"])
+                row["USER_COOKIES"] = cookies_path
+                # Set secure permissions for individual cookie files
+                await create_subprocess_exec("chmod", "600", cookies_path)
+                # Silently load user cookies without logging
+            user_data[uid] = row
 
-        # Force update streamrip config after settings are loaded
-        try:
-            from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
-                force_streamrip_config_update,
-            )
+        LOGGER.info("Users data has been imported from Database")
 
-            await force_streamrip_config_update()
-        except Exception as e:
-            LOGGER.error(
-                f"Failed to update streamrip config after settings load: {e}"
-            )
+    # CRITICAL FIX: Always ensure OWNER_ID and SUDO_USERS are authorized,
+    # even for new deployments with empty database
+    from bot.helper.ext_utils.bot_utils import ensure_authorized_users
 
-        if await database.db.rss[BOT_ID].find_one():
-            rows = database.db.rss[BOT_ID].find({})
-            async for row in rows:
-                user_id = row["_id"]
-                del row["_id"]
-                rss_dict[user_id] = row
-            LOGGER.info("Rss data has been imported from Database.")
+    await ensure_authorized_users()
+
+    # Force update streamrip config after settings are loaded
+    try:
+        from bot.helper.mirror_leech_utils.streamrip_utils.streamrip_config import (
+            force_streamrip_config_update,
+        )
+
+        await force_streamrip_config_update()
+    except Exception as e:
+        LOGGER.error(f"Failed to update streamrip config after settings load: {e}")
+
+    if await database.db.rss[BOT_ID].find_one():
+        rows = database.db.rss[BOT_ID].find({})
+        async for row in rows:
+            user_id = row["_id"]
+            del row["_id"]
+            rss_dict[user_id] = row
+        LOGGER.info("Rss data has been imported from Database.")
 
 
 async def save_settings():
@@ -539,28 +542,91 @@ async def save_settings():
 
 
 async def update_variables():
-    # Calculate max split size based on owner's USER_TRANSMISSION setting (matches old Aeon-MLTB logic)
-    # If owner has USER_TRANSMISSION enabled and premium, use 4GB limit, otherwise 2GB
-    owner_user_transmission = bool(
-        Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER
-    )
-    max_split_size = (
-        TgClient.MAX_SPLIT_SIZE if owner_user_transmission else 2097152000
-    )
+    # Smart default split size configuration based on client capabilities
+    # IMPORTANT: Splitting is ALWAYS enabled - never allow LEECH_SPLIT_SIZE = 0
 
-    # Set default leech split size to max split size based on owner transmission setting
-    # Only if not explicitly set by owner or if it exceeds max split size
+    # Determine client type and appropriate split size defaults
+    # Note: This is calculated before Config.USER_TRANSMISSION might be auto-disabled
+    # We'll recalculate after the auto-disable logic runs
+    owner_user_transmission = bool(Config.USER_TRANSMISSION and TgClient.user)
+
+    if owner_user_transmission:
+        if TgClient.IS_PREMIUM_USER:
+            # Premium user client - use 3.91GB default (safe for 4GB limit)
+            smart_default_split_size = int(3.91 * 1024 * 1024 * 1024)  # 3.91GB
+            max_allowed_split_size = int(3.91 * 1024 * 1024 * 1024)  # 3.91GB max
+        else:
+            # Non-premium user client - use 1.95GB default (safe for 2GB limit)
+            smart_default_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB
+            max_allowed_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB max
+    else:
+        # Bot client only - use 1.95GB default (safe for 2GB limit)
+        smart_default_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB
+        max_allowed_split_size = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB max
+
+    # Set smart default if not configured or if set to 0 (disabled)
     if (
-        not Config.LEECH_SPLIT_SIZE  # Not set
-        or max_split_size < Config.LEECH_SPLIT_SIZE  # Exceeds max allowed
-        or Config.LEECH_SPLIT_SIZE == 2097152000  # Default value, not custom
+        not Config.LEECH_SPLIT_SIZE  # Not set (0 or None)
+        or Config.LEECH_SPLIT_SIZE <= 0  # Explicitly disabled (not allowed)
+        or max_allowed_split_size < Config.LEECH_SPLIT_SIZE  # Exceeds client limit
+        or Config.LEECH_SPLIT_SIZE == 2097152000  # Old default value
     ):
-        Config.LEECH_SPLIT_SIZE = max_split_size
-
-    Config.HYBRID_LEECH = bool(Config.HYBRID_LEECH and TgClient.IS_PREMIUM_USER)
+        Config.LEECH_SPLIT_SIZE = smart_default_split_size
+    # Auto-disable USER_TRANSMISSION only if user session is not available
+    # USER_TRANSMISSION works with both premium and non-premium sessions
     Config.USER_TRANSMISSION = bool(
-        Config.USER_TRANSMISSION and TgClient.IS_PREMIUM_USER,
+        Config.USER_TRANSMISSION
+        and TgClient.user is not None  # Only requires user session to exist
     )
+
+    # HYBRID_LEECH requires USER_TRANSMISSION to be enabled and user session to exist
+    # It works with both premium and non-premium sessions (just uses different limits)
+    Config.HYBRID_LEECH = bool(
+        Config.HYBRID_LEECH
+        and Config.USER_TRANSMISSION  # Requires user transmission to be enabled
+        and TgClient.user is not None  # Requires user session to exist
+    )
+
+    # Recalculate split size defaults after USER_TRANSMISSION may have been auto-disabled
+    # This ensures we use the correct client type for split size calculation
+    final_owner_user_transmission = bool(Config.USER_TRANSMISSION and TgClient.user)
+
+    # If USER_TRANSMISSION was auto-disabled, we need to recalculate split size
+    if owner_user_transmission != final_owner_user_transmission:
+        LOGGER.info(
+            "🔄 Recalculating split size defaults after USER_TRANSMISSION auto-disable..."
+        )
+
+        if final_owner_user_transmission:
+            if TgClient.IS_PREMIUM_USER:
+                # Premium user client - use 3.91GB default (safe for 4GB limit)
+                new_smart_default = int(3.91 * 1024 * 1024 * 1024)  # 3.91GB
+                new_max_allowed = int(3.91 * 1024 * 1024 * 1024)  # 3.91GB max
+                new_client_info = "user client (premium session)"
+            else:
+                # Non-premium user client - use 1.95GB default (safe for 2GB limit)
+                new_smart_default = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB
+                new_max_allowed = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB max
+                new_client_info = "user client (non-premium session)"
+        else:
+            # Bot client only - use 1.95GB default (safe for 2GB limit)
+            new_smart_default = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB
+            new_max_allowed = int(1.95 * 1024 * 1024 * 1024)  # 1.95GB max
+            new_client_info = "bot client"
+
+        # Update split size if it was set to the old default or exceeds new limit
+        if (
+            smart_default_split_size
+            == Config.LEECH_SPLIT_SIZE  # Was using old default
+            or new_max_allowed < Config.LEECH_SPLIT_SIZE  # Exceeds new limit
+        ):
+            old_split_size = Config.LEECH_SPLIT_SIZE
+            Config.LEECH_SPLIT_SIZE = new_smart_default
+
+            LOGGER.info(
+                f"📏 Updated LEECH_SPLIT_SIZE from {old_split_size / (1024**3):.2f}GB to "
+                f"{Config.LEECH_SPLIT_SIZE / (1024**3):.2f}GB ({new_client_info})"
+            )
 
     # Migrate from old config if needed
     if (
@@ -570,10 +636,7 @@ async def update_variables():
     ):
         Config.MEDIA_SEARCH_CHATS = Config.MUSIC_SEARCH_CHATS
 
-    # Automatically authorize privileged users (Owner + Sudo)
-    from bot.helper.ext_utils.bot_utils import ensure_authorized_users
-
-    await ensure_authorized_users()
+    # User authorization will be handled after database loading in the main startup sequence
 
     if Config.AUTHORIZED_CHATS:
         aid = Config.AUTHORIZED_CHATS.split()

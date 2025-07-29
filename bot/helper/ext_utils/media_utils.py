@@ -8663,13 +8663,13 @@ class FFMpeg:
 
 
 async def apply_document_metadata(file_path, title=None, author=None, comment=None):
-    """Apply metadata to document files like PDF using appropriate tools.
+    """Apply metadata to document files like PDF using appropriate tools with template variable support.
 
     Args:
         file_path: Path to the document file
-        title: Title metadata to apply
-        author: Author metadata to apply
-        comment: Comment metadata to apply
+        title: Title metadata to apply (supports template variables)
+        author: Author metadata to apply (supports template variables)
+        comment: Comment metadata to apply (supports template variables)
 
     Returns:
         bool: True if metadata was successfully applied, False otherwise
@@ -8678,7 +8678,143 @@ async def apply_document_metadata(file_path, title=None, author=None, comment=No
         LOGGER.error(f"File not found: {file_path}")
         return False
 
-    # Skip if no metadata to apply
+    # Process template variables in metadata values
+    from bot.helper.ext_utils.template_processor import (
+        extract_metadata_from_filename,
+    )
+
+    # Extract file metadata for template variables
+    filename_without_ext = os.path.splitext(os.path.basename(file_path))[0]
+    file_metadata = await extract_metadata_from_filename(filename_without_ext)
+
+    # Add basic file information to metadata
+    file_metadata.update(
+        {
+            "filename": filename_without_ext,
+            "ext": os.path.splitext(file_path)[1][1:]
+            if os.path.splitext(file_path)[1]
+            else "",
+            "filepath": file_path,
+            "basename": os.path.basename(file_path),
+        }
+    )
+
+    # Add additional template variables for comprehensive support
+    try:
+        import hashlib
+        import os
+
+        # Get file size
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size >= 1024**3:  # GB
+                size_str = f"{file_size / (1024**3):.2f}GB"
+            elif file_size >= 1024**2:  # MB
+                size_str = f"{file_size / (1024**2):.2f}MB"
+            elif file_size >= 1024:  # KB
+                size_str = f"{file_size / 1024:.2f}KB"
+            else:
+                size_str = f"{file_size}B"
+            file_metadata["size"] = size_str
+        except:
+            file_metadata["size"] = "Unknown"
+
+        # Get MD5 hash (first 8 characters for performance)
+        try:
+            with open(file_path, "rb") as f:
+                file_hash = hashlib.md5(f.read(8192)).hexdigest()[
+                    :8
+                ]  # Quick hash of first 8KB
+            file_metadata["md5_hash"] = file_hash
+            file_metadata["id"] = file_hash
+        except:
+            file_metadata["md5_hash"] = "Unknown"
+            file_metadata["id"] = "Unknown"
+
+        # Get media information if it's a media file
+        try:
+            duration, artist, title = await get_media_info(file_path)
+            if duration and duration > 0:
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                seconds = duration % 60
+                if hours > 0:
+                    duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                else:
+                    duration_str = f"{minutes:02d}:{seconds:02d}"
+                file_metadata["duration"] = duration_str
+            else:
+                file_metadata["duration"] = ""
+        except:
+            file_metadata["duration"] = ""
+
+        # Set default values for media-specific variables
+        file_metadata.update(
+            {
+                "audios": "",
+                "audio_codecs": "",
+                "subtitles": "",
+                "NumVideos": "00",
+                "NumAudios": "00",
+                "NumSubtitles": "00",
+                "formate": file_metadata["ext"].upper()
+                if file_metadata["ext"]
+                else "",
+                "format": "Unknown",
+            }
+        )
+
+    except Exception as e:
+        LOGGER.warning(f"Error extracting additional metadata for {file_path}: {e}")
+        # Set default values if extraction fails
+        file_metadata.update(
+            {
+                "size": "Unknown",
+                "duration": "",
+                "audios": "",
+                "audio_codecs": "",
+                "subtitles": "",
+                "md5_hash": "Unknown",
+                "NumVideos": "00",
+                "NumAudios": "00",
+                "NumSubtitles": "00",
+                "formate": file_metadata["ext"].upper()
+                if file_metadata["ext"]
+                else "",
+                "format": "Unknown",
+                "id": "Unknown",
+            }
+        )
+
+    # Process template variables in metadata fields (simple substitution only)
+    async def process_metadata_template(template_value):
+        """Process template variables in metadata values - simple substitution only"""
+        if not template_value:
+            return template_value
+        try:
+            result = str(template_value)
+            # Simple template variable substitution using {variable} format
+            for key, value in file_metadata.items():
+                if value is not None:
+                    result = result.replace(f"{{{key}}}", str(value))
+            return result
+        except Exception as e:
+            LOGGER.warning(
+                f"Error processing metadata template '{template_value}': {e}"
+            )
+            return str(
+                template_value
+            )  # Return original value if template processing fails
+
+    # Process all metadata values through template processor
+    if title:
+        title = await process_metadata_template(title)
+    if author:
+        author = await process_metadata_template(author)
+    if comment:
+        comment = await process_metadata_template(comment)
+
+    # Skip if no metadata to apply after processing
     if not title and not author and not comment:
         return True
 

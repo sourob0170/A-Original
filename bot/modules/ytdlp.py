@@ -95,7 +95,7 @@ async def select_format(_, query, obj):
     else:
         if data[1] == "sub":
             obj.qual = obj.formats[data[2]][data[3]][1]
-        elif "|" in data[1]:
+        elif data[1] and "|" in data[1]:
             obj.qual = obj.formats[data[1]]
         else:
             obj.qual = data[1]
@@ -216,7 +216,7 @@ class YtSelection:
             matching_resolutions = []
             for r in self.formats:
                 # Check if the format name contains 'p' and has a number before it
-                if "p" in r:
+                if r and "p" in r:
                     try:
                         # Try to extract the resolution number
                         res_num = int(r.split("p")[0])
@@ -230,7 +230,7 @@ class YtSelection:
             # Sort resolutions in ascending order
             def get_resolution(format_name):
                 try:
-                    if "p" in format_name:
+                    if format_name and "p" in format_name:
                         return int(format_name.split("p")[0])
                     return 0
                 except (ValueError, IndexError):
@@ -251,7 +251,7 @@ class YtSelection:
                             tbr, v_list = next(iter(tbr_dict.items()))
                             size_str = get_readable_file_size(v_list[0])
                             # Highlight AV1 formats
-                            if "av1" in b_name.lower():
+                            if b_name and "av1" in b_name.lower():
                                 buttonName = f"🔸 {b_name} ({size_str})"
                             else:
                                 buttonName = f"{b_name} ({size_str})"
@@ -287,7 +287,7 @@ class YtSelection:
 
     async def get_quality(self, result):
         buttons = ButtonMaker()
-        if "entries" in result:
+        if result and "entries" in result:
             self._is_playlist = True
 
             # Store all formats for later use
@@ -463,7 +463,7 @@ class YtSelection:
                 for b_name in self.formats:
                     try:
                         # Extract resolution from format name (e.g., "720p-h264" -> 720)
-                        if "p" in b_name:
+                        if b_name and "p" in b_name:
                             resolution = int(b_name.split("p")[0])
                             sorted_formats.append((resolution, b_name))
                     except (ValueError, IndexError):
@@ -480,7 +480,7 @@ class YtSelection:
                         tbr, v_list = next(iter(tbr_dict.items()))
                         size_str = get_readable_file_size(v_list[0])
                         # Highlight AV1 formats
-                        if "av1" in b_name.lower():
+                        if b_name and "av1" in b_name.lower():
                             buttonName = f"🔸 {b_name} ({size_str})"
                         else:
                             buttonName = f"{b_name} ({size_str})"
@@ -511,19 +511,21 @@ class YtSelection:
 
     async def back_to_main(self):
         # Get the current message text to determine which menu we're in
-        current_msg = self._reply_to.text if hasattr(self._reply_to, "text") else ""
+        current_msg = ""
+        if hasattr(self._reply_to, "text") and self._reply_to.text:
+            current_msg = self._reply_to.text
 
         # Check if we're in an audio-related menu
-        if "Audio" in current_msg and "Quality" in current_msg:
+        if current_msg and "Audio" in current_msg and "Quality" in current_msg:
             # We're in the audio quality menu, go back to audio format selection
             await self.audio_format()
-        elif "Audio Format" in current_msg:
+        elif current_msg and "Audio Format" in current_msg:
             # We're in the audio format menu, go back to audio section
             await self.show_section("audio")
-        elif "MP3 Audio" in current_msg:
+        elif current_msg and "MP3 Audio" in current_msg:
             # We're in the MP3 quality menu, go back to audio section
             await self.show_section("audio")
-        elif "Choose AUDIO Format" in current_msg:
+        elif current_msg and "Choose AUDIO Format" in current_msg:
             # We're in the audio section, go back to main menu
             if self._is_playlist:
                 msg = f"Choose Playlist Videos Quality:\nTimeout: {get_readable_time(self._timeout - (time() - self._time))}"
@@ -876,7 +878,7 @@ class YtDlp(TaskListener):
                             # Look for preset in config
                             if (
                                 Config.FFMPEG_CMDS
-                                and preset_name in Config.FFMPEG_CMDS
+                                and preset_name and preset_name in Config.FFMPEG_CMDS
                             ):
                                 self.ffmpeg_cmds.append(
                                     Config.FFMPEG_CMDS[preset_name]
@@ -886,7 +888,7 @@ class YtDlp(TaskListener):
                                 )
                             elif (
                                 self.user_dict.get("FFMPEG_CMDS")
-                                and preset_name in self.user_dict["FFMPEG_CMDS"]
+                                and preset_name and preset_name in self.user_dict["FFMPEG_CMDS"]
                             ):
                                 self.ffmpeg_cmds.append(
                                     self.user_dict["FFMPEG_CMDS"][preset_name]
@@ -902,7 +904,7 @@ class YtDlp(TaskListener):
                                 LOGGER.info(
                                     f"Added direct FFmpeg command: {preset_name}"
                                 )
-                    elif Config.FFMPEG_CMDS and args["-ff"] in Config.FFMPEG_CMDS:
+                    elif Config.FFMPEG_CMDS and args["-ff"] and args["-ff"] in Config.FFMPEG_CMDS:
                         # Single preset from owner config
                         self.ffmpeg_cmds = [Config.FFMPEG_CMDS[args["-ff"]]]
                         LOGGER.info(
@@ -910,7 +912,7 @@ class YtDlp(TaskListener):
                         )
                     elif (
                         self.user_dict.get("FFMPEG_CMDS")
-                        and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
+                        and args["-ff"] and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
                     ):
                         # Single preset from user config
                         self.ffmpeg_cmds = [
@@ -1129,7 +1131,7 @@ class YtDlp(TaskListener):
                         if self.folder_name in self.same_dir:
                             self.same_dir[self.folder_name]["tasks"].add(self.mid)
                             for fd_name in self.same_dir:
-                                if fd_name != self.folder_name:
+                                if fd_name and fd_name != self.folder_name:
                                     self.same_dir[fd_name]["total"] -= 1
                         elif self.same_dir:
                             self.same_dir[self.folder_name] = {
@@ -1137,7 +1139,7 @@ class YtDlp(TaskListener):
                                 "tasks": {self.mid},
                             }
                             for fd_name in self.same_dir:
-                                if fd_name != self.folder_name:
+                                if fd_name and fd_name != self.folder_name:
                                     self.same_dir[fd_name]["total"] -= 1
                         else:
                             self.same_dir = {
@@ -1149,6 +1151,8 @@ class YtDlp(TaskListener):
                 elif self.same_dir:
                     async with task_dict_lock:
                         for fd_name in self.same_dir:
+                            if not fd_name:
+                                continue
                             self.same_dir[fd_name]["total"] -= 1
         else:
             await self.init_bulk(input_list, bulk_start, bulk_end, YtDlp)
@@ -1185,7 +1189,7 @@ class YtDlp(TaskListener):
             await self.remove_from_same_dir()
             return
 
-        if "mdisk.me" in self.link:
+        if self.link and "mdisk.me" in self.link:
             self.name, self.link = await _mdisk(self.link, self.name)
 
         try:
@@ -1211,10 +1215,10 @@ class YtDlp(TaskListener):
         options = {"usenetrc": True, "cookiefile": "cookies.txt"}
         if opt:
             for key, value in opt.items():
-                if key in ["postprocessors", "download_ranges"]:
+                if key and key in ["postprocessors", "download_ranges"]:
                     continue
                 if key == "format" and not self.select:
-                    if value.startswith("ba/b-"):
+                    if value and value.startswith("ba/b-"):
                         qual = value
                         continue
                     qual = value
@@ -1235,6 +1239,14 @@ class YtDlp(TaskListener):
         finally:
             await self.run_multi(input_list, YtDlp)
 
+        # Check if result is None (extraction failed)
+        if result is None:
+            await delete_links(self.message)
+            error_msg = await send_message(self.message, f"{self.tag} Failed to extract video information")
+            create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
+            await self.remove_from_same_dir()
+            return
+
         if not qual:
             qual = await YtSelection(self).get_quality(result)
             if qual is None:
@@ -1242,7 +1254,7 @@ class YtDlp(TaskListener):
                 return
 
         LOGGER.info(f"Downloading with YT-DLP: {self.link}")
-        playlist = "entries" in result
+        playlist = result and "entries" in result
         ydl = YoutubeDLHelper(self)
         create_task(ydl.add_download(path, qual, playlist, opt))  # noqa: RUF006
         await delete_links(self.message)

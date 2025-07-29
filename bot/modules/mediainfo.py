@@ -605,10 +605,20 @@ def parse_ffprobe_info(json_data, file_size, filename):
                 if not display_aspect_ratio:
                     # Calculate simple ratio
                     def gcd(a, b):
-                        return a if b == 0 else gcd(b, a % b)
+                        if b == 0:
+                            return a
+                        try:
+                            return gcd(b, a % b)
+                        except ZeroDivisionError:
+                            return a
 
                     divisor = gcd(width, height)
-                    display_aspect_ratio = f"{width // divisor}:{height // divisor}"
+                    if divisor > 0:
+                        display_aspect_ratio = (
+                            f"{width // divisor}:{height // divisor}"
+                        )
+                    else:
+                        display_aspect_ratio = f"{width}:{height}"
 
                 tc += f"{'Display aspect ratio':<28}: {display_aspect_ratio}\n"
 
@@ -1211,10 +1221,8 @@ async def gen_mediainfo(
                         else f"mediainfo_{int(time())}"
                     )
 
-                # Clean filename of any problematic characters
-                filename = (
-                    filename.replace(" ", "_").replace("'", "").replace('"', "")
-                )
+                # Clean filename of any problematic characters (keep spaces for better readability)
+                filename = filename.replace("'", "").replace('"', "")
 
                 # Ensure we have a valid temp_download_path
                 if not temp_download_path:
@@ -1416,9 +1424,8 @@ async def gen_mediainfo(
                 file_name = re.sub(
                     r'[<>:"|?*]', "_", file_name
                 )  # Replace Windows-forbidden characters
-                file_name = re.sub(
-                    r"\s+", "_", file_name
-                )  # Replace multiple spaces with single underscore
+                # Keep spaces in filename for better readability
+                # file_name = re.sub(r"\s+", "_", file_name)  # Commented out to preserve spaces
                 file_name = file_name.strip(
                     "._"
                 )  # Remove leading/trailing dots and underscores
@@ -2106,7 +2113,7 @@ async def gen_mediainfo(
                                     if size_match:
                                         uncompressed_size = int(size_match.group(1))
 
-                        if uncompressed_size > 0:
+                        if uncompressed_size > 0 and file_size > 0:
                             # Calculate compression ratio
                             ratio = uncompressed_size / file_size
                             tc += f"{'Compression ratio':<28}: {ratio:.2f}:1\n"

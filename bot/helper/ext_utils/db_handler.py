@@ -90,6 +90,10 @@ class DbManager:
             self._return = True
             return False
 
+        # Skip if database is marked as closed/disconnected
+        if self._return:
+            return False
+
         # Skip if we've checked recently (within last 30 seconds)
         current_time = int(get_time())
         if (
@@ -144,13 +148,27 @@ class DbManager:
             return not self._return
 
     async def disconnect(self):
+        # Set return flag first to prevent new operations
         self._return = True
+
+        # Stop heartbeat task first to prevent it from trying to reconnect
+        if hasattr(self, "_heartbeat_task") and self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_task
+            self._heartbeat_task = None
+            LOGGER.debug("Database heartbeat task stopped during disconnect")
+
         if self._conn is not None:
             try:
                 await self._conn.close()
                 LOGGER.info("Database connection closed successfully")
             except Exception as e:
-                LOGGER.error(f"Error closing database connection: {e}")
+                # Don't log as error if it's already closed
+                if "closed" in str(e).lower():
+                    LOGGER.debug(f"Database connection was already closed: {e}")
+                else:
+                    LOGGER.error(f"Error closing database connection: {e}")
         self._conn = None
         self.db = None
         self._last_connection_check = 0
@@ -159,6 +177,43 @@ class DbManager:
         # Force garbage collection after database operations
         if smart_garbage_collection is not None:
             smart_garbage_collection(aggressive=True)
+
+    async def safe_db_operation(self, operation_name: str, operation_func):
+        """Safely execute a database operation with proper error handling."""
+        try:
+            # Check if database is available
+            if self._return or self._conn is None:
+                LOGGER.debug(f"Skipping {operation_name} - database is disconnected")
+                return None
+
+            # Ensure connection is alive
+            if not await self.ensure_connection():
+                LOGGER.debug(
+                    f"Skipping {operation_name} - could not ensure database connection"
+                )
+                return None
+
+            # Execute the operation
+            return await operation_func()
+
+        except Exception as e:
+            # Handle database closed errors gracefully
+            if any(
+                keyword in str(e).lower()
+                for keyword in [
+                    "closed database",
+                    "connection closed",
+                    "client is closed",
+                    "cannot operate on a closed",
+                    "connection is closed",
+                ]
+            ):
+                LOGGER.debug(
+                    f"Database operation {operation_name} failed - connection closed (expected during shutdown): {e}"
+                )
+                return None
+            LOGGER.error(f"Error in database operation {operation_name}: {e}")
+            return None
 
     # Removed update_deploy_config method - deploy config is now only updated during startup
     # when actual config.py changes are detected. No more bidirectional sync!
@@ -489,8 +544,17 @@ class DbManager:
 
     async def update_user_data(self, user_id):
         if self._return:
+            LOGGER.warning(
+                f"Database connection not available, cannot save user data for user {user_id}"
+            )
             return
         data = user_data.get(user_id, {})
+        if not data:
+            LOGGER.warning(
+                f"No user data found for user {user_id} in memory, cannot save to database"
+            )
+            return
+
         data = data.copy()
         for key in (
             "THUMBNAIL",
@@ -533,7 +597,15 @@ class DbManager:
                 },
             },
         ]
-        await self.db.users.update_one({"_id": user_id}, pipeline, upsert=True)
+        try:
+            await self.db.users.update_one(
+                {"_id": user_id}, pipeline, upsert=True
+            )
+
+        except Exception as e:
+            LOGGER.error(
+                f"Failed to save user data to database for user {user_id}: {e}"
+            )
 
     async def update_user_doc(self, user_id, key, path="", binary_data=None):
         """Update a user document in the database with memory-efficient handling.
@@ -775,10 +847,8 @@ class DbManager:
 
     async def get_incomplete_tasks(self):
         notifier_dict = {}
-        if not await self.ensure_connection():
-            return notifier_dict
 
-        try:
+        async def _get_tasks():
             if await self.db.tasks[TgClient.ID].find_one():
                 rows = self.db.tasks[TgClient.ID].find({})
                 async for row in rows:
@@ -795,11 +865,11 @@ class DbManager:
                 await self.db.tasks[TgClient.ID].drop()
             except PyMongoError as e:
                 LOGGER.error(f"Error dropping tasks collection: {e}")
-        except PyMongoError as e:
-            LOGGER.error(f"Error retrieving incomplete tasks: {e}")
-            await self.ensure_connection()  # Try to reconnect for next operation
 
-        return notifier_dict
+            return notifier_dict
+
+        result = await self.safe_db_operation("get_incomplete_tasks", _get_tasks)
+        return result if result is not None else notifier_dict
 
     async def trunc_table(self, name):
         if self._return:
@@ -1168,7 +1238,7 @@ class DbManager:
                 },
             ]
 
-            cursor = self.db.nsfw_detections.aggregate(pipeline)
+            cursor = await self.db.nsfw_detections.aggregate(pipeline)
             result = await cursor.to_list(length=1)
             if result:
                 stats = result[0]
@@ -1356,12 +1426,27 @@ class DatabaseManager(DbManager):
         async def heartbeat():
             while True:
                 try:
-                    if Config.DATABASE_URL:
+                    # Check if database is still available and not closed
+                    if (
+                        Config.DATABASE_URL
+                        and not self._return
+                        and self._conn is not None
+                    ):
                         await self.ensure_connection()
                     await asyncio.sleep(60)  # Check every minute
                 except asyncio.CancelledError:
+                    LOGGER.debug("Database heartbeat task cancelled")
                     break
                 except Exception as e:
+                    # Check if this is a database closed error during shutdown
+                    if (
+                        "closed database" in str(e).lower()
+                        or "connection closed" in str(e).lower()
+                    ):
+                        LOGGER.debug(
+                            f"Database connection closed during heartbeat (expected during shutdown): {e}"
+                        )
+                        break
                     LOGGER.error(f"Error in database heartbeat: {e}")
                     await asyncio.sleep(30)  # Shorter interval on error
 
