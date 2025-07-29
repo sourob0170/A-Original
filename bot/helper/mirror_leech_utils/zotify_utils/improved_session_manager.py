@@ -33,7 +33,9 @@ class ImprovedZotifySessionManager:
         )
         self._last_api_call = 0
         self._last_activity = 0
-        self._inactivity_timeout = 600  # Increased to 10 minutes for active downloads
+        self._inactivity_timeout = (
+            600  # Increased to 10 minutes for active downloads
+        )
         self._api_call_interval = 0.5  # Reduced interval for better performance
         self._consecutive_failures = 0
         self._max_consecutive_failures = 5  # Increased for better resilience
@@ -57,7 +59,9 @@ class ImprovedZotifySessionManager:
         should_recreate = (
             not self._session
             or (not self._is_downloading and session_age > self._session_max_age)
-            or (self._is_downloading and session_age > self._session_max_age * 2)  # Double timeout during downloads
+            or (
+                self._is_downloading and session_age > self._session_max_age * 2
+            )  # Double timeout during downloads
             or self._consecutive_failures >= self._max_consecutive_failures
         )
 
@@ -68,8 +72,11 @@ class ImprovedZotifySessionManager:
         self._last_activity = current_time
 
         # Less frequent memory cleanup, skip during downloads
-        if (not self._is_downloading and
-            current_time - self._last_memory_cleanup > self._memory_cleanup_interval):
+        if (
+            not self._is_downloading
+            and current_time - self._last_memory_cleanup
+            > self._memory_cleanup_interval
+        ):
             self._cleanup_memory_sync()
             self._last_memory_cleanup = current_time
 
@@ -202,8 +209,10 @@ class ImprovedZotifySessionManager:
                             break
                         except Exception as e:
                             if attempt < max_retries - 1:
-                                wait_time = 2 ** attempt
-                                LOGGER.warning(f"Session creation attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
+                                wait_time = 2**attempt
+                                LOGGER.warning(
+                                    f"Session creation attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s..."
+                                )
                                 await asyncio.sleep(wait_time)
                             else:
                                 raise
@@ -551,7 +560,9 @@ async def _periodic_cleanup():
 
                 if session_age > max_age:
                     if improved_session_manager._is_downloading:
-                        LOGGER.info(f"Session aged {session_age}s but download is active, extending timeout")
+                        LOGGER.info(
+                            f"Session aged {session_age}s but download is active, extending timeout"
+                        )
                     else:
                         LOGGER.info("Forcing session cleanup due to age")
                         with contextlib.suppress(Exception):

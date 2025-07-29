@@ -878,7 +878,8 @@ class YtDlp(TaskListener):
                             # Look for preset in config
                             if (
                                 Config.FFMPEG_CMDS
-                                and preset_name and preset_name in Config.FFMPEG_CMDS
+                                and preset_name
+                                and preset_name in Config.FFMPEG_CMDS
                             ):
                                 self.ffmpeg_cmds.append(
                                     Config.FFMPEG_CMDS[preset_name]
@@ -888,7 +889,8 @@ class YtDlp(TaskListener):
                                 )
                             elif (
                                 self.user_dict.get("FFMPEG_CMDS")
-                                and preset_name and preset_name in self.user_dict["FFMPEG_CMDS"]
+                                and preset_name
+                                and preset_name in self.user_dict["FFMPEG_CMDS"]
                             ):
                                 self.ffmpeg_cmds.append(
                                     self.user_dict["FFMPEG_CMDS"][preset_name]
@@ -904,7 +906,11 @@ class YtDlp(TaskListener):
                                 LOGGER.info(
                                     f"Added direct FFmpeg command: {preset_name}"
                                 )
-                    elif Config.FFMPEG_CMDS and args["-ff"] and args["-ff"] in Config.FFMPEG_CMDS:
+                    elif (
+                        Config.FFMPEG_CMDS
+                        and args["-ff"]
+                        and args["-ff"] in Config.FFMPEG_CMDS
+                    ):
                         # Single preset from owner config
                         self.ffmpeg_cmds = [Config.FFMPEG_CMDS[args["-ff"]]]
                         LOGGER.info(
@@ -912,7 +918,8 @@ class YtDlp(TaskListener):
                         )
                     elif (
                         self.user_dict.get("FFMPEG_CMDS")
-                        and args["-ff"] and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
+                        and args["-ff"]
+                        and args["-ff"] in self.user_dict["FFMPEG_CMDS"]
                     ):
                         # Single preset from user config
                         self.ffmpeg_cmds = [
@@ -1242,7 +1249,9 @@ class YtDlp(TaskListener):
         # Check if result is None (extraction failed)
         if result is None:
             await delete_links(self.message)
-            error_msg = await send_message(self.message, f"{self.tag} Failed to extract video information")
+            error_msg = await send_message(
+                self.message, f"{self.tag} Failed to extract video information"
+            )
             create_task(auto_delete_message(error_msg, time=300))  # noqa: RUF006
             await self.remove_from_same_dir()
             return

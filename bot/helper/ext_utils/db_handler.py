@@ -598,9 +598,7 @@ class DbManager:
             },
         ]
         try:
-            await self.db.users.update_one(
-                {"_id": user_id}, pipeline, upsert=True
-            )
+            await self.db.users.update_one({"_id": user_id}, pipeline, upsert=True)
 
         except Exception as e:
             LOGGER.error(

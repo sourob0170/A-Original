@@ -63,7 +63,6 @@ try:
     import asyncio
     import os
 
-
     async def load_web_server_config():
         try:
             # First, try to load shared configuration from main bot process

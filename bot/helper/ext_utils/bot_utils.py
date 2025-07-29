@@ -1609,4 +1609,3 @@ def check_storage_threshold(size, threshold, arch=False):
         LOGGER.error(f"Error checking storage threshold: {e}")
         # Default to allowing the download if we can't check the space
         return True
-
