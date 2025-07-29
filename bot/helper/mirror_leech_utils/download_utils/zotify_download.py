@@ -11,7 +11,7 @@ from typing import Any
 
 from zotify import Session
 from zotify.collections import Album, Artist, Playlist, Show
-from zotify.utils import AudioFormat, ImageSize
+from zotify.utils import AudioFormat
 
 from bot import DOWNLOAD_DIR, LOGGER, task_dict, task_dict_lock
 from bot.helper.ext_utils.limit_checker import limit_checker
@@ -687,11 +687,10 @@ class ZotifyDownloadHelper:
                                 await improved_session_manager.force_session_recreation()
 
                     continue  # Retry the download
-                else:
-                    LOGGER.error(
-                        f"Non-retryable error or max retries reached: {error_msg}"
-                    )
-                    break
+                LOGGER.error(
+                    f"Non-retryable error or max retries reached: {error_msg}"
+                )
+                break
 
         # If we get here, all retries failed
         return False

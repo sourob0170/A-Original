@@ -1596,8 +1596,8 @@ async def ensure_database_and_config():
 
 # Export the variables for external use
 __all__ = [
-    "AsyncMongoClient",
     "USING_MOTOR",
+    "AsyncMongoClient",
     "database",
     "ensure_database_and_config",
 ]

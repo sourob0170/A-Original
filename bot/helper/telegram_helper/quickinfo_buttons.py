@@ -117,30 +117,29 @@ def get_quickinfo_menu_buttons():
             ],
             resize_keyboard=True,
         )
-    else:
-        # PyroFork and Nekozee don't have request features - use simple buttons
-        return ReplyKeyboardMarkup(
+    # PyroFork and Nekozee don't have request features - use simple buttons
+    return ReplyKeyboardMarkup(
+        [
             [
-                [
-                    KeyboardButton("👤 Users"),
-                    KeyboardButton("🤖 Bots"),
-                    KeyboardButton("⭐ Premium"),
-                ],
-                [
-                    KeyboardButton("🌐 Public Channel"),
-                    KeyboardButton("🌐 Public Group"),
-                ],
-                [
-                    KeyboardButton("🔒 Private Channel"),
-                    KeyboardButton("🔒 Private Group"),
-                ],
-                [
-                    KeyboardButton("👥 Your Groups"),
-                    KeyboardButton("🌟 Your Channels"),
-                ],
+                KeyboardButton("👤 Users"),
+                KeyboardButton("🤖 Bots"),
+                KeyboardButton("⭐ Premium"),
             ],
-            resize_keyboard=True,
-        )
+            [
+                KeyboardButton("🌐 Public Channel"),
+                KeyboardButton("🌐 Public Group"),
+            ],
+            [
+                KeyboardButton("🔒 Private Channel"),
+                KeyboardButton("🔒 Private Group"),
+            ],
+            [
+                KeyboardButton("👥 Your Groups"),
+                KeyboardButton("🌟 Your Channels"),
+            ],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def get_quickinfo_inline_buttons():

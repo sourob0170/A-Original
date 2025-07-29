@@ -1,4 +1,3 @@
-import os
 from logging import ERROR, getLogger
 from os import listdir
 from os import path as ospath
