@@ -14,7 +14,7 @@ try:
 
     # Check if aiofiles.os module exists (not available in 0.7)
     try:
-        import aiofiles.os
+        import aiofiles.os as aiofiles_os
 
         AIOFILES_OS_AVAILABLE = True
     except ImportError:
@@ -22,7 +22,7 @@ try:
 
     # Check if aiofiles.os.path module exists (not available in 0.7 and some newer versions)
     try:
-        import aiofiles.os.path
+        import aiofiles.os.path as aiofiles_os_path
 
         AIOFILES_OS_PATH_AVAILABLE = True
     except ImportError:

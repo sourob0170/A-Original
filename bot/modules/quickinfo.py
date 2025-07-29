@@ -90,14 +90,12 @@ async def quickinfo_command(client, message: Message):
         # Show current chat information
         try:
             chat_info = formatter.format_chat_info(chat, "detailed")
-
             reply_markup = get_quickinfo_inline_buttons()
             await send_message(
                 message,
                 f"<b>📋 Current Chat Information</b>\n\n{chat_info}",
                 reply_markup,
             )
-
         except Exception as e:
             LOGGER.error(f"Error getting current chat info: {e}")
             await send_message(message, "❌ <b>Failed to get chat information.</b>")
@@ -130,11 +128,19 @@ async def quickinfo_command(client, message: Message):
 
             # Add forum topic information if applicable
             topic_info = ""
-            if message.topic_message and message.message_thread_id:
-                topic_info = f"\n🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
-                if hasattr(message, "topic") and message.topic:
+            # Check for topic_message attribute (may not exist in PyroFork)
+            has_topic_message = getattr(message, "topic_message", None)
+            message_thread_id = getattr(message, "message_thread_id", None)
+
+            if has_topic_message and message_thread_id:
+                topic_info = (
+                    f"\n🧵 <b>Forum Topic ID:</b> <code>{message_thread_id}</code>"
+                )
+                # PyroFork compatibility for topic attribute
+                topic = getattr(message, "topic", None)
+                if topic and hasattr(topic, "name"):
                     topic_info += (
-                        f"\n📝 <b>Topic Name:</b> <code>{message.topic.name}</code>"
+                        f"\n📝 <b>Topic Name:</b> <code>{topic.name}</code>"
                     )
 
             welcome_text = (
@@ -201,10 +207,13 @@ async def handle_forwarded_message(client, message: Message):
                     f"📅 <b>Original Date:</b> <code>{message.forward_date}</code>"
                 )
 
-            # Check if it's from a forum topic
-            if message.topic_message and message.message_thread_id:
+            # Check if it's from a forum topic (PyroFork compatibility)
+            has_topic_message = getattr(message, "topic_message", None)
+            message_thread_id = getattr(message, "message_thread_id", None)
+
+            if has_topic_message and message_thread_id:
                 forward_details.append(
-                    f"🧵 <b>Forum Topic ID:</b> <code>{message.message_thread_id}</code>"
+                    f"🧵 <b>Forum Topic ID:</b> <code>{message_thread_id}</code>"
                 )
 
             info_parts.append(f"💬 <b>Original Chat:</b>\n{chat_info}")

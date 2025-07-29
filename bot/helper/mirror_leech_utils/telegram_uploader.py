@@ -15,7 +15,15 @@ from aioshutil import rmtree
 from natsort import natsorted
 from PIL import Image
 from pyrogram import enums
-from pyrogram.errors import BadRequest, FloodPremiumWait, FloodWait, RPCError
+
+# Smart import for FloodPremiumWait compatibility
+try:
+    from pyrogram.errors import BadRequest, FloodPremiumWait, FloodWait, RPCError
+except ImportError:
+    # FloodPremiumWait not available in pyrofork 2.2.11, use FloodWait as fallback
+    from pyrogram.errors import BadRequest, FloodWait, RPCError
+
+    FloodPremiumWait = FloodWait  # Use FloodWait as fallback
 from pyrogram.types import InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from tenacity import (
     RetryError,

@@ -5,13 +5,36 @@ import time
 from time import time as get_time
 
 from aiofiles import open as aiopen
-from pymongo import AsyncMongoClient
-from pymongo.errors import (
-    ConnectionFailure,
-    PyMongoError,
-    ServerSelectionTimeoutError,
-)
-from pymongo.server_api import ServerApi
+
+# Initialize USING_MOTOR flag
+USING_MOTOR = False
+
+# Smart import: Use pymongo's AsyncMongoClient if available (kurigram/newer pymongo),
+# otherwise fall back to motor's AsyncIOMotorClient (pyrofork/older pymongo)
+try:
+    from pymongo import AsyncMongoClient
+    from pymongo.errors import (
+        ConnectionFailure,
+        PyMongoError,
+        ServerSelectionTimeoutError,
+    )
+    from pymongo.server_api import ServerApi
+
+except ImportError:
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient as AsyncMongoClient
+        from pymongo.errors import (
+            ConnectionFailure,
+            PyMongoError,
+            ServerSelectionTimeoutError,
+        )
+        from pymongo.server_api import ServerApi
+
+    except ImportError:
+        raise ImportError(
+            "Neither pymongo.AsyncMongoClient nor motor.motor_asyncio.AsyncIOMotorClient is available. "
+            "Please install either a newer version of pymongo (>=4.5) or motor."
+        )
 
 from bot import LOGGER, qbit_options, rss_dict, user_data
 from bot.core.aeon_client import TgClient
@@ -1569,3 +1592,12 @@ async def ensure_database_and_config():
     except Exception as e:
         LOGGER.error(f"Error in unified database access: {e}")
         return None
+
+
+# Export the variables for external use
+__all__ = [
+    "AsyncMongoClient",
+    "USING_MOTOR",
+    "database",
+    "ensure_database_and_config",
+]

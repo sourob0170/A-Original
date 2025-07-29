@@ -57,8 +57,10 @@ async def authorize(_, message):
                 else reply_to.sender_chat.id
             )
         else:
-            if message.topic_message:
-                thread_id = message.message_thread_id
+            # PyroFork compatibility for topic_message
+            has_topic_message = getattr(message, "topic_message", None)
+            if has_topic_message:
+                thread_id = getattr(message, "message_thread_id", None)
             chat_id = message.chat.id
 
         # Initialize user data if not exists
@@ -124,8 +126,10 @@ async def unauthorize(_, message):
                 else reply_to.sender_chat.id
             )
         else:
-            if message.topic_message:
-                thread_id = message.message_thread_id
+            # PyroFork compatibility for topic_message
+            has_topic_message = getattr(message, "topic_message", None)
+            if has_topic_message:
+                thread_id = getattr(message, "message_thread_id", None)
             chat_id = message.chat.id
 
         if chat_id not in user_data:

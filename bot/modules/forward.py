@@ -1,15 +1,29 @@
 import asyncio
 from time import time
 
-from pyrogram.errors import (
-    ChannelPrivate,
-    ChatAdminRequired,
-    FloodPremiumWait,
-    FloodTestPhoneWait,
-    FloodWait,
-    SlowmodeWait,
-    UserNotParticipant,
-)
+# Smart import for FloodPremiumWait compatibility
+try:
+    from pyrogram.errors import (
+        ChannelPrivate,
+        ChatAdminRequired,
+        FloodPremiumWait,
+        FloodTestPhoneWait,
+        FloodWait,
+        SlowmodeWait,
+        UserNotParticipant,
+    )
+except ImportError:
+    # FloodPremiumWait not available in pyrofork 2.2.11, use FloodWait as fallback
+    from pyrogram.errors import (
+        ChannelPrivate,
+        ChatAdminRequired,
+        FloodTestPhoneWait,
+        FloodWait,
+        SlowmodeWait,
+        UserNotParticipant,
+    )
+
+    FloodPremiumWait = FloodWait  # Use FloodWait as fallback
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot import LOGGER
@@ -177,7 +191,7 @@ async def copy_message_safe(
                         )
                         raise forward_error  # Re-raise to stop the entire batch
 
-                    LOGGER.error(
+                    LOGGER.warning(
                         f"forward_messages failed for message {message_id}: {forward_error}"
                     )
                     return None
@@ -224,7 +238,7 @@ async def copy_message_safe(
                     )
                     raise copy_error  # Re-raise to stop the entire batch
 
-                LOGGER.error(
+                LOGGER.warning(
                     f"copy_message failed for message {message_id}: {copy_error}"
                 )
 

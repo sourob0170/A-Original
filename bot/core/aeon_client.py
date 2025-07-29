@@ -1,10 +1,131 @@
+# Detect which Telegram library is being used by checking Client parameters
+import inspect
 from asyncio import Lock, gather
 
 from pyrogram import Client, enums
+from pyrogram import utils as pyroutils
+
+# Import handlers for Nekozee compatibility (conditional import handled in decorators)
+try:
+    from pyrogram.handlers import (
+        CallbackQueryHandler,
+        EditedMessageHandler,
+        MessageHandler,
+    )
+except ImportError:
+    # Handlers not available in some libraries
+    MessageHandler = CallbackQueryHandler = EditedMessageHandler = None
 
 from bot import LOGGER
 
 from .config_manager import Config
+
+# Configure PyroFork/Pyrogram utils for better peer ID handling
+# This fixes "Peer id invalid" errors with large negative chat/channel IDs
+pyroutils.MIN_CHAT_ID = -999999999999
+pyroutils.MIN_CHANNEL_ID = -100999999999999
+
+# Multi-library detection system
+USING_KURIGRAM = False
+USING_PYROFORK = False
+USING_NEKOZEE = False
+LIBRARY_NAME = "unknown"
+
+try:
+    client_init_signature = inspect.signature(Client.__init__)
+    client_params = list(client_init_signature.parameters.keys())
+
+    # Check for library-specific attributes and methods
+    client_methods = dir(Client)
+
+    # Primary detection: Check if on_message method exists
+    has_on_message = hasattr(Client, "on_message") and "on_message" in client_methods
+
+    if not has_on_message:
+        # No on_message method = Nekozee
+        USING_NEKOZEE = True
+        LIBRARY_NAME = "nekozee"
+
+    elif "max_concurrent_transmissions" in client_params:
+        # Has on_message + max_concurrent_transmissions = Kurigram
+        USING_KURIGRAM = True
+        LIBRARY_NAME = "kurigram"
+
+    else:
+        # Has on_message but no max_concurrent_transmissions = PyroFork
+        USING_PYROFORK = True
+        LIBRARY_NAME = "pyrofork"
+
+except Exception as e:
+    # Fallback - assume pyrofork if detection fails
+    USING_PYROFORK = True
+    LIBRARY_NAME = "pyrofork"
+    LOGGER.warning(f"Library detection failed, defaulting to PyroFork: {e}")
+
+
+# Compatibility flags for easy checking
+IS_KURIGRAM = USING_KURIGRAM
+IS_PYROFORK = USING_PYROFORK
+IS_NEKOZEE = USING_NEKOZEE
+
+
+# Decorator compatibility wrapper
+class DecoratorWrapper:
+    """Wrapper to handle different decorator systems across libraries"""
+
+    def __init__(self, client):
+        self.client = client
+
+    def on_message(self, filters=None):
+        """Universal on_message decorator"""
+        if IS_NEKOZEE:
+            # Nekozee uses add_handler with MessageHandler
+            def decorator(func):
+                if MessageHandler is None:
+                    raise ImportError("MessageHandler not available in this library")
+                handler = MessageHandler(func, filters)
+                self.client.add_handler(handler)
+                return func
+
+            return decorator
+        # Kurigram and PyroFork use standard on_message
+        return self.client.on_message(filters)
+
+    def on_callback_query(self, filters=None):
+        """Universal on_callback_query decorator"""
+        if IS_NEKOZEE:
+
+            def decorator(func):
+                if CallbackQueryHandler is None:
+                    raise ImportError(
+                        "CallbackQueryHandler not available in this library"
+                    )
+                handler = CallbackQueryHandler(func, filters)
+                self.client.add_handler(handler)
+                return func
+
+            return decorator
+        return self.client.on_callback_query(filters)
+
+    def on_edited_message(self, filters=None):
+        """Universal on_edited_message decorator"""
+        if IS_NEKOZEE:
+
+            def decorator(func):
+                if EditedMessageHandler is None:
+                    raise ImportError(
+                        "EditedMessageHandler not available in this library"
+                    )
+                handler = EditedMessageHandler(func, filters)
+                self.client.add_handler(handler)
+                return func
+
+            return decorator
+        return self.client.on_edited_message(filters)
+
+    def __getattr__(self, name):
+        """Delegate all other attributes to the underlying client"""
+        return getattr(self.client, name)
 
 
 class TgClient:
@@ -23,20 +144,34 @@ class TgClient:
     async def start_bot(cls):
         LOGGER.info("Creating client from BOT_TOKEN")
         cls.ID = Config.BOT_TOKEN.split(":", 1)[0]
-        cls.bot = Client(
-            cls.ID,
-            Config.TELEGRAM_API,
-            Config.TELEGRAM_HASH,
-            proxy=Config.TG_PROXY,
-            bot_token=Config.BOT_TOKEN,
-            workdir="/usr/src/app",
-            parse_mode=enums.ParseMode.HTML,
-            max_concurrent_transmissions=100,
-            no_updates=False,  # Ensure updates are enabled
-        )
+
+        # Prepare client arguments based on library compatibility
+        client_args = {
+            "name": cls.ID,
+            "api_id": Config.TELEGRAM_API,
+            "api_hash": Config.TELEGRAM_HASH,
+            "proxy": Config.TG_PROXY,
+            "bot_token": Config.BOT_TOKEN,
+            "workdir": "/usr/src/app",
+            "parse_mode": enums.ParseMode.HTML,
+            "no_updates": False,  # Ensure updates are enabled
+        }
+
+        # Add kurigram-specific parameters
+        if USING_KURIGRAM:
+            client_args["max_concurrent_transmissions"] = 100
+
+        cls.bot = Client(**client_args)
+
         try:
             await cls.bot.start()
             cls.NAME = cls.bot.me.username
+
+            # Add decorator wrapper for cross-library compatibility after successful start
+            if not hasattr(cls.bot, "on_message") or IS_NEKOZEE:
+                # For Nekozee or libraries without standard decorators
+                cls.bot = DecoratorWrapper(cls.bot)
+                LOGGER.info("Applied decorator wrapper for library compatibility")
         except KeyError as e:
             if str(e) == "None":
                 LOGGER.error(
@@ -60,16 +195,22 @@ class TgClient:
         ):
             LOGGER.info("Creating client from USER_SESSION_STRING")
             try:
-                cls.user = Client(
-                    "user",
-                    Config.TELEGRAM_API,
-                    Config.TELEGRAM_HASH,
-                    proxy=Config.TG_PROXY,
-                    session_string=Config.USER_SESSION_STRING,
-                    parse_mode=enums.ParseMode.HTML,
-                    no_updates=True,
-                    max_concurrent_transmissions=100,
-                )
+                # Prepare user client arguments based on library compatibility
+                user_args = {
+                    "name": "user",
+                    "api_id": Config.TELEGRAM_API,
+                    "api_hash": Config.TELEGRAM_HASH,
+                    "proxy": Config.TG_PROXY,
+                    "session_string": Config.USER_SESSION_STRING,
+                    "parse_mode": enums.ParseMode.HTML,
+                    "no_updates": True,
+                }
+
+                # Add kurigram-specific parameters
+                if USING_KURIGRAM:
+                    user_args["max_concurrent_transmissions"] = 100
+
+                cls.user = Client(**user_args)
                 await cls.user.start()
                 cls.IS_PREMIUM_USER = cls.user.me.is_premium
                 if cls.IS_PREMIUM_USER:
@@ -99,16 +240,22 @@ class TgClient:
     @classmethod
     async def start_hclient(cls, no, b_token):
         try:
-            hbot = Client(
-                f"helper{no}",
-                Config.TELEGRAM_API,
-                Config.TELEGRAM_HASH,
-                proxy=Config.TG_PROXY,
-                bot_token=b_token,
-                parse_mode=enums.ParseMode.HTML,
-                no_updates=True,
-                max_concurrent_transmissions=20,
-            )
+            # Prepare helper client arguments based on library compatibility
+            helper_args = {
+                "name": f"helper{no}",
+                "api_id": Config.TELEGRAM_API,
+                "api_hash": Config.TELEGRAM_HASH,
+                "proxy": Config.TG_PROXY,
+                "bot_token": b_token,
+                "parse_mode": enums.ParseMode.HTML,
+                "no_updates": True,
+            }
+
+            # Add kurigram-specific parameters
+            if USING_KURIGRAM:
+                helper_args["max_concurrent_transmissions"] = 20
+
+            hbot = Client(**helper_args)
             await hbot.start()
             LOGGER.info(f"Helper Bot [@{hbot.me.username}] Started!")
             cls.helper_bots[no], cls.helper_loads[no] = hbot, 0

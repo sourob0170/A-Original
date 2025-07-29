@@ -28,17 +28,15 @@ class ImprovedZotifySessionManager:
     def __init__(self):
         self._session: Session | None = None
         self._session_created_at = 0
-        self._session_max_age = (
-            3600  # Increased to 1 hour to prevent session timeout during downloads
-        )
+        self._session_max_age = 7200  # Increased to 2 hours to prevent session timeout during long downloads
         self._last_api_call = 0
         self._last_activity = 0
         self._inactivity_timeout = (
-            600  # Increased to 10 minutes for active downloads
+            1800  # Increased to 30 minutes for active downloads
         )
         self._api_call_interval = 0.5  # Reduced interval for better performance
         self._consecutive_failures = 0
-        self._max_consecutive_failures = 5  # Increased for better resilience
+        self._max_consecutive_failures = 8  # Increased for better resilience
         # Simplified memory management
         self._memory_cleanup_interval = 600  # Increased to 10 minutes
         self._last_memory_cleanup = 0
@@ -47,6 +45,13 @@ class ImprovedZotifySessionManager:
         # Download state tracking
         self._is_downloading = False
         self._download_start_time = 0
+        # Connection health tracking
+        self._last_connection_check = 0
+        self._connection_check_interval = (
+            300  # Check connection every 5 minutes during downloads
+        )
+        self._packet_failures = 0
+        self._max_packet_failures = 3  # Allow more packet failures before recreation
         # Register for cleanup tracking
         _active_sessions.add(weakref.ref(self, self._cleanup_callback))
 
@@ -60,8 +65,8 @@ class ImprovedZotifySessionManager:
             not self._session
             or (not self._is_downloading and session_age > self._session_max_age)
             or (
-                self._is_downloading and session_age > self._session_max_age * 2
-            )  # Double timeout during downloads
+                self._is_downloading and session_age > self._session_max_age * 3
+            )  # Triple timeout during downloads for better stability
             or self._consecutive_failures >= self._max_consecutive_failures
         )
 
@@ -70,6 +75,13 @@ class ImprovedZotifySessionManager:
 
         # Update activity timestamp
         self._last_activity = current_time
+
+        # Check connection health during downloads
+        if self._is_downloading:
+            health_ok = await self.check_connection_health()
+            if not health_ok:
+                LOGGER.warning("Connection health check failed, recreating session")
+                await self._create_new_session()
 
         # Less frequent memory cleanup, skip during downloads
         if (
@@ -86,11 +98,19 @@ class ImprovedZotifySessionManager:
         """Mark inline search activity"""
         self._last_activity = time.time()
 
+    def keep_session_alive(self):
+        """Keep session alive during long downloads by updating activity timestamp"""
+        if self._is_downloading:
+            self._last_activity = time.time()
+            LOGGER.debug("Session keep-alive ping during download")
+
     def mark_download_start(self):
         """Mark the start of a download to prevent session timeout"""
         self._is_downloading = True
         self._download_start_time = time.time()
         self._last_activity = time.time()
+        # Reset packet failure counter at start of new download
+        self._packet_failures = 0
         LOGGER.info("Download started - session timeout protection enabled")
 
     def mark_download_end(self):
@@ -98,6 +118,8 @@ class ImprovedZotifySessionManager:
         self._is_downloading = False
         self._download_start_time = 0
         self._last_activity = time.time()
+        # Reset packet failure counter on successful download completion
+        self._packet_failures = 0
         LOGGER.info("Download ended - normal session timeout restored")
 
     def should_cleanup_for_inactivity(self) -> bool:
@@ -105,6 +127,51 @@ class ImprovedZotifySessionManager:
         if self._last_activity > 0:
             return time.time() - self._last_activity > self._inactivity_timeout
         return False
+
+    def handle_packet_failure(self) -> bool:
+        """Handle packet reading failures and determine if session should be recreated"""
+        self._packet_failures += 1
+        LOGGER.warning(
+            f"Packet failure #{self._packet_failures}/{self._max_packet_failures}"
+        )
+
+        if self._packet_failures >= self._max_packet_failures:
+            LOGGER.error("Too many packet failures, marking session for recreation")
+            self._consecutive_failures = self._max_consecutive_failures
+            self._packet_failures = 0  # Reset counter
+            return True  # Should recreate session
+        return False  # Continue with current session
+
+    async def check_connection_health(self) -> bool:
+        """Check connection health during downloads"""
+        current_time = time.time()
+
+        # Only check during downloads and at intervals
+        if not self._is_downloading:
+            return True
+
+        if (
+            current_time - self._last_connection_check
+            < self._connection_check_interval
+        ):
+            return True
+
+        self._last_connection_check = current_time
+
+        # Simple health check - try to access session attributes
+        if not self._session:
+            return False
+
+        try:
+            # Check if session is still responsive
+            if hasattr(self._session, "api") and self._session.api:
+                LOGGER.info("Connection health check passed")
+                return True
+        except Exception as e:
+            LOGGER.warning(f"Connection health check failed: {e}")
+            return False
+
+        return True
 
     @staticmethod
     def _cleanup_callback(weak_ref):
@@ -365,12 +432,28 @@ class ImprovedZotifySessionManager:
                         "RuntimeError",
                     ]
                 ):
-                    LOGGER.warning(
-                        "Connection error detected in API call - marking session for recreation"
-                    )
-                    self._consecutive_failures = (
-                        self._max_consecutive_failures
-                    )  # Force session recreation
+                    # Handle packet failures more gracefully
+                    if (
+                        "Failed reading packet" in error_msg
+                        or "Failed to receive packet" in error_msg
+                    ):
+                        should_recreate = self.handle_packet_failure()
+                        if should_recreate:
+                            LOGGER.warning(
+                                "Too many packet failures - forcing session recreation"
+                            )
+                        else:
+                            LOGGER.info(
+                                "Packet failure handled, continuing with current session"
+                            )
+                            continue  # Retry with current session
+                    else:
+                        LOGGER.warning(
+                            "Connection error detected in API call - marking session for recreation"
+                        )
+                        self._consecutive_failures = (
+                            self._max_consecutive_failures
+                        )  # Force session recreation
 
                 if attempt < max_retries - 1:
                     # Adaptive backoff based on error type
@@ -554,14 +637,21 @@ async def _periodic_cleanup():
                 )
                 max_age = improved_session_manager._session_max_age
 
-                # Don't cleanup during active downloads
+                # Don't cleanup during active downloads - use more generous timeouts
                 if improved_session_manager._is_downloading:
-                    max_age *= 2  # Double the timeout during downloads
+                    max_age *= 4  # Quadruple the timeout during downloads for better stability
+                    download_duration = (
+                        current_time - improved_session_manager._download_start_time
+                    )
+
+                    # For very long downloads, extend timeout even further
+                    if download_duration > 3600:  # More than 1 hour
+                        max_age *= 2  # Additional extension for long downloads
 
                 if session_age > max_age:
                     if improved_session_manager._is_downloading:
                         LOGGER.info(
-                            f"Session aged {session_age}s but download is active, extending timeout"
+                            f"Session aged {session_age:.1f}s but download is active (duration: {download_duration:.1f}s), extending timeout to {max_age:.1f}s"
                         )
                     else:
                         LOGGER.info("Forcing session cleanup due to age")

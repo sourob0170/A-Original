@@ -6,12 +6,20 @@ from time import time as get_time
 
 from cachetools import TTLCache
 from pyrogram import Client, enums
-from pyrogram.errors import (
-    FloodPremiumWait,
-    FloodWait,
-    MessageEmpty,
-    MessageNotModified,
-)
+
+# Smart import for FloodPremiumWait compatibility
+try:
+    from pyrogram.errors import (
+        FloodPremiumWait,
+        FloodWait,
+        MessageEmpty,
+        MessageNotModified,
+    )
+except ImportError:
+    # FloodPremiumWait not available in pyrofork 2.2.11, use FloodWait as fallback
+    from pyrogram.errors import FloodWait, MessageEmpty, MessageNotModified
+
+    FloodPremiumWait = FloodWait  # Use FloodWait as fallback
 from pyrogram.types import InputMediaPhoto
 
 from bot import (

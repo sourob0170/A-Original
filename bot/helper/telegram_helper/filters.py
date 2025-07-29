@@ -60,10 +60,11 @@ class CustomFilters:
         # For callback queries, we need to check the message's chat
         if hasattr(update, "message") and update.message:
             chat = update.message.chat
+            # PyroFork compatibility for topic_message
+            has_topic_message = getattr(update.message, "topic_message", None)
             thread_id = (
-                update.message.message_thread_id
-                if hasattr(update.message, "topic_message")
-                and update.message.topic_message
+                getattr(update.message, "message_thread_id", None)
+                if has_topic_message
                 else None
             )
         else:
@@ -135,10 +136,13 @@ class CustomFilters:
                 and update.callback_query.message
             ):
                 chat = update.callback_query.message.chat
+                # PyroFork compatibility for topic_message
+                has_topic_message = getattr(
+                    update.callback_query.message, "topic_message", None
+                )
                 thread_id = (
-                    update.callback_query.message.message_thread_id
-                    if hasattr(update.callback_query.message, "topic_message")
-                    and update.callback_query.message.topic_message
+                    getattr(update.callback_query.message, "message_thread_id", None)
+                    if has_topic_message
                     else None
                 )
             else:
@@ -147,19 +151,22 @@ class CustomFilters:
             # For message updates
             user = update.message.from_user or update.message.sender_chat
             chat = update.message.chat
+            # PyroFork compatibility for topic_message
+            has_topic_message = getattr(update.message, "topic_message", None)
             thread_id = (
-                update.message.message_thread_id
-                if hasattr(update.message, "topic_message")
-                and update.message.topic_message
+                getattr(update.message, "message_thread_id", None)
+                if has_topic_message
                 else None
             )
         elif hasattr(update, "chat") and update.chat:
             # For other updates with chat attribute
             user = update.from_user or update.sender_chat
             chat = update.chat
+            # PyroFork compatibility for topic_message
+            has_topic_message = getattr(update, "topic_message", None)
             thread_id = (
-                update.message_thread_id
-                if hasattr(update, "topic_message") and update.topic_message
+                getattr(update, "message_thread_id", None)
+                if has_topic_message
                 else None
             )
         else:

@@ -221,6 +221,8 @@ async def init_streaming_client(TgClient):
     try:
         # Initialize main bot client if not already initialized
         if TgClient.bot is None:
+            import inspect
+
             from pyrogram import Client, enums
 
             # Create main bot client with better session management
@@ -231,18 +233,27 @@ async def init_streaming_client(TgClient):
 
             session_dir = tempfile.mkdtemp(prefix="web_sessions_")
 
-            TgClient.bot = Client(
-                f"web_main_{TgClient.ID}",  # Different session name to avoid conflicts
-                Config.TELEGRAM_API,
-                Config.TELEGRAM_HASH,
-                proxy=Config.TG_PROXY,
-                bot_token=Config.BOT_TOKEN,
-                workdir=session_dir,  # Use temporary directory for sessions
-                parse_mode=enums.ParseMode.HTML,
-                max_concurrent_transmissions=50,
-                no_updates=True,  # Disable updates for web server client
-                in_memory=True,  # Use in-memory session to avoid auth issues
+            # Check if max_concurrent_transmissions is supported (kurigram vs pyrofork compatibility)
+            client_params = list(
+                inspect.signature(Client.__init__).parameters.keys()
             )
+            client_args = {
+                "name": f"web_main_{TgClient.ID}",  # Different session name to avoid conflicts
+                "api_id": Config.TELEGRAM_API,
+                "api_hash": Config.TELEGRAM_HASH,
+                "proxy": Config.TG_PROXY,
+                "bot_token": Config.BOT_TOKEN,
+                "workdir": session_dir,  # Use temporary directory for sessions
+                "parse_mode": enums.ParseMode.HTML,
+                "no_updates": True,  # Disable updates for web server client
+                "in_memory": True,  # Use in-memory session to avoid auth issues
+            }
+
+            # Add kurigram-specific parameters if supported
+            if "max_concurrent_transmissions" in client_params:
+                client_args["max_concurrent_transmissions"] = 50
+
+            TgClient.bot = Client(**client_args)
 
             # Start the main bot client
             await TgClient.bot.start()
@@ -273,22 +284,32 @@ async def init_helper_bots_for_streaming(TgClient):
         async def start_helper_bot(no, b_token):
             try:
                 # Use in-memory session for helper bots to avoid auth issues
+                import inspect
                 import tempfile
 
                 session_dir = tempfile.mkdtemp(prefix=f"web_helper{no}_")
 
-                hbot = Client(
-                    f"web_helper{no}",  # Different session name for web server
-                    Config.TELEGRAM_API,
-                    Config.TELEGRAM_HASH,
-                    proxy=Config.TG_PROXY,
-                    bot_token=b_token,
-                    workdir=session_dir,  # Use temporary directory for sessions
-                    parse_mode=enums.ParseMode.HTML,
-                    no_updates=True,
-                    max_concurrent_transmissions=20,
-                    in_memory=True,  # Use in-memory session to avoid auth issues
+                # Check if max_concurrent_transmissions is supported (kurigram vs pyrofork compatibility)
+                client_params = list(
+                    inspect.signature(Client.__init__).parameters.keys()
                 )
+                helper_args = {
+                    "name": f"web_helper{no}",  # Different session name for web server
+                    "api_id": Config.TELEGRAM_API,
+                    "api_hash": Config.TELEGRAM_HASH,
+                    "proxy": Config.TG_PROXY,
+                    "bot_token": b_token,
+                    "workdir": session_dir,  # Use temporary directory for sessions
+                    "parse_mode": enums.ParseMode.HTML,
+                    "no_updates": True,
+                    "in_memory": True,  # Use in-memory session to avoid auth issues
+                }
+
+                # Add kurigram-specific parameters if supported
+                if "max_concurrent_transmissions" in client_params:
+                    helper_args["max_concurrent_transmissions"] = 20
+
+                hbot = Client(**helper_args)
                 await hbot.start()
                 TgClient.helper_bots[no] = hbot
                 TgClient.helper_loads[no] = 0
